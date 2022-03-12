@@ -29,7 +29,7 @@ class Trial:
                 break
 
             start_timestamp = max(self.start_timestamp, parse(asr_message["data"]["start_timestamp"]))
-            end_timestamp = min(self.end_timestamp, parse(asr_message["data"]["start_timestamp"]))
+            end_timestamp = min(self.end_timestamp, parse(asr_message["data"]["end_timestamp"]))
 
             player_id = asr_message["data"]["participant_id"]
             if player_id in self.utterance_intervals:
@@ -81,7 +81,7 @@ class Trial:
 
 if __name__ =='__main__':
     trial = Trial()
-    trial.parse("data/study3/trials/NotHSRData_TrialMessages_Trial-T000459_Team-TM000078_Member-na_CondBtwn-ASI-SIFT-USC_CondWin-na_Vers-3.metadata")
+    trial.parse("../data/study3/Test_A_Thon/TrialMessages_CondBtwn-1_CondWin-Saturn-StaticMap_Trial-1_Team-55cd3a31_Member-Aptiomiomer1_Vers-3.5.1-dev.84-1c1474c.metadata")
 
     print(f"{trial.start_timestamp} - {trial.end_timestamp}")
     for player_id in trial.player_ids:

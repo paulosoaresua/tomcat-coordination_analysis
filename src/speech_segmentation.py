@@ -1,9 +1,12 @@
 import os
 import csv
 from typing import Tuple, Any, List, Dict
+import numpy as np
+import random
+import uuid
 
-from trial import Trial
-from vocalics import Vocalics
+from src.trial import Trial
+from src.vocalics import Vocalics
 
 
 class SpeechSegmentation:
@@ -21,7 +24,36 @@ class SpeechSegmentation:
         self.blue_to_red: List[Dict[str, List[Any]]] = [{}, {}]
         self.blue_to_green: List[Dict[str, List[Any]]] = [{}, {}]
 
+        self.trial = None
+
+    def generate_random_series(self, min_seg_size: int = 10, max_seg_size: int = 40, min_num_seg: int = 10,
+                               max_num_seg: int = 100):
+        """
+        Generates random time series for all features and dyads
+        """
+
+        player_colors = ["red", "green", "blue"]
+        for player1_color in player_colors:
+            for player2_color in player_colors:
+                if player1_color != player2_color:
+                    num_segments = random.randint(min_num_seg, max_num_seg)
+
+                    # Source and Target
+                    vocalics = [{}, {}]
+                    for i in range(2):
+                        vocalics[i] = {"timestamp": []}
+                        for feature_name in self._feature_names:
+                            vocalics[i][feature_name] = []
+
+                            for _ in range(num_segments):
+                                seg_size = random.randint(min_seg_size, max_seg_size)
+                                vocalics[i][feature_name].append(np.random.randn(seg_size).tolist())
+
+                    setattr(self, f"{player1_color}_to_{player2_color}", vocalics)
+
     def save(self, out_dir: str):
+        data_id = self.trial.id if self.trial is not None else str(uuid.uuid1())
+        out_dir = os.path.join(out_dir, data_id)
         os.makedirs(out_dir, exist_ok=True)
 
         series = [
@@ -96,24 +128,24 @@ class SpeechSegmentation:
             for feature_name in self._feature_names:
                 with open(os.path.join(dir_name, f"source_{feature_name}.txt"), newline="") as f:
                     reader = csv.reader(f)
-                    series[i][0][feature_name] = list(reader)
+                    series[i][0][feature_name] = [list(map(float, row)) for row in list(reader)]
 
                 with open(os.path.join(dir_name, f"target_{feature_name}.txt"), newline="") as f:
                     reader = csv.reader(f)
-                    series[i][1][feature_name] = list(reader)
+                    series[i][1][feature_name] = [list(map(float, row)) for row in list(reader)]
 
     def create_dyadic_vocalics_segment_series(self, trial_filepath: str):
-        trial = Trial()
-        trial.parse(trial_filepath)
+        self.trial = Trial()
+        self.trial.parse(trial_filepath)
         vocalics = Vocalics()
-        vocalics.read_features(trial, self._feature_names)
+        vocalics.read_features(self.trial, self._feature_names)
 
-        for player1_id in trial.player_ids:
-            for player2_id in trial.player_ids:
+        for player1_id in self.trial.player_ids:
+            for player2_id in self.trial.player_ids:
                 if player1_id == player2_id:
                     continue
 
-                self._store_segments(trial, vocalics, player1_id, player2_id)
+                self._store_segments(self.trial, vocalics, player1_id, player2_id)
 
     def _store_segments(self, trial: Trial, vocalics: Vocalics, source_player_id: str, target_player_id: str):
         source_vocalics, target_vocalics = SpeechSegmentation._segment(trial, vocalics, source_player_id,
@@ -295,15 +327,6 @@ def equalize_segments(source_segments: List[Tuple[Any, Any]],
 
 
 if __name__ == "__main__":
-    source_segments = [(0, 5), (7, 12), (14, 20), (22, 35), (40, 45), (50, 55), (57, 60), (70, 90)]
-    target_segments = [(3, 10), (17, 24), (27, 30), (37, 48), (81, 100), (101, 130)]
-
-    [seg1, seg2] = remove_overlapping_segments(source_segments, target_segments)
-    print("No overlap")
-    print(seg1)
-    print(seg2)
-
-    [seg1, seg2] = equalize_segments(seg1, seg2)
-    print("\nEqualized")
-    print(seg1)
-    print(seg2)
+    ss = SpeechSegmentation()
+    ss.generate_random_series()
+    ss.save("../data/study3/vocalic_series")

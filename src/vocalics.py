@@ -2,7 +2,7 @@ from typing import Any, List, Tuple
 
 import psycopg2
 
-from trial import Trial
+from src.trial import Trial
 
 
 class Vocalics:
