@@ -51,6 +51,41 @@ class SpeechSegmentation:
 
                     setattr(self, f"{player1_color}_to_{player2_color}", vocalics)
 
+    def generate_coupled_series(self, min_seg_size: int = 10, max_seg_size: int = 40, min_num_seg: int = 10,
+                                max_num_seg: int = 100):
+        """
+        Generates random time series for all features and dyads
+        """
+
+        player_colors = ["red", "green", "blue"]
+        for player1_color in player_colors:
+            for player2_color in player_colors:
+                if player1_color != player2_color:
+                    num_segments = random.randint(min_num_seg, max_num_seg)
+
+                    # Source and Target
+                    vocalics = [{}, {}]
+                    for i in range(2):
+                        vocalics[i] = {"timestamp": []}
+                        for feature_name in self._feature_names:
+                            vocalics[i][feature_name] = []
+
+                            for j in range(num_segments):
+                                seg_size = random.randint(min_seg_size, max_seg_size)
+                                if i == 0:
+                                    if j == 0:
+                                        vocalics[i][feature_name].append(np.random.randn(seg_size).tolist())
+                                    else:
+                                        mean_source_feature = np.mean(vocalics[0][feature_name][-1])
+                                        vocalics[i][feature_name].append(
+                                            0.5 * mean_source_feature + np.random.randn(seg_size).tolist())
+                                else:
+                                    mean_source_feature = np.mean(vocalics[0][feature_name][-1])
+                                    vocalics[i][feature_name].append(
+                                        mean_source_feature + np.random.randn(seg_size).tolist())
+
+                    setattr(self, f"{player1_color}_to_{player2_color}", vocalics)
+
     def save(self, out_dir: str):
         data_id = self.trial.id if self.trial is not None else str(uuid.uuid1())
         out_dir = os.path.join(out_dir, data_id)
@@ -328,5 +363,5 @@ def equalize_segments(source_segments: List[Tuple[Any, Any]],
 
 if __name__ == "__main__":
     ss = SpeechSegmentation()
-    ss.generate_random_series()
-    ss.save("../data/study3/vocalic_series")
+    ss.generate_coupled_series(min_seg_size=100, max_seg_size=500)
+    ss.save("../data/study3/vocalic_series/coupled")
