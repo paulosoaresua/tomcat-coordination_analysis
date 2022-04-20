@@ -1,29 +1,36 @@
 from typing import Any, List, Tuple, Dict
 
-import psycopg2
-
-from src.trial import Trial
+from src.components.speech.common import SegmentedUtterance, VocalicsComponent
 
 
-class Vocalics:
-
-    def __init__(self, timestamp: Any, features: Dict[str, float]):
-        self.timestamp = timestamp
-        self.features = features
-
-
-class VocalicsReader:
+class VocalicsWriter:
     """
-    This class extracts vocalic features from a trial.
+    This class writes vocalics component series to a file, converting the timestamps of segments utterances
+    appropriately.
     """
 
-    FEATURE_MAP = {
-        "pitch": "f0final_sma",
-        "intensity": "wave_rmsenergy_sma"
-    }
+    @staticmethod
+    def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, rate_milliseconds: float):
+        series_a_out = []
+        series_b_out = []
+        mask = [] # Keeps track of which time steps have data
 
-    def __init__(self, server: str = 'localhost', port: int = 5432, database: str = 'asist_vocalics'):
-        self._server = server
+        if vocalics_component.size > 0:
+            timestamp = initial_timestamp
+            while timestamp < vocalics_component.series_a[0].
+            for i in range(vocalics_component.size):
+
+
+
+
+
+
+
+
+
+
+    def __init__(self, vocalics_component: VocalicsComponent):
+        self._vocalics_component
         self._port = port
         self._database = database
         self.vocalics_per_player = {}
@@ -66,4 +73,3 @@ class VocalicsReader:
         cursor = connection.cursor()
         cursor.execute(query, (trial_id, initial_timestamp, final_timestamp))
         return cursor.fetchall()
-

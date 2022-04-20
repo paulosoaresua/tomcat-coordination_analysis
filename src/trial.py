@@ -1,8 +1,8 @@
 from typing import Dict, Any, List
 from dateutil.parser import parse
 import json
-from src.components.speech import Vocalics, Utterance
-from src.vocalics_reader import VocalicsReader
+from src.components.speech.common import Vocalics, Utterance
+from src.components.speech.vocalics_reader import VocalicsReader
 
 
 class Trial:
@@ -37,11 +37,11 @@ class Trial:
                 # Stop looking for utterances after the trial ends
                 break
 
+            subject_id = asr_message["data"]["subject_id"]
             # If an utterance started before but finished after the trial started, we include the full utterance in the
             # list anyway
-            utterance = Utterance(parse(asr_message["data"]["start"]), parse(asr_message["data"]["end"]))
+            utterance = Utterance(subject_id, parse(asr_message["data"]["start"]), parse(asr_message["data"]["end"]))
 
-            subject_id = asr_message["data"]["subject_id"]
             if subject_id in self.utterances_per_subject:
                 self.utterances_per_subject[subject_id].append(utterance)
             else:
