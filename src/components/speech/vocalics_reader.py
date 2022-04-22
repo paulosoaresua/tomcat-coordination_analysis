@@ -24,7 +24,7 @@ class VocalicsReader:
         self._server = server
         self._port = port
         self._database = database
-        self.vocalics_per_player = {}
+        self.vocalics_per_subject = {}
 
     def read(self, trial_id: str, initial_timestamp: Any, final_timestamp: Any, feature_names: List[str]):
         with self._connect() as connection:
@@ -35,10 +35,10 @@ class VocalicsReader:
                 for i, feature_name in enumerate(feature_names):
                     feature_map[feature_name] = features_record[i]
 
-                if player_id not in self.vocalics_per_player:
-                    self.vocalics_per_player[player_id] = [Vocalics(timestamp, feature_map)]
+                if player_id not in self.vocalics_per_subject:
+                    self.vocalics_per_subject[player_id] = [Vocalics(timestamp, feature_map)]
                 else:
-                    self.vocalics_per_player[player_id].append(Vocalics(timestamp, feature_map))
+                    self.vocalics_per_subject[player_id].append(Vocalics(timestamp, feature_map))
 
     def _connect(self) -> Any:
         connection = None

@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from dateutil.parser import parse
 import json
-from src.components.speech.common import Vocalics, Utterance
+from src.components.speech.common import Utterance
 from src.components.speech.vocalics_reader import VocalicsReader
 
 
@@ -124,12 +124,3 @@ class Trial:
                     print(
                         f"No vocalic features detected for utterance between {utterance.start} an {utterance.end} for"
                         " subject {subject_id} in trial {self.id}.")
-
-# if __name__ == '__main__':
-#     trial = Trial()
-#     trial.parse(
-#         "../data/study3/Test_A_Thon/TrialMessages_CondBtwn-1_CondWin-Saturn-StaticMap_Trial-1_Team-55cd3a31_Member-Aptiomiomer1_Vers-3.5.1-dev.84-1c1474c.metadata")
-#
-#     print(f"{trial.start} - {trial.end}")
-#     for subject_id in trial.subject_ids:
-#         print(f"{subject_id} has {len(trial.utterances[subject_id])} utterances in the trial")

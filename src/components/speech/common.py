@@ -32,12 +32,14 @@ class VocalicsComponent:
 
     def __init__(self, series_a: List[SegmentedUtterance], series_b: List[SegmentedUtterance]):
         # Equalizes the sizes of the two series
+        # TODO - fix this. The series do not need to have the same size. Changing this affects the VocalicsWriter's
+        #  logic.
         self.size = min(len(series_a), len(series_b))
         self.series_a = series_a[:self.size]
         self.series_b = series_b[:self.size]
 
-        self.initial_timestamp = None
-        self.timestamps = []
-        for i in range(self.size):
-            self.timestamps.append(series_b[i].end)
+        if self.size > 0:
+            self.feature_names = [feature_name for feature_name in self.series_a[0].average_vocalics.keys()]
+        else:
+            self.feature_names = []
 
