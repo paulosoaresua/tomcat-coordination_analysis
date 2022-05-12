@@ -1,4 +1,5 @@
-from typing import Callable, Dict, List, Tuple
+from typing import Dict, List, Tuple
+from scipy.stats import norm
 import random
 
 
@@ -7,15 +8,10 @@ class VocalicsGenerator:
     This class generates synthetic evidence for the vocalics component of a coordination model.
     """
 
-    def __init__(self, coordination_series: List[float], vocalic_features: List[str],
-                 time_scale_density: float, prior_a: Callable, prior_b: Callable, pa: Callable, pb: Callable):
+    def __init__(self, coordination_series: List[float], vocalic_features: List[str], time_scale_density: float):
         self._coordination_series = coordination_series
         self._vocalic_features = vocalic_features
         self._time_scale_density = time_scale_density
-        self._prior_a = prior_a
-        self._prior_b = prior_b
-        self._pa = pa
-        self._pb = pb
 
     def generate_evidence(self) -> Tuple[Dict[str, List[float]], Dict[str, List[float]]]:
         time_steps_a, time_steps_b = self._get_random_observation_time_steps()
@@ -31,12 +27,8 @@ class VocalicsGenerator:
 
                 if idx_a < len(time_steps_a):
                     if time_steps_a[idx_a] == t:
-                        if idx_a == 0:
-                            last_sampled_a = self._prior_a(feature_name)
-                            series_a[feature_name].append(last_sampled_a)
-                        else:
-                            last_sampled_a = self._pa(feature_name, last_sampled_a, last_sampled_b, c)
-                            series_a[feature_name].append(last_sampled_a)
+                        last_sampled_a = self._sample_a(feature_name, last_sampled_a, last_sampled_b, c)
+                        series_a[feature_name].append(last_sampled_a)
                         idx_a += 1
                     else:
                         series_a[feature_name].append(None)
@@ -45,12 +37,8 @@ class VocalicsGenerator:
 
                 if idx_b < len(time_steps_b):
                     if time_steps_b[idx_b] == t:
-                        if idx_b == 0:
-                            last_sampled_b = self._prior_b(feature_name)
-                            series_b[feature_name].append(last_sampled_b)
-                        else:
-                            last_sampled_b = self._pb(feature_name, last_sampled_b, last_sampled_a, c)
-                            series_b[feature_name].append(last_sampled_b)
+                        last_sampled_b = self._sample_b(feature_name, last_sampled_b, last_sampled_a, c)
+                        series_b[feature_name].append(last_sampled_b)
                         idx_b += 1
                     else:
                         series_b[feature_name].append(None)
@@ -76,3 +64,75 @@ class VocalicsGenerator:
                 time_steps_b.append(t)
 
         return time_steps_a, time_steps_b
+
+    def _sample_a(self, feature_name: str, previous_a: float, previous_b: float, coordination: float):
+        raise Exception("Not implemented in this class.")
+
+    def _sample_b(self, feature_name: str, previous_b: float, previous_a: float, coordination: float):
+        raise Exception("Not implemented in this class.")
+
+
+class VocalicsGeneratorForDiscreteCoordination(VocalicsGenerator):
+
+    def __init__(self, coordination_series: List[float], vocalic_features: List[str], time_scale_density: float,
+                 mean_prior: float = 0, std_prior: float = 1, mean_shift_coupled: float = 0, var_coupled: float = 1):
+        super().__init__(coordination_series, vocalic_features, time_scale_density)
+        self._mean_prior = mean_prior
+        self._std_prior = std_prior
+        self._mean_shift_coupled = mean_shift_coupled
+        self._var_coupled = var_coupled
+
+    def _sample_a(self, feature_name: str, previous_a: float, previous_b: float, coordination: float):
+        def sample_from_prior():
+            return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
+
+        if previous_b is None:
+            return sample_from_prior()
+        else:
+            if int(coordination) == 0:
+                return sample_from_prior()
+            else:
+                return norm.rvs(loc=previous_b + self._mean_shift_coupled, scale=self._var_coupled)
+
+    def _sample_b(self, feature_name: str, previous_b: float, previous_a: float, coordination: float):
+        def sample_from_prior():
+            return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
+
+        if previous_a is None:
+            return sample_from_prior()
+        else:
+            if int(coordination) == 0:
+                return sample_from_prior()
+            else:
+                return norm.rvs(loc=previous_a + self._mean_shift_coupled, scale=self._var_coupled)
+
+
+class VocalicsGeneratorForContinuousCoordination(VocalicsGenerator):
+
+    def __init__(self, coordination_series: List[float], vocalic_features: List[str], time_scale_density: float,
+                 mean_prior: float = 0, std_prior: float = 1, mean_shift_coupled: float = 0, var_coupled: float = 1):
+        super().__init__(coordination_series, vocalic_features, time_scale_density)
+        self._mean_prior = mean_prior
+        self._std_prior = std_prior
+        self._mean_shift_coupled = mean_shift_coupled
+        self._var_coupled = var_coupled
+
+    def _sample_a(self, feature_name: str, previous_a: float, previous_b: float, coordination: float):
+        def sample_from_prior():
+            return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
+
+        if previous_b is None:
+            return sample_from_prior()
+        else:
+            mean = (1 - coordination) * self._mean_prior + coordination * (previous_b + self._mean_shift_coupled)
+            return norm.rvs(loc=mean, scale=self._var_coupled)
+
+    def _sample_b(self, feature_name: str, previous_b: float, previous_a: float, coordination: float):
+        def sample_from_prior():
+            return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
+
+        if previous_a is None:
+            return sample_from_prior()
+        else:
+            mean = (1 - coordination) * self._mean_prior + coordination * (previous_a + self._mean_shift_coupled)
+            return norm.rvs(loc=mean, scale=self._var_coupled)

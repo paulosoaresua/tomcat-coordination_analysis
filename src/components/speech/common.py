@@ -42,4 +42,3 @@ class VocalicsComponent:
             self.feature_names = [feature_name for feature_name in self.series_a[0].average_vocalics.keys()]
         else:
             self.feature_names = []
-
