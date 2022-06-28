@@ -25,13 +25,14 @@ class VocalicsReader:
         self._server = server
         self._port = port
         self._database = database
-        self.vocalics_per_subject = {}
 
     def read(self,
              trial_id: str,
              initial_timestamp: Any,
              final_timestamp: Any,
              feature_names: List[str]):
+        vocalics_per_subject = {}
+
         with self._connect() as connection:
             records = VocalicsReader._read_features(connection, trial_id, initial_timestamp, final_timestamp,
                                                     feature_names)
@@ -40,12 +41,14 @@ class VocalicsReader:
                 for i, feature_name in enumerate(feature_names):
                     feature_map[feature_name] = features_record[i]
 
-                if player_id not in self.vocalics_per_subject:
-                    self.vocalics_per_subject[player_id] = [
+                if player_id not in vocalics_per_subject:
+                    vocalics_per_subject[player_id] = [
                         Vocalics(timestamp, feature_map)]
                 else:
-                    self.vocalics_per_subject[player_id].append(
+                    vocalics_per_subject[player_id].append(
                         Vocalics(timestamp, feature_map))
+
+        return vocalics_per_subject
 
     def _connect(self) -> Any:
         connection = None
@@ -54,7 +57,8 @@ class VocalicsReader:
                                           port=self._port,
                                           database=self._database)
         except (Exception, psycopg2.Error) as error:
-            raise RuntimeError("Error while connecting to the database: " + str(error))
+            raise RuntimeError(
+                "Error while connecting to the database: " + str(error))
 
         return connection
 
