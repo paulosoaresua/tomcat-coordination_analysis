@@ -2,11 +2,7 @@ from typing import Any, Dict, List, Tuple
 
 import psycopg2
 
-
-class Vocalics:
-    def __init__(self, timestamp: Any, features: Dict[str, float]):
-        self.timestamp = timestamp
-        self.features = features
+from .common import Vocalics
 
 
 class VocalicsReader:
@@ -21,7 +17,7 @@ class VocalicsReader:
     def __init__(self,
                  server: str = 'localhost',
                  port: int = 5432,
-                 database: str = 'asist_vocalics'):
+                 database: str = 'asist_vocalics') -> None:
         self._server = server
         self._port = port
         self._database = database
@@ -30,7 +26,7 @@ class VocalicsReader:
              trial_id: str,
              initial_timestamp: Any,
              final_timestamp: Any,
-             feature_names: List[str]):
+             feature_names: List[str]) -> Dict[str, List[Vocalics]]:
         vocalics_per_subject = {}
 
         with self._connect() as connection:
