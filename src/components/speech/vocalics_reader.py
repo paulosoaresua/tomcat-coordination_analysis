@@ -51,6 +51,11 @@ class VocalicsReader:
                     vocalics_per_subject[player_id].append(
                         Vocalics(parse(timestamp), feature_map))
 
+        # Sort the vocalics
+        for subject_id in vocalics_per_subject.keys():
+            vocalics_per_subject[subject_id] = sorted(
+                vocalics_per_subject[subject_id], key=lambda vocalic: vocalic.timestamp)
+
         return vocalics_per_subject
 
     def _connect(self) -> Any:

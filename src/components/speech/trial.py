@@ -2,9 +2,9 @@ import json
 from typing import Any, Dict, List
 
 from dateutil.parser import parse
-
 from src.components.speech.common import Utterance
 from src.components.speech.vocalics_reader import VocalicsReader
+from tqdm import tqdm
 
 
 class Trial:
@@ -32,6 +32,7 @@ class Trial:
     def _parse_metadata_file(self, filepath: str) -> None:
         asr_messages = self._get_asr_msgs_and_store_info(filepath)
 
+        pbar = tqdm(total = len(asr_messages))
         for asr_message in asr_messages:
             # Comparing header timestamp
             header_timestamp = parse(asr_message["header"]["timestamp"])
@@ -40,10 +41,15 @@ class Trial:
                 # Ignore utterances before the trial starts.
                 # If an utterance started before but finished after the trial started,
                 # we include the full utterance in the list anyway
+                pbar.update()
                 continue
             if header_timestamp > self.end:
                 # Stop looking for utterances after the trial ends
+                pbar.n = len(asr_messages)
+                pbar.close()
                 break
+
+            pbar.update()
 
             subject_id = asr_message["data"]["participant_id"]
             msg_start_timestamp = parse(asr_message["data"]["start_timestamp"])
@@ -63,6 +69,11 @@ class Trial:
         assert self.id
         assert self.start is not None
         assert self.end is not None
+
+        # Sort the utterances
+        for subject_id in self.utterances_per_subject.keys():
+            self.utterances_per_subject[subject_id] = sorted(
+                self.utterances_per_subject[subject_id], key=lambda utterance: utterance.start)
 
         self._read_vocalic_features_for_utterances()
 
@@ -127,9 +138,11 @@ class Trial:
 
             vocalics = vocalics_per_subject[subject_id]
 
-            v = 0
             for u in range(len(self.utterances_per_subject[subject_id])):
                 num_measurements = 0
+
+                # reset the vocalics index here just in case there are overlapping utterances for a subject
+                v = 0
 
                 sum_vocalic_features: Dict[str, float] = {}
 
