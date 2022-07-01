@@ -10,17 +10,20 @@ class Vocalics:
 class Utterance:
     def __init__(self,
                  subject_id: str,
-                 start: Any, end: Any,
-                 text: str,
-                 vocalic_series: List[Vocalics] = [],
-                 average_vocalics: Dict[str, float] = {}):
+                 start: str,
+                 end: str,
+                 text: str):
         self.subject_id = subject_id
         self.start = start
         self.end = end
         self.text = text
-        self.vocalic_series = vocalic_series
+        
+        # Avoid creating default parameters for vocalic_series and average_vocalics.
+        # For unknown reasons, the default lists are tied together, changing one also
+        # changes the other.
+        self.vocalic_series = []
         # A value per feature
-        self.average_vocalics = average_vocalics
+        self.average_vocalics = {}
 
 
 class SegmentedUtterance:
