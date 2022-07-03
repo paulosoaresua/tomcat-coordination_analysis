@@ -32,6 +32,11 @@ class Trial:
     def _parse_metadata_file(self, filepath: str) -> None:
         asr_messages = self._get_asr_msgs_and_store_info(filepath)
 
+        # Verify that these fields are filled
+        assert self.id
+        assert self.start is not None
+        assert self.end is not None
+
         pbar = tqdm(total = len(asr_messages))
         for asr_message in asr_messages:
             # Comparing header timestamp
@@ -64,16 +69,6 @@ class Trial:
                 self.utterances_per_subject[subject_id].append(utterance)
             else:
                 self.utterances_per_subject[subject_id] = [utterance]
-
-        # Verify that these fields are filled
-        assert self.id
-        assert self.start is not None
-        assert self.end is not None
-
-        # Sort the utterances
-        for subject_id in self.utterances_per_subject.keys():
-            self.utterances_per_subject[subject_id] = sorted(
-                self.utterances_per_subject[subject_id], key=lambda utterance: utterance.start)
 
         self._read_vocalic_features_for_utterances()
 
@@ -138,7 +133,7 @@ class Trial:
 
             vocalics = vocalics_per_subject[subject_id]
 
-            for u in range(len(self.utterances_per_subject[subject_id])):
+            for u, utterance in enumerate(self.utterances_per_subject[subject_id]):
                 num_measurements = 0
 
                 # reset the vocalics index here just in case there are overlapping utterances for a subject
@@ -147,11 +142,11 @@ class Trial:
                 sum_vocalic_features: Dict[str, float] = {}
 
                 # Find start index of vocalic features that matches the start of an utterance
-                while v < len(vocalics) and vocalics[v].timestamp <= self.utterances_per_subject[subject_id][u].start:
+                while v < len(vocalics) and vocalics[v].timestamp <= utterance.start:
                     v += 1
 
                 # Collect vocalic features within an utterance
-                while v < len(vocalics) and vocalics[v].timestamp <= self.utterances_per_subject[subject_id][u].end:
+                while v < len(vocalics) and vocalics[v].timestamp <= utterance.end:
                     self.utterances_per_subject[subject_id][u].vocalic_series.append(vocalics[v])
 
                     # Accumulate vocalic features to average later
@@ -172,5 +167,5 @@ class Trial:
                 if num_measurements == 0:
                     print(
                         "[WARN] No vocalic features detected for utterance between " +
-                        f"{self.utterances_per_subject[subject_id][u].start.isoformat()} and {self.utterances_per_subject[subject_id][u].end.isoformat()}" + 
+                        f"{utterance.start.isoformat()} and {utterance.end.isoformat()}" + 
                         f" for subject {subject_id} in trial {self.id}.")
