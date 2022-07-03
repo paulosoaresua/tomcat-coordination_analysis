@@ -131,3 +131,5 @@ dmypy.json
 # Misc
 data/
 .idea/
+.DS_Store
+.vscode/
