@@ -132,7 +132,7 @@ class Trial:
 
             vocalics = vocalics_per_subject[subject_id]
 
-            for u, utterance in enumerate(self.utterances_per_subject[subject_id]):
+            for utterance in self.utterances_per_subject[subject_id]:
                 num_measurements = 0
 
                 # reset the vocalics index here just in case there are overlapping utterances for a subject
@@ -146,7 +146,7 @@ class Trial:
 
                 # Collect vocalic features within an utterance
                 while v < len(vocalics) and vocalics[v].timestamp <= utterance.end:
-                    self.utterances_per_subject[subject_id][u].vocalic_series.append(vocalics[v])
+                    utterance.vocalic_series.append(vocalics[v])
 
                     # Accumulate vocalic features to average later
                     for feature_name, feature_value in vocalics[v].features.items():
@@ -161,7 +161,7 @@ class Trial:
                 # Compute average vocalics
                 if num_measurements > 0:
                     for name, value in sum_vocalic_features.items():
-                        self.utterances_per_subject[subject_id][u].average_vocalics[name] = value / float(num_measurements)
+                        utterance.average_vocalics[name] = value / float(num_measurements)
 
                 if num_measurements == 0:
                     print(
