@@ -39,16 +39,16 @@ class Trial:
 
         pbar = tqdm(total = len(asr_messages))
         for asr_message in asr_messages:
-            # Comparing header timestamp
-            header_timestamp = parse(asr_message["header"]["timestamp"])
             msg_end_timestamp = parse(asr_message["data"]["end_timestamp"])
-            if header_timestamp < self.start and msg_end_timestamp > self.start:
+            if msg_end_timestamp < self.start:
                 # Ignore utterances before the trial starts.
                 # If an utterance started before but finished after the trial started,
                 # we include the full utterance in the list anyway
                 pbar.update()
                 continue
-            if header_timestamp > self.end:
+
+            msg_start_timestamp = parse(asr_message["data"]["start_timestamp"])
+            if msg_start_timestamp > self.end:
                 # Stop looking for utterances after the trial ends
                 pbar.n = len(asr_messages)
                 pbar.close()
@@ -57,7 +57,6 @@ class Trial:
             pbar.update()
 
             subject_id = asr_message["data"]["participant_id"]
-            msg_start_timestamp = parse(asr_message["data"]["start_timestamp"])
             text = asr_message["data"]["text"]
 
             utterance = Utterance(subject_id,
