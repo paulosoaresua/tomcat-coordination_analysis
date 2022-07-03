@@ -1,4 +1,4 @@
-from typing import Tuple, Any, List, Dict
+from typing import List, Dict
 from enum import Enum
 import numpy as np
 from src.components.speech.common import Utterance, SegmentedUtterance, VocalicsComponent
@@ -16,18 +16,41 @@ class VocalicsAggregator:
         # It considers the entire current and next utterances regardless of whether they overlap.
         OVERLAP = 3
 
-    def __init__(self, utterances_per_subject: Dict[str, List[Utterance]]):
+    def __init__(self, utterances_per_subject: Dict[str, List[Utterance]]) -> None:
+        """Aggregate vocalic features from speech
+
+        Args:
+            utterances_per_subject (Dict[str, List[Utterance]]): utterances of each subject
+        """
         self._utterances_per_subject = utterances_per_subject
 
-    def split(self, method: SplitMethod):
-        if method == VocalicsAggregator.SplitMethod.TRUNCATE_CURRENT:
-            self.split_with_current_utterance_truncation()
-        elif method == VocalicsAggregator.SplitMethod.TRUNCATE_CURRENT:
-            self.split_with_next_utterance_truncation()
-        else:
-            self.split_with_overlap()
+    def split(self, method: SplitMethod) -> VocalicsComponent:
+        """Dispatch splitting vocalic feature method
 
-    def split_with_current_utterance_truncation(self):
+        Args:
+            method (SplitMethod): method for splitting vocalic feature
+
+        Raises:
+            RuntimeError: unknown split method
+
+        Returns:
+            VocalicsComponent: vocalics component
+        """
+        if method == VocalicsAggregator.SplitMethod.TRUNCATE_CURRENT:
+            return self._split_with_current_utterance_truncation()
+        elif method == VocalicsAggregator.SplitMethod.TRUNCATE_NEXT:
+            return self._split_with_next_utterance_truncation()
+        elif method == VocalicsAggregator.SplitMethod.OVERLAP:
+            return self._split_with_overlap()
+        else:
+            raise RuntimeError("invalid split method choice")
+
+    def _split_with_current_utterance_truncation(self) -> VocalicsComponent:
+        """Split vocalic feature and truncate overlapped utterances.
+
+        Returns:
+            VocalicsComponent: vocalics component
+        """
         utterances = []
         for _, u in self._utterances_per_subject.items():
             utterances.extend(u)
@@ -72,9 +95,8 @@ class VocalicsAggregator:
 
         return VocalicsComponent(series_a, series_b)
 
-    def split_with_next_utterance_truncation(self):
-        pass
+    def _split_with_next_utterance_truncation(self):
+        raise RuntimeError("Not implemented")
 
-    def split_with_overlap(self):
-        pass
-
+    def _split_with_overlap(self):
+        raise RuntimeError("Not implemented")
