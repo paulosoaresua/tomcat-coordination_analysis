@@ -105,7 +105,7 @@ class Trial:
                     print(f"[ERROR] Bad json line of len: {len(line)}, {line}")
 
         sorted_asr_messages = sorted(
-            asr_messages, key=lambda x: parse(x["@timestamp"])
+            asr_messages, key=lambda x: parse(x["header"]["timestamp"])
         )
 
         return sorted_asr_messages
