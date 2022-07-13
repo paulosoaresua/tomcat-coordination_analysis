@@ -19,9 +19,9 @@ class VocalicsReader:
     LEN_TIMESTAMP_STRING = 30
 
     def __init__(self,
-                 server: str = 'localhost',
+                 server: str = "localhost",
                  port: int = 5432,
-                 database: str = 'asist_vocalics') -> None:
+                 database: str = "asist_vocalics_replay") -> None:
         self._server = server
         self._port = port
         self._database = database

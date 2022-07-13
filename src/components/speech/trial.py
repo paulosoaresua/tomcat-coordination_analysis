@@ -19,13 +19,18 @@ class Trial:
     MISSION_STATE_TOPIC = "observations/events/mission"
     VOCALIC_FEATURES = ["pitch", "intensity"]
 
-    def __init__(self, filepath: str):
+    def __init__(self,
+                 filepath: str,
+                 ignore_outside_mission: bool = True,
+                 no_vocalics: bool = False):
         self.utterances_per_subject: Dict[str, List[Utterance]] = {}
         self.subject_ids = []
-        self.subject_id_to_color = []
+        self.subject_id_to_color = {}
         self.id = ''
         self.start = None
         self.end = None
+        self.ignore_outside_mission = ignore_outside_mission
+        self.no_vocalics = no_vocalics
 
         self._parse_metadata_file(filepath)
 
@@ -34,42 +39,50 @@ class Trial:
 
         # Verify that these fields are filled
         assert self.id
-        assert self.start is not None
-        assert self.end is not None
 
-        pbar = tqdm(total = len(asr_messages))
+        if self.ignore_outside_mission:
+            assert self.start is not None
+            assert self.end is not None
+
+        pbar = tqdm(total=len(asr_messages))
         for asr_message in asr_messages:
             msg_end_timestamp = parse(asr_message["data"]["end_timestamp"])
-            if msg_end_timestamp < self.start:
-                # Ignore utterances before the trial starts.
-                # If an utterance started before but finished after the trial started,
-                # we include the full utterance in the list anyway
-                pbar.update()
-                continue
-
             msg_start_timestamp = parse(asr_message["data"]["start_timestamp"])
-            if msg_start_timestamp > self.end:
-                # Stop looking for utterances after the trial ends
-                pbar.n = len(asr_messages)
-                pbar.close()
-                break
+
+            if self.ignore_outside_mission:
+                if msg_end_timestamp < self.start:
+                    # Ignore utterances before the trial starts.
+                    # If an utterance started before but finished after the trial started,
+                    # we include the full utterance in the list anyway
+                    pbar.update()
+                    continue
+
+                if msg_start_timestamp > self.end:
+                    # Stop looking for utterances after the trial ends
+                    pbar.n = len(asr_messages)
+                    pbar.close()
+                    break
 
             pbar.update()
 
-            subject_id = asr_message["data"]["participant_id"]
+            # get subject callsign
+            subject_callsign = self.subject_id_to_color[asr_message["data"]
+                                                        ["participant_id"]]
+
             text = asr_message["data"]["text"]
 
-            utterance = Utterance(subject_id,
+            utterance = Utterance(subject_callsign,
                                   msg_start_timestamp,
                                   msg_end_timestamp,
                                   text)
 
-            if subject_id in self.utterances_per_subject:
-                self.utterances_per_subject[subject_id].append(utterance)
+            if subject_callsign in self.utterances_per_subject:
+                self.utterances_per_subject[subject_callsign].append(utterance)
             else:
-                self.utterances_per_subject[subject_id] = [utterance]
+                self.utterances_per_subject[subject_callsign] = [utterance]
 
-        self._read_vocalic_features_for_utterances()
+        if not self.no_vocalics:
+            self._read_vocalic_features_for_utterances()
 
     def _get_asr_msgs_and_store_info(self, filepath: str) -> List[Dict[str, Any]]:
         asr_messages = []
@@ -89,8 +102,12 @@ class Trial:
                 except:
                     print(f"[ERROR] Bad json line of len: {len(line)}, {line}")
 
+        # sorted_asr_messages = sorted(
+        #     asr_messages, key=lambda x: parse(x["header"]["timestamp"])
+        # )
+
         sorted_asr_messages = sorted(
-            asr_messages, key=lambda x: parse(x["header"]["timestamp"])
+            asr_messages, key=lambda x: parse(x["@timestamp"])
         )
 
         return sorted_asr_messages
@@ -104,11 +121,11 @@ class Trial:
                             for subjectId in json_message["data"]["subjects"]]
         for info in json_message["data"]["client_info"]:
             subject_color = info["callsign"].lower()
-            subject_id = info["subject_id"]
+            subject_id = info["participant_id"]
             self.subject_id_to_color[subject_id] = subject_color
 
             # The ASR agent might use the subject_name as id sometimes.
-            subject_name = info["subjectname"]
+            subject_name = info["playername"]
             self.subject_id_to_color[subject_name] = subject_color
 
     def _store_mission_state(self, json_message: Any) -> None:
@@ -124,13 +141,17 @@ class Trial:
         vocalics_per_subject = reader.read(
             self.id, self.start, self.end, Trial.VOCALIC_FEATURES)
 
-        for subject_id in self.utterances_per_subject.keys():
-            if subject_id not in vocalics_per_subject:
+        vocalics_subject_callsign_to_id = {}
+        for subject_id in vocalics_per_subject.keys():
+            vocalics_subject_callsign_to_id[self.subject_id_to_color[subject_id]] = subject_id
+
+        for subject_callsign in self.utterances_per_subject.keys():
+            if subject_callsign not in vocalics_subject_callsign_to_id.keys():
                 print(
-                    f"[WARN] No vocalic feature found for subject {subject_id}.")
+                    f"[WARN] No vocalic feature found for subject {subject_callsign}.")
                 continue
 
-            vocalics = vocalics_per_subject[subject_id]
+            vocalics = vocalics_per_subject[vocalics_subject_callsign_to_id[subject_callsign]]
 
             for utterance in self.utterances_per_subject[subject_id]:
                 num_measurements = 0
@@ -161,10 +182,11 @@ class Trial:
                 # Compute average vocalics
                 if num_measurements > 0:
                     for name, value in sum_vocalic_features.items():
-                        utterance.average_vocalics[name] = value / float(num_measurements)
+                        utterance.average_vocalics[name] = value / \
+                            float(num_measurements)
 
                 if num_measurements == 0:
                     print(
                         "[WARN] No vocalic features detected for utterance between " +
-                        f"{utterance.start.isoformat()} and {utterance.end.isoformat()}" + 
-                        f" for subject {subject_id} in trial {self.id}.")
+                        f"{utterance.start.isoformat()} and {utterance.end.isoformat()}" +
+                        f" for subject {subject_id} in trial {self.id}. Text: {utterance.text}")
