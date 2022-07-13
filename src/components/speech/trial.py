@@ -160,8 +160,9 @@ class Trial:
 
             vocalics = vocalics_per_subject[vocalics_subject_callsign_to_id[subject_callsign]]
 
-            num_measurements = 0
-            for utterance in tqdm(self.utterances_per_subject[subject_callsign], desc=subject_callsign):
+            for utterance in self.utterances_per_subject[subject_callsign]:
+                num_measurements = 0
+
                 # reset the vocalics index here just in case there are overlapping utterances for a subject
                 v = 0
 
