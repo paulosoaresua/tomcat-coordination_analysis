@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
 from dateutil.parser import parse
@@ -19,26 +19,31 @@ class VocalicsReader:
     LEN_TIMESTAMP_STRING = 30
 
     def __init__(self,
-                 server: str = 'localhost',
+                 server: str = "localhost",
                  port: int = 5432,
-                 database: str = 'asist_vocalics') -> None:
+                 database: str = "asist_vocalics_replay") -> None:
         self._server = server
         self._port = port
         self._database = database
 
     def read(self,
              trial_id: str,
-             initial_timestamp: datetime,
-             final_timestamp: datetime,
-             feature_names: List[str]) -> Dict[str, List[Vocalics]]:
+             feature_names: List[str],
+             initial_timestamp: Optional[datetime] = None,
+             final_timestamp: Optional[datetime] = None,) -> Dict[str, List[Vocalics]]:
         vocalics_per_subject = {}
 
         with self._connect() as connection:
-            records = VocalicsReader._read_features(connection,
-                                                    trial_id,
-                                                    initial_timestamp,
-                                                    final_timestamp,
-                                                    feature_names)
+            if initial_timestamp is None or final_timestamp is None:
+                records = VocalicsReader._read_features(connection, trial_id, feature_names)
+            else:
+                records = VocalicsReader._read_features_between_timestamps(
+                    connection,
+                    trial_id,
+                    feature_names,
+                    initial_timestamp,
+                    final_timestamp)
+
             for player_id, timestamp, *features_record in records:
                 feature_map = {}
                 for i, feature_name in enumerate(feature_names):
@@ -71,11 +76,11 @@ class VocalicsReader:
         return connection
 
     @staticmethod
-    def _read_features(connection: Any,
-                       trial_id: str,
-                       initial_timestamp: datetime,
-                       final_timestamp: datetime,
-                       feature_names: List[str]) -> List[Tuple[Any]]:
+    def _read_features_between_timestamps(connection: Any,
+                                          trial_id: str,
+                                          initial_timestamp: datetime,
+                                          final_timestamp: datetime,
+                                          feature_names: List[str]) -> List[Tuple[Any]]:
 
         db_feature_list = ",".join(
             [VocalicsReader.FEATURE_MAP[feature_name] for feature_name in feature_names])
@@ -92,4 +97,19 @@ class VocalicsReader:
         cursor = connection.cursor()
         cursor.execute(
             query, (trial_id, initial_timestamp_formatted, final_timestamp_formatted))
+        return cursor.fetchall()
+
+    @staticmethod
+    def _read_features(connection: Any,
+                       trial_id: str,
+                       feature_names: List[str]) -> List[Tuple[Any]]:
+
+        db_feature_list = ",".join(
+            [VocalicsReader.FEATURE_MAP[feature_name] for feature_name in feature_names])
+
+        query = f"SELECT participant, timestamp, {db_feature_list} FROM features WHERE " + \
+            "trial_id = %s ORDER BY participant, timestamp"
+
+        cursor = connection.cursor()
+        cursor.execute(query, (trial_id,))
         return cursor.fetchall()
