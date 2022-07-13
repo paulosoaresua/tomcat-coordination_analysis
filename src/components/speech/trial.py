@@ -27,8 +27,10 @@ class Trial:
         self.subject_ids = []
         self.subject_id_to_color = {}
         self.id = ''
-        self.start = None
-        self.end = None
+        self.trial_start = None
+        self.trial_end = None
+        self.mission_start = None
+        self.mission_end = None
         self.ignore_outside_mission = ignore_outside_mission
         self.no_vocalics = no_vocalics
 
@@ -41,8 +43,8 @@ class Trial:
         assert self.id
 
         if self.ignore_outside_mission:
-            assert self.start is not None
-            assert self.end is not None
+            assert self.mission_start is not None
+            assert self.mission_end is not None
 
         pbar = tqdm(total=len(asr_messages))
         for asr_message in asr_messages:
@@ -50,14 +52,14 @@ class Trial:
             msg_start_timestamp = parse(asr_message["data"]["start_timestamp"])
 
             if self.ignore_outside_mission:
-                if msg_end_timestamp < self.start:
+                if msg_end_timestamp < self.mission_start:
                     # Ignore utterances before the trial starts.
                     # If an utterance started before but finished after the trial started,
                     # we include the full utterance in the list anyway
                     pbar.update()
                     continue
 
-                if msg_start_timestamp > self.end:
+                if msg_start_timestamp > self.mission_end:
                     # Stop looking for utterances after the trial ends
                     pbar.n = len(asr_messages)
                     pbar.close()
@@ -102,10 +104,6 @@ class Trial:
                 except:
                     print(f"[ERROR] Bad json line of len: {len(line)}, {line}")
 
-        # sorted_asr_messages = sorted(
-        #     asr_messages, key=lambda x: parse(x["header"]["timestamp"])
-        # )
-
         sorted_asr_messages = sorted(
             asr_messages, key=lambda x: parse(x["@timestamp"])
         )
@@ -113,37 +111,46 @@ class Trial:
         return sorted_asr_messages
 
     def _store_trial_info(self, json_message: Any) -> None:
-        self.id = json_message["msg"]["trial_id"]
-        self.number = json_message["data"]["trial_number"]
+        if json_message["msg"]["sub_type"] == "start":
+            self.trial_start = parse(json_message["msg"]["timestamp"])
+            self.id = json_message["msg"]["trial_id"]
+            self.number = json_message["data"]["trial_number"]
 
-        # Stores the list of subject ids in the game and the map between ID and color
-        self.subject_ids = [subjectId.strip()
-                            for subjectId in json_message["data"]["subjects"]]
-        for info in json_message["data"]["client_info"]:
-            subject_color = info["callsign"].lower()
-            subject_id = info["participant_id"]
-            self.subject_id_to_color[subject_id] = subject_color
+            # Stores the list of subject ids in the game and the map between ID and color
+            self.subject_ids = [subjectId.strip()
+                                for subjectId in json_message["data"]["subjects"]]
+            for info in json_message["data"]["client_info"]:
+                subject_color = info["callsign"].lower()
+                subject_id = info["participant_id"]
+                self.subject_id_to_color[subject_id] = subject_color
 
-            # The ASR agent might use the subject_name as id sometimes.
-            subject_name = info["playername"]
-            self.subject_id_to_color[subject_name] = subject_color
+                # The ASR agent might use the subject_name as id sometimes.
+                subject_name = info["playername"]
+                self.subject_id_to_color[subject_name] = subject_color
+        else:
+            self._trial_end = parse(json_message["msg"]["timestamp"])
 
     def _store_mission_state(self, json_message: Any) -> None:
         # Stores the initial and final timestamp of a mission
         state = json_message["data"]["mission_state"].lower()
         if state == "start":
-            self.start = parse(json_message["header"]["timestamp"])
+            self.mission_start = parse(json_message["header"]["timestamp"])
         else:
-            self.end = parse(json_message["header"]["timestamp"])
+            self.mission_end = parse(json_message["header"]["timestamp"])
 
     def _read_vocalic_features_for_utterances(self) -> None:
         reader = VocalicsReader()
-        vocalics_per_subject = reader.read(
-            self.id, self.start, self.end, Trial.VOCALIC_FEATURES)
+        vocalics_per_subject = reader.read(self.id, Trial.VOCALIC_FEATURES)
 
+        earliest_vocalics_timestamp = None
         vocalics_subject_callsign_to_id = {}
-        for subject_id in vocalics_per_subject.keys():
+        for subject_id, vocalics in vocalics_per_subject.items():
             vocalics_subject_callsign_to_id[self.subject_id_to_color[subject_id]] = subject_id
+
+            if earliest_vocalics_timestamp is None or earliest_vocalics_timestamp > vocalics[0].timestamp:
+                earliest_vocalics_timestamp = vocalics[0].timestamp
+
+        timestamp_offset = self.trial_start - earliest_vocalics_timestamp
 
         for subject_callsign in self.utterances_per_subject.keys():
             if subject_callsign not in vocalics_subject_callsign_to_id.keys():
@@ -153,20 +160,19 @@ class Trial:
 
             vocalics = vocalics_per_subject[vocalics_subject_callsign_to_id[subject_callsign]]
 
-            for utterance in self.utterances_per_subject[subject_id]:
-                num_measurements = 0
-
+            num_measurements = 0
+            for utterance in tqdm(self.utterances_per_subject[subject_callsign], desc=subject_callsign):
                 # reset the vocalics index here just in case there are overlapping utterances for a subject
                 v = 0
 
                 sum_vocalic_features: Dict[str, float] = {}
 
                 # Find start index of vocalic features that matches the start of an utterance
-                while v < len(vocalics) and vocalics[v].timestamp <= utterance.start:
+                while v < len(vocalics) and vocalics[v].timestamp + timestamp_offset < utterance.start:
                     v += 1
 
                 # Collect vocalic features within an utterance
-                while v < len(vocalics) and vocalics[v].timestamp <= utterance.end:
+                while v < len(vocalics) and vocalics[v].timestamp + timestamp_offset <= utterance.end:
                     utterance.vocalic_series.append(vocalics[v])
 
                     # Accumulate vocalic features to average later
