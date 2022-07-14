@@ -193,7 +193,8 @@ class Trial:
                             float(num_measurements)
 
                 if num_measurements == 0:
+                    subject_callsign = self.subject_id_to_color[subject_id]
                     print(
                         "[WARN] No vocalic features detected for utterance between " +
                         f"{utterance.start.isoformat()} and {utterance.end.isoformat()}" +
-                        f" for subject {subject_id} in trial {self.id}. Text: {utterance.text}")
+                        f" for subject {subject_callsign} in trial {self.id}. Text: {utterance.text}")

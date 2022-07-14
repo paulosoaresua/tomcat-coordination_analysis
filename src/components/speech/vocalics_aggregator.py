@@ -52,46 +52,61 @@ class VocalicsAggregator:
             VocalicsComponent: vocalics component
         """
         utterances = []
-        for _, u in self._utterances_per_subject.items():
+        for u in self._utterances_per_subject.values():
             utterances.extend(u)
 
         # First, we sort utterances by timestamp, regardless of the subject it belongs to.
-        utterances.sort(key=lambda utterance: utterance.timestamp)
+        utterances.sort(key=lambda utterance: utterance.start)
 
         series_a: List[SegmentedUtterance] = []
         series_b: List[SegmentedUtterance] = []
+
         turn_a = True
         raw_vocalics: Dict[str, List[float]] = {}
         segmented_utterance = None
         for i, current_utterance in enumerate(utterances):
+            # start a new segmented utterance if the previous one is completed or not available
             if segmented_utterance is None:
-                segmented_utterance = SegmentedUtterance(current_utterance.start, current_utterance.end)
-                series = {}
+                segmented_utterance = SegmentedUtterance(
+                    current_utterance.start, current_utterance.end)
+
             next_utterance = utterances[i+1] if i < len(utterances) - 1 else None
-            for j, vocalics in enumerate(current_utterance.vocalic_series):
-                if next_utterance is not None and vocalics.timestamp > next_utterance.start:
+
+            if len(current_utterance.vocalic_series) == 0:
+                if current_utterance.end > next_utterance.start:
                     segmented_utterance.end = next_utterance.start
-                    break
-                else:
+            else:
+                for vocalics in current_utterance.vocalic_series:
+                    # if vocalics of current utterance overlaps the next, then move on to next utterance
+                    if next_utterance is not None and vocalics.timestamp > next_utterance.start:
+                        segmented_utterance.end = next_utterance.start
+                        break
+
+                    # add vocalics values to raw_vocalics
                     if len(raw_vocalics) == 0:
-                        raw_vocalics = {feature_name: [] for feature_name in vocalics.features.keys()}
+                        raw_vocalics = {feature_name: []
+                                        for feature_name in vocalics.features.keys()}
 
                     for feature_name, value in vocalics.features.items():
                         raw_vocalics[feature_name].append(value)
 
-                if next_utterance is None or next_utterance.subject_id != current_utterance.subject_id:
-                    # If the subject of the next utterance is the same, we merge the segments
-                    for feature_name, values in raw_vocalics.items():
-                        # Average the vocalics within an utterance
-                        segmented_utterance.average_vocalics[feature_name] = np.mean(values)
+            # If the subject of the next utterance is the same, we merge the segments by keep updating
+            # raw_vocalics and segmented_utterance in the next loop cycle until we encounter utterance 
+            # of a different subject
+            if next_utterance is None or next_utterance.subject_callsign != current_utterance.subject_callsign:
+                for feature_name, values in raw_vocalics.items():
+                    # Average the vocalics within an utterance
+                    segmented_utterance.average_vocalics[feature_name] = np.mean(
+                        values)
 
-                    if turn_a:
-                        series_a.append(segmented_utterance)
-                    else:
-                        series_b.append(segmented_utterance)
+                if turn_a:
+                    series_a.append(segmented_utterance)
+                else:
+                    series_b.append(segmented_utterance)
 
-                    segmented_utterance = None
-                    turn_a = not turn_a
+                segmented_utterance = None
+                raw_vocalics = {}
+                turn_a = not turn_a
 
         return VocalicsComponent(series_a, series_b)
 
