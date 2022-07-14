@@ -1,7 +1,10 @@
-from typing import List, Dict
+from datetime import timedelta
 from enum import Enum
+from typing import Dict, List
+
 import numpy as np
-from src.components.speech.common import Utterance, SegmentedUtterance, VocalicsComponent
+from src.components.speech.common import (SegmentedUtterance, Utterance,
+                                          VocalicsComponent)
 
 
 class VocalicsAggregator:
@@ -16,13 +19,16 @@ class VocalicsAggregator:
         # It considers the entire current and next utterances regardless of whether they overlap.
         OVERLAP = 3
 
-    def __init__(self, utterances_per_subject: Dict[str, List[Utterance]]) -> None:
+    def __init__(self,
+                 utterances_per_subject: Dict[str, List[Utterance]],
+                 timestamp_offset: timedelta) -> None:
         """Aggregate vocalic features from speech
 
         Args:
             utterances_per_subject (Dict[str, List[Utterance]]): utterances of each subject
         """
         self._utterances_per_subject = utterances_per_subject
+        self._timestamp_offset = timestamp_offset
 
     def split(self, method: SplitMethod) -> VocalicsComponent:
         """Dispatch splitting vocalic feature method
@@ -55,7 +61,10 @@ class VocalicsAggregator:
         for u in self._utterances_per_subject.values():
             utterances.extend(u)
 
-        # First, we sort utterances by timestamp, regardless of the subject it belongs to.
+        # remove any utterance with no vocalic features
+        utterances = list(filter(lambda u: len(u.vocalic_series) > 0, utterances))
+
+        # sort utterances by timestamp, regardless of the subject it belongs to.
         utterances.sort(key=lambda utterance: utterance.start)
 
         series_a: List[SegmentedUtterance] = []
@@ -72,23 +81,19 @@ class VocalicsAggregator:
 
             next_utterance = utterances[i+1] if i < len(utterances) - 1 else None
 
-            if len(current_utterance.vocalic_series) == 0:
-                if current_utterance.end > next_utterance.start:
+            for vocalics in current_utterance.vocalic_series:
+                # if vocalics of current utterance overlaps the next, then move on to next utterance
+                if next_utterance is not None and vocalics.timestamp + self._timestamp_offset > next_utterance.start:
                     segmented_utterance.end = next_utterance.start
-            else:
-                for vocalics in current_utterance.vocalic_series:
-                    # if vocalics of current utterance overlaps the next, then move on to next utterance
-                    if next_utterance is not None and vocalics.timestamp > next_utterance.start:
-                        segmented_utterance.end = next_utterance.start
-                        break
+                    break
 
-                    # add vocalics values to raw_vocalics
-                    if len(raw_vocalics) == 0:
-                        raw_vocalics = {feature_name: []
-                                        for feature_name in vocalics.features.keys()}
+                # add vocalics values to raw_vocalics
+                if len(raw_vocalics) == 0:
+                    raw_vocalics = {feature_name: []
+                                    for feature_name in vocalics.features.keys()}
 
-                    for feature_name, value in vocalics.features.items():
-                        raw_vocalics[feature_name].append(value)
+                for feature_name, value in vocalics.features.items():
+                    raw_vocalics[feature_name].append(value)
 
             # If the subject of the next utterance is the same, we merge the segments by keep updating
             # raw_vocalics and segmented_utterance in the next loop cycle until we encounter utterance 
