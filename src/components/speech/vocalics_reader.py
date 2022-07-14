@@ -30,12 +30,27 @@ class VocalicsReader:
              trial_id: str,
              feature_names: List[str],
              initial_timestamp: Optional[datetime] = None,
-             final_timestamp: Optional[datetime] = None,) -> Dict[str, List[Vocalics]]:
+             final_timestamp: Optional[datetime] = None,
+             start_timestamp: Optional[datetime] = None) -> Dict[str, List[Vocalics]]:
+        """Read vocalics from database
+
+        Args:
+            trial_id (str): trial id
+            feature_names (List[str]): features to be extracted from the database
+            initial_timestamp (Optional[datetime], optional): timestamp in database to start collecting. Defaults to None.
+            final_timestamp (Optional[datetime], optional): timestamp in database to stop collecting. Defaults to None.
+            start_timestamp (Optional[datetime], optional): timestamp to offset the vocalics timestamp back to.
+                Can be start of trial or start of mission. Defaults to None.
+
+        Returns:
+            Dict[str, List[Vocalics]]: dictionary of vocalics, with subject id as key
+        """
         vocalics_per_subject = {}
 
         with self._connect() as connection:
             if initial_timestamp is None or final_timestamp is None:
-                records = VocalicsReader._read_features(connection, trial_id, feature_names)
+                records = VocalicsReader._read_features(
+                    connection, trial_id, feature_names)
             else:
                 records = VocalicsReader._read_features_between_timestamps(
                     connection,
@@ -44,17 +59,33 @@ class VocalicsReader:
                     initial_timestamp,
                     final_timestamp)
 
-            for player_id, timestamp, *features_record in records:
+            timestamp_offset = None
+            if start_timestamp is not None:
+                # identify earliest vocalics timestamp
+                earliest_vocalics_timestamp = None
+                for _, timestamp_str, *_ in records:
+                    timestamp = parse(timestamp_str)
+                    if earliest_vocalics_timestamp is None or earliest_vocalics_timestamp > timestamp:
+                        earliest_vocalics_timestamp = timestamp
+
+                timestamp_offset = start_timestamp - earliest_vocalics_timestamp
+
+            # create vocalics objects
+            for player_id, timestamp_str, *features_record in records:
+                timestamp = parse(timestamp_str)
+                if timestamp_offset is not None:
+                    timestamp += timestamp_offset
+
                 feature_map = {}
                 for i, feature_name in enumerate(feature_names):
                     feature_map[feature_name] = features_record[i]
 
                 if player_id not in vocalics_per_subject:
                     vocalics_per_subject[player_id] = [
-                        Vocalics(parse(timestamp), feature_map)]
+                        Vocalics(timestamp, feature_map)]
                 else:
                     vocalics_per_subject[player_id].append(
-                        Vocalics(parse(timestamp), feature_map))
+                        Vocalics(timestamp, feature_map))
 
         # Sort the vocalics
         for subject_id in vocalics_per_subject.keys():

@@ -1,4 +1,3 @@
-from datetime import timedelta
 from enum import Enum
 from typing import Dict, List
 
@@ -19,16 +18,13 @@ class VocalicsAggregator:
         # It considers the entire current and next utterances regardless of whether they overlap.
         OVERLAP = 3
 
-    def __init__(self,
-                 utterances_per_subject: Dict[str, List[Utterance]],
-                 timestamp_offset: timedelta) -> None:
+    def __init__(self, utterances_per_subject: Dict[str, List[Utterance]]) -> None:
         """Aggregate vocalic features from speech
 
         Args:
             utterances_per_subject (Dict[str, List[Utterance]]): utterances of each subject
         """
         self._utterances_per_subject = utterances_per_subject
-        self._timestamp_offset = timestamp_offset
 
     def split(self, method: SplitMethod) -> VocalicsComponent:
         """Dispatch splitting vocalic feature method
@@ -83,7 +79,7 @@ class VocalicsAggregator:
 
             for vocalics in current_utterance.vocalic_series:
                 # if vocalics of current utterance overlaps the next, then move on to next utterance
-                if next_utterance is not None and vocalics.timestamp + self._timestamp_offset > next_utterance.start:
+                if next_utterance is not None and vocalics.timestamp > next_utterance.start:
                     segmented_utterance.end = next_utterance.start
                     break
 

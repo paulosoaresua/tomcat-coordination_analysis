@@ -27,7 +27,6 @@ class Trial:
         self.subject_ids = []
         self.subject_id_to_color = {}
         self.id = ''
-        self.timestamp_offset = None
         self.trial_start = None
         self.trial_end = None
         self.mission_start = None
@@ -141,17 +140,12 @@ class Trial:
 
     def _read_vocalic_features_for_utterances(self) -> None:
         reader = VocalicsReader()
-        vocalics_per_subject = reader.read(self.id, Trial.VOCALIC_FEATURES)
+        vocalics_per_subject = reader.read(
+            self.id, Trial.VOCALIC_FEATURES, start_timestamp=self.trial_start)
 
-        earliest_vocalics_timestamp = None
         vocalics_subject_callsign_to_id = {}
         for subject_id, vocalics in vocalics_per_subject.items():
             vocalics_subject_callsign_to_id[self.subject_id_to_color[subject_id]] = subject_id
-
-            if earliest_vocalics_timestamp is None or earliest_vocalics_timestamp > vocalics[0].timestamp:
-                earliest_vocalics_timestamp = vocalics[0].timestamp
-
-        self.timestamp_offset = self.trial_start - earliest_vocalics_timestamp
 
         for subject_callsign in self.utterances_per_subject.keys():
             if subject_callsign not in vocalics_subject_callsign_to_id.keys():
@@ -170,11 +164,11 @@ class Trial:
                 sum_vocalic_features: Dict[str, float] = {}
 
                 # Find start index of vocalic features that matches the start of an utterance
-                while v < len(vocalics) and vocalics[v].timestamp + self.timestamp_offset < utterance.start:
+                while v < len(vocalics) and vocalics[v].timestamp < utterance.start:
                     v += 1
 
                 # Collect vocalic features within an utterance
-                while v < len(vocalics) and vocalics[v].timestamp + self.timestamp_offset <= utterance.end:
+                while v < len(vocalics) and vocalics[v].timestamp <= utterance.end:
                     utterance.vocalic_series.append(vocalics[v])
 
                     # Accumulate vocalic features to average later
