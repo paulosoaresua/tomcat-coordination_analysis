@@ -13,6 +13,7 @@ class VocalicsWriter:
 
     @staticmethod
     def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, freq_milliseconds: float):
+        # TODO: The series do not need to have the same size. Changing this affects the VocalicsWriter's logic
         # We consider that vocalics data is available to the model at the end of an utterance.
         series_a_out: Dict[str, List[Any]] = {feature_name: [] for feature_name in vocalics_component.feature_names}
         series_b_out: Dict[str, List[Any]] = {feature_name: [] for feature_name in vocalics_component.feature_names}
