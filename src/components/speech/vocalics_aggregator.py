@@ -2,8 +2,8 @@ from enum import Enum
 from typing import Dict, List
 
 import numpy as np
-from src.components.speech.common import (SegmentedUtterance, Utterance,
-                                          VocalicsComponent)
+
+from .common import SegmentedUtterance, Utterance, VocalicsComponent
 
 
 class VocalicsAggregator:
