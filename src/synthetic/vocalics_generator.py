@@ -1,6 +1,7 @@
 from typing import Dict, List, Tuple
 from scipy.stats import norm
 import random
+import numpy as np
 
 
 class VocalicsGenerator:
@@ -70,6 +71,41 @@ class VocalicsGenerator:
 
     def _sample_b(self, feature_name: str, previous_b: float, previous_a: float, coordination: float):
         raise Exception("Not implemented in this class.")
+
+
+class VocalicsGeneratorForDiscreteCoordinationASIST(VocalicsGenerator):
+
+    def __init__(self, coordination_series: List[float], vocalic_features: List[str], time_scale_density: float,
+                 mean_prior: float = 0, std_prior: float = 1, mean_shift_coupled: float = 0, var_coupled: float = 1):
+        super().__init__(coordination_series, vocalic_features, time_scale_density)
+        self._mean_prior = mean_prior
+        self._std_prior = std_prior
+        self._mean_shift_coupled = mean_shift_coupled
+        self._var_coupled = var_coupled
+
+    def _sample_a(self, feature_name: str, previous_a: float, previous_b: float, coordination: float):
+        def sample_from_prior():
+            return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
+
+        if previous_b is None:
+            return sample_from_prior()
+        else:
+            if int(coordination) == 0:
+                return sample_from_prior() if previous_a is None else norm.rvs(loc=previous_a, scale=self._std_prior)
+            else:
+                return norm.rvs(loc=previous_b, scale=np.sqrt(self._var_coupled))
+
+    def _sample_b(self, feature_name: str, previous_b: float, previous_a: float, coordination: float):
+        def sample_from_prior():
+            return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
+
+        if previous_a is None:
+            return sample_from_prior()
+        else:
+            if int(coordination) == 0:
+                return sample_from_prior() if previous_b is None else norm.rvs(loc=previous_b, scale=self._std_prior)
+            else:
+                return norm.rvs(loc=previous_a, scale=np.sqrt(self._var_coupled))
 
 
 class VocalicsGeneratorForDiscreteCoordination(VocalicsGenerator):

@@ -24,6 +24,27 @@ class CoordinationGenerator:
         raise Exception("Not implemented in this class.")
 
 
+class DiscreteCoordinationGeneratorASIST(CoordinationGenerator):
+    """
+    This class generates synthetic values for a binary-variable coordination.
+    """
+
+    def __init__(self, p_prior: float, pc: float):
+        self.__p_prior = p_prior
+        self.__pc = pc
+
+    def _sample_from_prior(self) -> float:
+        return bernoulli.rvs(self.__p_prior)
+
+    def _sample_from_transition(self, previous_c: float) -> float:
+        if bernoulli.rvs(self.__pc) == 1:
+            # Repeat the state
+            return previous_c
+        else:
+            # Flip the state
+            return 1 - previous_c
+
+
 class DiscreteCoordinationGenerator(CoordinationGenerator):
     """
     This class generates synthetic values for a binary-variable coordination.
