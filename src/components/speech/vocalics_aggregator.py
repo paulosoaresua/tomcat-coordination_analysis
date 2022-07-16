@@ -2,8 +2,11 @@ from enum import Enum
 from typing import Dict, List
 
 import numpy as np
-from src.components.speech.common import (SegmentedUtterance, Utterance,
-                                          VocalicsComponent)
+
+from .common import SegmentedUtterance, Utterance, VocalicsComponent
+
+
+UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD = 1
 
 
 class VocalicsAggregator:
@@ -58,7 +61,31 @@ class VocalicsAggregator:
             utterances.extend(u)
 
         # remove any utterance with no vocalic features
-        utterances = list(filter(lambda u: len(u.vocalic_series) > 0, utterances))
+        utterance_missing_vocalics_short_duration = []
+        utterance_missing_vocalics_long_duration = []
+
+        def filter_criteria(utterance: Utterance):
+            if len(utterance.vocalic_series) == 0:
+                if (utterance.end - utterance.start).total_seconds() < UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD:
+                    utterance_missing_vocalics_short_duration.append(utterance)
+                else:
+                    utterance_missing_vocalics_long_duration.append(utterance)
+
+                return False
+
+            return True
+
+        utterances = list(filter(filter_criteria, utterances))
+
+        for utterance in utterance_missing_vocalics_short_duration:
+            print("[WARN] utterance starts " + utterance.start.isoformat() +
+                  " and ends " + utterance.end.isoformat() +
+                  " is short and does not have any vocalics. Text: " + utterance.text)
+
+        for utterance in utterance_missing_vocalics_long_duration:
+            print("[WARN] utterance starts " + utterance.start.isoformat() +
+                  " and ends " + utterance.end.isoformat() +
+                  " is long and does not have any vocalics. Text: " + utterance.text)
 
         # sort utterances by timestamp, regardless of the subject it belongs to.
         utterances.sort(key=lambda utterance: utterance.start)
@@ -92,7 +119,7 @@ class VocalicsAggregator:
                     raw_vocalics[feature_name].append(value)
 
             # If the subject of the next utterance is the same, we merge the segments by keep updating
-            # raw_vocalics and segmented_utterance in the next loop cycle until we encounter utterance 
+            # raw_vocalics and segmented_utterance in the next loop cycle until we encounter utterance
             # of a different subject
             if next_utterance is None or next_utterance.subject_callsign != current_utterance.subject_callsign:
                 for feature_name, values in raw_vocalics.items():
