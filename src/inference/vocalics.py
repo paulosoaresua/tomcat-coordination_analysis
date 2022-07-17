@@ -73,18 +73,18 @@ class DiscreteCoordinationInference:
         for t in range(self.mid_time_step + 1):
             # Contribution of the previous coordination sample to the marginal
             if t == 0:
-                m_forward[t] = np.array([1 - self.prior_c, self.prior_c], dtype=float)
+                m_forward_t_log = np.log(np.array([1 - self.prior_c, self.prior_c], dtype=float))
             else:
-                m_forward[t] = np.matmul(m_forward[t - 1], self.transition_matrix)
+                m_forward_t_log = np.log(np.matmul(m_forward[t - 1], self.transition_matrix))
 
             # Contribution of the components to the coordination marginal
             if t == self.mid_time_step:
                 # All the components contributions after t = M
                 # TODO - This can result in a very small number. Check if we can work on log scale.
-                m_forward[t] *= np.prod(m_comp2coord[t:], axis=0)
+                m_forward_t_log += np.log(np.prod(m_comp2coord[t:], axis=0))
             else:
-                m_forward[t] *= m_comp2coord[t]
-            m_forward[t] /= np.sum(m_forward[t])  # Message normalization
+                m_forward_t_log += np.log(m_comp2coord[t])
+            m_forward[t] = np.exp(m_forward_t_log) / np.sum(np.exp(m_forward_t_log))  # Message normalization
 
         return m_forward
 
@@ -95,12 +95,12 @@ class DiscreteCoordinationInference:
             if t == self.mid_time_step:
                 # All the components contributions after t = M
                 # TODO - This can result in a very small number. Check if we can work on log scale.
-                m_backwards[t] = np.prod(m_comp2coord[t:], axis=0)
+                m_backwards_t_log = np.log(np.prod(m_comp2coord[t:], axis=0))
             else:
-                m_backwards[t] = np.matmul(m_backwards[t + 1], self.transition_matrix)
-                m_backwards[t] *= m_comp2coord[t]
+                m_backwards_t_log = np.log(np.matmul(m_backwards[t + 1], self.transition_matrix))
+                m_backwards_t_log += np.log(m_comp2coord[t])
 
-            m_backwards[t] /= np.sum(m_backwards[t])  # Message normalization
+            m_backwards[t] = np.exp(m_backwards_t_log) / np.sum(np.exp(m_backwards_t_log))  # Message normalization
 
         return m_backwards
 
@@ -192,27 +192,32 @@ def estimate_discrete_coordination(series_a: np.ndarray, series_b: np.ndarray, p
     # Forward messages
     last_ta = None
     last_tb = None
+
     for t in range(T):
         # Contribution of the previous coordination sample to the marginal
         if t == 0:
-            c_forward[t] = np.array([1 - prior_c, prior_c], dtype=float)
+            c_forward_t_log = np.log(np.array([1 - prior_c, prior_c], dtype=float))
         else:
-            c_forward[t] = np.matmul(c_forward[t - 1], transition_matrix)
+            c_forward_t_log = np.log(np.matmul(c_forward[t - 1], transition_matrix))
 
         # Contribution of the vocalic component to the marginal
         previous_a = None if last_ta is None else series_a[last_ta]
         previous_b = None if last_tb is None else series_b[last_tb]
 
         if previous_b is not None:
-            c_leaves[t] *= \
+            c_leaves_t_log = np.log(c_leaves[t]) + np.log(
                 np.ones(2) * (1 - mask_a[t]) + np.array([pa(series_a[t], previous_a, previous_b, 0),
                                                          pa(series_a[t], previous_a, previous_b, 1)]) * mask_a[t]
+            )
         if previous_a is not None:
-            c_leaves[t] *= \
+            c_leaves_t_log = np.log(c_leaves[t]) + np.log(
                 np.ones(2) * (1 - mask_b[t]) + np.array([pb(series_b[t], previous_b, previous_a, 0),
                                                          pb(series_b[t], previous_b, previous_a, 1)]) * mask_b[t]
-        c_forward[t] *= c_leaves[t]
-        c_forward[t] /= np.sum(c_forward[t])
+            )
+        c_leaves[t] = np.exp(c_leaves_t_log)
+
+        c_forward_t_log += c_leaves_t_log
+        c_forward[t] = np.exp(c_forward_t_log) / np.sum(np.exp(c_forward_t_log))
 
         if mask_a[t] == 1:
             last_ta = t
@@ -222,20 +227,21 @@ def estimate_discrete_coordination(series_a: np.ndarray, series_b: np.ndarray, p
     # Backward messages
     for t in range(T - 1, -1, -1):
         if t == T - 1:
-            c_backwards[t] = np.ones(2)
+            c_backwards_t_log = np.log(np.ones(2))
         else:
             # Because the transition probability is symmetric. We can multiply a value in the future by the transition
             # matrix as is to estimate probabilities in the past.
-            c_backwards[t] = np.matmul(c_backwards[t + 1], transition_matrix)
+            c_backwards_t_log = np.log(np.matmul(c_backwards[t + 1], transition_matrix))
 
         # Contribution of the vocalic component to the marginal
-        c_backwards[t] *= c_leaves[t]
-        c_backwards[t] /= np.sum(c_backwards[t])
+        c_backwards_t_log += np.log(c_leaves[t])
+        c_backwards[t] = np.exp(c_backwards_t_log) / np.sum(np.exp(c_backwards[t]))
 
     c_backwards = np.roll(c_backwards, shift=-1, axis=0)
     c_backwards[-1] = 1
-    c_marginals = c_forward * np.matmul(c_backwards, transition_matrix)
-    c_marginals /= np.sum(c_marginals, axis=1, keepdims=True)
+
+    c_marginals_log = np.log(c_forward) + np.log(np.matmul(c_backwards, transition_matrix))
+    c_marginals = np.exp(c_marginals_log) / np.sum(np.exp(c_marginals, axis=1, keepdims=True))
 
     return c_marginals
 
