@@ -71,36 +71,45 @@ class DiscreteCoordinationInference:
     def __forward(self, m_comp2coord: np.ndarray):
         m_forward = np.zeros((self.mid_time_step + 1, 2))
         for t in range(self.mid_time_step + 1):
+            # Transform to log scale for numerical stability
+
             # Contribution of the previous coordination sample to the marginal
             if t == 0:
-                m_forward[t] = np.array([1 - self.prior_c, self.prior_c], dtype=float)
+                m_forward[t] = np.log(np.array([1 - self.prior_c, self.prior_c], dtype=float) + EPSILON)
             else:
-                m_forward[t] = np.matmul(m_forward[t - 1], self.transition_matrix)
+                m_forward[t] = np.log(np.matmul(m_forward[t - 1], self.transition_matrix) + EPSILON)
 
             # Contribution of the components to the coordination marginal
             if t == self.mid_time_step:
                 # All the components contributions after t = M
-                # TODO - This can result in a very small number. Check if we can work on log scale.
-                m_forward[t] *= np.prod(m_comp2coord[t:], axis=0)
+                m_forward[t] += np.sum(np.log(m_comp2coord[t:]) + EPSILON, axis=0)
             else:
-                m_forward[t] *= m_comp2coord[t]
-            m_forward[t] /= np.sum(m_forward[t])  # Message normalization
+                m_forward[t] += np.log(m_comp2coord[t] + EPSILON)
+
+            # Message normalization
+            m_forward[t] -= np.max(m_forward[t])
+            m_forward[t] = np.exp(m_forward[t])
+            m_forward[t] /= np.sum(m_forward[t])
 
         return m_forward
 
     def __backwards(self, m_comp2coord: np.ndarray):
         m_backwards = np.zeros((self.mid_time_step + 1, 2))
         for t in range(self.mid_time_step, -1, -1):
+            # Transform to log scale for numerical stability
+
             # Contribution of the next coordination sample to the marginal
             if t == self.mid_time_step:
                 # All the components contributions after t = M
-                # TODO - This can result in a very small number. Check if we can work on log scale.
-                m_backwards[t] = np.prod(m_comp2coord[t:], axis=0)
+                m_backwards[t] = np.sum(np.log(m_comp2coord[t:] + EPSILON), axis=0)
             else:
-                m_backwards[t] = np.matmul(m_backwards[t + 1], self.transition_matrix)
-                m_backwards[t] *= m_comp2coord[t]
+                m_backwards[t] = np.log(np.matmul(m_backwards[t + 1], self.transition_matrix) + EPSILON)
+                m_backwards[t] += np.log(m_comp2coord[t] + EPSILON)
 
-            m_backwards[t] /= np.sum(m_backwards[t])  # Message normalization
+            # Message normalization
+            m_backwards[t] -= np.max(m_backwards[t])
+            m_backwards[t] = np.exp(m_backwards[t])
+            m_backwards[t] /= np.sum(m_backwards[t])
 
         return m_backwards
 
@@ -132,6 +141,10 @@ class DiscreteCoordinationInference:
                 # For C_t = 1
                 c1 = addition_factor + mask_main_series * np.prod(
                     norm.pdf(current_value_main_series, loc=previous_value_other_series, scale=coupling_std))
+
+            if c0 <= EPSILON and c1 <= EPSILON:
+                c0 = 0.5
+                c1 = 0.5
 
             return np.array([c0, c1])
 

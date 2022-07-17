@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, List
+from datetime import datetime
 
 from dateutil.parser import parse
 from src.components.speech.common import Utterance
@@ -137,7 +138,7 @@ class Trial:
                 subject_name = info["playername"]
                 self.subject_id_to_color[subject_name] = subject_color
         else:
-            self._trial_end = parse(json_message["msg"]["timestamp"])
+            self.trial_end = parse(json_message["msg"]["timestamp"])
 
     def _store_mission_state(self, json_message: Any) -> None:
         # Stores the initial and final timestamp of a mission
