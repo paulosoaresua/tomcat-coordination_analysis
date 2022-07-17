@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
 from dateutil.parser import parse
+from tqdm import tqdm
 
 from .common import Vocalics
 
@@ -62,15 +63,11 @@ class VocalicsReader:
             timestamp_offset = None
             if start_timestamp is not None:
                 # identify earliest vocalics timestamp
-                earliest_vocalics_timestamp = None
-                for _, timestamp_str, *_ in records:
-                    timestamp = parse(timestamp_str)
-                    if earliest_vocalics_timestamp is None or earliest_vocalics_timestamp > timestamp:
-                        earliest_vocalics_timestamp = timestamp
-
+                earliest_vocalics_timestamp = parse(VocalicsReader._read_earliest_timestamp(connection, trial_id))
                 timestamp_offset = start_timestamp - earliest_vocalics_timestamp
 
             # create vocalics objects
+            pbar = tqdm(total=len(records))
             for player_id, timestamp_str, *features_record in records:
                 timestamp = parse(timestamp_str)
                 if timestamp_offset is not None:
@@ -86,6 +83,7 @@ class VocalicsReader:
                 else:
                     vocalics_per_subject[player_id].append(
                         Vocalics(timestamp, feature_map))
+                pbar.update()
 
         # Sort the vocalics
         for subject_id in vocalics_per_subject.keys():
@@ -117,7 +115,7 @@ class VocalicsReader:
             [VocalicsReader.FEATURE_MAP[feature_name] for feature_name in feature_names])
 
         query = f"SELECT participant, timestamp, {db_feature_list} FROM features WHERE trial_id = %s AND " + \
-            "timestamp >= %s AND timestamp <= %s ORDER BY participant, timestamp"
+                "timestamp >= %s AND timestamp <= %s ORDER BY participant, timestamp"
 
         # Transform isoformat of python into timestamp string to match database timestamp
         initial_timestamp_formatted = initial_timestamp.isoformat().ljust(
@@ -131,6 +129,17 @@ class VocalicsReader:
         return cursor.fetchall()
 
     @staticmethod
+    def _read_earliest_timestamp(connection: Any,
+                                 trial_id: str) -> str:
+
+        query = f"SELECT min(timestamp) FROM features WHERE trial_id = %s"
+
+        cursor = connection.cursor()
+        cursor.execute(
+            query, (trial_id,))
+        return cursor.fetchall()[0][0]
+
+    @staticmethod
     def _read_features(connection: Any,
                        trial_id: str,
                        feature_names: List[str]) -> List[Tuple[Any]]:
@@ -139,7 +148,7 @@ class VocalicsReader:
             [VocalicsReader.FEATURE_MAP[feature_name] for feature_name in feature_names])
 
         query = f"SELECT participant, timestamp, {db_feature_list} FROM features WHERE " + \
-            "trial_id = %s ORDER BY participant, timestamp"
+                "trial_id = %s ORDER BY participant, timestamp"
 
         cursor = connection.cursor()
         cursor.execute(query, (trial_id,))

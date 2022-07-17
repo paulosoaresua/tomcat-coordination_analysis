@@ -12,20 +12,22 @@ class VocalicsWriter:
     """
 
     @staticmethod
-    def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, freq_milliseconds: float):
-        # TODO: The series do not need to have the same size. Changing this affects the VocalicsWriter's logic
+    def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, time_steps: int,
+              freq_milliseconds: float = 1 / 1000):
         # We consider that vocalics data is available to the model at the end of an utterance.
-        series_a_out: Dict[str, List[Any]] = {feature_name: [] for feature_name in vocalics_component.feature_names}
-        series_b_out: Dict[str, List[Any]] = {feature_name: [] for feature_name in vocalics_component.feature_names}
+        series_a_out: Dict[str, List[Any]] = {feature_name: [None] * time_steps for feature_name in
+                                              vocalics_component.feature_names}
+        series_b_out: Dict[str, List[Any]] = {feature_name: [None] * time_steps for feature_name in
+                                              vocalics_component.feature_names}
 
-        if vocalics_component.size > 0:
+        size = len(vocalics_component.series_a)
+
+        if size > 0:
             timestamp = initial_timestamp
-            for i in range(vocalics_component.size):
+            for i in range(size):
                 diff = vocalics_component.series_a[i].end - timestamp
-                time_steps = (diff.total_seconds() * 1000) * freq_milliseconds
+                time_steps = int((diff.total_seconds() * 1000) * freq_milliseconds)
                 for feature_name in vocalics_component.feature_names:
-                    # No data until the end of an utterance from series A
-                    series_a_out[feature_name].extend([None] * time_steps)
                     # Data available in the end of an utterance from series A
                     series_a_out[feature_name].append(vocalics_component.series_a[i].average_vocalics[feature_name])
 
@@ -33,8 +35,6 @@ class VocalicsWriter:
                 diff = vocalics_component.series_b[i].end - timestamp
                 time_steps = (diff.total_seconds() * 1000) * freq_milliseconds
                 for feature_name in vocalics_component.feature_names:
-                    # No data until the end of an utterance from series B
-                    series_b_out[feature_name].extend([None] * time_steps)
                     # Data available in the end of an utterance from series B
                     series_b_out[feature_name].append(vocalics_component.series_b[i].average_vocalics[feature_name])
 
