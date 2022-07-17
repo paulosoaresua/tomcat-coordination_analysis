@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, List
+from datetime import datetime
 
 from dateutil.parser import parse
 from src.components.speech.common import Utterance
@@ -16,13 +17,17 @@ class Trial:
 
     TRIAL_TOPIC = "trial"
     ASR_TOPIC = "agent/asr/final"
+    SCOREBOARD_TOPIC = "observations/events/scoreboard"
     MISSION_STATE_TOPIC = "observations/events/mission"
     VOCALIC_FEATURES = ["pitch", "intensity"]
 
     def __init__(self,
                  filepath: str,
                  ignore_outside_mission: bool = True,
-                 no_vocalics: bool = False):
+                 no_vocalics: bool = False,
+                 server: str = "localhost",
+                 port: int = 5432,
+                 database: str = "asist_vocalics_replay"):
         self.utterances_per_subject: Dict[str, List[Utterance]] = {}
         self.subject_ids = []
         self.subject_id_to_color = {}
@@ -33,6 +38,9 @@ class Trial:
         self.mission_end = None
         self.ignore_outside_mission = ignore_outside_mission
         self.no_vocalics = no_vocalics
+        self.team_score = 0
+
+        self.vocalics_reader = VocalicsReader(server, port, database)
 
         self._parse_metadata_file(filepath)
 
@@ -69,7 +77,7 @@ class Trial:
 
             # get subject callsign
             subject_callsign = self.subject_id_to_color[asr_message["data"]
-                                                        ["participant_id"]]
+            ["participant_id"]]
 
             text = asr_message["data"]["text"]
 
@@ -101,6 +109,8 @@ class Trial:
                         asr_messages.append(json_message)
                     elif topic == Trial.MISSION_STATE_TOPIC:
                         self._store_mission_state(json_message)
+                    elif topic == Trial.SCOREBOARD_TOPIC:
+                        self._store_team_score(json_message)
                 except:
                     print(f"[ERROR] Bad json line of len: {len(line)}, {line}")
 
@@ -128,7 +138,7 @@ class Trial:
                 subject_name = info["playername"]
                 self.subject_id_to_color[subject_name] = subject_color
         else:
-            self._trial_end = parse(json_message["msg"]["timestamp"])
+            self.trial_end = parse(json_message["msg"]["timestamp"])
 
     def _store_mission_state(self, json_message: Any) -> None:
         # Stores the initial and final timestamp of a mission
@@ -138,9 +148,11 @@ class Trial:
         else:
             self.mission_end = parse(json_message["header"]["timestamp"])
 
+    def _store_team_score(self, json_message: Any):
+        self.team_score = max(int(json_message["data"]["scoreboard"]["TeamScore"]), self.team_score)
+
     def _read_vocalic_features_for_utterances(self) -> None:
-        reader = VocalicsReader()
-        vocalics_per_subject = reader.read(
+        vocalics_per_subject = self.vocalics_reader.read(
             self.id, Trial.VOCALIC_FEATURES, start_timestamp=self.trial_start)
 
         vocalics_subject_callsign_to_id = {}
@@ -185,7 +197,7 @@ class Trial:
                 if num_measurements > 0:
                     for name, value in sum_vocalic_features.items():
                         utterance.average_vocalics[name] = value / \
-                            float(num_measurements)
+                                                           float(num_measurements)
 
                 if num_measurements == 0:
                     subject_callsign = self.subject_id_to_color[subject_id]

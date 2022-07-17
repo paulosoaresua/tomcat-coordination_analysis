@@ -12,40 +12,32 @@ class VocalicsWriter:
     """
 
     @staticmethod
-    def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, freq_milliseconds: float):
-        # TODO: The series do not need to have the same size. Changing this affects the VocalicsWriter's logic
-        # We consider that vocalics data is available to the model at the end of an utterance.
-        series_a_out: Dict[str, List[Any]] = {feature_name: [] for feature_name in vocalics_component.feature_names}
-        series_b_out: Dict[str, List[Any]] = {feature_name: [] for feature_name in vocalics_component.feature_names}
+    def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, time_steps: int):
+        assert len(vocalics_component.series_a) == len(vocalics_component.series_b)
 
-        if vocalics_component.size > 0:
-            timestamp = initial_timestamp
-            for i in range(vocalics_component.size):
-                diff = vocalics_component.series_a[i].end - timestamp
-                time_steps = (diff.total_seconds() * 1000) * freq_milliseconds
+        # TODO check to see if vocalics time step is bigger than time steps
+
+        # We consider that vocalics data is available to the model at the end of an utterance
+        series_a_out: Dict[str, List[Any]] = {feature_name: [None] * time_steps for feature_name in
+                                              vocalics_component.feature_names}
+        series_b_out: Dict[str, List[Any]] = {feature_name: [None] * time_steps for feature_name in
+                                              vocalics_component.feature_names}
+
+        num_vocalics = len(vocalics_component.series_a)
+
+        if num_vocalics > 0:
+            for i in range(num_vocalics):
+                time_step_a = int((vocalics_component.series_a[i].end - initial_timestamp).total_seconds())
+                time_step_b = int((vocalics_component.series_b[i].end - initial_timestamp).total_seconds())
                 for feature_name in vocalics_component.feature_names:
-                    # No data until the end of an utterance from series A
-                    series_a_out[feature_name].extend([None] * time_steps)
                     # Data available in the end of an utterance from series A
-                    series_a_out[feature_name].append(vocalics_component.series_a[i].average_vocalics[feature_name])
-
-                timestamp = vocalics_component.series_a[i].end
-                diff = vocalics_component.series_b[i].end - timestamp
-                time_steps = (diff.total_seconds() * 1000) * freq_milliseconds
-                for feature_name in vocalics_component.feature_names:
-                    # No data until the end of an utterance from series B
-                    series_b_out[feature_name].extend([None] * time_steps)
-                    # Data available in the end of an utterance from series B
-                    series_b_out[feature_name].append(vocalics_component.series_b[i].average_vocalics[feature_name])
-
-            # At this step, evidence from series A is behind B in the number of time steps. We complement it with None
-            # to equalize the series sizes.
-            for feature_name in vocalics_component.feature_names:
-                series_a_out[feature_name].extend(
-                    [None] * (len(series_b_out[feature_name]) - len(series_a_out[feature_name])))
+                    series_a_out[feature_name][time_step_a] = vocalics_component.series_a[i].average_vocalics[
+                        feature_name]
+                    series_b_out[feature_name][time_step_b] = vocalics_component.series_b[i].average_vocalics[
+                        feature_name]
 
         final_dir = f"{out_dir}/vocalics"
-        os.makedirs(final_dir)
+        os.makedirs(final_dir, exist_ok=True)
 
         with open(f"{final_dir}/series_a.pkl", "wb") as f:
             pickle.dump(series_a_out, f)

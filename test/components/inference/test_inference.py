@@ -87,7 +87,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
         m_comp2coord_expected = m_a2coord_expected * m_b2coord_expected
         m_comp2coord_actual = inference_engine._DiscreteCoordinationInference__get_messages_from_components_to_coordination()
 
-        np.testing.assert_allclose(m_comp2coord_expected, m_comp2coord_actual, rtol=1e-5)
+        np.testing.assert_allclose(m_comp2coord_expected, m_comp2coord_actual, atol=1e-5)
 
     def test_forward_messages(self):
         inference_engine = DiscreteCoordinationInference(self.params.series_a, self.params.series_b,
@@ -131,7 +131,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
         # Message from components to coordination
         m_forward_actual = inference_engine._DiscreteCoordinationInference__forward(m_comp2coord)
 
-        np.testing.assert_allclose(m_forward_expected, m_forward_actual, rtol=1e-5)
+        np.testing.assert_allclose(m_forward_expected, m_forward_actual, atol=1e-5)
 
     def test_backwards_messages(self):
         inference_engine = DiscreteCoordinationInference(self.params.series_a, self.params.series_b,
@@ -174,7 +174,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
         # Message from components to coordination
         m_backwards_actual = inference_engine._DiscreteCoordinationInference__backwards(m_comp2coord)
 
-        np.testing.assert_allclose(m_backwards_expected, m_backwards_actual, rtol=1e-5)
+        np.testing.assert_allclose(m_backwards_expected, m_backwards_actual, atol=1e-5)
 
     def test_marginals(self):
         inference_engine = DiscreteCoordinationInference(self.params.series_a, self.params.series_b,
@@ -256,7 +256,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
 
         m_marginals_actual = inference_engine.estimate_marginals()
 
-        np.testing.assert_allclose(m_marginals_expected, m_marginals_actual, rtol=1e-5)
+        np.testing.assert_allclose(m_marginals_expected, m_marginals_actual, atol=1e-5)
 
 
 if __name__ == '__main__':
