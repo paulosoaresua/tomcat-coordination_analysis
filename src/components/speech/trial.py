@@ -27,11 +27,12 @@ class Trial:
                  no_vocalics: bool = False,
                  server: str = "localhost",
                  port: int = 5432,
-                 database: str = "asist_vocalics_replay"):
+                 database: str = "asist_vocalics"):
         self.utterances_per_subject: Dict[str, List[Utterance]] = {}
         self.subject_ids = []
         self.subject_id_to_color = {}
         self.id = ''
+        self.number = None
         self.trial_start = None
         self.trial_end = None
         self.mission_start = None

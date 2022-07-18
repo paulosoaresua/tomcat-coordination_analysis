@@ -13,7 +13,9 @@ class VocalicsWriter:
 
     @staticmethod
     def write(out_dir: str, vocalics_component: VocalicsComponent, initial_timestamp: Any, time_steps: int):
-        assert len(vocalics_component.series_a) == len(vocalics_component.series_b)
+        assert len(vocalics_component.series_a) == len(vocalics_component.series_b) or \
+            len(vocalics_component.series_a) == len(vocalics_component.series_b) + 1 or \
+            len(vocalics_component.series_a) + 1 == len(vocalics_component.series_b)
 
         # TODO check to see if vocalics time step is bigger than time steps
 
@@ -23,10 +25,10 @@ class VocalicsWriter:
         series_b_out: Dict[str, List[Any]] = {feature_name: [None] * time_steps for feature_name in
                                               vocalics_component.feature_names}
 
-        num_vocalics = len(vocalics_component.series_a)
+        min_length = min(len(vocalics_component.series_a), len(vocalics_component.series_b))
 
-        if num_vocalics > 0:
-            for i in range(num_vocalics):
+        if min_length > 0:
+            for i in range(min_length):
                 time_step_a = int((vocalics_component.series_a[i].end - initial_timestamp).total_seconds())
                 time_step_b = int((vocalics_component.series_b[i].end - initial_timestamp).total_seconds())
                 for feature_name in vocalics_component.feature_names:
