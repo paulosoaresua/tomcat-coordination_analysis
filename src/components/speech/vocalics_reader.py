@@ -21,7 +21,7 @@ class VocalicsReader:
              trial_id: str,
              feature_map: Dict[str, str],
              baseline_time: Optional[datetime],
-             subject_id_map: Dict[str, str]) -> Dict[str, Tuple[np.array, List[datetime]]]:
+             subject_id_map: Dict[str, str]) -> Dict[str, List[Dict[str, Any]]]:
         """
         Reads vocalic features from a specific trial
 
@@ -50,22 +50,16 @@ class VocalicsReader:
                 if timestamp_offset is not None:
                     timestamp += timestamp_offset
 
-                values = []  # List with one value per feature
-                for feature_value in feature_values:
-                    values.append(feature_value)
+                values = {"timestamp": timestamp}
+                for i, feature_name in enumerate(feature_map.keys()):
+                    values[feature_name] = feature_values[i]
 
                 if subject_id not in vocalics_per_subject:
-                    vocalics_per_subject[subject_id] = ([], [])
+                    vocalics_per_subject[subject_id] = []
 
-                vocalics_per_subject[subject_id][0].append(np.array(values).reshape(-1, 1))
-                vocalics_per_subject[subject_id][1].append(timestamp)
+                vocalics_per_subject[subject_id].append(values)
 
                 pbar.update()
-
-            # From list to numpy
-            for subject_id in vocalics_per_subject.keys():
-                vocalics_per_subject[subject_id] = (np.concatenate(vocalics_per_subject[subject_id][0], axis=1),
-                                                    vocalics_per_subject[subject_id][1])
 
         return vocalics_per_subject
 
