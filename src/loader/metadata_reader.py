@@ -50,7 +50,7 @@ class MetadataReader:
                     elif topic == MetadataReader.ASR_TOPIC:
                         asr_messages.append(json_message)
                 except:
-                    logger.error(f"[ERROR] Bad json line of len: {len(line)}, {line}")
+                    logger.error(f"Bad json line of len: {len(line)}, {line}")
 
         trial_metadata.check_validity()
         vocalics = VocalicsComponent.from_asr_messages(asr_messages, trial_metadata, self._database_config,
