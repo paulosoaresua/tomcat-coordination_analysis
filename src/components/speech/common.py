@@ -2,31 +2,6 @@ from datetime import datetime
 from typing import Dict, List
 
 
-class Vocalics:
-    def __init__(self, timestamp: datetime, features: Dict[str, float]):
-        self.timestamp = timestamp
-        self.features = features
-
-
-class Utterance:
-    def __init__(self,
-                 subject_callsign: str,
-                 start: datetime,
-                 end: datetime,
-                 text: str):
-        self.subject_callsign = subject_callsign
-        self.start = start
-        self.end = end
-        self.text = text
-
-        # Avoid creating default parameters for vocalic_series and average_vocalics.
-        # For unknown reasons, the default lists are tied together, changing one also
-        # changes the other.
-        self.vocalic_series: List[Vocalics] = []
-        # A value per feature
-        self.average_vocalics: Dict[str, float] = {}
-
-
 class SegmentedUtterance:
     def __init__(self, start: datetime, end: datetime):
         self.start = start

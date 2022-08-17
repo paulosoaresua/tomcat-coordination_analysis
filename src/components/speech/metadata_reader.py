@@ -23,7 +23,6 @@ class MetadataReader:
     ASR_TOPIC = "agent/asr/final"
     SCOREBOARD_TOPIC = "observations/events/scoreboard"
     MISSION_STATE_TOPIC = "observations/events/mission"
-    VOCALIC_FEATURES = ["pitch", "intensity"]
 
     def __init__(self, filepath: str) -> None:
         self.speeches_per_subject: Dict[str, List[Speech]] = {}

@@ -4,7 +4,12 @@ from dateutil.parser import parse
 
 import psycopg2
 from tqdm import tqdm
-import numpy as np
+
+
+class Vocalics:
+    def __init__(self, timestamp: datetime, features: Dict[str, float]):
+        self.timestamp = timestamp
+        self.features = features
 
 
 class VocalicsReader:
@@ -21,7 +26,7 @@ class VocalicsReader:
              trial_id: str,
              feature_map: Dict[str, str],
              baseline_time: Optional[datetime],
-             subject_id_map: Dict[str, str]) -> Dict[str, List[Dict[str, Any]]]:
+             subject_id_map: Dict[str, str]) -> Dict[str, List[Vocalics]]:
         """
         Reads vocalic features from a specific trial
 
@@ -50,14 +55,15 @@ class VocalicsReader:
                 if timestamp_offset is not None:
                     timestamp += timestamp_offset
 
-                values = {"timestamp": timestamp}
+                values = {}
                 for i, feature_name in enumerate(feature_map.keys()):
                     values[feature_name] = feature_values[i]
 
                 if subject_id not in vocalics_per_subject:
                     vocalics_per_subject[subject_id] = []
 
-                vocalics_per_subject[subject_id].append(values)
+                vocalics = Vocalics(timestamp, values)
+                vocalics_per_subject[subject_id].append(vocalics)
 
                 pbar.update()
 
