@@ -14,7 +14,20 @@ class Utterance:
 
     @property
     def vocalics_matrix(self) -> np.ndarray:
-        return np.array([])
+        feature_names = list(self.vocalics_series[0].features.keys())
+
+        features_matrix = None
+        for name in feature_names:
+            feature_values = []
+            for vocalics in self.vocalics_series:
+                feature_values.append(vocalics.features[name])
+
+            if features_matrix is None:
+                features_matrix = np.array(feature_values)
+            else:
+                features_matrix = np.vstack((features_matrix, feature_values))
+
+        return features_matrix
 
 
 def pair_speech_vocalics(speeches_per_subject: Dict[str, List[Speech]],
