@@ -16,7 +16,6 @@ class VocalicsReader:
     """
     This class reads vocalic features from a database
     """
-
     def __init__(self, database_address: str, database_port: int, database_name: str):
         self._database_address = database_address
         self._database_port = database_port

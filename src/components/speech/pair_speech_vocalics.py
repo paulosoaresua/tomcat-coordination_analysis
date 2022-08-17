@@ -19,7 +19,7 @@ class Utterance:
 
 def pair_speech_vocalics(speeches_per_subject: Dict[str, List[Speech]],
                          vocalics_per_subject: Dict[str, List[Vocalics]],
-                         silent_warnings: bool = False):
+                         silent_warnings: bool = False) -> Dict[str, List[Utterance]]:
     subjects = speeches_per_subject.keys()
 
     utterances_per_subject = {}
@@ -58,3 +58,5 @@ def pair_speech_vocalics(speeches_per_subject: Dict[str, List[Speech]],
                     f" for subject {subject}. Text: {speech.text}")
 
             pbar.update()
+
+    return utterances_per_subject
