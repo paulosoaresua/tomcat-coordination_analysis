@@ -1,17 +1,23 @@
-from src.trial import Trial
-from src.config.component_config_bundle import ComponentConfigBundle
+from src.common import log
+from src.config.database_config import DatabaseConfig
+from src.entity.trial import Trial
+from src.loader.vocalics_reader import VocalicFeature
 
 if __name__ == "__main__":
-    config_bundle = ComponentConfigBundle()
-    config_bundle.vocalics_config.no_vocalics = True
-    trial = Trial(config_bundle)
-    trial.parse("/Users/paulosoares/data/study-3_2022/metadata/HSRData_TrialMessages_Trial-T000745_Team-TM000273_Member-na_CondBtwn-ASI-UAZ-TA1_CondWin-na_Vers-1.metadata")
+    log.setup_file_logger("../data/study-3_2022/logs/T000745.txt")
+    database_config = DatabaseConfig("localhost", 5432, "asist_vocalics")
+
+    metadata_filepath = "/Users/paulosoares/data/study-3_2022/metadata/HSRData_TrialMessages_Trial-T000745_Team-TM000273_Member-na_CondBtwn-ASI-UAZ-TA1_CondWin-na_Vers-1.metadata"
+    trial = Trial.from_metadata_file(metadata_filepath, database_config, [VocalicFeature.PITCH, VocalicFeature.INTENSITY])
     trial.save("../data/study-3_2022")
-    trial.load("../data/study-3_2022/T000745")
-    print(trial.mission_start.isoformat())
+    mean_vocalics_first_utterance = trial.vocalics.utterances_per_subject["red"][0].vocalic_series.mean()
 
+    # Load and save in a different folder to see if the results are the same
+    trial = Trial.from_directory("../data/study-3_2022/T000745")
+    trial.save("../data/study-3_2022.rep")
+    mean_vocalics_first_utterance2 = trial.vocalics.utterances_per_subject["red"][0].vocalic_series.mean()
 
-
+    assert mean_vocalics_first_utterance == mean_vocalics_first_utterance2
 
     # trial = Trial()
     # trial.parse("../data/asist/study2/metadata/.metadata")
