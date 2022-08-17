@@ -42,7 +42,7 @@ class Trial:
         return cls(metadata, utterances_per_subject)
 
     def save(self, out_dir: str):
-        trial_out_dir = f"{out_dir}/{self.number}"
+        trial_out_dir = f"{out_dir}/{self.metadata.number}"
         os.makedirs(trial_out_dir, exist_ok=True)
 
         with open(f"{trial_out_dir}/utterances.pkl", "wb") as f:
