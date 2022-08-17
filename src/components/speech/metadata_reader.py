@@ -167,7 +167,7 @@ class MetadataReader:
             self.mission_start = parse(info_dict["mission_start"])
             self.mission_end = parse(info_dict["mission_end"])
             self.team_score = info_dict["team_score"]
-            self.subject_id_to_color = info_dict["subject_id_map"]
+            self.subject_id_to_color = info_dict["subject_id_to_color"]
 
         speeches_path = f"{save_directory}/speeches.pkl"
         if not os.path.exists(speeches_path):
@@ -185,7 +185,7 @@ class MetadataReader:
             "mission_start": self.mission_start.isoformat(),
             "mission_end": self.mission_end.isoformat(),
             "team_score": self.team_score,
-            "subject_id_map": self.subject_id_to_color,
+            "subject_id_to_color": self.subject_id_to_color,
         }
 
         with open(f"{save_directory}/info.json", "w") as f:
