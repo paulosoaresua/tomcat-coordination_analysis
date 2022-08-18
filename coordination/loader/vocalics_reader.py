@@ -10,6 +10,7 @@ import numpy as np
 
 from coordination.config.database_config import DatabaseConfig
 from coordination.entity.trial_metadata import TrialMetadata
+from coordination.entity.vocalics_series import VocalicsSeries
 
 logger = logging.getLogger()
 
@@ -20,29 +21,6 @@ class VocalicFeature:
     """
     PITCH = "pitch"
     INTENSITY = "intensity"
-
-
-class VocalicsSeries:
-
-    def __init__(self, values, timestamps):
-        # A matrix containing values per each vocalic feature over time.
-        # Each row contains the series for a different feature.
-        self.values = values
-        self.timestamps = timestamps
-
-    @property
-    def num_series(self):
-        """
-        Number of vocalic features
-        """
-        return self.values.shape[0]
-
-    @property
-    def size(self):
-        """
-        Number of vocalic feature values
-        """
-        return self.values.shape[1]
 
 
 class VocalicsReader:

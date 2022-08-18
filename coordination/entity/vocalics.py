@@ -12,6 +12,7 @@ from tqdm import tqdm
 import numpy as np
 
 from coordination.entity.trial_metadata import TrialMetadata
+from coordination.entity.vocalics_series import VocalicsSeries
 from coordination.config.database_config import DatabaseConfig
 from coordination.loader.vocalics_reader import VocalicsReader
 
@@ -20,7 +21,7 @@ logger = logging.getLogger()
 
 class Utterance:
     def __init__(self, participant_id: str, text: str, start: datetime, end: datetime):
-        self.participant_id = participant_id
+        self.subject_id = participant_id
         self.text = text
         self.start = start
         self.end = end
@@ -28,17 +29,21 @@ class Utterance:
         # This will contain values for different vocalic features within an utterance.
         # The series is a matrix, with as many rows as the number of features and as many
         # columns as the number of vocalic values in the utterance
-        self.vocalic_series = np.array([])
+        self.vocalic_series: VocalicsSeries = VocalicsSeries(np.array([]), [])
+
+    @property
+    def duration_in_seconds(self):
+        return (self.end - self.start).total_seconds()
 
 
-class VocalicsComponent:
+class Vocalics:
     def __init__(self, features: List[str], utterances_per_subject: Dict[str, List[Utterance]]):
         self.features = features
         self.utterances_per_subject = utterances_per_subject
 
     @classmethod
     def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata, database_config: DatabaseConfig,
-                          features: List[str]) -> VocalicsComponent:
+                          features: List[str]) -> Vocalics:
         """
         Parses a list of ASR messages to extract utterances and their corresponding vocalic features.
         """
@@ -84,12 +89,12 @@ class VocalicsComponent:
             pbar.update()
 
         vocalics_reader = VocalicsReader(database_config, features)
-        VocalicsComponent._read_vocalic_features(trial_metadata, utterances_per_subject, vocalics_reader)
+        Vocalics._read_vocalic_features(trial_metadata, utterances_per_subject, vocalics_reader)
 
         return cls(features, utterances_per_subject)
 
     @classmethod
-    def from_trial_directory(cls, trial_dir: str) -> VocalicsComponent:
+    def from_trial_directory(cls, trial_dir: str) -> Vocalics:
         features_path = f"{trial_dir}/features.txt"
         if not os.path.exists(features_path):
             raise Exception(f"Could not find the file features.txt in {features_path}.")
@@ -137,12 +142,15 @@ class VocalicsComponent:
 
                     # Collect vocalic feature values within an utterance
                     vocalics_in_utterance = []
+                    vocalics_timestamps = []
                     while t < vocalic_series.size and vocalic_series.timestamps[t] <= utterance.end:
+                        vocalics_timestamps.append(vocalic_series.timestamps[t])
                         vocalics_in_utterance.append(vocalic_series.values[:, t, np.newaxis])
                         t += 1
 
                     if len(vocalics_in_utterance) > 0:
-                        utterance.vocalic_series = np.concatenate(vocalics_in_utterance, axis=1)
+                        utterance.vocalic_series = VocalicsSeries(np.concatenate(vocalics_in_utterance, axis=1),
+                                                                  vocalics_timestamps)
                     else:
                         logger.warning(
                             "No vocalic features detected for utterance between " +

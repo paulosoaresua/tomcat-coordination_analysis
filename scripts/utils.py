@@ -28,18 +28,24 @@ def get_common_parse_and_save_metadata_argument_parser(description: str) -> argp
     return parser
 
 
-def parse_and_save_metadata(metadata_filepath: str, trial_out_dir: str, verbose: bool, log_dir: str,
-                            database_config: DatabaseConfig):
+def configure_log(verbose: bool, log_filepath: str):
     if verbose:
-        if log_dir:
-            # Remove extension
-            filename = os.path.basename(metadata_filepath).rsplit('.')[0]
-            log.setup_file_logger(f"{log_dir}/{filename}.txt")
+        if log_filepath:
+            log.setup_file_logger(log_filepath)
         else:
             log.setup_custom_logger()
     else:
         logging.disable(logging.CRITICAL)
 
+
+def parse_and_save_metadata(metadata_filepath: str, trial_out_dir: str, verbose: bool, log_dir: str,
+                            database_config: DatabaseConfig):
+    log_filepath = ""
+    if log_dir != "":
+        filename = os.path.basename(metadata_filepath).rsplit('.')[0]
+        log_filepath = f"{log_dir}/{filename}.txt"
+
+    configure_log(verbose, log_filepath)
     trial = Trial.from_metadata_file(metadata_filepath, database_config,
                                      [VocalicFeature.PITCH, VocalicFeature.INTENSITY])
     trial.save(trial_out_dir)

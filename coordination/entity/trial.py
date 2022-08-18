@@ -3,9 +3,9 @@ from typing import List
 
 import os
 
-from coordination.entity.trial_metadata import TrialMetadata
 from coordination.config.database_config import DatabaseConfig
-from coordination.components.speech.vocalics_component import VocalicsComponent
+from coordination.entity.trial_metadata import TrialMetadata
+from coordination.entity.vocalics import Vocalics
 from coordination.loader.metadata_reader import MetadataReader
 
 
@@ -14,7 +14,7 @@ class Trial:
     This class encapsulates relevant information about an ASIST trial, including components for the coordination model.
     """
 
-    def __init__(self, metadata: TrialMetadata, vocalics: VocalicsComponent):
+    def __init__(self, metadata: TrialMetadata, vocalics: Vocalics):
         self.metadata = metadata
         self.vocalics = vocalics
 
@@ -35,7 +35,7 @@ class Trial:
         """
 
         metadata = TrialMetadata.from_trial_directory(trial_dir)
-        vocalics = VocalicsComponent.from_trial_directory(trial_dir)
+        vocalics = Vocalics.from_trial_directory(trial_dir)
         return cls(metadata, vocalics)
 
     def save(self, out_dir: str):

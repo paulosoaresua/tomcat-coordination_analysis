@@ -6,7 +6,7 @@ import json
 import logging
 
 from coordination.entity.trial_metadata import TrialMetadata
-from coordination.components.speech.vocalics_component import VocalicsComponent
+from coordination.entity.vocalics import Vocalics
 from coordination.config.database_config import DatabaseConfig
 
 logger = logging.getLogger()
@@ -28,7 +28,7 @@ class MetadataReader:
         self._database_config = database_config
         self._vocalic_features = vocalic_features
 
-    def load(self) -> Tuple[TrialMetadata, VocalicsComponent]:
+    def load(self) -> Tuple[TrialMetadata, Vocalics]:
         trial_metadata = TrialMetadata()
         asr_messages = []
 
@@ -55,8 +55,8 @@ class MetadataReader:
                     logger.error(f"Bad json line of len: {len(line)}, {line}")
 
         trial_metadata.check_validity()
-        vocalics = VocalicsComponent.from_asr_messages(asr_messages, trial_metadata, self._database_config,
-                                                       self._vocalic_features)
+        vocalics = Vocalics.from_asr_messages(asr_messages, trial_metadata, self._database_config,
+                                              self._vocalic_features)
 
         return trial_metadata, vocalics
 
