@@ -3,10 +3,10 @@ from typing import List
 
 import os
 
-from src.entity.trial_metadata import TrialMetadata
-from src.config.database_config import DatabaseConfig
-from src.components.speech.vocalics_component import VocalicsComponent
-from src.loader.metadata_reader import MetadataReader
+from coordination.entity.trial_metadata import TrialMetadata
+from coordination.config.database_config import DatabaseConfig
+from coordination.components.speech.vocalics_component import VocalicsComponent
+from coordination.loader.metadata_reader import MetadataReader
 
 
 class Trial:
@@ -25,7 +25,7 @@ class Trial:
         Gets relevant information about a trial by parsing a .metadata file
         """
         loader = MetadataReader(metadata_filepath, database_config, vocalic_features)
-        return Trial(*loader.load())
+        return cls(*loader.load())
 
     @classmethod
     def from_directory(cls, trial_dir: str) -> Trial:
@@ -36,12 +36,9 @@ class Trial:
 
         metadata = TrialMetadata.from_trial_directory(trial_dir)
         vocalics = VocalicsComponent.from_trial_directory(trial_dir)
-        return Trial(metadata, vocalics)
+        return cls(metadata, vocalics)
 
     def save(self, out_dir: str):
-        assert self.metadata
-        assert self.vocalics
-
         trial_out_dir = f"{out_dir}/{self.metadata.number}"
         os.makedirs(trial_out_dir, exist_ok=True)
 

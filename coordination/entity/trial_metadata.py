@@ -6,7 +6,7 @@ from dateutil.parser import parse
 import json
 import os
 
-from src.common.utils import json_serial
+from coordination.common.utils import json_serial
 
 
 class TrialMetadata:
@@ -28,7 +28,7 @@ class TrialMetadata:
         if not os.path.exists(metadata_path):
             raise Exception(f"Could not find the file info.json in {metadata_path}.")
 
-        metadata = TrialMetadata()
+        metadata = cls()
         with open(metadata_path, "r") as f:
             metadata_dict = json.load(f)
             for k, v in metadata_dict.items():

@@ -1,12 +1,13 @@
+import os.path
 from typing import Any, List, Tuple
 
 from dateutil.parser import parse
 import json
 import logging
 
-from src.entity.trial_metadata import TrialMetadata
-from src.components.speech.vocalics_component import VocalicsComponent
-from src.config.database_config import DatabaseConfig
+from coordination.entity.trial_metadata import TrialMetadata
+from coordination.components.speech.vocalics_component import VocalicsComponent
+from coordination.config.database_config import DatabaseConfig
 
 logger = logging.getLogger()
 
@@ -31,6 +32,7 @@ class MetadataReader:
         trial_metadata = TrialMetadata()
         asr_messages = []
 
+        logger.info(f"Parsing {os.path.basename(self._metadata_filepath)}")
         with open(self._metadata_filepath, 'r') as f:
             for line in f:
                 try:

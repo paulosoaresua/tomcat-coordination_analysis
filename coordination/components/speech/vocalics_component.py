@@ -11,9 +11,9 @@ import os
 from tqdm import tqdm
 import numpy as np
 
-from src.entity.trial_metadata import TrialMetadata
-from src.config.database_config import DatabaseConfig
-from src.loader.vocalics_reader import VocalicsReader
+from coordination.entity.trial_metadata import TrialMetadata
+from coordination.config.database_config import DatabaseConfig
+from coordination.loader.vocalics_reader import VocalicsReader
 
 logger = logging.getLogger()
 
@@ -84,9 +84,9 @@ class VocalicsComponent:
             pbar.update()
 
         vocalics_reader = VocalicsReader(database_config, features)
-        VocalicsComponent.read_vocalic_features(trial_metadata, utterances_per_subject, vocalics_reader)
+        VocalicsComponent._read_vocalic_features(trial_metadata, utterances_per_subject, vocalics_reader)
 
-        return VocalicsComponent(features, utterances_per_subject)
+        return cls(features, utterances_per_subject)
 
     @classmethod
     def from_trial_directory(cls, trial_dir: str) -> VocalicsComponent:
@@ -104,11 +104,11 @@ class VocalicsComponent:
         with open(vocalics_path, "rb") as f:
             vocalics = pickle.load(f)
 
-        return VocalicsComponent(features, vocalics)
+        return cls(features, vocalics)
 
     @staticmethod
-    def read_vocalic_features(trial_metadata: TrialMetadata, utterances_per_subject: Dict[str, List[Utterance]],
-                              reader: VocalicsReader):
+    def _read_vocalic_features(trial_metadata: TrialMetadata, utterances_per_subject: Dict[str, List[Utterance]],
+                               reader: VocalicsReader):
         """
         Reads vocalic feature values for a series of parsed utterances.
         """
@@ -119,36 +119,37 @@ class VocalicsComponent:
         # time range to the read function.
         vocalics_per_subject = reader.read(trial_metadata, trial_metadata.trial_start)
 
-        pbar = tqdm(total=len(utterances_per_subject), desc="Adding vocalics to utterances")
-        for subject_id in utterances_per_subject.keys():
-            if subject_id not in vocalics_per_subject.keys():
-                logger.warning(f"No vocalic features found for subject {subject_id}.")
-                continue
+        if len(vocalics_per_subject) > 0:
+            pbar = tqdm(total=len(utterances_per_subject), desc="Adding vocalics to utterances")
+            for subject_id in utterances_per_subject.keys():
+                if subject_id not in vocalics_per_subject.keys():
+                    logger.warning(f"No vocalic features found for subject {subject_id}.")
+                    continue
 
-            # Sorted per subject
-            vocalic_series = vocalics_per_subject[subject_id]
+                # Sorted per subject
+                vocalic_series = vocalics_per_subject[subject_id]
 
-            t = 0
-            for utterance in utterances_per_subject[subject_id]:
-                # Find start index of vocalic features that matches the start of an utterance
-                while t < vocalic_series.size and vocalic_series.timestamps[t] < utterance.start:
-                    t += 1
+                t = 0
+                for utterance in utterances_per_subject[subject_id]:
+                    # Find start index of vocalic features that matches the start of an utterance
+                    while t < vocalic_series.size and vocalic_series.timestamps[t] < utterance.start:
+                        t += 1
 
-                # Collect vocalic feature values within an utterance
-                vocalics_in_utterance = []
-                while t < vocalic_series.size and vocalic_series.timestamps[t] <= utterance.end:
-                    vocalics_in_utterance.append(vocalic_series.values[:, t, np.newaxis])
-                    t += 1
+                    # Collect vocalic feature values within an utterance
+                    vocalics_in_utterance = []
+                    while t < vocalic_series.size and vocalic_series.timestamps[t] <= utterance.end:
+                        vocalics_in_utterance.append(vocalic_series.values[:, t, np.newaxis])
+                        t += 1
 
-                if len(vocalics_in_utterance) > 0:
-                    utterance.vocalic_series = np.concatenate(vocalics_in_utterance, axis=1)
-                else:
-                    logger.warning(
-                        "No vocalic features detected for utterance between " +
-                        f"{utterance.start.isoformat()} and {utterance.end.isoformat()}" +
-                        f" for subject {subject_id} in trial {trial_metadata.number}. Text: {utterance.text}")
+                    if len(vocalics_in_utterance) > 0:
+                        utterance.vocalic_series = np.concatenate(vocalics_in_utterance, axis=1)
+                    else:
+                        logger.warning(
+                            "No vocalic features detected for utterance between " +
+                            f"{utterance.start.isoformat()} and {utterance.end.isoformat()}" +
+                            f" for subject {subject_id} in trial {trial_metadata.number}. Text: {utterance.text}")
 
-            pbar.update()
+                pbar.update()
 
     def save(self, out_dir: str):
         with open(f"{out_dir}/features.txt", "w") as f:
