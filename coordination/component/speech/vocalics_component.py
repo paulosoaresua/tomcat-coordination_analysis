@@ -7,6 +7,7 @@ import logging
 import numpy as np
 import os
 import pickle
+import json
 
 from coordination.entity.vocalics import Utterance, Vocalics
 from coordination.entity.vocalics_series import VocalicsSeries
@@ -37,10 +38,14 @@ class SegmentationMethod(Enum):
 
 
 class VocalicsComponent:
-    def __init__(self, series_a: List[SegmentedUtterance], series_b: List[SegmentedUtterance]):
+    def __init__(self,
+                 series_a: List[SegmentedUtterance],
+                 series_b: List[SegmentedUtterance],
+                 feature_names: List[str]):
         # One series per subject in turn.
         self.series_a = series_a
         self.series_b = series_b
+        self.feature_names = feature_names
 
     @classmethod
     def from_vocalics(cls, vocalics: Vocalics,
@@ -58,6 +63,7 @@ class VocalicsComponent:
     def from_trial_directory(cls, trial_dir: str) -> VocalicsComponent:
         vocalics_component_a_path = f"{trial_dir}/vocalics_component_a.pkl"
         vocalics_component_b_path = f"{trial_dir}/vocalics_component_b.pkl"
+        feature_names_path = f"{trial_dir}/features.txt"
 
         if not os.path.exists(vocalics_component_a_path):
             raise Exception(f"Could not find the file vocalics_component_a.pkl in {trial_dir}.")
@@ -65,13 +71,19 @@ class VocalicsComponent:
         if not os.path.exists(vocalics_component_b_path):
             raise Exception(f"Could not find the file vocalics_component_b.pkl in {trial_dir}.")
 
+        if not os.path.exists(feature_names_path):
+            raise Exception(f"Could not find the file features.txt in {trial_dir}.")
+
         with open(vocalics_component_a_path, "rb") as f:
             series_a = pickle.load(f)
 
         with open(vocalics_component_b_path, "rb") as f:
             series_b = pickle.load(f)
 
-        return cls(series_a, series_b)
+        with open(feature_names_path, "r") as f:
+            feature_names = json.load(f)
+
+        return cls(series_a, series_b, feature_names)
 
     @classmethod
     def _split_with_current_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:
@@ -136,7 +148,7 @@ class VocalicsComponent:
                 segmented_vocalic_timestamps: List[datetime] = []
                 series_a_active = not series_a_active
 
-        return cls(series_a, series_b)
+        return cls(series_a, series_b, vocalics.features)
 
     @classmethod
     def _split_with_next_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:
@@ -180,10 +192,13 @@ class VocalicsComponent:
 
         return utterances
 
-    def save(self, out_dir: str):
+    def save(self, out_dir: str, save_feature_names: bool = True):
         with open(f"{out_dir}/vocalics_component_a.pkl", "wb") as f:
             pickle.dump(self.series_a, f)
 
         with open(f"{out_dir}/vocalics_component_b.pkl", "wb") as f:
             pickle.dump(self.series_b, f)
 
+        if save_feature_names:
+            with open(f"{out_dir}/features.txt", "w") as f:
+                json.dump(self.feature_names, f)
