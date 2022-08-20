@@ -30,34 +30,6 @@ class SparseSeries:
         self.values = values
         self.mask = mask
 
-    @classmethod
-    def from_sparse_series_timestep(cls,
-                                    sparse_series_timestep: SparseSeriesTimestep,
-                                    max_size: Optional[int] = None):
-        if isinstance(sparse_series_timestep.time_steps[0], datetime):
-            raise RuntimeError("Timestep must be in seconds")
-
-        num_time_steps = sparse_series_timestep.time_steps[-1] + 1
-
-        values = np.zeros((sparse_series_timestep.values.shape[0], num_time_steps))
-        mask = np.zeros(num_time_steps)
-
-        for i, second in enumerate(sparse_series_timestep.time_steps):
-            mask[second] = 1
-            values[:, second] = sparse_series_timestep.values[:, i]
-
-        if max_size is not None:
-            mask = mask[:max_size]
-            values = values[:, :max_size]
-
-        return cls(values, mask)
-
-
-class SparseSeriesTimestep:
-    def __init__(self, values: np.ndarray, time_steps: List[Union[int, datetime]]):
-        self.values = values
-        self.time_steps = time_steps
-
 
 class SegmentationMethod(Enum):
     # If the current utterance overlaps with the next, it ends the current utterance when the next one starts
@@ -72,6 +44,11 @@ class SegmentationMethod(Enum):
 
 
 class VocalicsComponent:
+    class SparseSeriesTimestep:
+        def __init__(self, values: np.ndarray, time_steps: List[Union[int, datetime]]):
+            self.values = values
+            self.time_steps = time_steps
+
     def __init__(self,
                  series_a: List[SegmentedUtterance],
                  series_b: List[SegmentedUtterance],
@@ -82,9 +59,27 @@ class VocalicsComponent:
         self.feature_names = feature_names
 
     def sparse_series(self, max_size: Optional[int] = None) -> Tuple[SparseSeries, SparseSeries]:
-        sparse_series_timestep_a, sparse_series_timestep_b = self.sparse_series_timestep(timestamp_as_index=False)
-        sparse_series_a = SparseSeries.from_sparse_series_timestep(sparse_series_timestep_a, max_size)
-        sparse_series_b = SparseSeries.from_sparse_series_timestep(sparse_series_timestep_b, max_size)
+        sparse_series_timestep_a, sparse_series_timestep_b = self._sparse_series_timestep(timestamp_as_index=False)
+
+        def sparse_series_timestep_to_mask(sparse_series_timestep: VocalicsComponent.SparseSeriesTimestep,
+                                           max_size: Optional[int] = None) -> SparseSeries:
+            num_time_steps = sparse_series_timestep.time_steps[-1] + 1
+
+            values = np.zeros((sparse_series_timestep.values.shape[0], num_time_steps))
+            mask = np.zeros(num_time_steps)
+
+            for i, second in enumerate(sparse_series_timestep.time_steps):
+                mask[second] = 1
+                values[:, second] = sparse_series_timestep.values[:, i]
+
+            if max_size is not None:
+                mask = mask[:max_size]
+                values = values[:, :max_size]
+
+            return SparseSeries(values, mask)
+
+        sparse_series_a = sparse_series_timestep_to_mask(sparse_series_timestep_a, max_size)
+        sparse_series_b = sparse_series_timestep_to_mask(sparse_series_timestep_b, max_size)
         return sparse_series_a, sparse_series_b
 
     @classmethod
@@ -125,8 +120,8 @@ class VocalicsComponent:
 
         return cls(series_a, series_b, feature_names)
 
-    def sparse_series_timestep(self,
-                               timestamp_as_index: bool = False) -> Tuple[SparseSeriesTimestep, SparseSeriesTimestep]:
+    def _sparse_series_timestep(self,
+                                timestamp_as_index: bool = False) -> Tuple[SparseSeriesTimestep, SparseSeriesTimestep]:
         """
         Create sparse series time steps for series A and series B
         Args:
@@ -137,7 +132,7 @@ class VocalicsComponent:
         """
 
         def series_to_seconds(utterances: List[SegmentedUtterance],
-                              initial_timestamp: datetime) -> SparseSeriesTimestep:
+                              initial_timestamp: datetime) -> VocalicsComponent.SparseSeriesTimestep:
             values = []
             time_steps = []
 
@@ -153,7 +148,7 @@ class VocalicsComponent:
 
                 time_steps.append(time_step)
 
-            return SparseSeriesTimestep(np.column_stack(values), time_steps)
+            return VocalicsComponent.SparseSeriesTimestep(np.column_stack(values), time_steps)
 
         # The first utterance always goes in series A
         earliest_timestamp = self.series_a[0].start
@@ -163,7 +158,7 @@ class VocalicsComponent:
         return sparse_series_a, sparse_series_b
 
     def plot_features(self, axes: List[Any], timestamp_as_index: bool = True):
-        series_a_data, series_b_data = self.sparse_series_timestep(timestamp_as_index)
+        series_a_data, series_b_data = self._sparse_series_timestep(timestamp_as_index)
 
         # plot
         for i, feature_name in enumerate(self.feature_names):
