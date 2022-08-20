@@ -27,3 +27,4 @@ def plot_vocalic_features(axs: List[Any], series_a: SparseSeries, series_b: Spar
                     label="Subject B")
         axs[i].legend()
         axs[i].set_xlabel("Time" if timestamp_as_index else "Time Step (seconds)")
+        # axs[i].set_xlim([0, max(series_a.num_time_steps, series_b.num_time_steps)])

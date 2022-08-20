@@ -1,11 +1,11 @@
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import random
 
 from scipy.stats import norm
 
-from coordination.entity.sparse_series import SparseSeries
+from coordination.common.sparse_series import SparseSeries
 
 
 class VocalicsGenerator:

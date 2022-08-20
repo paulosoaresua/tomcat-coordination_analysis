@@ -48,6 +48,7 @@ def add_discrete_coordination_bar(main_ax: Any, coordination_series: List[np.arr
 
     # Labels and ticks
     color_bar_ax.set_xlabel(main_ax.get_xlabel())
+    # color_bar_ax.set_xlim([0, len(coordination_series[0])])
     main_ax.axes.xaxis.set_visible(False)
 
     if labels is None or len(labels) == 0:
