@@ -1,5 +1,4 @@
 from glob import glob
-import logging
 import os
 
 from coordination.config.database_config import DatabaseConfig

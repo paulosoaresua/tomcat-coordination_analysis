@@ -5,7 +5,7 @@ import numpy as np
 from scipy.stats import norm
 
 from coordination.inference.vocalics import DiscreteCoordinationInferenceFromVocalics
-from coordination.entity.sparse_series import SparseSeries
+from coordination.common.sparse_series import SparseSeries
 
 
 class DiscreteCoordinationParameters:

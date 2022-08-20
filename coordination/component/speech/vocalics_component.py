@@ -9,8 +9,10 @@ import os
 import pickle
 import json
 
+from coordination.common.sparse_series import SparseSeries
 from coordination.entity.vocalics import Utterance, Vocalics
 from coordination.entity.vocalics_series import VocalicsSeries
+from coordination.plot.vocalics import plot_vocalic_features
 
 UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD = 1
 
@@ -23,12 +25,6 @@ class SegmentedUtterance:
         self.end = end
 
         self.vocalic_series: VocalicsSeries = VocalicsSeries(np.array([]), [])
-
-
-class SparseSeries:
-    def __init__(self, values: np.ndarray, mask: np.ndarray):
-        self.values = values
-        self.mask = mask
 
 
 class SegmentationMethod(Enum):
@@ -56,31 +52,7 @@ class VocalicsComponent:
         # One series per subject in turn.
         self.series_a = series_a
         self.series_b = series_b
-        self.feature_names = feature_names
-
-    def sparse_series(self, max_size: Optional[int] = None) -> Tuple[SparseSeries, SparseSeries]:
-        sparse_series_timestep_a, sparse_series_timestep_b = self._sparse_series_timestep(timestamp_as_index=False)
-
-        def sparse_series_timestep_to_mask(sparse_series_timestep: VocalicsComponent.SparseSeriesTimestep,
-                                           max_size: Optional[int] = None) -> SparseSeries:
-            num_time_steps = sparse_series_timestep.time_steps[-1] + 1
-
-            values = np.zeros((sparse_series_timestep.values.shape[0], num_time_steps))
-            mask = np.zeros(num_time_steps)
-
-            for i, second in enumerate(sparse_series_timestep.time_steps):
-                mask[second] = 1
-                values[:, second] = sparse_series_timestep.values[:, i]
-
-            if max_size is not None:
-                mask = mask[:max_size]
-                values = values[:, :max_size]
-
-            return SparseSeries(values, mask)
-
-        sparse_series_a = sparse_series_timestep_to_mask(sparse_series_timestep_a, max_size)
-        sparse_series_b = sparse_series_timestep_to_mask(sparse_series_timestep_b, max_size)
-        return sparse_series_a, sparse_series_b
+        self.features = feature_names
 
     @classmethod
     def from_vocalics(cls, vocalics: Vocalics,
@@ -120,35 +92,27 @@ class VocalicsComponent:
 
         return cls(series_a, series_b, feature_names)
 
-    def _sparse_series_timestep(self,
-                                timestamp_as_index: bool = False) -> Tuple[SparseSeriesTimestep, SparseSeriesTimestep]:
-        """
-        Create sparse series time steps for series A and series B
-        Args:
-            timestamp_as_index: True for time-step as timestamp, False for seconds
+    def sparse_series(self, num_time_steps: int) -> Tuple[SparseSeries, SparseSeries]:
+        def series_to_seconds(utterances: List[SegmentedUtterance], initial_timestamp: datetime) -> SparseSeries:
+            values = np.zeros((utterances[0].vocalic_series.num_series, num_time_steps))
+            mask = np.zeros(num_time_steps)  # 1 for time steps with observation, 0 otherwise
+            timestamps: List[Optional[datetime]] = [None] * num_time_steps
 
-        Returns:
-            sparse series A and sparse series B
-        """
+            for i, utterance in enumerate(utterances):
+                # We consider that the observation is available at the end of an utterance. We take the average vocalics
+                # per feature within the utterance as a measurement at the respective time step.
+                time_step = int((utterance.end - initial_timestamp).total_seconds())
+                if time_step >= num_time_steps:
+                    logger.warning(f"""Time step {time_step} exceeds the number of time steps {num_time_steps} at utterance
+                                   {i} out of {len(utterances)} ending at {utterance.end.isoformat()} considering an 
+                                   initial timestamp of {initial_timestamp.isoformat()}.""")
+                    break
 
-        def series_to_seconds(utterances: List[SegmentedUtterance],
-                              initial_timestamp: datetime) -> VocalicsComponent.SparseSeriesTimestep:
-            values = []
-            time_steps = []
+                values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
+                mask[time_step] = 1
+                timestamps[time_step] = utterance.end
 
-            for utterance in utterances:
-                # We consider that the observation is available at the end of an utterance. We take the average
-                # vocalics per feature within the utterance as a measurement at the respective time step.
-                values.append(utterance.vocalic_series.values.mean(axis=1))
-
-                if timestamp_as_index:
-                    time_step = utterance.end
-                else:
-                    time_step = _timestamp_to_seconds(utterance.end, initial_timestamp)
-
-                time_steps.append(time_step)
-
-            return VocalicsComponent.SparseSeriesTimestep(np.column_stack(values), time_steps)
+            return SparseSeries(values, mask, timestamps)
 
         # The first utterance always goes in series A
         earliest_timestamp = self.series_a[0].start
@@ -157,26 +121,9 @@ class VocalicsComponent:
 
         return sparse_series_a, sparse_series_b
 
-    def plot_features(self, axes: List[Any], timestamp_as_index: bool = True):
-        series_a_data, series_b_data = self._sparse_series_timestep(timestamp_as_index)
-
-        # plot
-        for i, feature_name in enumerate(self.feature_names):
-            axes[i].set_ylabel("Average value in utterance")
-            axes[i].set_title(feature_name.capitalize(), fontsize=16)
-            axes[i].plot(series_a_data.time_steps,
-                         series_a_data.values[i],
-                         color='r',
-                         marker='o',
-                         label="Series A")
-            axes[i].plot(series_b_data.time_steps,
-                         series_b_data.values[i],
-                         color='b',
-                         marker='o',
-                         label="Series B")
-            axes[i].legend()
-
-        axes[len(self.feature_names) - 1].set_xlabel("Timestamp")
+    def plot_features(self, axs: List[Any], num_time_steps: int, timestamp_as_index: bool = True):
+        sparse_series_a, sparse_series_b = self.sparse_series(num_time_steps)
+        plot_vocalic_features(axs, sparse_series_a, sparse_series_b, self.features, timestamp_as_index)
 
     @classmethod
     def _split_with_current_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:
@@ -293,7 +240,7 @@ class VocalicsComponent:
 
         if save_feature_names:
             with open(f"{out_dir}/features.txt", "w") as f:
-                json.dump(self.feature_names, f)
+                json.dump(self.features, f)
 
 
 def _timestamp_to_seconds(target_timestamp: datetime, initial_timestamp: datetime) -> int:

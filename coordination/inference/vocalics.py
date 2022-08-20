@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import norm
 
-from coordination.entity.sparse_series import SparseSeries
+from coordination.common.sparse_series import SparseSeries
 
 EPSILON = 1E-16
 
@@ -182,78 +182,8 @@ class DiscreteCoordinationInferenceFromVocalics:
 
         return m_comp2coord
 
-#
-# def estimate_discrete_coordination(series_a: np.ndarray, series_b: np.ndarray, prior_c: float,
-#                                    transition_p: float, pa: Callable, pb: Callable, mask_a: Any,
-#                                    mask_b: Any) -> np.ndarray:
-#     """
-#     Exact estimation of coordination marginals
-#     """
-#
-#     T = series_a.shape[0]
-#
-#     if mask_a is None:
-#         # Consider values of series A at all time steps
-#         mask_a = np.ones(T)
-#     if mask_b is None:
-#         # Consider values of series B at all time steps
-#         mask_b = np.ones(T)
-#
-#     c_forward = np.zeros((T, 2))
-#     c_backwards = np.zeros((T, 2))
-#     c_leaves = np.ones((T, 2)) * 0.5
-#     transition_matrix = np.array([[1 - transition_p, transition_p], [transition_p, 1 - transition_p]])
-#
-#     # Forward messages
-#     last_ta = None
-#     last_tb = None
-#     for t in range(T):
-#         # Contribution of the previous coordination sample to the marginal
-#         if t == 0:
-#             c_forward[t] = np.array([1 - prior_c, prior_c], dtype=float)
-#         else:
-#             c_forward[t] = np.matmul(c_forward[t - 1], transition_matrix)
-#
-#         # Contribution of the vocalic component to the marginal
-#         previous_a = None if last_ta is None else series_a[last_ta]
-#         previous_b = None if last_tb is None else series_b[last_tb]
-#
-#         if previous_b is not None:
-#             c_leaves[t] *= \
-#                 np.ones(2) * (1 - mask_a[t]) + np.array([pa(series_a[t], previous_a, previous_b, 0),
-#                                                          pa(series_a[t], previous_a, previous_b, 1)]) * mask_a[t]
-#         if previous_a is not None:
-#             c_leaves[t] *= \
-#                 np.ones(2) * (1 - mask_b[t]) + np.array([pb(series_b[t], previous_b, previous_a, 0),
-#                                                          pb(series_b[t], previous_b, previous_a, 1)]) * mask_b[t]
-#         c_forward[t] *= c_leaves[t]
-#         c_forward[t] /= np.sum(c_forward[t])
-#
-#         if mask_a[t] == 1:
-#             last_ta = t
-#         if mask_b[t] == 1:
-#             last_tb = t
-#
-#     # Backward messages
-#     for t in range(T - 1, -1, -1):
-#         if t == T - 1:
-#             c_backwards[t] = np.ones(2)
-#         else:
-#             # Because the transition probability is symmetric. We can multiply a value in the future by the transition
-#             # matrix as is to estimate probabilities in the past.
-#             c_backwards[t] = np.matmul(c_backwards[t + 1], transition_matrix)
-#
-#         # Contribution of the vocalic component to the marginal
-#         c_backwards[t] *= c_leaves[t]
-#         c_backwards[t] /= np.sum(c_backwards[t])
-#
-#     c_backwards = np.roll(c_backwards, shift=-1, axis=0)
-#     c_backwards[-1] = 1
-#     c_marginals = c_forward * np.matmul(c_backwards, transition_matrix)
-#     c_marginals /= np.sum(c_marginals, axis=1, keepdims=True)
-#
-#     return c_marginals
-#
+
+# TODO - Remove this old code after implementing continuous inference
 #
 # def estimate_continuous_coordination(gibbs_steps: int, series_a: np.ndarray, series_b: np.ndarray,
 #                                      mean_a: float, mean_b: float, mask_a: Any, mask_b: Any,

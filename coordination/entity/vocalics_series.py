@@ -3,6 +3,12 @@ from typing import List
 from datetime import datetime
 import numpy as np
 
+"""
+This class is on its own file because Vocalics depends on it and VocalicsReader too. 
+And Vocalics depends on VocalicsReader. Therefore, adding it to Vocalics would cause circular
+dependency.
+"""
+
 
 class VocalicsSeries:
 
@@ -25,7 +31,7 @@ class VocalicsSeries:
     @property
     def size(self):
         """
-        Number of time steps
+        Number of values per feature
         """
         if len(self.values) == 0:
             return 0
