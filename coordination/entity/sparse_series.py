@@ -1,16 +1,15 @@
-from typing import List
-
-from datetime import datetime
 import numpy as np
 
 
-class VocalicsSeries:
+class SparseSeries:
+    """
+    Represents a series of sparse values. The mask attribute has 1 in the time steps for which there are valid values
+    in the series, and 0 otherwise.
+    """
 
-    def __init__(self, values: np.ndarray, timestamps: List[datetime]):
-        # A matrix containing values per each vocalic feature over time.
-        # Each row contains the series for a different feature.
+    def __init__(self, values: np.ndarray, mask: np.ndarray):
         self.values = values
-        self.timestamps = timestamps
+        self.mask = mask
 
     @property
     def num_series(self):
@@ -31,3 +30,4 @@ class VocalicsSeries:
             return 0
 
         return self.values.shape[1]
+

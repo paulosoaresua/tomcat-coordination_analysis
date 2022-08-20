@@ -1,48 +1,36 @@
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Optional
+
 from scipy.stats import bernoulli, truncnorm
+import numpy as np
+import random
 
 
 class CoordinationGenerator:
     """
     This class generates synthetic values for a latent coordination variable over time.
     """
+    def __init__(self, num_time_steps: int):
+        self._num_time_steps = num_time_steps
 
-    def generate_evidence(self, time_steps: int) -> List[float]:
+    def generate(self, seed: Optional[int] = None) -> np.ndarray:
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
         cs = []
-        for t in range(time_steps):
+        for t in range(self._num_time_steps):
             if t == 0:
                 cs.append(self._sample_from_prior())
             else:
                 cs.append(self._sample_from_transition(cs[t-1]))
 
-        return cs
+        return np.array(cs)
 
     def _sample_from_prior(self) -> float:
         raise Exception("Not implemented in this class.")
 
-    def _sample_from_transition(self, previous_c: float) -> float:
+    def _sample_from_transition(self, previous_coordination: float) -> float:
         raise Exception("Not implemented in this class.")
-
-
-class DiscreteCoordinationGeneratorASIST(CoordinationGenerator):
-    """
-    This class generates synthetic values for a binary-variable coordination.
-    """
-
-    def __init__(self, p_prior: float, pc: float):
-        self.__p_prior = p_prior
-        self.__pc = pc
-
-    def _sample_from_prior(self) -> float:
-        return bernoulli.rvs(self.__p_prior)
-
-    def _sample_from_transition(self, previous_c: float) -> float:
-        if bernoulli.rvs(self.__pc) == 1:
-            # Repeat the state
-            return previous_c
-        else:
-            # Flip the state
-            return 1 - previous_c
 
 
 class DiscreteCoordinationGenerator(CoordinationGenerator):
@@ -50,20 +38,16 @@ class DiscreteCoordinationGenerator(CoordinationGenerator):
     This class generates synthetic values for a binary-variable coordination.
     """
 
-    def __init__(self, p_prior: float, p_transition: float):
-        self._p_prior = p_prior
-        self._p_transition = p_transition
+    def __init__(self, p_coordinated: float, p_transition: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._prior = bernoulli(p_coordinated)
+        self._transition = bernoulli(p_transition)
 
     def _sample_from_prior(self) -> float:
-        return bernoulli.rvs(self._p_prior)
+        return self._prior.rvs()
 
-    def _sample_from_transition(self, previous_c: float) -> float:
-        if bernoulli.rvs(self._p_transition) == 1:
-            # Flip the state
-            return 1 - previous_c
-        else:
-            # Repeat the state
-            return previous_c
+    def _sample_from_transition(self, previous_coordination: float) -> float:
+        return 1 - previous_coordination if self._transition.rvs() == 1 else previous_coordination
 
 
 class ContinuousCoordinationGenerator(CoordinationGenerator):
@@ -71,11 +55,20 @@ class ContinuousCoordinationGenerator(CoordinationGenerator):
     This class generates synthetic values for a continuous coordination.
     """
 
-    def _sample_from_prior(self) -> float:
-        return 0
+    def __init__(self, prior_mean: float, prior_std: float, transition_std: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def _sample_from_transition(self, previous_c: float) -> float:
-        std = 0.1
-        return truncnorm.rvs((0 - previous_c)/std, (1-previous_c)/std, loc=previous_c, scale=std)
+        assert 0 <= prior_mean <= 1
+
+        self._transition_std = transition_std
+
+        self._prior = truncnorm(loc=prior_mean, scale=prior_std, a=0, b=1)
+
+    def _sample_from_prior(self) -> float:
+        return self._prior.rvs()
+
+    def _sample_from_transition(self, previous_coordination: float) -> float:
+        transition = truncnorm(loc=previous_coordination, scale=self._transition_std, a=0, b=1)
+        return transition.rvs()
 
 

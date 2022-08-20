@@ -5,15 +5,9 @@ import logging
 import numpy as np
 
 from coordination.component.speech.vocalics_component import SegmentedUtterance, VocalicsComponent
+from coordination.entity.sparse_series import SparseSeries
 
 logger = logging.getLogger()
-
-
-class SparseSeries:
-
-    def __init__(self, values: np.ndarray, mask: np.ndarray):
-        self.values = values
-        self.mask = mask
 
 
 def to_seconds_scale(num_time_steps: int, vocalics_component: VocalicsComponent) -> Tuple[SparseSeries, SparseSeries]:
