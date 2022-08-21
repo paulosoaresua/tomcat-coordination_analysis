@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Any, Tuple, Union, Optional
+from typing import List, Any, Tuple, Optional
 
 from datetime import datetime
 from enum import Enum
@@ -8,11 +8,12 @@ import numpy as np
 import os
 import pickle
 import json
+import matplotlib.pyplot as plt
 
 from coordination.common.sparse_series import SparseSeries
 from coordination.entity.vocalics import Utterance, Vocalics
 from coordination.entity.vocalics_series import VocalicsSeries
-from coordination.plot.vocalics import plot_vocalic_features
+from coordination.plot.vocalics import plot_vocalic_features, plot_utterance_durations
 
 UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD = 1
 
@@ -40,11 +41,6 @@ class SegmentationMethod(Enum):
 
 
 class VocalicsComponent:
-    class SparseSeriesTimestep:
-        def __init__(self, values: np.ndarray, time_steps: List[Union[int, datetime]]):
-            self.values = values
-            self.time_steps = time_steps
-
     def __init__(self,
                  series_a: List[SegmentedUtterance],
                  series_b: List[SegmentedUtterance],
@@ -103,9 +99,9 @@ class VocalicsComponent:
                 # per feature within the utterance as a measurement at the respective time step.
                 time_step = int((utterance.end - initial_timestamp).total_seconds())
                 if time_step >= num_time_steps:
-                    logger.warning(f"""Time step {time_step} exceeds the number of time steps {num_time_steps} at utterance
-                                   {i} out of {len(utterances)} ending at {utterance.end.isoformat()} considering an 
-                                   initial timestamp of {initial_timestamp.isoformat()}.""")
+                    logger.warning(f"""Time step {time_step} exceeds the number of time steps {num_time_steps} at 
+                                   utterance {i} out of {len(utterances)} ending at {utterance.end.isoformat()} 
+                                   considering an initial timestamp of {initial_timestamp.isoformat()}.""")
                     break
 
                 values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
@@ -124,6 +120,14 @@ class VocalicsComponent:
     def plot_features(self, axs: List[Any], num_time_steps: int, timestamp_as_index: bool = True):
         sparse_series_a, sparse_series_b = self.sparse_series(num_time_steps)
         plot_vocalic_features(axs, sparse_series_a, sparse_series_b, self.features, timestamp_as_index)
+
+    def plot_utterance_durations(self):
+        utterances_per_subject = {
+            "Series A": self.series_a,
+            "Series B": self.series_b
+        }
+
+        return plot_utterance_durations(utterances_per_subject)
 
     @classmethod
     def _split_with_current_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:
@@ -241,7 +245,3 @@ class VocalicsComponent:
         if save_feature_names:
             with open(f"{out_dir}/features.txt", "w") as f:
                 json.dump(self.features, f)
-
-
-def _timestamp_to_seconds(target_timestamp: datetime, initial_timestamp: datetime) -> int:
-    return int((target_timestamp - initial_timestamp).total_seconds())
