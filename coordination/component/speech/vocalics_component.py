@@ -117,17 +117,21 @@ class VocalicsComponent:
 
         return sparse_series_a, sparse_series_b
 
-    def plot_features(self, axs: List[Any], num_time_steps: int, timestamp_as_index: bool = True):
+    def plot_features(self, axs: List[Any], num_time_steps: int, timestamp_as_index: bool = True,
+                      normalize: bool = False):
         sparse_series_a, sparse_series_b = self.sparse_series(num_time_steps)
+        if normalize:
+            sparse_series_a.normalize()
+            sparse_series_b.normalize()
         plot_vocalic_features(axs, sparse_series_a, sparse_series_b, self.features, timestamp_as_index)
 
-    def plot_utterance_durations(self):
+    def plot_utterance_durations(self, ax: Any):
         utterances_per_subject = {
             "Series A": self.series_a,
             "Series B": self.series_b
         }
 
-        return plot_utterance_durations(utterances_per_subject)
+        return plot_utterance_durations(ax, utterances_per_subject)
 
     @classmethod
     def _split_with_current_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:

@@ -16,7 +16,7 @@ def plot_vocalic_features(axs: List[Any], series_a: SparseSeries, series_b: Spar
     # plot
     for i, feature_name in enumerate(feature_names):
         axs[i].set_ylabel("Average Value in Utterance")
-        axs[i].set_title(feature_name.capitalize(), fontsize=14)
+        axs[i].set_title(feature_name.capitalize(), fontsize=14, weight="bold")
         axs[i].plot(time_labels_a,
                     series_a.values[i, time_steps_a],
                     color='tab:red',
@@ -32,25 +32,24 @@ def plot_vocalic_features(axs: List[Any], series_a: SparseSeries, series_b: Spar
         # axs[i].set_xlim([0, max(series_a.num_time_steps, series_b.num_time_steps)])
 
 
-def plot_utterance_durations(utterances_per_subject) -> None:
+def plot_utterance_durations(ax: Any, utterances_per_subject) -> None:
     """Plot durations of utterances
 
     Args:
+        ax (Any): axis
         utterances_per_subject (Dictionary[str, Utterance or SegmentedUtterance]): utterances or 
             segmented utterances per subject.
     """
-    plt.figure(figsize=(25, 1))
-    plt.margins(x=0)
-
+    ax.margins(x=0)
     labels = list(utterances_per_subject.keys())
     num_labels = len(labels)
 
     for i, utterances in enumerate(utterances_per_subject.values()):
         durations = [[utterance.start, utterance.end - utterance.start] for utterance in utterances]
-        plt.broken_barh(durations, ((num_labels - i - 1) * 5, 4.9), facecolors='tab:blue')
+        ax.broken_barh(durations, ((num_labels - i - 1) * 5, 4.9), facecolors='tab:blue')
 
-    plt.yticks([(num_labels - i - 1) * 5 + 2.5 for i in range(num_labels)], labels=labels)
+    ax.set_yticks([(num_labels - i - 1) * 5 + 2.5 for i in range(num_labels)])
+    ax.set_yticklabels(labels)
 
-    plt.title("Utterance Durations")
+    ax.set_title("Utterance Durations", fontsize=14, weight="bold")
     plt.xlabel("Timestamps")
-    plt.show()
