@@ -14,6 +14,14 @@ def plot_discrete_coordination(ax: Any, coordination: np.ndarray, color: str, ti
     ax.set_yticklabels(["No Coordination", "Coordination"])
 
 
+def plot_continuous_coordination(ax: Any, coordination: np.ndarray, color: str, title: str, xaxis_label: str,
+                                 marker: str = "o"):
+    ax.plot(range(len(coordination)), coordination, color=color, marker=marker, linestyle="--")
+    ax.set_title(title, fontsize=14, weight='bold')
+    ax.set_xlabel(xaxis_label)
+    ax.set_ylabel("Coordination")
+
+
 def add_discrete_coordination_bar(main_ax: Any, coordination_series: List[np.array],
                                   coordination_colors: List[str], no_coordination_color: str = "white",
                                   labels: Optional[List[str]] = None):
@@ -48,7 +56,53 @@ def add_discrete_coordination_bar(main_ax: Any, coordination_series: List[np.arr
 
     # Labels and ticks
     color_bar_ax.set_xlabel(main_ax.get_xlabel())
-    # color_bar_ax.set_xlim([0, len(coordination_series[0])])
+    main_ax.axes.xaxis.set_visible(False)
+
+    if labels is None or len(labels) == 0:
+        color_bar_ax.axes.yaxis.set_visible(False)
+    else:
+        bar_height = 0.5
+        color_bar_ax.set_ylim([0, num_series * bar_height])
+        ticks = [i * bar_height + bar_height / 2 for i in range(num_series)]
+
+        color_bar_ax.set_yticks(ticks)
+        color_bar_ax.set_yticklabels(labels)
+
+
+def add_continuous_coordination_bar(main_ax: Any, coordination_series: List[np.array],
+                                    coordination_colors: List[str], no_coordination_color: str = "white",
+                                    labels: Optional[List[str]] = None):
+
+    # For now, we limit the number of coordination series to 2
+    assert len(coordination_series) <= 2
+    assert labels is None or len(coordination_series) == len(labels)
+    assert len(coordination_colors) == len(coordination_series)
+
+    if len(coordination_series) == 0:
+        # Nothing to be done
+        return
+
+    num_series = len(coordination_series)
+    color_bar_values = np.zeros((num_series, len(coordination_series[0])))
+    relative_height = f"{5 + (10 * (num_series - 1))}%"
+
+    values_2_colors = []
+    for i in range(0, num_series):
+        values_2_colors.append((2 * i, no_coordination_color))
+        values_2_colors.append((2 * i + 1, coordination_colors[i]))
+
+        # We change the coordination values in the different series to map it them to different colors
+        color_bar_values[i] = coordination_series[i] + 2 * i
+
+    cmap = colors.LinearSegmentedColormap.from_list('gradient', values_2_colors)
+
+    # Splitting the axis to insert the color bar under it
+    divider = make_axes_locatable(main_ax)
+    color_bar_ax = divider.append_axes("bottom", size=relative_height, pad=0.1, sharex=main_ax)
+    color_bar_ax.imshow(color_bar_values, cmap=cmap, aspect="auto")
+
+    # Labels and ticks
+    color_bar_ax.set_xlabel(main_ax.get_xlabel())
     main_ax.axes.xaxis.set_visible(False)
 
     if labels is None or len(labels) == 0:

@@ -55,10 +55,13 @@ class ContinuousCoordinationGenerator(CoordinationGenerator):
     This class generates synthetic values for a continuous coordination.
     """
 
+    MIN_VALUE = 0
+    MAX_VALUE = 1
+
     def __init__(self, prior_mean: float, prior_std: float, transition_std: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        assert 0 <= prior_mean <= 1
+        assert ContinuousCoordinationGenerator.MIN_VALUE <= prior_mean <= ContinuousCoordinationGenerator.MAX_VALUE
 
         self._transition_std = transition_std
 
@@ -68,7 +71,10 @@ class ContinuousCoordinationGenerator(CoordinationGenerator):
         return self._prior.rvs()
 
     def _sample_from_transition(self, previous_coordination: float) -> float:
-        transition = truncnorm(loc=previous_coordination, scale=self._transition_std, a=0, b=1)
+        a = (ContinuousCoordinationGenerator.MIN_VALUE - previous_coordination) / self._transition_std
+        b = (ContinuousCoordinationGenerator.MAX_VALUE - previous_coordination) / self._transition_std
+        transition = truncnorm(loc=previous_coordination, scale=self._transition_std, a=a, b=b)
+
         return transition.rvs()
 
 

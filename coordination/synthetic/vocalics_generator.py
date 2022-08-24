@@ -132,32 +132,41 @@ class VocalicsGeneratorForDiscreteCoordination(VocalicsGenerator):
 
         return distribution.rvs()
 
-# class VocalicsGeneratorForContinuousCoordination(VocalicsGenerator):
-#
-#     def __init__(self, coordination_series: List[float], vocalic_features: List[str], time_scale_density: float,
-#                  mean_prior: float = 0, std_prior: float = 1, mean_shift_coupled: float = 0, var_coupled: float = 1):
-#         super().__init__(coordination_series, vocalic_features, time_scale_density)
-#         self._mean_prior = mean_prior
-#         self._std_prior = std_prior
-#         self._mean_shift_coupled = mean_shift_coupled
-#         self._var_coupled = var_coupled
-#
-#     def _sample_a(self, feature_name: str, previous_a: float, previous_b: float, coordination: float):
-#         def sample_from_prior():
-#             return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
-#
-#         if previous_b is None:
-#             return sample_from_prior()
-#         else:
-#             mean = (1 - coordination) * self._mean_prior + coordination * (previous_b + self._mean_shift_coupled)
-#             return norm.rvs(loc=mean, scale=self._var_coupled)
-#
-#     def _sample_b(self, feature_name: str, previous_b: float, previous_a: float, coordination: float):
-#         def sample_from_prior():
-#             return norm.rvs(loc=self._mean_prior, scale=self._std_prior)
-#
-#         if previous_a is None:
-#             return sample_from_prior()
-#         else:
-#             mean = (1 - coordination) * self._mean_prior + coordination * (previous_a + self._mean_shift_coupled)
-#             return norm.rvs(loc=mean, scale=self._var_coupled)
+
+class VocalicsGeneratorForContinuousCoordination(VocalicsGenerator):
+
+    def __init__(self, mean_prior_a: np.array, mean_prior_b: np.array, std_prior_a: np.array, std_prior_b: np.array,
+                 std_coupling_a: np.array, std_coupling_b: np.array, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        assert len(mean_prior_a) == self._num_vocalic_features
+        assert len(mean_prior_b) == self._num_vocalic_features
+        assert len(std_prior_a) == self._num_vocalic_features
+        assert len(std_prior_b) == self._num_vocalic_features
+        assert len(std_coupling_a) == self._num_vocalic_features
+        assert len(std_coupling_b) == self._num_vocalic_features
+
+        self._prior_a = norm(loc=mean_prior_a, scale=std_prior_a)
+        self._prior_b = norm(loc=mean_prior_b, scale=std_prior_b)
+
+        self._std_coupling_a = std_coupling_a
+        self._std_coupling_b = std_coupling_b
+
+    def _sample_a(self, previous_a: Optional[float], previous_b: Optional[float], coordination: float):
+        return VocalicsGeneratorForContinuousCoordination._sample_value(self._prior_a, previous_a, previous_b,
+                                                                        coordination, self._std_coupling_a)
+
+    def _sample_b(self, previous_b: Optional[float], previous_a: Optional[float], coordination: float):
+        return VocalicsGeneratorForContinuousCoordination._sample_value(self._prior_b, previous_b, previous_a,
+                                                                        coordination, self._std_coupling_b)
+
+    @staticmethod
+    def _sample_value(prior_distribution: Any, previous_self: Optional[float], previous_other: Optional[float],
+                      coordination: float, std_coupling: float):
+        if previous_self is not None and previous_other is not None:
+            D = previous_other - previous_self
+            distribution = norm(loc=D * coordination + previous_self, scale=std_coupling)
+        else:
+            distribution = prior_distribution
+
+        return distribution.rvs()
