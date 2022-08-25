@@ -7,7 +7,11 @@ import numpy as np
 
 class SparseSeries:
     def __init__(self, values: np.ndarray, mask: np.ndarray, timestamps: Optional[List[Optional[datetime]]] = None):
-        self.values = values
+        if values.ndim == 1:
+            self.values = values[np.newaxis, :]
+        else:
+            self.values = values
+
         self.mask = mask
         self.timestamps = timestamps
 
