@@ -1,7 +1,10 @@
+from typing import Callable
+
 import numpy as np
 from scipy.stats import norm
 
 from coordination.common.sparse_series import SparseSeries
+from coordination.inference.lds import apply_marginal_property, apply_conditional_property, pdf_projection
 
 EPSILON = 1E-16
 
@@ -183,97 +186,147 @@ class DiscreteCoordinationInferenceFromVocalics:
         return m_comp2coord
 
 
-# TODO - Remove this old code after implementing continuous inference
-#
-# def estimate_continuous_coordination(gibbs_steps: int, series_a: np.ndarray, series_b: np.ndarray,
-#                                      mean_a: float, mean_b: float, mask_a: Any, mask_b: Any,
-#                                      mean_shift_coupling: float = 0) -> np.ndarray:
-#     """
-#     Approximate estimation of coordination marginals.
-#
-#     We will use Gibbs Sampling to infer coordination at each time step. Because of the transition entanglement between
-#     coordination, we cannot generate the samples for all the time steps at the same time. However, we can split the
-#     variables between even/odd time steps arrays and sample them in sequence at each gibbs step to speed up computation.
-#
-#     The posterior of the coordination variable can be written in a closed form. It is a truncated normal distribution
-#     with mean and variance define as below.
-#     """
-#
-#     T = series_a.shape[0]
-#
-#     if mask_a is None:
-#         # Consider values of series A at all time steps
-#         mask_a = np.ones(T)
-#     if mask_b is None:
-#         # Consider values of series B at all time steps
-#         mask_b = np.ones(T)
-#
-#     even_indices = np.arange(0, T, 2)[1:]  # t = 0 has no previous neighbor
-#     odd_indices = np.arange(1, T, 2)
-#
-#     c_samples = np.zeros((gibbs_steps, T + 1))
-#
-#     # Initialization
-#     mask_ab = np.ones(T)
-#     mask_ba = np.ones(T)
-#     last_as = series_a
-#     last_bs = series_b
-#     observed_a = False
-#     observed_b = False
-#     for t in range(T):
-#         if t > 0:
-#             mean = c_samples[0, t - 1]
-#             std = 0.1
-#             c_samples[0, t] = truncnorm.rvs((0 - mean) / std, (1 - mean) / std, loc=mean, scale=std)
-#             last_as[t] = mask_a[t] * last_as[t] + (1 - mask_a[t]) * last_as[t - 1]
-#             last_bs[t] = mask_b[t] * last_bs[t] + (1 - mask_b[t]) * last_bs[t - 1]
-#
-#         if not observed_a or (observed_a and mask_b[t] == 0):
-#             mask_ab[t] = 0
-#         if not observed_b or (observed_b and mask_a[t] == 0):
-#             mask_ba[t] = 0
-#         if not observed_a:
-#             observed_a = mask_a[t] == 1
-#         if not observed_b:
-#             observed_b = mask_b[t] == 1
-#
-#     # MCMC
-#     for s in tqdm(range(gibbs_steps)):
-#         # Sample even coordination
-#         variances = (2 + np.sum(
-#             mask_ba[even_indices][:, np.newaxis] * (mean_a - last_bs[even_indices - 1] - mean_shift_coupling) ** 2 +
-#             mask_ab[even_indices][:, np.newaxis] * (mean_b - last_as[even_indices - 1] - mean_shift_coupling) ** 2,
-#             axis=1))
-#         variances[-1] -= 1  # The last time step only counts the previous coordination value
-#         variances = 1 / variances
-#         means = (np.sum(
-#             mask_ba[even_indices][:, np.newaxis] * (mean_a - last_bs[even_indices - 1] - mean_shift_coupling) * (
-#                     mean_a - series_a[even_indices]) +
-#             mask_ab[even_indices][:, np.newaxis] * (mean_b - last_as[even_indices - 1] - mean_shift_coupling) * (
-#                     mean_b - series_b[even_indices]), axis=1) +
-#                  c_samples[s, even_indices - 1] + c_samples[s, even_indices + 1]) * variances
-#
-#         stds = np.sqrt(variances)
-#         c_samples[s, even_indices] = truncnorm.rvs((0 - means) / stds, (1 - means) / stds, loc=means, scale=stds)
-#
-#         # Sample odd coordination
-#         variances = (2 + np.sum(
-#             mask_ba[odd_indices][:, np.newaxis] * (mean_a - last_bs[odd_indices - 1] - mean_shift_coupling) ** 2 +
-#             mask_ab[odd_indices][:, np.newaxis] * (mean_b - last_as[odd_indices - 1] - mean_shift_coupling) ** 2,
-#             axis=1))
-#         variances[-1] -= 1  # The last time step only counts the previous coordination value
-#         variances = 1 / variances
-#         means = (np.sum(
-#             mask_ba[odd_indices][:, np.newaxis] * (mean_a - last_bs[odd_indices - 1] - mean_shift_coupling) * (
-#                     mean_a - series_a[odd_indices]) +
-#             mask_ab[odd_indices][:, np.newaxis] * (mean_b - last_as[odd_indices - 1] - mean_shift_coupling) * (
-#                     mean_b - series_b[odd_indices]), axis=1) +
-#                  c_samples[s, odd_indices] + c_samples[s, odd_indices + 1]) * variances
-#
-#         stds = np.sqrt(variances)
-#         c_samples[s, odd_indices] = truncnorm.rvs((0 - means) / stds, (1 - means) / stds, loc=means, scale=stds)
-#
-#         if s < gibbs_steps - 1:
-#             c_samples[s + 1] = c_samples[s]
-#
-#     return c_samples[:, :-1]
+class ContinuousCoordinationInferenceFromVocalics:
+
+    def __init__(self, series_a: SparseSeries, series_b: SparseSeries, mean_prior_coordination: float,
+                 std_prior_coordination: float, std_coordination_drifting: float, mean_prior_a: np.array,
+                 mean_prior_b: np.ndarray, std_prior_a: np.array, std_prior_b: np.array, std_coupling_a: np.ndarray,
+                 std_coupling_b: np.ndarray, f: Callable = lambda x: x):
+
+        assert len(mean_prior_a) == series_a.num_series
+        assert len(mean_prior_b) == series_a.num_series
+        assert len(std_prior_a) == series_a.num_series
+        assert len(std_prior_b) == series_a.num_series
+        assert len(std_coupling_a) == series_a.num_series
+        assert len(std_coupling_b) == series_a.num_series
+
+        self._series_a = series_a
+        self._series_b = series_b
+        self._mean_prior_coordination = mean_prior_coordination
+        self._std_prior_coordination = std_prior_coordination
+        self._std_coordination_drifting = std_coordination_drifting
+        self._mean_prior_a = mean_prior_a
+        self._mean_prior_b = mean_prior_b
+        self._std_prior_a = std_prior_a
+        self._std_prior_b = std_prior_b
+        self._std_coupling_a = std_coupling_a
+        self._std_coupling_b = std_coupling_b
+        self._f = f
+
+        self._num_features, self._time_steps = series_a.values.shape  # n and T
+        self._mid_time_step = int(self._time_steps / 2)  # M
+
+    def estimate_means_and_variances(self) -> np.ndarray:
+        filter_params = self._kalman_filter(False)
+        return self._rts_smoother(filter_params, True)
+
+    def filter(self) -> np.ndarray:
+        return self._kalman_filter(True)
+
+    def _kalman_filter(self, constrained: bool) -> np.ndarray:
+        var_C = self._std_coordination_drifting ** 2
+        var_BA = self._std_coupling_b ** 2
+        var_AB = self._std_coupling_a ** 2
+
+        last_ta = None  # last time step with observed value for the series A
+        last_tb = None  # last time step with observed value for the series B
+        params = np.zeros((2, self._mid_time_step + 1))
+        params[:, 0] = np.array([self._mean_prior_coordination, self._std_prior_coordination ** 2])
+        for t in range(1, self._mid_time_step + 1):
+            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta])
+            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb])
+
+            m_previous, v_previous = params[:, t - 1]
+
+            """
+            Coordination moves because of drifting:
+            N(C_t | m_t, s_t) sim Integral [N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1})] dC_{t-1} 
+                                = N(C_t | m_{t-1}, v_{t-1} + var_C)
+
+            """
+            mean, var = apply_marginal_property(1, 0, var_C, m_previous, v_previous)
+
+            if previous_a is not None and previous_b is not None:
+                """
+                Coordination moves because of drifting and vocalics:
+
+                N(C_t | m_t, s_t) sim Integral [
+                                        N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1}) *
+                                        p(A_t | A_{t-1}, B_{t-1}, C_t, f) * p(A_t | A_{t-1}, B_{t-1}, C_t, f)
+                                      ] dC_{t-1}
+
+                                    = p(A_t | A_{t-1}, B_{t-1}, C_t, f) * p(A_t | A_{t-1}, B_{t-1}, C_t, f) *
+                                      Integral [N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1})] dC_{t-1} 
+
+                                    = N(A_t | D_{t-1} * C_t + A_{t-1}, var_AB) *
+                                      N(B_t | -D_{t-1} * C_t + B_{t-1}, var_BA) *
+                                      N(C_t | m_{t-1}, v_{t-1} + var_C) -- Obtained by the integral property previously
+
+                                  We can apply the conditional property recursively to obtain the mean and 
+                                  variances of the final distribution. We must apply the conditional property
+                                  to each dimension of A and B.
+                """
+
+                D = previous_b - previous_a
+                A_t = self._f(self._series_a.values[:, t])
+                B_t = self._f(self._series_b.values[:, t])
+
+                for i in range(self._num_features):
+                    if self._series_a.mask[t] == 1:
+                        mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
+
+                    if self._series_b.mask[t] == 1:
+                        mean, var = apply_conditional_property(B_t[i], -D[i], previous_b[i], var_BA[i], mean, var)
+
+                if constrained:
+                    mean, var = pdf_projection(mean, var, 0, 1)
+                params[:, t] = [mean, var]
+
+            if self._series_a.mask[t] == 1:
+                last_ta = t
+            if self._series_b.mask[t] == 1:
+                last_tb = t
+
+        # All the remaining vocalics contribute to the final coordination at t == M
+        mean, var = params[:, self._mid_time_step - 1]
+        for t in range(self._mid_time_step, self._time_steps):
+            previous_a = None if last_ta is None else self._series_a.values[:, last_ta]
+            previous_b = None if last_tb is None else self._series_b.values[:, last_tb]
+
+            D = previous_b - previous_a
+            A_t = self._f(self._series_a.values[:, t])
+            B_t = self._f(self._series_b.values[:, t])
+
+            for i in range(self._num_features):
+                if self._series_a.mask[t] == 1:
+                    mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
+
+                if self._series_b.mask[t] == 1:
+                    mean, var = apply_conditional_property(B_t[i], -D[i], previous_b[i], var_BA[i], mean, var)
+
+            if self._series_a.mask[t] == 1:
+                last_ta = t
+            if self._series_b.mask[t] == 1:
+                last_tb = t
+
+        mean, var = pdf_projection(mean, var, 0, 1)
+        params[:, self._mid_time_step] = [mean, var]
+
+        return params
+
+    def _rts_smoother(self, filter_params: np.ndarray, constrained: bool) -> np.ndarray:
+        var_C = self._std_coordination_drifting ** 2
+
+        params = np.zeros((2, self._mid_time_step + 1))  # Coordination mean and variance over time
+        params[:, self._mid_time_step] = filter_params[:, -1]
+
+        for t in range(self._mid_time_step - 1, -1, -1):
+            K = (filter_params[1, t] ** 2) / (filter_params[1, t] ** 2 + var_C)
+
+            mean_filter, var_filter = filter_params[:, t]
+            mean, var = apply_marginal_property(K, (1 - K) * mean_filter, (1 - K) * var_filter, *params[:, t + 1])
+            if constrained:
+                mean, var = pdf_projection(mean, var, 0, 1)
+            params[:, t] = [mean, var]
+
+        return params

@@ -9,6 +9,7 @@ class CoordinationGenerator:
     """
     This class generates synthetic values for a latent coordination variable over time.
     """
+
     def __init__(self, num_time_steps: int):
         self._num_time_steps = num_time_steps
 
@@ -22,7 +23,7 @@ class CoordinationGenerator:
             if t == 0:
                 cs.append(self._sample_from_prior())
             else:
-                cs.append(self._sample_from_transition(cs[t-1]))
+                cs.append(self._sample_from_transition(cs[t - 1]))
 
         return np.array(cs)
 
@@ -63,12 +64,18 @@ class ContinuousCoordinationGenerator(CoordinationGenerator):
 
         assert ContinuousCoordinationGenerator.MIN_VALUE <= prior_mean <= ContinuousCoordinationGenerator.MAX_VALUE
 
+        self._prior_mean = prior_mean
+        self._prior_std = prior_std
         self._transition_std = transition_std
 
-        self._prior = truncnorm(loc=prior_mean, scale=prior_std, a=0, b=1)
-
     def _sample_from_prior(self) -> float:
-        return self._prior.rvs()
+        if self._prior_std == 0:
+            return self._prior_mean
+        else:
+            a = (ContinuousCoordinationGenerator.MIN_VALUE - self._prior_mean) / self._prior_std
+            b = (ContinuousCoordinationGenerator.MAX_VALUE - self._prior_mean) / self._prior_std
+
+        return truncnorm.rvs(loc=self._prior_mean, scale=self._prior_std, a=a, b=b)
 
     def _sample_from_transition(self, previous_coordination: float) -> float:
         a = (ContinuousCoordinationGenerator.MIN_VALUE - previous_coordination) / self._transition_std
@@ -76,5 +83,3 @@ class ContinuousCoordinationGenerator(CoordinationGenerator):
         transition = truncnorm(loc=previous_coordination, scale=self._transition_std, a=a, b=b)
 
         return transition.rvs()
-
-
