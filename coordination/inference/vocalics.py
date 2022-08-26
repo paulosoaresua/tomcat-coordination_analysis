@@ -14,7 +14,8 @@ class DiscreteCoordinationInferenceFromVocalics:
     def __init__(self, series_a: SparseSeries, series_b: SparseSeries, p_prior_coordination: float,
                  p_coordination_transition: float, mean_prior_a: np.array, mean_prior_b: np.ndarray,
                  std_prior_a: np.array, std_prior_b: np.array, std_uncoordinated_a: np.ndarray,
-                 std_uncoordinated_b: np.ndarray, std_coordinated_a: np.ndarray, std_coordinated_b: np.ndarray):
+                 std_uncoordinated_b: np.ndarray, std_coordinated_a: np.ndarray, std_coordinated_b: np.ndarray,
+                 f: Callable = lambda x, s: x):
         """
         This class estimates discrete coordination with message passing.
         The series A and B can contain multiple series, one for each feature (e.g. pitch and intensity).
@@ -53,6 +54,7 @@ class DiscreteCoordinationInferenceFromVocalics:
         self._std_uncoordinated_b = std_uncoordinated_b
         self._std_coordinated_a = std_coordinated_a
         self._std_coordinated_b = std_coordinated_b
+        self._f = f
 
         self._num_features, self._time_steps = series_a.values.shape  # n and T
         self._mid_time_step = int(self._time_steps / 2)  # M
@@ -159,24 +161,27 @@ class DiscreteCoordinationInferenceFromVocalics:
 
             return np.array([c0, c1])
 
-        f = get_message_from_individual_series_to_coordination
+        f_msg = get_message_from_individual_series_to_coordination
 
         last_ta = None  # last time step with observed value for the series A
         last_tb = None  # last time step with observed value for the series B
         m_comp2coord = np.zeros((2, self._time_steps))
         for t in range(self._time_steps):
-            previous_a = None if last_ta is None else self._series_a.values[:, last_ta]
-            previous_b = None if last_tb is None else self._series_b.values[:, last_tb]
+            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta], 0)
+            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb], 1)
+
+            A_t = self._f(self._series_a.values[:, t], 0)
+            B_t = self._f(self._series_b.values[:, t], 1)
 
             # Message from A_t to C_t
-            m_comp2coord[:, t] = f(self._series_a.values[:, t], previous_a, previous_b, self._mean_prior_a,
-                                   self._std_prior_a, self._std_uncoordinated_a, self._std_coordinated_a,
-                                   self._series_a.mask[t])
+            m_comp2coord[:, t] = f_msg(A_t, previous_a, previous_b, self._mean_prior_a,
+                                       self._std_prior_a, self._std_uncoordinated_a, self._std_coordinated_a,
+                                       self._series_a.mask[t])
 
             # Message from B_t to C_t
-            m_comp2coord[:, t] *= f(self._series_b.values[:, t], previous_b, previous_a, self._mean_prior_b,
-                                    self._std_prior_b, self._std_uncoordinated_b, self._std_coordinated_b,
-                                    self._series_b.mask[t])
+            m_comp2coord[:, t] *= f_msg(B_t, previous_b, previous_a, self._mean_prior_b,
+                                        self._std_prior_b, self._std_uncoordinated_b, self._std_coordinated_b,
+                                        self._series_b.mask[t])
 
             if self._series_a.mask[t] == 1:
                 last_ta = t
@@ -191,7 +196,7 @@ class ContinuousCoordinationInferenceFromVocalics:
     def __init__(self, series_a: SparseSeries, series_b: SparseSeries, mean_prior_coordination: float,
                  std_prior_coordination: float, std_coordination_drifting: float, mean_prior_a: np.array,
                  mean_prior_b: np.ndarray, std_prior_a: np.array, std_prior_b: np.array, std_coupling_a: np.ndarray,
-                 std_coupling_b: np.ndarray, f: Callable = lambda x: x):
+                 std_coupling_b: np.ndarray, f: Callable = lambda x, s: x):
 
         assert len(mean_prior_a) == series_a.num_series
         assert len(mean_prior_b) == series_a.num_series
@@ -228,13 +233,13 @@ class ContinuousCoordinationInferenceFromVocalics:
         var_BA = self._std_coupling_b ** 2
         var_AB = self._std_coupling_a ** 2
 
-        last_ta = None  # last time step with observed value for the series A
-        last_tb = None  # last time step with observed value for the series B
+        last_ta = None if self._series_a.mask[0] == 0 else 0  # last time step with observed value for the series A
+        last_tb = None if self._series_b.mask[0] == 0 else 0  # last time step with observed value for the series B
         params = np.zeros((2, self._mid_time_step + 1))
         params[:, 0] = np.array([self._mean_prior_coordination, self._std_prior_coordination ** 2])
-        for t in range(1, self._mid_time_step + 1):
-            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta])
-            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb])
+        for t in range(1, self._mid_time_step):
+            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta], 0)
+            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb], 1)
 
             m_previous, v_previous = params[:, t - 1]
 
@@ -268,8 +273,8 @@ class ContinuousCoordinationInferenceFromVocalics:
                 """
 
                 D = previous_b - previous_a
-                A_t = self._f(self._series_a.values[:, t])
-                B_t = self._f(self._series_b.values[:, t])
+                A_t = self._f(self._series_a.values[:, t], 0)
+                B_t = self._f(self._series_b.values[:, t], 1)
 
                 for i in range(self._num_features):
                     if self._series_a.mask[t] == 1:
@@ -280,22 +285,23 @@ class ContinuousCoordinationInferenceFromVocalics:
 
                 if constrained:
                     mean, var = pdf_projection(mean, var, 0, 1)
-                params[:, t] = [mean, var]
 
             if self._series_a.mask[t] == 1:
                 last_ta = t
             if self._series_b.mask[t] == 1:
                 last_tb = t
 
+            params[:, t] = [mean, var]
+
         # All the remaining vocalics contribute to the final coordination at t == M
         mean, var = params[:, self._mid_time_step - 1]
         for t in range(self._mid_time_step, self._time_steps):
-            previous_a = None if last_ta is None else self._series_a.values[:, last_ta]
-            previous_b = None if last_tb is None else self._series_b.values[:, last_tb]
+            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta], 0)
+            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb], 1)
 
             D = previous_b - previous_a
-            A_t = self._f(self._series_a.values[:, t])
-            B_t = self._f(self._series_b.values[:, t])
+            A_t = self._f(self._series_a.values[:, t], 0)
+            B_t = self._f(self._series_b.values[:, t], 1)
 
             for i in range(self._num_features):
                 if self._series_a.mask[t] == 1:
