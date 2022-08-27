@@ -163,6 +163,8 @@ class VocalicsComponent:
             if segmented_utterance is None:
                 segmented_utterance = SegmentedUtterance(
                     current_utterance.start, current_utterance.end)
+            else:
+                segmented_utterance.end = current_utterance.end
 
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
