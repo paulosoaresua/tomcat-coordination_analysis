@@ -182,6 +182,8 @@ class VocalicsComponent:
 
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
+            next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
+
             for j in range(current_utterance.vocalic_series.size):
                 # If vocalics of current utterance overlaps with the next, then move on to next utterance
                 if next_utterance is not None and current_utterance.vocalic_series.timestamps[j] > next_utterance.start:
