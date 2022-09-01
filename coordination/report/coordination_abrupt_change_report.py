@@ -2,7 +2,6 @@ import os
 from typing import List, Optional, Union, Tuple
 
 import numpy as np
-from scipy.io import wavfile
 from yattag import Doc, indent
 
 from coordination.common.sparse_series import SparseSeries
@@ -25,66 +24,166 @@ class CoordinationAbruptChangeReport:
 
         doc, tag, text = Doc().tagtext()
 
-        header_texts, col_spans = CoordinationAbruptChangeReport._get_header()
+        header_texts, col_spans, data_alignment = CoordinationAbruptChangeReport._get_header()
         table_rows = self._get_rows(ignore_under_percentage)
 
         with tag("html"):
+            doc.stag("link", href="https://fonts.googleapis.com/css?family=Nunito Sans", rel="stylesheet")
             with tag("script"):
-                text("function playAudio(source) { var audio = new Audio(source); audio.play(); }")
+                doc.asis(CoordinationAbruptChangeReport._get_js())
+            with tag("script", src="https://kit.fontawesome.com/5631021ae3.js", crossorigin="anonymous"):
+                pass
             with tag("head"):
                 with tag("style"):
-                    text("""
-                        table, th, td {
-                          border: 1px solid black;
-                          border-collapse: collapse;
-                        }
-                    """)
+                    text(CoordinationAbruptChangeReport._get_style())
             with tag("body"):
-                with tag("table"):
-                    for i, header_row in enumerate(header_texts):
-                        with tag("tr"):
-                            for j, header_cell in enumerate(header_row):
-                                if col_spans[i][j] > 1:
-                                    with tag("th", colspan=col_spans[i][j]):
-                                        text(header_cell)
-                                else:
-                                    with tag("th"):
-                                        text(header_cell)
-
-                    for i, table_row in enumerate(table_rows):
-                        with tag("tr"):
-                            for j, table_cell in enumerate(table_row):
-                                with tag("td"):
-                                    if isinstance(table_cell, AudioSegment):
-                                        audio_src = f"{out_dir}/audio/audio_{i}_{j}.wav"
-                                        wavfile.write(audio_src, table_cell.sample_rate, table_cell.data)
-                                        with tag("button", onclick=f"playAudio('./audio/audio_{i}_{j}.wav')",
-                                                 style="border-radius: 50px;"):
-                                            with tag("span"):
-                                                text("Play")
+                with tag("table", klass="styled-table"):
+                    with tag("thead"):
+                        for i, header_row in enumerate(header_texts):
+                            with tag("tr"):
+                                for j, header_cell in enumerate(header_row):
+                                    if col_spans[i][j] > 1:
+                                        with tag("th", colspan=col_spans[i][j]):
+                                            text(header_cell)
                                     else:
-                                        text(table_cell)
+                                        with tag("th"):
+                                            text(header_cell)
+
+                    with tag("tbody"):
+                        for i, table_row in enumerate(table_rows):
+                            with tag("tr"):
+                                for j, table_cell in enumerate(table_row):
+                                    with tag("td", style=f"text-align:{data_alignment[j]}"):
+                                        if isinstance(table_cell, AudioSegment):
+                                            audio_src = f"{out_dir}/audio/audio_{i}_{j}.mp3"
+                                            # table_cell.save_to_mp3(audio_src, True)
+                                            # doc.stag("button", klass="play-button",
+                                            #          onclick=f"playAudio('./audio/audio_{i}_{j}.mp3')")
+                                            with tag("a", href="#", klass="play-button",
+                                                     onclick=f"playAudio('./audio/audio_{i}_{j}.mp3')"):
+                                                with tag("i", klass="fa fa-play fa-2x"):
+                                                    pass
+                                        else:
+                                            text(table_cell)
 
         with open(filepath, "w") as f:
             f.write(indent(doc.getvalue()))
 
     @staticmethod
-    def _get_header() -> Tuple[List[List[str]], List[List[int]]]:
+    def _get_js() -> str:
+        js = """
+            function playAudio(source) { 
+                console.log(source)
+                var audio = new Audio(source); 
+                audio.play()
+                    .then(() => {
+                        // Audio is playing.
+                    })
+                    .catch(error => { 
+                        console.log(error); 
+                    }); 
+            }
+        """
+
+        return js
+
+    @staticmethod
+    def _get_style() -> str:
+        css = """
+              body {
+                  font-family: 'Nunito Sans';font-size: 14px;
+              }
+        
+              .styled-table {
+                  border-collapse: collapse;
+                  margin: 25px 0;
+                  font-size: 0.9em;
+                  font-family: sans-serif;
+                  min-width: 400px;
+                  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);                  
+              }
+              
+              .styled-table th, td {
+                  border-left: 1px solid #dddddd;
+                  border-right: 1px solid #dddddd;
+              }
+              
+              .styled-table thead tr {
+                  background-color: #009879;
+                  color: #ffffff;
+                  text-align: center;     
+                  border-bottom: 1px solid #dddddd;          
+              }
+
+              .styled-table th,
+              .styled-table td {
+                  padding: 10px 12px;
+              }
+
+              .styled-table tbody tr {
+                  border-bottom: 1px solid #dddddd;
+              }
+
+              .styled-table tbody tr:nth-of-type(even) {
+                  background-color: #f3f3f3;
+              }
+
+              .styled-table tbody tr:last-of-type {
+                  border-bottom: 2px solid #009879;
+              }
+
+              .styled-table tbody tr:hover {
+                  background-color: #3BF7D2;
+              }
+              
+              .play-button {
+                  box-sizing: border-box;
+                  display:inline-block;
+                  width:20px;
+                  height:20px;
+                  padding-top: 3px;
+                  padding-left: 2px;
+                  line-height: 18px;
+                  border: 2px solid #fff;
+                  border-radius: 50%;
+                  color:#f5f5f5;
+                  text-align:center;
+                  text-decoration:none;
+                  background-color: rgba(0,0,0,0.6);
+                  font-size:5px;
+                  font-weight:bold;
+                  transition: all 0.3s ease;
+            }
+            
+            .play-button:hover {
+                  background-color: rgba(0,0,0,0.8);
+                  box-shadow: 0px 0px 10px rgba(255,255,100,1);
+                  text-shadow: 0px 0px 10px rgba(255,255,100,1);
+            }
+        """
+
+        return css
+
+    @staticmethod
+    def _get_header() -> Tuple[List[List[str]], List[List[int]], List[str]]:
         texts = [
-            ["", "", "", "", "", "Vocalics"],
-            ["", "", "", "", "", "Main Subject", "Other Subject"],
-            ["#", "Timestep", "Previous Coordination", "Current Coordination", "% Change", "Series", "Name",
+            ["", "Vocalics"],
+            ["", "Main Subject", "Other Subject"],
+            ["#", "Timestep", "Previous Coordination", "Current Coordination", "Change", "Series", "Name",
              "Previous Value", "Current Value", "Delay (seconds)", "Previous Utterance", "Current Utterance", "Series",
              "Name", "Previous Value", "Delay (seconds)", "Previous Utterance"]
         ]
 
         col_spans = [
-            [1, 1, 1, 1, 1, 12],
-            [1, 1, 1, 1, 1, 7, 5],
+            [5, 12],
+            [5, 7, 5],
             [1] * len(texts[-1]),
         ]
 
-        return texts, col_spans
+        data_alignment = ["left", "left", "right", "right", "right", "left", "left", "left", "left", "right", "center",
+                          "center", "left", "left", "left", "right", "center"]
+
+        return texts, col_spans, data_alignment
 
     def _get_rows(self, ignore_under_percentage: float) -> List[List[Union[str, AudioSegment]]]:
         def get_vocalic_entries(time_step: int,
@@ -198,6 +297,8 @@ class CoordinationAbruptChangeReport:
 if __name__ == "__main__":
     import random
     from datetime import datetime
+
+    np.random.seed(0)
 
     cs = np.random.rand(100)
 

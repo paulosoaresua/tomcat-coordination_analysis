@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import pickle
+import pydub
 import re
 
 import numpy as np
@@ -26,6 +27,20 @@ class AudioSegment:
         self.end = end
         self.data = data
         self.sample_rate = sample_rate
+
+    def save_to_wav(self, out_filepath: str):
+        wavfile.write(out_filepath, self.sample_rate, self.data)
+
+    def save_to_mp3(self, out_filepath: str, normalized: bool = False):
+        # Code from  https://stackoverflow.com/questions/53633177/how-to-read-a-mp3-audio-file- ...
+        # into-a-numpy-array-save-a-numpy-array-to-mp3
+        channels = 2 if (self.data.ndim == 2 and self.data.shape[1] == 2) else 1
+        if normalized:  # normalized array - each item should be a float in [-1, 1)
+            y = np.int16(self.data * 2 ** 15)
+        else:
+            y = np.int16(self.data)
+        mp3_audio = pydub.AudioSegment(y.tobytes(), frame_rate=self.sample_rate, sample_width=2, channels=channels)
+        mp3_audio.export(out_filepath, format="mp3", bitrate="320k")
 
 
 class AudioSparseSeries:
