@@ -20,11 +20,12 @@ logger = logging.getLogger()
 
 class AudioSegment:
 
-    def __init__(self, source: str, start: datetime, end: datetime, data: np.ndarray):
+    def __init__(self, source: str, start: datetime, end: datetime, data: np.ndarray, sample_rate: int):
         self.source = source
         self.start = start
         self.end = end
         self.data = data
+        self.sample_rate = sample_rate
 
 
 class AudioSparseSeries:
@@ -39,14 +40,15 @@ class VocalicsComponentAudio:
         self.series_b = series_b
 
     @classmethod
-    def from_vocalics_component(cls, trial_audio: TrialAudio, vocalics_component: VocalicsComponent) -> VocalicsComponentAudio:
+    def from_vocalics_component(cls, trial_audio: TrialAudio,
+                                vocalics_component: VocalicsComponent) -> VocalicsComponentAudio:
         def segment_audio_from_segmented_utterances(utterances: List[SegmentedUtterance]) -> List[AudioSegment]:
             audio_segments: List[AudioSegment] = []
             for utterance in utterances:
                 audio_series = trial_audio.audio_per_participant[utterance.subject_id]
                 audio_data_segment = audio_series.get_data_segment(utterance.start, utterance.end)
                 audio_segment = AudioSegment(utterance.subject_id, utterance.start, utterance.end,
-                                             audio_data_segment)
+                                             audio_data_segment, audio_series.sample_rate)
                 audio_segments.append(audio_segment)
 
             return audio_segments

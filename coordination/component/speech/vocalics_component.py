@@ -93,6 +93,7 @@ class VocalicsComponent:
             values = np.zeros((utterances[0].vocalic_series.num_series, num_time_steps))
             mask = np.zeros(num_time_steps)  # 1 for time steps with observation, 0 otherwise
             timestamps: List[Optional[datetime]] = [None] * num_time_steps
+            sources: List[Optional[str]] = [None] * num_time_steps
 
             for i, utterance in enumerate(utterances):
                 # We consider that the observation is available at the end of an utterance. We take the average vocalics
@@ -107,8 +108,9 @@ class VocalicsComponent:
                 values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
                 mask[time_step] = 1
                 timestamps[time_step] = utterance.end
+                sources[time_step] = utterance.subject_id
 
-            return SparseSeries(values, mask, timestamps)
+            return SparseSeries(values, mask, timestamps, sources)
 
         # The first utterance always goes in series A
         earliest_timestamp = self.series_a[0].start
