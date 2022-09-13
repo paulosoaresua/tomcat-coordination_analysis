@@ -182,6 +182,7 @@ class VocalicsComponent:
 
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
+
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
             for j in range(current_utterance.vocalic_series.size):
