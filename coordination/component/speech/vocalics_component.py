@@ -1,14 +1,13 @@
 from __future__ import annotations
-from typing import List, Any, Tuple, Optional
+from typing import Any, List, Optional, Tuple
 
 from datetime import datetime
 from enum import Enum
+import json
 import logging
 import numpy as np
 import os
 import pickle
-import json
-import matplotlib.pyplot as plt
 
 from coordination.common.sparse_series import SparseSeries
 from coordination.entity.vocalics import Utterance, Vocalics
@@ -20,12 +19,25 @@ UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD = 1
 logger = logging.getLogger()
 
 
+class VocalicsSparseSeries(SparseSeries):
+    def __init__(self, utterances: List[Optional[SegmentedUtterance]] = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.utterances = utterances
+
+
 class SegmentedUtterance:
-    def __init__(self, start: datetime, end: datetime):
+    def __init__(self, subject_id: str, start: datetime, end: datetime, text: str):
+        self.subject_id = subject_id
         self.start = start
         self.end = end
+        self.text = text
 
         self.vocalic_series: VocalicsSeries = VocalicsSeries(np.array([]), [])
+
+    @classmethod
+    def from_utterance(cls, utterance: Utterance, start: datetime, end: datetime) -> SegmentedUtterance:
+        return cls(utterance.subject_id, start, end, utterance.text)
 
 
 class SegmentationMethod(Enum):
@@ -88,11 +100,13 @@ class VocalicsComponent:
 
         return cls(series_a, series_b, feature_names)
 
-    def sparse_series(self, num_time_steps: int) -> Tuple[SparseSeries, SparseSeries]:
-        def series_to_seconds(utterances: List[SegmentedUtterance], initial_timestamp: datetime) -> SparseSeries:
+    def sparse_series(self, num_time_steps: int) -> Tuple[VocalicsSparseSeries, VocalicsSparseSeries]:
+        def series_to_seconds(utterances: List[SegmentedUtterance],
+                              initial_timestamp: datetime) -> VocalicsSparseSeries:
             values = np.zeros((utterances[0].vocalic_series.num_series, num_time_steps))
             mask = np.zeros(num_time_steps)  # 1 for time steps with observation, 0 otherwise
             timestamps: List[Optional[datetime]] = [None] * num_time_steps
+            segmented_utterances: List[Optional[SegmentedUtterance]] = [None] * num_time_steps
 
             for i, utterance in enumerate(utterances):
                 # We consider that the observation is available at the end of an utterance. We take the average vocalics
@@ -107,8 +121,10 @@ class VocalicsComponent:
                 values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
                 mask[time_step] = 1
                 timestamps[time_step] = utterance.end
+                segmented_utterances[time_step] = utterance
 
-            return SparseSeries(values, mask, timestamps)
+            return VocalicsSparseSeries(values=values, mask=mask, timestamps=timestamps,
+                                        utterances=segmented_utterances)
 
         # The first utterance always goes in series A
         earliest_timestamp = self.series_a[0].start
@@ -161,10 +177,8 @@ class VocalicsComponent:
         for i, current_utterance in enumerate(utterances):
             # Start a new segmented utterance if the previous one is completed or not available
             if segmented_utterance is None:
-                segmented_utterance = SegmentedUtterance(
-                    current_utterance.start, current_utterance.end)
-            else:
-                segmented_utterance.end = current_utterance.end
+                segmented_utterance = SegmentedUtterance.from_utterance(current_utterance, current_utterance.start,
+                                                                        current_utterance.end)
 
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
@@ -196,6 +210,8 @@ class VocalicsComponent:
                 segmented_vocalic_values = np.array([])
                 segmented_vocalic_timestamps: List[datetime] = []
                 series_a_active = not series_a_active
+            elif next_utterance is not None and next_utterance.subject_id == current_utterance.subject_id:
+                segmented_utterance.end = next_utterance.end
 
         return cls(series_a, series_b, vocalics.features)
 
