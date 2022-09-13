@@ -1,14 +1,13 @@
 from __future__ import annotations
-from typing import List, Any, Tuple, Optional
+from typing import Any, List, Optional, Tuple
 
 from datetime import datetime
 from enum import Enum
+import json
 import logging
 import numpy as np
 import os
 import pickle
-import json
-import matplotlib.pyplot as plt
 
 from coordination.common.sparse_series import SparseSeries
 from coordination.entity.vocalics import Utterance, Vocalics
@@ -21,7 +20,8 @@ logger = logging.getLogger()
 
 
 class SegmentedUtterance:
-    def __init__(self, start: datetime, end: datetime):
+    def __init__(self, subject_id: str, start: datetime, end: datetime):
+        self.subject_id = subject_id
         self.start = start
         self.end = end
 
@@ -161,7 +161,7 @@ class VocalicsComponent:
         for i, current_utterance in enumerate(utterances):
             # Start a new segmented utterance if the previous one is completed or not available
             if segmented_utterance is None:
-                segmented_utterance = SegmentedUtterance(
+                segmented_utterance = SegmentedUtterance(current_utterance.subject_id,
                     current_utterance.start, current_utterance.end)
             else:
                 segmented_utterance.end = current_utterance.end
