@@ -175,6 +175,7 @@ class VocalicsComponent:
         segmented_vocalic_timestamps: List[datetime] = []
         segmented_utterance = None
         for i, current_utterance in enumerate(utterances):
+
             # Start a new segmented utterance if the previous one is completed or not available
             if segmented_utterance is None:
                 segmented_utterance = SegmentedUtterance.from_utterance(current_utterance, current_utterance.start,
@@ -188,7 +189,7 @@ class VocalicsComponent:
             for j in range(current_utterance.vocalic_series.size):
                 # If vocalics of current utterance overlaps with the next, then move on to next utterance
                 if next_utterance is not None and current_utterance.vocalic_series.timestamps[j] > next_utterance.start:
-                    # segmented_utterance.end = next_utterance.start
+                    segmented_utterance.end = next_utterance.start
                     break
 
                 # Add vocalics to the current segment
