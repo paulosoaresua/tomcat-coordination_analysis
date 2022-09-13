@@ -175,14 +175,10 @@ class VocalicsComponent:
         segmented_vocalic_timestamps: List[datetime] = []
         segmented_utterance = None
         for i, current_utterance in enumerate(utterances):
-
             # Start a new segmented utterance if the previous one is completed or not available
             if segmented_utterance is None:
                 segmented_utterance = SegmentedUtterance.from_utterance(current_utterance, current_utterance.start,
                                                                         current_utterance.end)
-
-            next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
-
 
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
