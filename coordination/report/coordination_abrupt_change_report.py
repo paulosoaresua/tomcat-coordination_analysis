@@ -61,11 +61,12 @@ class CoordinationAbruptChangeReport:
                                 for j, table_cell in enumerate(table_row):
                                     with tag("td", style=f"text-align:{data_alignment[j]}"):
                                         if isinstance(table_cell, AudioSegment):
-                                            audio_src = f"{out_dir}/audio/audio_{i}_{j}.mp3"
-                                            table_cell.save_to_mp3(audio_src, False)
+                                            audio_src = f"{out_dir}/audio/audio_{i}_{j}.wav"
+                                            # table_cell.save_to_mp3(audio_src, False)
+                                            table_cell.save_to_wav(audio_src)
                                             with tag("div", klass="tooltip"):
-                                                with tag("a", href="#", klass="play-button",
-                                                         onclick=f"playAudio('./audio/audio_{i}_{j}.mp3')"):
+                                                with tag("a", href="#!", klass="play-button",
+                                                         onclick=f"playAudio('./audio/audio_{i}_{j}.wav')"):
                                                     with tag("i", klass="fa fa-play fa-2x"):
                                                         pass
                                                 with tag("span", klass="tooltiptext"):

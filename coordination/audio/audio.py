@@ -135,11 +135,14 @@ class AudioSeries:
         self.baseline_timestamp = baseline_timestamp
 
     def get_data_segment(self, start: datetime, end: datetime):
+        print(start, self.baseline_timestamp)
         start_time_step = (start - self.baseline_timestamp).total_seconds()
-        end_time_step = (end - self.baseline_timestamp).total_seconds() + 1
+        end_time_step = (end - self.baseline_timestamp).total_seconds()
+
+        print(start_time_step, end_time_step)
 
         lower_idx = math.floor(self.sample_rate * start_time_step)
-        upper_idx = min(math.ceil(self.sample_rate * end_time_step), len(self.data))
+        upper_idx = min(math.ceil(self.sample_rate * end_time_step + 1), len(self.data))
         return self.data[lower_idx: upper_idx]
 
 
@@ -157,7 +160,7 @@ class TrialAudio:
             result = re.search(r".+_Member-(.+)_CondBtwn.+", filepath)
             subject_id = result.group(1)
             audio_series = AudioSeries(*wavfile.read(filepath),
-                                       baseline_timestamp=self._trial_metadata.trial_start + timedelta(seconds=5))
+                                       baseline_timestamp=self._trial_metadata.trial_start)
             self.audio_per_participant[self._trial_metadata.subject_id_map[subject_id]] = audio_series
 
 # if __name__ == "__main__":
