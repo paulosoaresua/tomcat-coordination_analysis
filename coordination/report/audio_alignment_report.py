@@ -66,8 +66,6 @@ class AudioAlignmentReport:
                                                          onclick=f"playAudio('./audio/audio_{i}_{j}.wav')"):
                                                     with tag("i", klass="fa fa-play fa-2x"):
                                                         pass
-                                        else:
-                                            text(table_cell)
 
         with open(filepath, "w") as f:
             f.write(indent(doc.getvalue()))

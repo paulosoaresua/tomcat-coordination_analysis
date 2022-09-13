@@ -135,9 +135,9 @@ class AudioSeries:
         self.baseline_timestamp = baseline_timestamp
 
     def get_data_segment(self, start: datetime, end: datetime):
+        print(start, self.baseline_timestamp)
         start_time_step = (start - self.baseline_timestamp).total_seconds()
         end_time_step = (end - self.baseline_timestamp).total_seconds()
-
         lower_idx = math.floor(self.sample_rate * start_time_step)
         upper_idx = min(math.ceil(self.sample_rate * end_time_step + 1), len(self.data))
 
