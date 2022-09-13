@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
 from glob import glob
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import math
 import os
@@ -135,14 +135,12 @@ class AudioSeries:
         self.baseline_timestamp = baseline_timestamp
 
     def get_data_segment(self, start: datetime, end: datetime):
-        print(start, self.baseline_timestamp)
         start_time_step = (start - self.baseline_timestamp).total_seconds()
         end_time_step = (end - self.baseline_timestamp).total_seconds()
 
-        print(start_time_step, end_time_step)
-
         lower_idx = math.floor(self.sample_rate * start_time_step)
         upper_idx = min(math.ceil(self.sample_rate * end_time_step + 1), len(self.data))
+
         return self.data[lower_idx: upper_idx]
 
 
@@ -162,8 +160,3 @@ class TrialAudio:
             audio_series = AudioSeries(*wavfile.read(filepath),
                                        baseline_timestamp=self._trial_metadata.trial_start)
             self.audio_per_participant[self._trial_metadata.subject_id_map[subject_id]] = audio_series
-
-# if __name__ == "__main__":
-#     SegmentedAudio.from_segmented_utterances(
-#         "/Users/paulosoares/data/study-3_2022/audio/HSRData_ClientAudio_Trial-T000745_Team-TM000273_Member-E000771_CondBtwn-ASI-UAZ-TA1_CondWin-na_Vers-1.wav",
-#         [])
