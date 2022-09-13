@@ -6,8 +6,7 @@ import numpy as np
 
 
 class SparseSeries:
-    def __init__(self, values: np.ndarray, mask: np.ndarray, timestamps: Optional[List[Optional[datetime]]] = None,
-                 sources: Optional[List[Optional[str]]] = None):
+    def __init__(self, values: np.ndarray, mask: np.ndarray, timestamps: Optional[List[Optional[datetime]]] = None):
         if values.ndim == 1:
             self.values = values[np.newaxis, :]
         else:
@@ -15,7 +14,6 @@ class SparseSeries:
 
         self.mask = mask
         self.timestamps = timestamps
-        self.sources = sources
 
     @property
     def num_series(self):

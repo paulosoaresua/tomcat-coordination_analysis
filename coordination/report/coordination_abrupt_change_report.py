@@ -4,19 +4,22 @@ from typing import List, Optional, Union, Tuple
 import numpy as np
 from yattag import Doc, indent
 
-from coordination.common.sparse_series import SparseSeries
 from coordination.audio.audio import AudioSegment, AudioSparseSeries
+from coordination.component.speech.vocalics_component import VocalicsSparseSeries
+
+NO_VALUE_STR = "n.a"
 
 
 class CoordinationAbruptChangeReport:
-    def __init__(self, coordination_series: np.ndarray, vocalics_series_a: SparseSeries,
-                 vocalics_series_b: SparseSeries, audio_series_a: Optional[AudioSparseSeries] = None,
-                 audio_series_b: Optional[AudioSparseSeries] = None):
+    def __init__(self, coordination_series: np.ndarray, vocalics_series_a: VocalicsSparseSeries,
+                 vocalics_series_b: VocalicsSparseSeries, audio_series_a: Optional[AudioSparseSeries] = None,
+                 audio_series_b: Optional[AudioSparseSeries] = None, title: Optional[str] = None):
         self.coordination_series = coordination_series
         self.vocalics_series_a = vocalics_series_a
         self.vocalics_series_b = vocalics_series_b
         self.audio_series_a = audio_series_a
         self.audio_series_b = audio_series_b
+        self.title = title
 
     def export_to_html(self, filepath: str, ignore_under_percentage: float):
         out_dir = os.path.dirname(filepath)
@@ -37,6 +40,9 @@ class CoordinationAbruptChangeReport:
                 with tag("style"):
                     text(CoordinationAbruptChangeReport._get_style())
             with tag("body"):
+                if self.title is not None:
+                    with tag("h1"):
+                        text(self.title)
                 with tag("table", klass="styled-table"):
                     with tag("thead"):
                         for i, header_row in enumerate(header_texts):
@@ -56,13 +62,15 @@ class CoordinationAbruptChangeReport:
                                     with tag("td", style=f"text-align:{data_alignment[j]}"):
                                         if isinstance(table_cell, AudioSegment):
                                             audio_src = f"{out_dir}/audio/audio_{i}_{j}.mp3"
-                                            # table_cell.save_to_mp3(audio_src, True)
-                                            # doc.stag("button", klass="play-button",
-                                            #          onclick=f"playAudio('./audio/audio_{i}_{j}.mp3')")
-                                            with tag("a", href="#", klass="play-button",
-                                                     onclick=f"playAudio('./audio/audio_{i}_{j}.mp3')"):
-                                                with tag("i", klass="fa fa-play fa-2x"):
-                                                    pass
+                                            table_cell.save_to_mp3(audio_src, False)
+                                            with tag("div", klass="tooltip"):
+                                                with tag("a", href="#", klass="play-button",
+                                                         onclick=f"playAudio('./audio/audio_{i}_{j}.mp3')"):
+                                                    with tag("i", klass="fa fa-play fa-2x"):
+                                                        pass
+                                                with tag("span", klass="tooltiptext"):
+                                                    text(
+                                                        f"{table_cell.transcription}: [{table_cell.start.isoformat()}, {table_cell.end.isoformat()}]")
                                         else:
                                             text(table_cell)
 
@@ -160,6 +168,24 @@ class CoordinationAbruptChangeReport:
                   box-shadow: 0px 0px 10px rgba(255,255,100,1);
                   text-shadow: 0px 0px 10px rgba(255,255,100,1);
             }
+            
+            .tooltip .tooltiptext {
+              visibility: hidden;
+              width: 120px;
+              background-color: black;
+              color: #fff;
+              text-align: center;
+              border-radius: 6px;
+              padding: 5px 0;
+            
+              /* Position the tooltip */
+              position: absolute;
+              z-index: 1;
+            }
+
+            .tooltip:hover .tooltiptext {
+              visibility: visible;
+            }
         """
 
         return css
@@ -188,30 +214,30 @@ class CoordinationAbruptChangeReport:
     def _get_rows(self, ignore_under_percentage: float) -> List[List[Union[str, AudioSegment]]]:
         def get_vocalic_entries(time_step: int,
                                 main_subject_series_name: str,
-                                main_subject_vocalic_series: SparseSeries,
+                                main_subject_vocalic_series: VocalicsSparseSeries,
                                 main_subject_previous_value: Optional[np.ndarray],
                                 main_subject_previous_time_step: Optional[int],
                                 main_subject_audio_series: Optional[AudioSparseSeries],
                                 other_subject_series_name: str,
-                                other_subject_vocalic_series: SparseSeries,
+                                other_subject_vocalic_series: VocalicsSparseSeries,
                                 other_subject_previous_value: Optional[np.ndarray],
                                 other_subject_previous_time_step: Optional[int],
                                 other_subject_audio_series: Optional[AudioSparseSeries],
                                 ) -> List[Union[str, AudioSegment]]:
 
             # Main Subject
-            main_subject_name = main_subject_vocalic_series.sources[time_step]
+            main_subject_name = main_subject_vocalic_series.utterances[time_step].subject_id
             if main_subject_previous_value is None:
-                main_subject_previous_value = "N.A."
-                main_subject_delay = "N.A."
+                main_subject_previous_value = NO_VALUE_STR
+                main_subject_delay = NO_VALUE_STR
             else:
                 main_subject_previous_value = np.array2string(main_subject_previous_value, precision=2)
                 main_subject_delay = str(time_step - main_subject_previous_time_step)
 
             main_subject_current_value = np.array2string(main_subject_vocalic_series.values[:, time_step], precision=2)
 
-            main_subject_previous_audio = "N.A"
-            main_subject_current_audio = "N.A"
+            main_subject_previous_audio = NO_VALUE_STR
+            main_subject_current_audio = NO_VALUE_STR
             if main_subject_audio_series is not None and main_subject_previous_time_step is not None and \
                     main_subject_audio_series.audio_segments[main_subject_previous_time_step] is not None:
                 main_subject_previous_audio = main_subject_audio_series.audio_segments[main_subject_previous_time_step]
@@ -220,15 +246,17 @@ class CoordinationAbruptChangeReport:
                 main_subject_current_audio = main_subject_audio_series.audio_segments[time_step]
 
             # Other Subject
-            other_subject_name = other_subject_vocalic_series.sources[time_step]
             if other_subject_previous_value is None:
-                other_subject_previous_value = "N.A."
-                other_subject_delay = "N.A."
+                other_subject_name = NO_VALUE_STR
+                other_subject_previous_value = NO_VALUE_STR
+                other_subject_delay = NO_VALUE_STR
             else:
+                other_subject_name = other_subject_vocalic_series.utterances[
+                    other_subject_previous_time_step].subject_id
                 other_subject_previous_value = np.array2string(other_subject_previous_value, precision=2)
                 other_subject_delay = str(time_step - other_subject_previous_time_step)
 
-            other_subject_previous_audio = "N.A"
+            other_subject_previous_audio = NO_VALUE_STR
             if other_subject_audio_series is not None and other_subject_previous_time_step is not None and \
                     other_subject_audio_series.audio_segments[other_subject_previous_time_step] is not None:
                 other_subject_previous_audio = other_subject_audio_series.audio_segments[
@@ -255,7 +283,9 @@ class CoordinationAbruptChangeReport:
                 previous_b = (t, self.vocalics_series_b.values[:, t])
 
         # Only report entries with a significant change in the coordination
-        change_rel_magnitude = np.diff(self.coordination_series) / (self.coordination_series[:-1] + 1E-16)
+        change_rel_magnitude = np.divide(np.diff(self.coordination_series), self.coordination_series[:-1],
+                                         out=np.ones_like(self.coordination_series[:-1]) * np.inf,
+                                         where=self.coordination_series[:-1] != 0)
         time_steps = np.where(np.abs(change_rel_magnitude) >= ignore_under_percentage)[0] + 1
         rows: List[List[Union[str, AudioSegment]]] = []
         for i, t in enumerate(time_steps):
@@ -287,7 +317,7 @@ class CoordinationAbruptChangeReport:
                                         other_previous_time, self.audio_series_a)
                 )
             else:
-                row.extend(["N.A."] * 12)
+                row.extend([NO_VALUE_STR] * 12)
 
             rows.append(row)
 
@@ -297,6 +327,7 @@ class CoordinationAbruptChangeReport:
 if __name__ == "__main__":
     import random
     from datetime import datetime
+    from coordination.component.speech.vocalics_component import SegmentedUtterance
 
     np.random.seed(0)
 
@@ -316,12 +347,18 @@ if __name__ == "__main__":
             mask_b[t] = 1
 
     audio_a = AudioSparseSeries(
-        [AudioSegment("", datetime.today(), datetime.today(), np.random.rand(48000 * 5), 48000)] * 100)
+        [AudioSegment("", datetime.today(), datetime.today(), np.random.rand(48000 * 5), 48000, "Hello World!")] * 100)
     audio_b = AudioSparseSeries(
-        [AudioSegment("", datetime.today(), datetime.today(), np.random.rand(48000 * 5), 48000)] * 100)
+        [AudioSegment("", datetime.today(), datetime.today(), np.random.rand(48000 * 5), 48000, "Hi Universe!")] * 100)
 
-    voc_a = SparseSeries(np.random.rand(100), mask_a, sources=["Red"] * 100)
-    voc_b = SparseSeries(np.random.rand(100), mask_b, sources=["Green"] * 100)
+    voc_a = VocalicsSparseSeries(values=np.random.rand(100), mask=mask_a,
+                                 utterances=[SegmentedUtterance("Red", datetime.today(),
+                                                                datetime.today(),
+                                                                "Hello World!")] * 100)
+    voc_b = VocalicsSparseSeries(values=np.random.rand(100), mask=mask_b,
+                                 utterances=[SegmentedUtterance("Green", datetime.today(),
+                                                                datetime.today(),
+                                                                "Hi Universe!")] * 100)
 
-    rep = CoordinationAbruptChangeReport(cs, voc_a, voc_b, audio_a, audio_b)
+    rep = CoordinationAbruptChangeReport(cs, voc_a, voc_b, audio_a, audio_b, "T00045")
     rep.export_to_html("/Users/paulosoares/code/tomcat-coordination/data/report.html", 0.5)

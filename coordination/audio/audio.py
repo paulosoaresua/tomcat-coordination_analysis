@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
 from glob import glob
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import math
 import os
@@ -21,12 +21,14 @@ logger = logging.getLogger()
 
 class AudioSegment:
 
-    def __init__(self, source: str, start: datetime, end: datetime, data: np.ndarray, sample_rate: int):
+    def __init__(self, source: str, start: datetime, end: datetime, data: np.ndarray, sample_rate: int,
+                 transcription: Optional[str] = None):
         self.source = source
         self.start = start
         self.end = end
         self.data = data
         self.sample_rate = sample_rate
+        self.transcription = transcription
 
     def save_to_wav(self, out_filepath: str):
         wavfile.write(out_filepath, self.sample_rate, self.data)
@@ -63,7 +65,7 @@ class VocalicsComponentAudio:
                 audio_series = trial_audio.audio_per_participant[utterance.subject_id]
                 audio_data_segment = audio_series.get_data_segment(utterance.start, utterance.end)
                 audio_segment = AudioSegment(utterance.subject_id, utterance.start, utterance.end,
-                                             audio_data_segment, audio_series.sample_rate)
+                                             audio_data_segment, audio_series.sample_rate, utterance.text)
                 audio_segments.append(audio_segment)
 
             return audio_segments
@@ -154,7 +156,8 @@ class TrialAudio:
         for filepath in filepaths:
             result = re.search(r".+_Member-(.+)_CondBtwn.+", filepath)
             subject_id = result.group(1)
-            audio_series = AudioSeries(*wavfile.read(filepath), baseline_timestamp=self._trial_metadata.trial_start)
+            audio_series = AudioSeries(*wavfile.read(filepath),
+                                       baseline_timestamp=self._trial_metadata.trial_start + timedelta(seconds=5))
             self.audio_per_participant[self._trial_metadata.subject_id_map[subject_id]] = audio_series
 
 # if __name__ == "__main__":
