@@ -66,9 +66,6 @@ class AudioAlignmentReport:
                                                          onclick=f"playAudio('./audio/audio_{i}_{j}.wav')"):
                                                     with tag("i", klass="fa fa-play fa-2x"):
                                                         pass
-                                                # with tag("span", klass="tooltiptext"):
-                                                #     text(
-                                                #         f"{table_cell.transcription}: [{table_cell.start.isoformat()}, {table_cell.end.isoformat()}]")
                                         else:
                                             text(table_cell)
 
@@ -220,7 +217,7 @@ class AudioAlignmentReport:
                 utterance.subject_id,
                 utterance.start.isoformat(),
                 utterance.end.isoformat(),
-                str((utterance.end - utterance.start).total_seconds()),
+                f"{((utterance.end - utterance.start).total_seconds()):.2f}",
                 utterance.text,
                 AudioSegment(utterance.subject_id, utterance.start, utterance.end,
                              voice.get_data_segment(utterance.start, utterance.end), voice.sample_rate)
