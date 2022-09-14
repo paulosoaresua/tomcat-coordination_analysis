@@ -174,18 +174,18 @@ class DiscreteCoordinationInferenceFromVocalics:
 
             # Message from A_t to C_t
             previous_a = previous_values_same_source_a[t]
-            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_a = None if previous_a is None else self._f(previous_a[1], 0)
             previous_b = previous_values_b[t]
-            previous_b = None if previous_b is None else self._f(previous_b, 0)
+            previous_b = None if previous_b is None else self._f(previous_b[1], 0)
             m_comp2coord[:, t] = f_msg(A_t, previous_a, previous_b, self._mean_prior_a,
                                        self._std_prior_a, self._std_uncoordinated_a, self._std_coordinated_a,
                                        self._series_a.mask[t])
 
             # Message from B_t to C_t
             previous_a = previous_values_a[t]
-            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_a = None if previous_a is None else self._f(previous_a[1], 0)
             previous_b = previous_values_same_source_b[t]
-            previous_b = None if previous_b is None else self._f(previous_b, 0)
+            previous_b = None if previous_b is None else self._f(previous_b[1], 0)
             m_comp2coord[:, t] *= f_msg(B_t, previous_b, previous_a, self._mean_prior_b,
                                         self._std_prior_b, self._std_uncoordinated_b, self._std_coordinated_b,
                                         self._series_b.mask[t])
@@ -277,9 +277,9 @@ class ContinuousCoordinationInferenceFromVocalics:
             B_t = self._f(self._series_b.values[:, t], 1)
 
             previous_a = previous_values_same_source_a[t]
-            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_a = None if previous_a is None else self._f(previous_a[1], 0)
             previous_b = previous_values_b[t]
-            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            previous_b = None if previous_b is None else self._f(previous_b[1], 1)
             if previous_a is not None and previous_b is not None:
                 D = previous_b - previous_a
                 for i in range(self._num_features):
@@ -287,9 +287,9 @@ class ContinuousCoordinationInferenceFromVocalics:
                         mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
 
             previous_a = previous_values_a[t]
-            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_a = None if previous_a is None else self._f(previous_a[1], 0)
             previous_b = previous_values_same_source_b[t]
-            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            previous_b = None if previous_b is None else self._f(previous_b[1], 1)
             if previous_a is not None and previous_b is not None:
                 D = previous_a - previous_b
                 for i in range(self._num_features):
@@ -308,9 +308,9 @@ class ContinuousCoordinationInferenceFromVocalics:
             B_t = self._f(self._series_b.values[:, t], 1)
 
             previous_a = previous_values_same_source_a[t]
-            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_a = None if previous_a is None else self._f(previous_a[1], 0)
             previous_b = previous_values_b[t]
-            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            previous_b = None if previous_b is None else self._f(previous_b[1], 1)
             if previous_a is not None and previous_b is not None:
                 D = previous_b - previous_a
                 for i in range(self._num_features):
@@ -318,9 +318,9 @@ class ContinuousCoordinationInferenceFromVocalics:
                         mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
 
             previous_a = previous_values_a[t]
-            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_a = None if previous_a is None else self._f(previous_a[1], 0)
             previous_b = previous_values_same_source_b[t]
-            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            previous_b = None if previous_b is None else self._f(previous_b[1], 1)
             if previous_a is not None and previous_b is not None:
                 D = previous_a - previous_b
                 for i in range(self._num_features):

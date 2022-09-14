@@ -93,29 +93,27 @@ class VocalicsComponentAudio:
 
         return cls(series_a, series_b)
 
-    def sparse_series(self, num_time_steps: int) -> Tuple[AudioSparseSeries, AudioSparseSeries]:
-        def series_to_seconds(audio_segments: List[AudioSegment], initial_timestamp: datetime) -> AudioSparseSeries:
+    def sparse_series(self, num_time_steps: int, mission_start: datetime) -> Tuple[AudioSparseSeries, AudioSparseSeries]:
+        def series_to_seconds(audio_segments: List[AudioSegment]) -> AudioSparseSeries:
             segments: List[Optional[AudioSegment]] = [None] * num_time_steps
 
             for i, audio_segment in enumerate(audio_segments):
                 # We consider that the observation is available at the end of an utterance. We take the average vocalics
                 # per feature within the utterance as a measurement at the respective time step.
-                time_step = int((audio_segment.end - initial_timestamp).total_seconds())
+                time_step = int((audio_segment.end - mission_start).total_seconds())
                 if time_step >= num_time_steps:
                     logger.warning(f"""Time step {time_step} exceeds the number of time steps {num_time_steps} at 
                                    audio segment {i} out of {len(audio_segments)} ending at 
                                    {audio_segment.end.isoformat()} considering an initial timestamp 
-                                   of {initial_timestamp.isoformat()}.""")
+                                   of {mission_start.isoformat()}.""")
                     break
 
                 segments[time_step] = audio_segment
 
             return AudioSparseSeries(segments)
 
-        # The first audio always goes in series A
-        earliest_timestamp = self.series_a[0].start
-        sparse_series_a = series_to_seconds(self.series_a, earliest_timestamp)
-        sparse_series_b = series_to_seconds(self.series_b, earliest_timestamp)
+        sparse_series_a = series_to_seconds(self.series_a)
+        sparse_series_b = series_to_seconds(self.series_b)
 
         return sparse_series_a, sparse_series_b
 

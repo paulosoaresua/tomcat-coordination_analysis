@@ -26,18 +26,18 @@ class VocalicsSparseSeries(SparseSeries):
 
         self.utterances = utterances
 
-    def get_previous_values(self) -> List[Optional[np.ndarray]]:
+    def get_previous_values(self) -> List[Optional[Tuple[int, np.ndarray]]]:
         # Previous occurrence from the same individual
         previous_values = []
         previous_value = None
         for t in range(self.num_time_steps):
             previous_values.append(previous_value)
             if self.mask[t] == 1:
-                previous_value = self.values[:, t]
+                previous_value = (t, self.values[:, t])
 
         return previous_values
 
-    def get_previous_values_same_source(self) -> List[Optional[np.ndarray]]:
+    def get_previous_values_same_source(self) -> List[Optional[Tuple[int, np.ndarray]]]:
         # Previous occurrence from the same individual
         previous_values = []
         previous_value_per_source = {}
@@ -45,7 +45,7 @@ class VocalicsSparseSeries(SparseSeries):
             if self.mask[t] == 1:
                 # Previous observation from the same source
                 previous_values.append(previous_value_per_source.get(self.utterances[t].subject_id, None))
-                previous_value_per_source[self.utterances[t].subject_id] = self.values[:, t]
+                previous_value_per_source[self.utterances[t].subject_id] = (t, self.values[:, t])
             else:
                 # No previous value if the current value was not observed because we don't know who is the source.
                 previous_values.append(None)
@@ -128,9 +128,8 @@ class VocalicsComponent:
 
         return cls(series_a, series_b, feature_names)
 
-    def sparse_series(self, num_time_steps: int) -> Tuple[VocalicsSparseSeries, VocalicsSparseSeries]:
-        def series_to_seconds(utterances: List[SegmentedUtterance],
-                              initial_timestamp: datetime) -> VocalicsSparseSeries:
+    def sparse_series(self, num_time_steps: int, mission_start: datetime) -> Tuple[VocalicsSparseSeries, VocalicsSparseSeries]:
+        def series_to_seconds(utterances: List[SegmentedUtterance]) -> VocalicsSparseSeries:
             values = np.zeros((utterances[0].vocalic_series.num_series, num_time_steps))
             mask = np.zeros(num_time_steps)  # 1 for time steps with observation, 0 otherwise
             timestamps: List[Optional[datetime]] = [None] * num_time_steps
@@ -139,11 +138,11 @@ class VocalicsComponent:
             for i, utterance in enumerate(utterances):
                 # We consider that the observation is available at the end of an utterance. We take the average vocalics
                 # per feature within the utterance as a measurement at the respective time step.
-                time_step = int((utterance.end - initial_timestamp).total_seconds())
+                time_step = int((utterance.end - mission_start).total_seconds())
                 if time_step >= num_time_steps:
                     logger.warning(f"""Time step {time_step} exceeds the number of time steps {num_time_steps} at 
                                    utterance {i} out of {len(utterances)} ending at {utterance.end.isoformat()} 
-                                   considering an initial timestamp of {initial_timestamp.isoformat()}.""")
+                                   considering an initial timestamp of {mission_start.isoformat()}.""")
                     break
 
                 values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
@@ -156,8 +155,8 @@ class VocalicsComponent:
 
         # The first utterance always goes in series A
         earliest_timestamp = self.series_a[0].start
-        sparse_series_a = series_to_seconds(self.series_a, earliest_timestamp)
-        sparse_series_b = series_to_seconds(self.series_b, earliest_timestamp)
+        sparse_series_a = series_to_seconds(self.series_a)
+        sparse_series_b = series_to_seconds(self.series_b)
 
         return sparse_series_a, sparse_series_b
 

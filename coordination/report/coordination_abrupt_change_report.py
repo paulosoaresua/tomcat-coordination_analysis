@@ -69,9 +69,13 @@ class CoordinationAbruptChangeReport:
                                                          onclick=f"playAudio('./audio/audio_{i}_{j}.wav')"):
                                                     with tag("i", klass="fa fa-play fa-2x"):
                                                         pass
-                                                with tag("span", klass="tooltiptext"):
-                                                    text(
-                                                        f"{table_cell.transcription}: [{table_cell.start.isoformat()}, {table_cell.end.isoformat()}]")
+                                                with tag("span", klass="play_button_tooltip"):
+                                                    text(table_cell.transcription)
+                                                    doc.stag("br")
+                                                    doc.stag("br")
+                                                    text(table_cell.start.isoformat())
+                                                    doc.stag("br")
+                                                    text(table_cell.end.isoformat())
                                         else:
                                             text(table_cell)
 
@@ -170,9 +174,9 @@ class CoordinationAbruptChangeReport:
                   text-shadow: 0px 0px 10px rgba(255,255,100,1);
             }
             
-            .tooltip .tooltiptext {
+            .tooltip .play_button_tooltip {
               visibility: hidden;
-              width: 120px;
+              width: 250px;
               background-color: black;
               color: #fff;
               text-align: center;
@@ -184,7 +188,7 @@ class CoordinationAbruptChangeReport:
               z-index: 1;
             }
 
-            .tooltip:hover .tooltiptext {
+            .tooltip:hover .play_button_tooltip {
               visibility: visible;
             }
         """
@@ -269,57 +273,77 @@ class CoordinationAbruptChangeReport:
                     other_subject_previous_value, other_subject_delay, other_subject_previous_audio]
 
         # Get previous timestamps and values of the vocalic series with actual values
-        previous_values_a: List[Optional[Tuple[int, np.ndarray]]] = []
-        previous_values_b: List[Optional[Tuple[int, np.ndarray]]] = []
-        previous_a = None
-        previous_b = None
-        for t in range(len(self.coordination_series)):
-            previous_values_a.append(previous_a)
-            previous_values_b.append(previous_b)
-
-            if self.vocalics_series_a.mask[t] == 1:
-                previous_a = (t, self.vocalics_series_a.values[:, t])
-
-            if self.vocalics_series_b.mask[t] == 1:
-                previous_b = (t, self.vocalics_series_b.values[:, t])
+        previous_values_same_source_a = self.vocalics_series_a.get_previous_values_same_source()
+        previous_values_same_source_b = self.vocalics_series_b.get_previous_values_same_source()
+        previous_values_a = self.vocalics_series_a.get_previous_values_same_source()
+        previous_values_b = self.vocalics_series_b.get_previous_values_same_source()
 
         # Only report entries with a significant change in the coordination
         change_rel_magnitude = np.divide(np.diff(self.coordination_series), self.coordination_series[:-1],
                                          out=np.ones_like(self.coordination_series[:-1]) * np.inf,
                                          where=self.coordination_series[:-1] != 0)
+
+        # change_rel_magnitude starts from the second time step, thus we need to add 1 to correct the indexes.
         time_steps = np.where(np.abs(change_rel_magnitude) >= ignore_under_percentage)[0] + 1
         rows: List[List[Union[str, AudioSegment]]] = []
+        row_number = 1
         for i, t in enumerate(time_steps):
-            row = [str(i + 1), str(t), f"{self.coordination_series[t - 1]:.2f}", f"{self.coordination_series[t]:.2f}",
-                   f"{change_rel_magnitude[t - 1] * 100:.2f}%"]
+            time_step = str(t)
+            previous_coordination = f"{self.coordination_series[t - 1]:.2f}"
+            current_coordination = f"{self.coordination_series[t]:.2f}"
+            coordination_rel_change = f"{change_rel_magnitude[t - 1] * 100:.2f}%"
 
-            if self.vocalics_series_a.mask[t] == 1:
-                main_previous_time, main_previous_value = (None, None)
-                if previous_values_a[t] is not None:
-                    main_previous_time, main_previous_value = previous_values_a[t]
-                other_previous_time, other_previous_value = (None, None)
-                if previous_values_b[t] is not None:
-                    other_previous_time, other_previous_value = previous_values_b[t]
-                row.extend(
-                    get_vocalic_entries(t, "A", self.vocalics_series_a, main_previous_value, main_previous_time,
-                                        self.audio_series_a, "B", self.vocalics_series_b, other_previous_value,
-                                        other_previous_time, self.audio_series_b)
-                )
-            elif self.vocalics_series_b.mask[t] == 1:
-                main_previous_time, main_previous_value = (None, None)
-                if previous_values_b[t] is not None:
-                    main_previous_time, main_previous_value = previous_values_b[t]
-                other_previous_time, other_previous_value = (None, None)
-                if previous_values_a[t] is not None:
-                    other_previous_time, other_previous_value = previous_values_a[t]
-                row.extend(
-                    get_vocalic_entries(t, "B", self.vocalics_series_b, main_previous_value, main_previous_time,
-                                        self.audio_series_b, "A", self.vocalics_series_a, other_previous_value,
-                                        other_previous_time, self.audio_series_a)
-                )
+            row_common = [str(row_number), time_step, previous_coordination, current_coordination, coordination_rel_change]
+
+            if self.vocalics_series_a.mask[t] == 1 or self.vocalics_series_b.mask[t] == 1:
+                row_vocalics_a = None
+                row_vocalics_b = None
+
+                if self.vocalics_series_a.mask[t] == 1:
+                    main_previous_time, main_previous_value = (None, None)
+                    if previous_values_same_source_a[t] is not None:
+                        main_previous_time, main_previous_value = previous_values_same_source_a[t]
+                    other_previous_time, other_previous_value = (None, None)
+                    if previous_values_b[t] is not None:
+                        other_previous_time, other_previous_value = previous_values_b[t]
+
+                    if main_previous_value is not None and other_previous_value is not None:
+                        # If there's any change when main or other previous value is None, this is due to coordination
+                        # drifting, and we do add that to the report.
+                        row_vocalics_a = get_vocalic_entries(t, "A", self.vocalics_series_a, main_previous_value,
+                                                             main_previous_time, self.audio_series_a, "B",
+                                                             self.vocalics_series_b, other_previous_value,
+                                                             other_previous_time, self.audio_series_b)
+
+                if self.vocalics_series_b.mask[t] == 1:
+                    main_previous_time, main_previous_value = (None, None)
+                    if previous_values_same_source_b[t] is not None:
+                        main_previous_time, main_previous_value = previous_values_same_source_b[t]
+                    other_previous_time, other_previous_value = (None, None)
+                    if previous_values_a[t] is not None:
+                        other_previous_time, other_previous_value = previous_values_a[t]
+
+                    if main_previous_value is not None and other_previous_value is not None:
+                        # If there's any change when main or other previous value is None, this is due to coordination
+                        # drifting, and we do add that to the report.
+                        row_vocalics_b = get_vocalic_entries(t, "B", self.vocalics_series_b, main_previous_value,
+                                                             main_previous_time, self.audio_series_b, "A",
+                                                             self.vocalics_series_a, other_previous_value,
+                                                             other_previous_time, self.audio_series_a)
+
+                if row_vocalics_a is not None:
+                    rows.append(row_common + row_vocalics_a)
+                    if row_vocalics_b is not None:
+                        # Do not repeat common information
+                        rows.append([""] * len(row_common) + row_vocalics_b)
+                    row_number += 1
+                elif row_vocalics_b is not None:
+                    rows.append(row_common + row_vocalics_b)
+                    row_number += 1
+
             else:
-                row.extend([NO_VALUE_STR] * 12)
-
-            rows.append(row)
+                # Change is due to drifting only. We don't add that to the report to avoid clutter.
+                # rows.append(row_common + [NO_VALUE_STR] * 12)
+                pass
 
         return rows
