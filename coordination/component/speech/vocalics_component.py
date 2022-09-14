@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, List, Optional, Tuple
 
+import copy
 from datetime import datetime
 from enum import Enum
 import json
@@ -24,6 +25,32 @@ class VocalicsSparseSeries(SparseSeries):
         super().__init__(*args, **kwargs)
 
         self.utterances = utterances
+
+    def get_previous_values(self) -> List[Optional[np.ndarray]]:
+        # Previous occurrence from the same individual
+        previous_values = []
+        previous_value = None
+        for t in range(self.num_time_steps):
+            previous_values.append(previous_value)
+            if self.mask[t] == 1:
+                previous_value = self.values[:, t]
+
+        return previous_values
+
+    def get_previous_values_same_source(self) -> List[Optional[np.ndarray]]:
+        # Previous occurrence from the same individual
+        previous_values = []
+        previous_value_per_source = {}
+        for t in range(self.num_time_steps):
+            if self.mask[t] == 1:
+                # Previous observation from the same source
+                previous_values.append(previous_value_per_source.get(self.utterances[t].subject_id, None))
+                previous_value_per_source[self.utterances[t].subject_id] = self.values[:, t]
+            else:
+                # No previous value if the current value was not observed because we don't know who is the source.
+                previous_values.append(None)
+
+        return previous_values
 
 
 class SegmentedUtterance:
@@ -64,13 +91,14 @@ class VocalicsComponent:
 
     @classmethod
     def from_vocalics(cls, vocalics: Vocalics,
-                      segmentation_method: SegmentationMethod = SegmentationMethod.TRUNCATE_CURRENT):
+                      segmentation_method: SegmentationMethod = SegmentationMethod.TRUNCATE_CURRENT,
+                      min_vocalic_values: int = 1):
         if segmentation_method == SegmentationMethod.TRUNCATE_CURRENT:
-            return VocalicsComponent._split_with_current_utterance_truncation(vocalics)
+            return VocalicsComponent._split_with_current_utterance_truncation(vocalics, min_vocalic_values)
         elif segmentation_method == SegmentationMethod.TRUNCATE_NEXT:
-            return VocalicsComponent._split_with_next_utterance_truncation(vocalics)
+            return VocalicsComponent._split_with_next_utterance_truncation(vocalics, min_vocalic_values)
         elif segmentation_method == SegmentationMethod.KEEP_ALL:
-            return VocalicsComponent._split_with_overlap(vocalics)
+            return VocalicsComponent._split_with_overlap(vocalics, min_vocalic_values)
         else:
             raise Exception(f"{segmentation_method} is an invalid segmentation method.")
 
@@ -150,12 +178,13 @@ class VocalicsComponent:
         return plot_utterance_durations(ax, utterances_per_subject)
 
     @classmethod
-    def _split_with_current_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:
+    def _split_with_current_utterance_truncation(cls, vocalics: Vocalics, min_vocalic_values: int) -> VocalicsComponent:
         """
         Split utterances from different individuals into two series. Merging utterances of the current speaker in the
         active series, and changing series when another person is the speaker. If speeches overlap, it truncates the
         utterance and associated vocalics of the current speaker.
         """
+
         # Single list with the utterances from all the subjects
         utterances: List[Utterance] = []
         for u in vocalics.utterances_per_subject.values():
@@ -167,61 +196,79 @@ class VocalicsComponent:
         # We sort the utterances by timestamp, regardless of the subject they belong to.
         utterances.sort(key=lambda utterance: utterance.start)
 
-        series_a: List[SegmentedUtterance] = []
-        series_b: List[SegmentedUtterance] = []
-
-        series_a_active = True
-        segmented_vocalic_values = np.array([])
-        segmented_vocalic_timestamps: List[datetime] = []
-        segmented_utterance = None
+        segmented_utterances: List[SegmentedUtterance] = []
         for i, current_utterance in enumerate(utterances):
             # Start a new segmented utterance if the previous one is completed or not available
-            if segmented_utterance is None:
-                segmented_utterance = SegmentedUtterance.from_utterance(current_utterance, current_utterance.start,
-                                                                        current_utterance.end)
+            segmented_utterance = SegmentedUtterance.from_utterance(current_utterance, current_utterance.start,
+                                                                    current_utterance.end)
 
             next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
 
-            for j in range(current_utterance.vocalic_series.size):
-                # If vocalics of current utterance overlaps with the next, then move on to next utterance
-                if next_utterance is not None and current_utterance.vocalic_series.timestamps[j] > next_utterance.start:
-                    segmented_utterance.end = next_utterance.start
-                    break
+            if next_utterance is None or next_utterance.start >= current_utterance.end:
+                # No overlap. Use the full vocalics
+                segmented_utterance.vocalic_series = copy.deepcopy(current_utterance.vocalic_series)
+            else:
+                # Add vocalics until it overlaps with the start of the next utterance.
+                j = 0
+                while j < current_utterance.vocalic_series.size and next_utterance.start >= \
+                        current_utterance.vocalic_series.timestamps[j]:
+                    # Stop when vocalics start to overlap with the start of the next utterance
+                    j += 1
 
-                # Add vocalics to the current segment
-                if len(segmented_vocalic_values) == 0:
-                    segmented_vocalic_values = current_utterance.vocalic_series.values[:, j, np.newaxis]
-                else:
-                    segmented_vocalic_values = np.concatenate(
-                        [segmented_vocalic_values, current_utterance.vocalic_series.values[:, j, np.newaxis]], axis=1)
-                segmented_vocalic_timestamps.append(current_utterance.vocalic_series.timestamps[j])
+                segmented_utterance.vocalic_series = current_utterance.vocalic_series.get_time_range(0, j)
 
-            # If the subject of the next utterance is different, we start a new segment.
-            if next_utterance is None or next_utterance.subject_id != current_utterance.subject_id:
-                segmented_vocalic_series = VocalicsSeries(segmented_vocalic_values, segmented_vocalic_timestamps)
-                segmented_utterance.vocalic_series = segmented_vocalic_series
+            if segmented_utterance.vocalic_series.size >= min_vocalic_values:
+                segmented_utterances.append(segmented_utterance)
+            else:
+                msg = f"Segmented utterance at {segmented_utterance.start.isoformat()} and ending " \
+                      f"at {segmented_utterance.end.isoformat()} was not added to a series because it has " \
+                      f"{segmented_utterance.vocalic_series.size} vocalic values which is less " \
+                      f"than the minimum required of {min_vocalic_values}. Text: {segmented_utterance.text}"
+                logger.warning(msg)
 
-                if series_a_active:
-                    series_a.append(segmented_utterance)
-                else:
-                    series_b.append(segmented_utterance)
-
-                segmented_utterance = None
-                segmented_vocalic_values = np.array([])
-                segmented_vocalic_timestamps: List[datetime] = []
-                series_a_active = not series_a_active
-            elif next_utterance is not None and next_utterance.subject_id == current_utterance.subject_id:
-                segmented_utterance.end = next_utterance.end
-
+        series_a, series_b = VocalicsComponent._series_from_non_overlapping_utterances(segmented_utterances)
         return cls(series_a, series_b, vocalics.features)
 
     @classmethod
-    def _split_with_next_utterance_truncation(cls, vocalics: Vocalics) -> VocalicsComponent:
+    def _split_with_next_utterance_truncation(cls, vocalics: Vocalics, min_vocalic_values: int) -> VocalicsComponent:
         raise RuntimeError("Not implemented")
 
     @classmethod
-    def _split_with_overlap(cls, vocalics: Vocalics) -> VocalicsComponent:
-        raise RuntimeError("Not implemented")
+    def _split_with_overlap(cls, vocalics: Vocalics, min_vocalic_values: int) -> VocalicsComponent:
+        """
+        Split utterances from different individuals into two series. Merging utterances of the current speaker in the
+        active series, and changing series when another person is the speaker. We keep all utterances including any
+        overlapping pieces.
+        """
+
+        # Single list with the utterances from all the subjects
+        utterances: List[Utterance] = []
+        for u in vocalics.utterances_per_subject.values():
+            utterances.extend(u)
+
+        # Remove utterances with no vocalics
+        utterances = VocalicsComponent._filter_utterances(utterances)
+
+        # We sort the utterances by timestamp, regardless of the subject they belong to.
+        utterances.sort(key=lambda utterance: utterance.start)
+
+        segmented_utterances: List[SegmentedUtterance] = []
+        for i, current_utterance in enumerate(utterances):
+            segmented_utterance = SegmentedUtterance.from_utterance(current_utterance, current_utterance.start,
+                                                                    current_utterance.end)
+            segmented_utterance.vocalic_series = copy.deepcopy(current_utterance.vocalic_series)
+
+            if segmented_utterance.vocalic_series.size >= min_vocalic_values:
+                segmented_utterances.append(segmented_utterance)
+            else:
+                msg = f"Segmented utterance at {segmented_utterance.start.isoformat()} and ending " \
+                      f"at {segmented_utterance.end.isoformat()} was not added to a series because it has " \
+                      f"{segmented_utterance.vocalic_series.size} vocalic values which is less " \
+                      f"than the minimum required of {min_vocalic_values}. Text: {segmented_utterance.text}"
+                logger.warning(msg)
+
+        series_a, series_b = VocalicsComponent._series_from_non_overlapping_utterances(segmented_utterances)
+        return cls(series_a, series_b, vocalics.features)
 
     @staticmethod
     def _filter_utterances(utterances: List[Utterance]) -> List[Utterance]:
@@ -249,13 +296,42 @@ class VocalicsComponent:
         # Log utterances with no vocalics
         for utterance in utterance_missing_vocalics_short_duration:
             logger.warning(f"""Utterance starting at {utterance.start.isoformat()} and ending 
-                at {utterance.end.isoformat()} is short and does not have any vocalics. Text: {utterance.text}""")
+                    at {utterance.end.isoformat()} is short and does not have any vocalics. Text: {utterance.text}""")
 
         for utterance in utterance_missing_vocalics_long_duration:
             logger.warning(f"""Utterance starting at {utterance.start.isoformat()} and ending 
-                at {utterance.end.isoformat()} is long and does not have any vocalics. Text: {utterance.text}""")
+                    at {utterance.end.isoformat()} is long and does not have any vocalics. Text: {utterance.text}""")
 
         return utterances
+
+    @staticmethod
+    def _series_from_non_overlapping_utterances(utterances: List[SegmentedUtterance]) -> Tuple[
+        List[SegmentedUtterance], List[SegmentedUtterance]]:
+        series_a: List[SegmentedUtterance] = []
+        series_b: List[SegmentedUtterance] = []
+
+        series_a_active = True
+        segmented_utterance = None
+        for i, current_utterance in enumerate(utterances):
+            if segmented_utterance is None:
+                segmented_utterance = copy.deepcopy(current_utterance)
+
+            next_utterance = utterances[i + 1] if i < len(utterances) - 1 else None
+
+            if next_utterance is None or next_utterance.subject_id != segmented_utterance.subject_id:
+                if series_a_active:
+                    series_a.append(segmented_utterance)
+                else:
+                    series_b.append(segmented_utterance)
+
+                series_a_active = not series_a_active
+                segmented_utterance = None
+            elif next_utterance is not None and next_utterance.subject_id == current_utterance.subject_id:
+                # Merge with the next utterance
+                segmented_utterance.text += " ... " + next_utterance.text
+                segmented_utterance.end = next_utterance.end
+
+        return series_a, series_b
 
     def save(self, out_dir: str, save_feature_names: bool = True):
         with open(f"{out_dir}/vocalics_component_a.pkl", "wb") as f:

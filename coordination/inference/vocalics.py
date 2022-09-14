@@ -3,7 +3,7 @@ from typing import Callable
 import numpy as np
 from scipy.stats import norm
 
-from coordination.common.sparse_series import SparseSeries
+from coordination.component.speech.vocalics_component import VocalicsSparseSeries
 from coordination.inference.lds import apply_marginal_property, apply_conditional_property, pdf_projection
 
 EPSILON = 1E-16
@@ -11,7 +11,7 @@ EPSILON = 1E-16
 
 class DiscreteCoordinationInferenceFromVocalics:
 
-    def __init__(self, series_a: SparseSeries, series_b: SparseSeries, p_prior_coordination: float,
+    def __init__(self, series_a: VocalicsSparseSeries, series_b: VocalicsSparseSeries, p_prior_coordination: float,
                  p_coordination_transition: float, mean_prior_a: np.array, mean_prior_b: np.ndarray,
                  std_prior_a: np.array, std_prior_b: np.array, std_uncoordinated_a: np.ndarray,
                  std_uncoordinated_b: np.ndarray, std_coordinated_a: np.ndarray, std_coordinated_b: np.ndarray,
@@ -163,37 +163,39 @@ class DiscreteCoordinationInferenceFromVocalics:
 
         f_msg = get_message_from_individual_series_to_coordination
 
-        last_ta = None  # last time step with observed value for the series A
-        last_tb = None  # last time step with observed value for the series B
         m_comp2coord = np.zeros((2, self._time_steps))
+        previous_values_a = self._series_a.get_previous_values()
+        previous_values_b = self._series_b.get_previous_values()
+        previous_values_same_source_a = self._series_a.get_previous_values_same_source()
+        previous_values_same_source_b = self._series_b.get_previous_values_same_source()
         for t in range(self._time_steps):
-            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta], 0)
-            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb], 1)
-
             A_t = self._f(self._series_a.values[:, t], 0)
             B_t = self._f(self._series_b.values[:, t], 1)
 
             # Message from A_t to C_t
+            previous_a = previous_values_same_source_a[t]
+            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_b = previous_values_b[t]
+            previous_b = None if previous_b is None else self._f(previous_b, 0)
             m_comp2coord[:, t] = f_msg(A_t, previous_a, previous_b, self._mean_prior_a,
                                        self._std_prior_a, self._std_uncoordinated_a, self._std_coordinated_a,
                                        self._series_a.mask[t])
 
             # Message from B_t to C_t
+            previous_a = previous_values_a[t]
+            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_b = previous_values_same_source_b[t]
+            previous_b = None if previous_b is None else self._f(previous_b, 0)
             m_comp2coord[:, t] *= f_msg(B_t, previous_b, previous_a, self._mean_prior_b,
                                         self._std_prior_b, self._std_uncoordinated_b, self._std_coordinated_b,
                                         self._series_b.mask[t])
-
-            if self._series_a.mask[t] == 1:
-                last_ta = t
-            if self._series_b.mask[t] == 1:
-                last_tb = t
 
         return m_comp2coord
 
 
 class ContinuousCoordinationInferenceFromVocalics:
 
-    def __init__(self, series_a: SparseSeries, series_b: SparseSeries, mean_prior_coordination: float,
+    def __init__(self, series_a: VocalicsSparseSeries, series_b: VocalicsSparseSeries, mean_prior_coordination: float,
                  std_prior_coordination: float, std_coordination_drifting: float, mean_prior_a: np.array,
                  mean_prior_b: np.ndarray, std_prior_a: np.array, std_prior_b: np.array, std_coupling_a: np.ndarray,
                  std_coupling_b: np.ndarray, f: Callable = lambda x, s: x):
@@ -233,14 +235,13 @@ class ContinuousCoordinationInferenceFromVocalics:
         var_BA = self._std_coupling_b ** 2
         var_AB = self._std_coupling_a ** 2
 
-        last_ta = None if self._series_a.mask[0] == 0 else 0  # last time step with observed value for the series A
-        last_tb = None if self._series_b.mask[0] == 0 else 0  # last time step with observed value for the series B
         params = np.zeros((2, self._mid_time_step + 1))
         params[:, 0] = np.array([self._mean_prior_coordination, self._std_prior_coordination ** 2])
+        previous_values_a = self._series_a.get_previous_values()
+        previous_values_b = self._series_b.get_previous_values()
+        previous_values_same_source_a = self._series_a.get_previous_values_same_source()
+        previous_values_same_source_b = self._series_b.get_previous_values_same_source()
         for t in range(1, self._mid_time_step):
-            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta], 0)
-            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb], 1)
-
             m_previous, v_previous = params[:, t - 1]
 
             """
@@ -251,71 +252,84 @@ class ContinuousCoordinationInferenceFromVocalics:
             """
             mean, var = apply_marginal_property(1, 0, var_C, m_previous, v_previous)
 
+
+            """
+            Coordination moves because of drifting and vocalics:
+
+            N(C_t | m_t, s_t) sim Integral [
+                                    N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1}) *
+                                    p(A_t | A_{t-1}, B_{t-1}, C_t, f) * p(A_t | A_{t-1}, B_{t-1}, C_t, f)
+                                    ] dC_{t-1}
+
+                                = p(A_t | A_{t-1}, B_{t-1}, C_t, f) * p(A_t | A_{t-1}, B_{t-1}, C_t, f) *
+                                    Integral [N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1})] dC_{t-1} 
+
+                                = N(A_t | D_{t-1} * C_t + A_{t-1}, var_AB) *
+                                    N(B_t | -D_{t-1} * C_t + B_{t-1}, var_BA) *
+                                    N(C_t | m_{t-1}, v_{t-1} + var_C) -- Obtained by the integral property previously
+
+                                We can apply the conditional property recursively to obtain the mean and 
+                                variances of the final distribution. We must apply the conditional property
+                                to each dimension of A and B.
+            """
+
+            A_t = self._f(self._series_a.values[:, t], 0)
+            B_t = self._f(self._series_b.values[:, t], 1)
+
+            previous_a = previous_values_same_source_a[t]
+            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_b = previous_values_b[t]
+            previous_b = None if previous_b is None else self._f(previous_b, 1)
             if previous_a is not None and previous_b is not None:
-                """
-                Coordination moves because of drifting and vocalics:
-
-                N(C_t | m_t, s_t) sim Integral [
-                                        N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1}) *
-                                        p(A_t | A_{t-1}, B_{t-1}, C_t, f) * p(A_t | A_{t-1}, B_{t-1}, C_t, f)
-                                      ] dC_{t-1}
-
-                                    = p(A_t | A_{t-1}, B_{t-1}, C_t, f) * p(A_t | A_{t-1}, B_{t-1}, C_t, f) *
-                                      Integral [N(C_t | C_{t-1}, var_C) * N(C_{t-1}, m_{t-1}, v_{t-1})] dC_{t-1} 
-
-                                    = N(A_t | D_{t-1} * C_t + A_{t-1}, var_AB) *
-                                      N(B_t | -D_{t-1} * C_t + B_{t-1}, var_BA) *
-                                      N(C_t | m_{t-1}, v_{t-1} + var_C) -- Obtained by the integral property previously
-
-                                  We can apply the conditional property recursively to obtain the mean and 
-                                  variances of the final distribution. We must apply the conditional property
-                                  to each dimension of A and B.
-                """
-
                 D = previous_b - previous_a
-                A_t = self._f(self._series_a.values[:, t], 0)
-                B_t = self._f(self._series_b.values[:, t], 1)
-
                 for i in range(self._num_features):
                     if self._series_a.mask[t] == 1:
                         mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
 
+            previous_a = previous_values_a[t]
+            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_b = previous_values_same_source_b[t]
+            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            if previous_a is not None and previous_b is not None:
+                D = previous_a - previous_b
+                for i in range(self._num_features):
                     if self._series_b.mask[t] == 1:
-                        mean, var = apply_conditional_property(B_t[i], -D[i], previous_b[i], var_BA[i], mean, var)
+                        mean, var = apply_conditional_property(B_t[i], D[i], previous_b[i], var_BA[i], mean, var)
 
-                if constrained:
-                    mean, var = pdf_projection(mean, var, 0, 1)
-
-            if self._series_a.mask[t] == 1:
-                last_ta = t
-            if self._series_b.mask[t] == 1:
-                last_tb = t
+            if constrained:
+                mean, var = pdf_projection(mean, var, 0, 1)
 
             params[:, t] = [mean, var]
 
         # All the remaining vocalics contribute to the final coordination at t == M
         mean, var = params[:, self._mid_time_step - 1]
         for t in range(self._mid_time_step, self._time_steps):
-            previous_a = None if last_ta is None else self._f(self._series_a.values[:, last_ta], 0)
-            previous_b = None if last_tb is None else self._f(self._series_b.values[:, last_tb], 1)
-
-            D = previous_b - previous_a
             A_t = self._f(self._series_a.values[:, t], 0)
             B_t = self._f(self._series_b.values[:, t], 1)
 
-            for i in range(self._num_features):
-                if self._series_a.mask[t] == 1:
-                    mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
+            previous_a = previous_values_same_source_a[t]
+            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_b = previous_values_b[t]
+            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            if previous_a is not None and previous_b is not None:
+                D = previous_b - previous_a
+                for i in range(self._num_features):
+                    if self._series_a.mask[t] == 1:
+                        mean, var = apply_conditional_property(A_t[i], D[i], previous_a[i], var_AB[i], mean, var)
 
-                if self._series_b.mask[t] == 1:
-                    mean, var = apply_conditional_property(B_t[i], -D[i], previous_b[i], var_BA[i], mean, var)
+            previous_a = previous_values_a[t]
+            previous_a = None if previous_a is None else self._f(previous_a, 0)
+            previous_b = previous_values_same_source_b[t]
+            previous_b = None if previous_b is None else self._f(previous_b, 1)
+            if previous_a is not None and previous_b is not None:
+                D = previous_a - previous_b
+                for i in range(self._num_features):
+                    if self._series_b.mask[t] == 1:
+                        mean, var = apply_conditional_property(B_t[i], D[i], previous_b[i], var_BA[i], mean, var)
 
-            if self._series_a.mask[t] == 1:
-                last_ta = t
-            if self._series_b.mask[t] == 1:
-                last_tb = t
+        if constrained:
+            mean, var = pdf_projection(mean, var, 0, 1)
 
-        mean, var = pdf_projection(mean, var, 0, 1)
         params[:, self._mid_time_step] = [mean, var]
 
         return params
@@ -331,6 +345,7 @@ class ContinuousCoordinationInferenceFromVocalics:
 
             mean_filter, var_filter = filter_params[:, t]
             mean, var = apply_marginal_property(K, (1 - K) * mean_filter, (1 - K) * var_filter, *params[:, t + 1])
+
             if constrained:
                 mean, var = pdf_projection(mean, var, 0, 1)
             params[:, t] = [mean, var]

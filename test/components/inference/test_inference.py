@@ -1,11 +1,13 @@
 import unittest
 from unittest.mock import MagicMock
 
+from datetime import datetime
+
 import numpy as np
 from scipy.stats import norm
 
 from coordination.inference.vocalics import DiscreteCoordinationInferenceFromVocalics
-from coordination.common.sparse_series import SparseSeries
+from coordination.component.speech.vocalics_component import VocalicsSparseSeries, SegmentedUtterance
 
 
 class DiscreteCoordinationParameters:
@@ -18,8 +20,11 @@ class DiscreteCoordinationParameters:
                          [0, 0.3, 0.4, 0, 0, 0.9]])
     mask_b = np.array([0, 1, 1, 0, 0, 1])
 
-    series_a = SparseSeries(values_a, mask_a)
-    series_b = SparseSeries(values_b, mask_b)
+    utterances_a = [SegmentedUtterance("A", datetime.now(), datetime.now(), "")] * 6
+    utterances_b = [SegmentedUtterance("B", datetime.now(), datetime.now(), "")] * 6
+
+    series_a = VocalicsSparseSeries(values=values_a, mask=mask_a, utterances=utterances_a)
+    series_b = VocalicsSparseSeries(values=values_b, mask=mask_b, utterances=utterances_b)
 
     p_prior_coordination = 0
     p_coordination_transition = 0.1

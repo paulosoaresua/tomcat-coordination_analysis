@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import List
 
 from datetime import datetime
@@ -37,3 +38,6 @@ class VocalicsSeries:
             return 0
 
         return self.values.shape[1]
+
+    def get_time_range(self, lower_idx: int, upper_idx: int) -> VocalicsSeries:
+        return VocalicsSeries(self.values[:, lower_idx:upper_idx], self.timestamps[lower_idx:upper_idx])
