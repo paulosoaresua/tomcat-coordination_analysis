@@ -4,21 +4,18 @@ from typing import List, Optional, Union, Tuple
 import numpy as np
 from yattag import Doc, indent
 
-from coordination.audio.audio import AudioSegment, AudioSparseSeries
+from coordination.audio.audio import AudioSegment, TrialAudio
 from coordination.component.speech.vocalics_component import VocalicsSparseSeries
 
 NO_VALUE_STR = "n.a"
 
 
-class CoordinationAbruptChangeReport:
-    def __init__(self, coordination_series: np.ndarray, vocalics_series_a: VocalicsSparseSeries,
-                 vocalics_series_b: VocalicsSparseSeries, audio_series_a: Optional[AudioSparseSeries] = None,
-                 audio_series_b: Optional[AudioSparseSeries] = None, title: Optional[str] = None):
+class CoordinationChangeReport:
+    def __init__(self, coordination_series: np.ndarray, vocalic_series: VocalicsSparseSeries,
+                 trial_audio: Optional[TrialAudio] = None, title: Optional[str] = None):
         self.coordination_series = coordination_series
-        self.vocalics_series_a = vocalics_series_a
-        self.vocalics_series_b = vocalics_series_b
-        self.audio_series_a = audio_series_a
-        self.audio_series_b = audio_series_b
+        self.vocalic_series = vocalic_series
+        self.trial_audio = trial_audio
         self.title = title
 
     def export_to_html(self, filepath: str, ignore_under_percentage: float):
@@ -27,18 +24,18 @@ class CoordinationAbruptChangeReport:
 
         doc, tag, text = Doc().tagtext()
 
-        header_texts, col_spans, data_alignment = CoordinationAbruptChangeReport._get_header()
+        header_texts, col_spans, data_alignment = CoordinationChangeReport._get_header()
         table_rows = self._get_rows(ignore_under_percentage)
 
         with tag("html"):
             doc.stag("link", href="https://fonts.googleapis.com/css?family=Nunito Sans", rel="stylesheet")
             with tag("script"):
-                doc.asis(CoordinationAbruptChangeReport._get_js())
+                doc.asis(CoordinationChangeReport._get_js())
             with tag("script", src="https://kit.fontawesome.com/5631021ae3.js", crossorigin="anonymous"):
                 pass
             with tag("head"):
                 with tag("style"):
-                    text(CoordinationAbruptChangeReport._get_style())
+                    text(CoordinationChangeReport._get_style())
             with tag("body"):
                 if self.title is not None:
                     with tag("h1"):
@@ -200,84 +197,23 @@ class CoordinationAbruptChangeReport:
         texts = [
             ["", "Vocalics"],
             ["", "Main Subject", "Other Subject"],
-            ["#", "Timestep", "Previous Coordination", "Current Coordination", "Change", "Series", "Name",
-             "Previous Value", "Current Value", "Delay (seconds)", "Previous Utterance", "Current Utterance", "Series",
+            ["#", "Timestep", "Previous Coordination", "Current Coordination", "Change", "Name",
+             "Previous Value", "Current Value", "Delay (seconds)", "Previous Utterance", "Current Utterance",
              "Name", "Previous Value", "Delay (seconds)", "Previous Utterance"]
         ]
 
         col_spans = [
-            [5, 12],
-            [5, 7, 5],
+            [5, 10],
+            [5, 6, 5],
             [1] * len(texts[-1]),
         ]
 
-        data_alignment = ["left", "left", "right", "right", "right", "left", "left", "left", "left", "right", "center",
-                          "center", "left", "left", "left", "right", "center"]
+        data_alignment = ["left", "left", "right", "right", "right", "left", "left", "left", "right", "center",
+                          "center", "left", "left", "right", "center"]
 
         return texts, col_spans, data_alignment
 
     def _get_rows(self, ignore_under_percentage: float) -> List[List[Union[str, AudioSegment]]]:
-        def get_vocalic_entries(time_step: int,
-                                main_subject_series_name: str,
-                                main_subject_vocalic_series: VocalicsSparseSeries,
-                                main_subject_previous_value: Optional[np.ndarray],
-                                main_subject_previous_time_step: Optional[int],
-                                main_subject_audio_series: Optional[AudioSparseSeries],
-                                other_subject_series_name: str,
-                                other_subject_vocalic_series: VocalicsSparseSeries,
-                                other_subject_previous_value: Optional[np.ndarray],
-                                other_subject_previous_time_step: Optional[int],
-                                other_subject_audio_series: Optional[AudioSparseSeries],
-                                ) -> List[Union[str, AudioSegment]]:
-
-            # Main Subject
-            main_subject_name = main_subject_vocalic_series.utterances[time_step].subject_id
-            if main_subject_previous_value is None:
-                main_subject_previous_value = NO_VALUE_STR
-                main_subject_delay = NO_VALUE_STR
-            else:
-                main_subject_previous_value = np.array2string(main_subject_previous_value, precision=2)
-                main_subject_delay = str(time_step - main_subject_previous_time_step)
-
-            main_subject_current_value = np.array2string(main_subject_vocalic_series.values[:, time_step], precision=2)
-
-            main_subject_previous_audio = NO_VALUE_STR
-            main_subject_current_audio = NO_VALUE_STR
-            if main_subject_audio_series is not None and main_subject_previous_time_step is not None and \
-                    main_subject_audio_series.audio_segments[main_subject_previous_time_step] is not None:
-                main_subject_previous_audio = main_subject_audio_series.audio_segments[main_subject_previous_time_step]
-
-            if main_subject_audio_series is not None:
-                main_subject_current_audio = main_subject_audio_series.audio_segments[time_step]
-
-            # Other Subject
-            if other_subject_previous_value is None:
-                other_subject_name = NO_VALUE_STR
-                other_subject_previous_value = NO_VALUE_STR
-                other_subject_delay = NO_VALUE_STR
-            else:
-                other_subject_name = other_subject_vocalic_series.utterances[
-                    other_subject_previous_time_step].subject_id
-                other_subject_previous_value = np.array2string(other_subject_previous_value, precision=2)
-                other_subject_delay = str(time_step - other_subject_previous_time_step)
-
-            other_subject_previous_audio = NO_VALUE_STR
-            if other_subject_audio_series is not None and other_subject_previous_time_step is not None and \
-                    other_subject_audio_series.audio_segments[other_subject_previous_time_step] is not None:
-                other_subject_previous_audio = other_subject_audio_series.audio_segments[
-                    other_subject_previous_time_step]
-
-            return [main_subject_series_name, main_subject_name, main_subject_previous_value,
-                    main_subject_current_value, main_subject_delay, main_subject_previous_audio,
-                    main_subject_current_audio, other_subject_series_name, other_subject_name,
-                    other_subject_previous_value, other_subject_delay, other_subject_previous_audio]
-
-        # Get previous timestamps and values of the vocalic series with actual values
-        previous_values_same_source_a = self.vocalics_series_a.get_previous_values_same_source()
-        previous_values_same_source_b = self.vocalics_series_b.get_previous_values_same_source()
-        previous_values_a = self.vocalics_series_a.get_previous_values_same_source()
-        previous_values_b = self.vocalics_series_b.get_previous_values_same_source()
-
         # Only report entries with a significant change in the coordination
         change_rel_magnitude = np.divide(np.diff(self.coordination_series), self.coordination_series[:-1],
                                          out=np.ones_like(self.coordination_series[:-1]) * np.inf,
@@ -286,60 +222,64 @@ class CoordinationAbruptChangeReport:
         # change_rel_magnitude starts from the second time step, thus we need to add 1 to correct the indexes.
         time_steps = np.where(np.abs(change_rel_magnitude) >= ignore_under_percentage)[0] + 1
         rows: List[List[Union[str, AudioSegment]]] = []
-        row_number = 1
         for i, t in enumerate(time_steps):
+            row_number = str(len(rows) + 1)
             time_step = str(t)
             previous_coordination = f"{self.coordination_series[t - 1]:.2f}"
             current_coordination = f"{self.coordination_series[t]:.2f}"
             coordination_rel_change = f"{change_rel_magnitude[t - 1] * 100:.2f}%"
 
-            row_common = [str(row_number), time_step, previous_coordination, current_coordination, coordination_rel_change]
+            row = [str(row_number), time_step, previous_coordination, current_coordination,
+                   coordination_rel_change]
 
-            if self.vocalics_series_a.mask[t] == 1 or self.vocalics_series_b.mask[t] == 1:
-                row_vocalics_a = None
-                row_vocalics_b = None
+            if self.vocalic_series.mask[t] == 1:
+                main_previous_time, main_previous_value = (None, None)
+                if self.vocalic_series.previous_from_self[t] is not None:
+                    main_previous_time = self.vocalic_series.previous_from_self[t]
+                    main_previous_value = self.vocalic_series.values[:, main_previous_time]
+                other_previous_time, other_previous_value = (None, None)
+                if self.vocalic_series.previous_from_other[t] is not None:
+                    other_previous_time = self.vocalic_series.previous_from_other[t]
+                    other_previous_value = self.vocalic_series.values[:, other_previous_time]
 
-                if self.vocalics_series_a.mask[t] == 1:
-                    main_previous_time, main_previous_value = (None, None)
-                    if previous_values_same_source_a[t] is not None:
-                        main_previous_time, main_previous_value = previous_values_same_source_a[t]
-                    other_previous_time, other_previous_value = (None, None)
-                    if previous_values_b[t] is not None:
-                        other_previous_time, other_previous_value = previous_values_b[t]
+                if main_previous_time is not None and other_previous_time is not None:
+                    # If there's any change when main or other previous value is None, this is due to coordination
+                    # drifting, and we do add that to the report.
 
-                    if main_previous_value is not None and other_previous_value is not None:
-                        # If there's any change when main or other previous value is None, this is due to coordination
-                        # drifting, and we do add that to the report.
-                        row_vocalics_a = get_vocalic_entries(t, "A", self.vocalics_series_a, main_previous_value,
-                                                             main_previous_time, self.audio_series_a, "B",
-                                                             self.vocalics_series_b, other_previous_value,
-                                                             other_previous_time, self.audio_series_b)
+                    # Main Subject
+                    main_subject_current_value = np.array2string(self.vocalic_series.values[:, t], precision=2)
+                    main_subject_name = self.vocalic_series.utterances[t].subject_id
+                    main_subject_previous_value = np.array2string(main_previous_value, precision=2)
+                    main_subject_delay = str(t - main_previous_time)
 
-                if self.vocalics_series_b.mask[t] == 1:
-                    main_previous_time, main_previous_value = (None, None)
-                    if previous_values_same_source_b[t] is not None:
-                        main_previous_time, main_previous_value = previous_values_same_source_b[t]
-                    other_previous_time, other_previous_value = (None, None)
-                    if previous_values_a[t] is not None:
-                        other_previous_time, other_previous_value = previous_values_a[t]
+                    main_subject_previous_audio = NO_VALUE_STR
+                    main_subject_current_audio = NO_VALUE_STR
+                    if self.trial_audio is not None:
+                        main_subject_current_audio = self.trial_audio.audio_per_participant[
+                            main_subject_name].get_audio_segment_from_utterance(self.vocalic_series.utterances[t])
+                        if main_previous_time is not None:
+                            main_subject_previous_audio = self.trial_audio.audio_per_participant[
+                                main_subject_name].get_audio_segment_from_utterance(
+                                self.vocalic_series.utterances[main_previous_time])
 
-                    if main_previous_value is not None and other_previous_value is not None:
-                        # If there's any change when main or other previous value is None, this is due to coordination
-                        # drifting, and we do add that to the report.
-                        row_vocalics_b = get_vocalic_entries(t, "B", self.vocalics_series_b, main_previous_value,
-                                                             main_previous_time, self.audio_series_b, "A",
-                                                             self.vocalics_series_a, other_previous_value,
-                                                             other_previous_time, self.audio_series_a)
+                    # Other Subject
+                    other_subject_name = self.vocalic_series.utterances[other_previous_time].subject_id
+                    other_subject_previous_value = np.array2string(other_previous_value, precision=2)
+                    other_subject_delay = str(t - other_previous_time)
 
-                if row_vocalics_a is not None:
-                    rows.append(row_common + row_vocalics_a)
-                    if row_vocalics_b is not None:
-                        # Do not repeat common information
-                        rows.append([""] * len(row_common) + row_vocalics_b)
-                    row_number += 1
-                elif row_vocalics_b is not None:
-                    rows.append(row_common + row_vocalics_b)
-                    row_number += 1
+                    other_subject_previous_audio = NO_VALUE_STR
+                    if self.trial_audio is not None and other_previous_time is not None:
+                        other_subject_previous_audio = self.trial_audio.audio_per_participant[
+                            other_subject_name].get_audio_segment_from_utterance(
+                            self.vocalic_series.utterances[other_previous_time])
+
+                    row_vocalics = [main_subject_name, main_subject_previous_value, main_subject_current_value,
+                                    main_subject_delay, main_subject_previous_audio, main_subject_current_audio,
+                                    other_subject_name, other_subject_previous_value, other_subject_delay,
+                                    other_subject_previous_audio]
+
+                    row.extend(row_vocalics)
+                    rows.append(row)
 
             else:
                 # Change is due to drifting only. We don't add that to the report to avoid clutter.
