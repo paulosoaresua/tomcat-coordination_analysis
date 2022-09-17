@@ -1,20 +1,20 @@
 from __future__ import annotations
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Union
 
 from glob import glob
 from datetime import datetime
 import logging
 import math
-import os
-import pickle
 import pydub
 import re
 
 import numpy as np
 from scipy.io import wavfile
 
+from coordination.component.speech.common import SegmentedUtterance
 from coordination.entity.trial_metadata import TrialMetadata
-from coordination.component.speech.vocalics_component import SegmentedUtterance, VocalicsComponent
+from coordination.entity.vocalics import Utterance
+
 
 logger = logging.getLogger()
 
@@ -45,91 +45,10 @@ class AudioSegment:
         mp3_audio.export(out_filepath, format="mp3", bitrate="320k")
 
 
-class AudioSparseSeries:
-    def __init__(self, audio_segments: List[Optional[AudioSegment]]):
-        self.audio_segments = audio_segments
-
-
-class VocalicsComponentAudio:
-
-    def __init__(self, series_a: List[AudioSegment], series_b: List[AudioSegment]):
-        self.series_a = series_a
-        self.series_b = series_b
-
-    @classmethod
-    def from_vocalics_component(cls, trial_audio: TrialAudio,
-                                vocalics_component: VocalicsComponent) -> VocalicsComponentAudio:
-        def segment_audio_from_segmented_utterances(utterances: List[SegmentedUtterance]) -> List[AudioSegment]:
-            audio_segments: List[AudioSegment] = []
-            for utterance in utterances:
-                audio_series = trial_audio.audio_per_participant[utterance.subject_id]
-                audio_data_segment = audio_series.get_data_segment(utterance.start, utterance.end)
-                audio_segment = AudioSegment(utterance.subject_id, utterance.start, utterance.end,
-                                             audio_data_segment, audio_series.sample_rate, utterance.text)
-                audio_segments.append(audio_segment)
-
-            return audio_segments
-
-        audio_series_a = segment_audio_from_segmented_utterances(vocalics_component.series_a)
-        audio_series_b = segment_audio_from_segmented_utterances(vocalics_component.series_b)
-        return VocalicsComponentAudio(audio_series_a, audio_series_b)
-
-    @classmethod
-    def from_trial_directory(cls, trial_dir: str) -> VocalicsComponentAudio:
-        vocalics_component_a_path = f"{trial_dir}/vocalics_component_audio_a.pkl"
-        vocalics_component_b_path = f"{trial_dir}/vocalics_component_audio_b.pkl"
-
-        if not os.path.exists(vocalics_component_a_path):
-            raise Exception(f"Could not find the file vocalics_component_audio_a.pkl in {trial_dir}.")
-
-        if not os.path.exists(vocalics_component_b_path):
-            raise Exception(f"Could not find the file vocalics_component_audio_b.pkl in {trial_dir}.")
-
-        with open(vocalics_component_a_path, "rb") as f:
-            series_a = pickle.load(f)
-
-        with open(vocalics_component_b_path, "rb") as f:
-            series_b = pickle.load(f)
-
-        return cls(series_a, series_b)
-
-    def sparse_series(self, num_time_steps: int) -> Tuple[AudioSparseSeries, AudioSparseSeries]:
-        def series_to_seconds(audio_segments: List[AudioSegment], initial_timestamp: datetime) -> AudioSparseSeries:
-            segments: List[Optional[AudioSegment]] = [None] * num_time_steps
-
-            for i, audio_segment in enumerate(audio_segments):
-                # We consider that the observation is available at the end of an utterance. We take the average vocalics
-                # per feature within the utterance as a measurement at the respective time step.
-                time_step = int((audio_segment.end - initial_timestamp).total_seconds())
-                if time_step >= num_time_steps:
-                    logger.warning(f"""Time step {time_step} exceeds the number of time steps {num_time_steps} at 
-                                   audio segment {i} out of {len(audio_segments)} ending at 
-                                   {audio_segment.end.isoformat()} considering an initial timestamp 
-                                   of {initial_timestamp.isoformat()}.""")
-                    break
-
-                segments[time_step] = audio_segment
-
-            return AudioSparseSeries(segments)
-
-        # The first audio always goes in series A
-        earliest_timestamp = self.series_a[0].start
-        sparse_series_a = series_to_seconds(self.series_a, earliest_timestamp)
-        sparse_series_b = series_to_seconds(self.series_b, earliest_timestamp)
-
-        return sparse_series_a, sparse_series_b
-
-    def save(self, out_dir: str):
-        with open(f"{out_dir}/vocalics_component_audio_a.pkl", "wb") as f:
-            pickle.dump(self.series_a, f)
-
-        with open(f"{out_dir}/vocalics_component_audio_b.pkl", "wb") as f:
-            pickle.dump(self.series_b, f)
-
-
 class AudioSeries:
 
-    def __init__(self, sample_rate: int, data: np.ndarray, baseline_timestamp: datetime):
+    def __init__(self, source: str, sample_rate: int, data: np.ndarray, baseline_timestamp: datetime):
+        self.source = source
         self.sample_rate = sample_rate
         self.data = data
         self.baseline_timestamp = baseline_timestamp
@@ -141,6 +60,13 @@ class AudioSeries:
         upper_idx = min(math.ceil(self.sample_rate * end_time_step + 1), len(self.data))
 
         return self.data[lower_idx: upper_idx]
+
+    def get_audio_segment(self, start: datetime, end: datetime, transcription: Optional[str]):
+        data = self.get_data_segment(start, end)
+        return AudioSegment(self.source, start, end, data, self.sample_rate, transcription)
+
+    def get_audio_segment_from_utterance(self, utterance: Union[SegmentedUtterance, Utterance]):
+        return self.get_audio_segment(utterance.start, utterance.end, utterance.text)
 
 
 class TrialAudio:
@@ -156,6 +82,6 @@ class TrialAudio:
         for filepath in filepaths:
             result = re.search(r".+_Member-(.+)_CondBtwn.+", filepath)
             subject_id = result.group(1)
-            audio_series = AudioSeries(*wavfile.read(filepath),
+            audio_series = AudioSeries(subject_id, *wavfile.read(filepath),
                                        baseline_timestamp=self._trial_metadata.trial_start)
             self.audio_per_participant[self._trial_metadata.subject_id_map[subject_id]] = audio_series

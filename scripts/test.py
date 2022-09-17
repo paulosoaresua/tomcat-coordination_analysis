@@ -1,21 +1,24 @@
-from coordination.audio.audio import TrialAudio, VocalicsComponentAudio
+import matplotlib.pyplot as plt
+import numpy as np
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Custom code
+from coordination.audio.audio import TrialAudio
+from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent
 from coordination.entity.trial import Trial
-from coordination.component.speech.vocalics_component import VocalicsComponent
-from coordination.report.coordination_abrupt_change_report import CoordinationAbruptChangeReport
-
-
-
-NUM_TIME_STEPS = 100
+from coordination.inference.vocalics import DiscreteCoordinationInferenceFromVocalics, ContinuousCoordinationInferenceFromVocalics
+from coordination.plot.coordination import add_discrete_coordination_bar
+from coordination.plot.vocalics import plot_vocalic_features
+from coordination.report.coordination_change_report import CoordinationChangeReport
 
 
 if __name__ == "__main__":
+    NUM_TIME_STEPS = 17 * 60
     trial = Trial.from_directory("../data/study-3_2022/T000745/")
-    vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics)
-    vocalics_a, vocalics_b = vocalics_component.sparse_series(NUM_TIME_STEPS)
-    vocalics_a.normalize()
-    vocalics_b.normalize()
+    vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics,
+                                                         segmentation_method=SegmentationMethod.KEEP_ALL)
 
-    trial_audio = TrialAudio(trial.metadata, "/Users/paulosoares/data/study-3_2022/audio")
-    audio_component = VocalicsComponentAudio.from_vocalics_component(trial_audio, vocalics_component)
-    audio_a, audio_b = audio_component.sparse_series(NUM_TIME_STEPS)
-    # report = CoordinationAbruptChangeReport(mean_cs, vocalics_a, vocalics_b, audio_a, audio_b)
+    vocalic_series = vocalics_component.sparse_series(NUM_TIME_STEPS, trial.metadata.mission_start)
+    vocalic_series.normalize_per_subject()
