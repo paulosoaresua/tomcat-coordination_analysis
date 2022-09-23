@@ -3,9 +3,11 @@ import os
 
 
 def _setup_logger(handler):
+    logger = logging.getLogger()
+    for old_handler in logger.handlers:
+        logger.removeHandler(old_handler)
     formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
     handler.setFormatter(formatter)
-    logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)  # Prints all types of messages including DEBUG ones
     logger.addHandler(handler)
 

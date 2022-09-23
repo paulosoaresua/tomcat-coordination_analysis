@@ -42,7 +42,7 @@ def pdf_projection(mean: float, var: float, a: float, b: float) -> Tuple[float, 
     """
 
     if np.isclose(var, 0):
-        return mean, var
+        return max(min(mean, 1), 0), var
 
     std = np.sqrt(var)
     alpha = (a - mean) / std

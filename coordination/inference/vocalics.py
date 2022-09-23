@@ -14,7 +14,7 @@ class DiscreteCoordinationInferenceFromVocalics:
     def __init__(self, vocalic_series: VocalicsSparseSeries, p_prior_coordination: float,
                  p_coordination_transition: float, mean_prior_vocalics: np.array, std_prior_vocalics: np.array,
                  std_uncoordinated_vocalics: np.ndarray, std_coordinated_vocalics: np.ndarray,
-                 f: Callable = lambda x, s: x):
+                 f: Callable = lambda x, s: x, fix_coordination_on_second_half: bool = True):
         """
         This class estimates discrete coordination with message passing.
         The series A and B can contain multiple series, one for each feature (e.g. pitch and intensity).
@@ -26,6 +26,7 @@ class DiscreteCoordinationInferenceFromVocalics:
         @param std_prior_vocalics: standard deviation of the distribution of vocalics at the first time it is observed.
         @param std_uncoordinated_vocalics: standard deviation of vocalics series when there's no coordination.
         @param std_coordinated_vocalics: standard deviation of the vocalic series when there's coordination.
+        @param fix_coordination_on_second_half: whether coordination in the second half of the mission should be fixed.
         """
 
         assert len(mean_prior_vocalics) == vocalic_series.num_series
@@ -40,9 +41,9 @@ class DiscreteCoordinationInferenceFromVocalics:
         self._std_uncoordinated_vocalics = std_uncoordinated_vocalics
         self._std_coordinated_vocalics = std_coordinated_vocalics
         self._f = f
+        self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
         self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
-        self._mid_time_step = int(self._time_steps / 2)  # M
 
         # C_{t-1} to C_t and vice-versa since the matrix is symmetric
         self._prior_vector = np.array([1 - p_prior_coordination, p_prior_coordination])
@@ -65,8 +66,11 @@ class DiscreteCoordinationInferenceFromVocalics:
         return c_marginals
 
     def _forward(self, m_comp2coord: np.ndarray) -> np.ndarray:
-        m_forward = np.zeros((2, self._mid_time_step + 1))
-        for t in range(self._mid_time_step + 1):
+        M = int(self._time_steps / 2)
+        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+
+        m_forward = np.zeros((2, num_time_steps))
+        for t in range(num_time_steps):
             # Transform to log scale for numerical stability
 
             # Contribution of the previous coordination sample to the marginal
@@ -76,7 +80,7 @@ class DiscreteCoordinationInferenceFromVocalics:
                 m_forward[:, t] = np.log(np.matmul(m_forward[:, t - 1], self._transition_matrix) + EPSILON)
 
             # Contribution of the components to the coordination marginal
-            if t == self._mid_time_step:
+            if t == M and self._fix_coordination_on_second_half:
                 # All the components contributions after t = M
                 m_forward[:, t] += np.sum(np.log(m_comp2coord[:, t:]) + EPSILON, axis=1)
             else:
@@ -90,13 +94,17 @@ class DiscreteCoordinationInferenceFromVocalics:
         return m_forward
 
     def _backwards(self, m_comp2coord: np.ndarray) -> np.ndarray:
-        m_backwards = np.zeros((2, self._mid_time_step + 1))
-        for t in range(self._mid_time_step, -1, -1):
+        M = int(self._time_steps / 2)
+        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+
+        m_backwards = np.zeros((2, num_time_steps))
+        for t in range(num_time_steps - 1, -1, -1):
             # Transform to log scale for numerical stability
 
             # Contribution of the next coordination sample to the marginal
-            if t == self._mid_time_step:
-                # All the components contributions after t = M
+            if t == num_time_steps - 1:
+                # All the components contributions after t = M (or last element for non-fixed coordination in the
+                # second half)
                 m_backwards[:, t] = np.sum(np.log(m_comp2coord[:, t:] + EPSILON), axis=1)
             else:
                 m_backwards[:, t] = np.log(np.matmul(m_backwards[:, t + 1], self._transition_matrix.T) + EPSILON)
@@ -157,7 +165,8 @@ class ContinuousCoordinationInferenceFromVocalics:
 
     def __init__(self, vocalic_series: VocalicsSparseSeries, mean_prior_coordination: float,
                  std_prior_coordination: float, std_coordination_drifting: float, mean_prior_vocalics: np.array,
-                 std_prior_vocalics: np.array, std_coordinated_vocalics: np.ndarray, f: Callable = lambda x, s: x):
+                 std_prior_vocalics: np.array, std_coordinated_vocalics: np.ndarray, f: Callable = lambda x, s: x,
+                 fix_coordination_on_second_half: bool = True):
 
         assert len(mean_prior_vocalics) == vocalic_series.num_series
         assert len(std_prior_vocalics) == vocalic_series.num_series
@@ -171,9 +180,9 @@ class ContinuousCoordinationInferenceFromVocalics:
         self._std_prior_vocalics = std_prior_vocalics
         self._std_coordinated_vocalics = std_coordinated_vocalics
         self._f = f
+        self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
         self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
-        self._mid_time_step = int(self._time_steps / 2)  # M
 
     def estimate_means_and_variances(self) -> np.ndarray:
         filter_params = self._kalman_filter(False)
@@ -186,12 +195,15 @@ class ContinuousCoordinationInferenceFromVocalics:
         var_C = self._std_coordination_drifting ** 2
         var_V = self._std_coordinated_vocalics ** 2
 
-        params = np.zeros((2, self._mid_time_step + 1))
+        M = int(self._time_steps / 2)
+        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+
+        params = np.zeros((2, num_time_steps))
         params[:, 0] = np.array([self._mean_prior_coordination, self._std_prior_coordination ** 2])
         mean, var = params[:, 0]
         for t in range(1, self._time_steps):
-            if t < self._mid_time_step:
-                # No coordination drift from M beyond
+            if t < M or not self._fix_coordination_on_second_half:
+                # No coordination drift from M beyond if coordination in the second half is fixed
                 m_previous, v_previous = params[:, t - 1]
 
                 """
@@ -238,17 +250,21 @@ class ContinuousCoordinationInferenceFromVocalics:
             if constrained:
                 mean, var = pdf_projection(mean, var, 0, 1)
 
-            params[:, min(t, self._mid_time_step)] = [mean, var]
+            if self._fix_coordination_on_second_half:
+                params[:, min(t, M)] = [mean, var]
+            else:
+                params[:, t] = [mean, var]
 
         return params
 
     def _rts_smoother(self, filter_params: np.ndarray, constrained: bool) -> np.ndarray:
         var_C = self._std_coordination_drifting ** 2
 
-        params = np.zeros((2, self._mid_time_step + 1))  # Coordination mean and variance over time
-        params[:, self._mid_time_step] = filter_params[:, -1]
+        params = np.zeros((2, filter_params.shape[1]))  # Coordination mean and variance over time
 
-        for t in range(self._mid_time_step - 1, -1, -1):
+        last_time_step = filter_params.shape[1] - 1
+        params[:, last_time_step] = filter_params[:, -1]
+        for t in range(last_time_step - 1, -1, -1):
             K = (filter_params[1, t] ** 2) / (filter_params[1, t] ** 2 + var_C)
 
             mean_filter, var_filter = filter_params[:, t]
