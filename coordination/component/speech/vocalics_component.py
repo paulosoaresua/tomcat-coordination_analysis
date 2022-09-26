@@ -84,16 +84,16 @@ class VocalicsComponent:
             # per feature within the utterance as a measurement at the respective time step.
             time_step = int((utterance.end - mission_start).total_seconds())
 
-            if mask[time_step] == 1:
-                # A previous utterance finished at the same time. Discard this one.
-                continue
-
             if time_step >= num_time_steps:
                 msg = f"Time step {time_step} exceeds the number of time steps {num_time_steps} at " \
                       f"utterance {i} out of {len(self.segmented_utterances)} ending at " \
                       f"{utterance.end.isoformat()} considering an initial timestamp of {mission_start.isoformat()}."
                 logger.warning(msg)
                 break
+
+            if mask[time_step] == 1:
+                # A previous utterance finished at the same time. Discard this one.
+                continue
 
             values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
             mask[time_step] = 1
