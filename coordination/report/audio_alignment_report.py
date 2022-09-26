@@ -2,12 +2,15 @@ import os
 from typing import List, Optional, Union, Tuple
 
 from datetime import datetime
+from pkg_resources import resource_string
 
+import numpy as np
 from yattag import Doc, indent
 
 from coordination.audio.audio import AudioSegment, TrialAudio
 from coordination.entity.trial import Trial
 from coordination.entity.vocalics import Utterance
+from coordination.report.utils import generate_chart_script
 
 NO_VALUE_STR = "n.a"
 
@@ -32,6 +35,10 @@ class AudioAlignmentReport:
             with tag("script"):
                 doc.asis(AudioAlignmentReport._get_js())
             with tag("script", src="https://kit.fontawesome.com/5631021ae3.js", crossorigin="anonymous"):
+                pass
+            with tag("script", src="https://cdn.jsdelivr.net/npm/chart.js"):
+                pass
+            with tag("script", src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"):
                 pass
             with tag("head"):
                 with tag("style"):
@@ -66,6 +73,11 @@ class AudioAlignmentReport:
                                                          onclick=f"playAudio('./audio/audio_{i}_{j}.wav')"):
                                                     with tag("i", klass="fa fa-play fa-2x"):
                                                         pass
+                                        elif isinstance(table_cell, list):
+                                            canvas_id = f"vocalics_plot_{i}_{j}"
+                                            doc.stag("canvas", id=canvas_id, width="400", height="200")
+                                            with tag("script"):
+                                                doc.asis(generate_chart_script(canvas_id, table_cell))
                                         else:
                                             text(table_cell)
 
@@ -92,78 +104,9 @@ class AudioAlignmentReport:
 
     @staticmethod
     def _get_style() -> str:
-        css = """
-              body {
-                  font-family: 'Nunito Sans';font-size: 14px;
-              }
-        
-              .styled-table {
-                  border-collapse: collapse;
-                  margin: 25px 0;
-                  font-size: 0.9em;
-                  font-family: sans-serif;
-                  min-width: 400px;
-                  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);                  
-              }
-              
-              .styled-table th, td {
-                  border-left: 1px solid #dddddd;
-                  border-right: 1px solid #dddddd;
-              }
-              
-              .styled-table thead tr {
-                  background-color: #009879;
-                  color: #ffffff;
-                  text-align: center;     
-                  border-bottom: 1px solid #dddddd;          
-              }
-
-              .styled-table th,
-              .styled-table td {
-                  padding: 10px 12px;
-              }
-
-              .styled-table tbody tr {
-                  border-bottom: 1px solid #dddddd;
-              }
-
-              .styled-table tbody tr:nth-of-type(even) {
-                  background-color: #f3f3f3;
-              }
-
-              .styled-table tbody tr:last-of-type {
-                  border-bottom: 2px solid #009879;
-              }
-
-              .styled-table tbody tr:hover {
-                  background-color: #3BF7D2;
-              }
-              
-              .play-button {
-                  box-sizing: border-box;
-                  display:inline-block;
-                  width:20px;
-                  height:20px;
-                  padding-top: 3px;
-                  padding-left: 2px;
-                  line-height: 18px;
-                  border: 2px solid #fff;
-                  border-radius: 50%;
-                  color:#f5f5f5;
-                  text-align:center;
-                  text-decoration:none;
-                  background-color: rgba(0,0,0,0.6);
-                  font-size:5px;
-                  font-weight:bold;
-                  transition: all 0.3s ease;
-            }
-            
-            .play-button:hover {
-                  background-color: rgba(0,0,0,0.8);
-                  box-shadow: 0px 0px 10px rgba(255,255,100,1);
-                  text-shadow: 0px 0px 10px rgba(255,255,100,1);
-            }
-            
+        css = resource_string("coordination.resources.style", "report.css").decode()
+        css += resource_string("coordination.resources.style", "play_button.css").decode()
+        tooltip_css = """                   
             .tooltip .tooltiptext {
               visibility: hidden;
               width: 120px;
@@ -172,7 +115,7 @@ class AudioAlignmentReport:
               text-align: center;
               border-radius: 6px;
               padding: 5px 0;
-            
+
               /* Position the tooltip */
               position: absolute;
               z-index: 1;
@@ -183,20 +126,23 @@ class AudioAlignmentReport:
             }
         """
 
+        css += tooltip_css
+
         return css
 
     @staticmethod
     def _get_header() -> Tuple[List[List[str]], List[List[int]], List[str]]:
         texts = [
             ["#", "Duration Since Trial Start", "Duration Since Mission Start", "Player", "Start", "End",
-             "Duration (seconds)", "Utterance", "Audio"]
+             "Duration (seconds)", "Utterance", "Audio", "Pitch", "Intensity"]
         ]
 
         col_spans = [
             [1] * len(texts[-1]),
         ]
 
-        data_alignment = ["left", "center", "center", "center", "center", "center", "center", "left", "center"]
+        data_alignment = ["left", "center", "center", "center", "center", "center", "center", "left", "center",
+                          "center", "center"]
 
         return texts, col_spans, data_alignment
 
@@ -210,6 +156,8 @@ class AudioAlignmentReport:
         entries = []
         for i, utterance in enumerate(utterances):
             voice = self.audio.audio_per_participant[utterance.subject_id]
+            pitches = [] if utterance.vocalic_series.size == 0 else utterance.vocalic_series.values[0].tolist()
+            intensities = [] if utterance.vocalic_series.size == 0 else utterance.vocalic_series.values[1].tolist()
             entry = [
                 str(i + 1),
                 AudioAlignmentReport._get_relative_time(utterance.start, self.trial.metadata.trial_start),
@@ -220,7 +168,9 @@ class AudioAlignmentReport:
                 f"{((utterance.end - utterance.start).total_seconds()):.2f}",
                 utterance.text,
                 AudioSegment(utterance.subject_id, utterance.start, utterance.end,
-                             voice.get_data_segment(utterance.start, utterance.end), voice.sample_rate)
+                             voice.get_data_segment(utterance.start, utterance.end), voice.sample_rate),
+                pitches,
+                intensities
             ]
 
             entries.append(entry)
