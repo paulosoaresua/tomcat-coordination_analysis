@@ -6,12 +6,13 @@ import numpy as np
 from scipy.stats import beta, norm
 
 from coordination.component.speech.common import VocalicsSparseSeries
+from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.particle_filter import ParticleFilter
 
-from scipy.special import expit, logit
+from scipy.special import expit
 
 
-class LogisticCoordinationInferenceFromVocalics(ParticleFilter):
+class LogisticCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter):
 
     def __init__(self, vocalic_series: VocalicsSparseSeries,
                  mean_prior_coordination_logit: float, std_prior_coordination_logit: float,

@@ -6,6 +6,7 @@ import numpy as np
 from scipy.stats import beta, norm
 
 from coordination.component.speech.common import VocalicsSparseSeries
+from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.particle_filter import ParticleFilter
 
 
@@ -32,6 +33,23 @@ class BetaCoordinationInferenceFromVocalics(ParticleFilter):
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
         self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
+
+    def estimate_means_and_variances(self, seed: Optional[float]) -> np.ndarray:
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+        M = int(self._time_steps / 2)
+        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+
+        params = np.zeros((2, num_time_steps))
+        for t in range(0, num_time_steps):
+            self.next()
+            mean = self.states[-1].mean()
+            variance = self.states[-1].var()
+            params[:, t] = [mean, variance]
+
+        return params
 
     def _sample_from_prior(self):
         a = np.ones(self.num_particles) * self._prior_a
@@ -107,20 +125,3 @@ class BetaCoordinationInferenceFromVocalics(ParticleFilter):
         B_prev = None if self._vocalic_series.previous_from_other[time_step] is None else self._f(
             self._vocalic_series.values[:, self._vocalic_series.previous_from_other[time_step]], 1)
         return self._vocalic_series.mask[time_step] == 1 and B_prev is not None
-
-    def estimate_means_and_variances(self, seed: Optional[float]) -> np.ndarray:
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-
-        M = int(self._time_steps / 2)
-        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
-
-        params = np.zeros((2, num_time_steps))
-        for t in range(0, num_time_steps):
-            self.next()
-            mean = self.states[-1].mean()
-            variance = self.states[-1].var()
-            params[:, t] = [mean, variance]
-
-        return params

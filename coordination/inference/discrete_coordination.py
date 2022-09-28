@@ -1,14 +1,15 @@
-from typing import Callable
+from typing import Callable, Tuple
 
 import numpy as np
 from scipy.stats import norm
 
 from coordination.component.speech.common import VocalicsSparseSeries
+from coordination.inference.inference_engine import InferenceEngine
 
 EPSILON = 1E-16
 
 
-class DiscreteCoordinationInferenceFromVocalics:
+class DiscreteCoordinationInferenceFromVocalics(InferenceEngine):
 
     def __init__(self, vocalic_series: VocalicsSparseSeries, p_prior_coordination: float,
                  p_coordination_transition: float, mean_prior_vocalics: np.array, std_prior_vocalics: np.array,
@@ -50,7 +51,7 @@ class DiscreteCoordinationInferenceFromVocalics:
             [1 - p_coordination_transition, p_coordination_transition],
             [p_coordination_transition, 1 - p_coordination_transition]])
 
-    def estimate_marginals(self):
+    def estimate_means_and_variances(self) -> np.ndarray:
         m_comp2coord = self._get_messages_from_components_to_coordination()
         m_forward = self._forward(m_comp2coord)
         m_backwards = self._backwards(m_comp2coord)
@@ -62,7 +63,8 @@ class DiscreteCoordinationInferenceFromVocalics:
         c_marginals = m_forward * np.matmul(m_backwards.T, self._transition_matrix.T).T
         c_marginals /= np.sum(c_marginals, axis=0, keepdims=True)
 
-        return c_marginals
+        # There's no variance in exact estimation for discrete state-space
+        return np.vstack([c_marginals[1], np.zeros_like(c_marginals[1])])
 
     def _forward(self, m_comp2coord: np.ndarray) -> np.ndarray:
         M = int(self._time_steps / 2)

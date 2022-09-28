@@ -40,10 +40,10 @@ class ParticleFilter:
         return True
 
     def _sample_from_prior(self):
-        raise Exception("Not implemented.")
+        raise NotImplementedError
 
     def _sample_from_transition_to(self, time_step: int):
-        raise Exception("Not implemented.")
+        raise NotImplementedError
 
     def _calculate_log_likelihood_at(self, time_step: int):
-        raise Exception("Not implemented.")
+        raise NotImplementedError

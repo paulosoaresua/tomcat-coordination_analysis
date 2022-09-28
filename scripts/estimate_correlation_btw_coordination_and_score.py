@@ -37,8 +37,12 @@ def estimate(data_df_path: str, out_dir: str, plot_regression: bool):
     }
 
     for estimation_name in data_df["estimation_name"].unique():
-        measures = ["mean", "variance", "mean_second_half", "variance_second_half", "prop"]
-        xlims = [[0, 1], [0, 0.2], [0, 1], [0, 0.2], [0, 1]]
+        if "discrete" in estimation_name:
+            measures = ["mean", "mean_second_half", "prop"]
+            xlims = [[0, 1], [0, 1], [0, 1]]
+        else:
+            measures = ["mean", "variance", "mean_second_half", "variance_second_half", "prop"]
+            xlims = [[0, 1], [0, 0.2], [0, 1], [0, 0.2], [0, 1]]
         for i, measure in enumerate(measures):
             data_estimation_df = data_df[data_df["estimation_name"] == estimation_name]
             if not data_estimation_df[measure].isnull().any():

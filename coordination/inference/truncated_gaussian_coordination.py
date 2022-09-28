@@ -3,10 +3,11 @@ from typing import Callable
 import numpy as np
 
 from coordination.component.speech.common import VocalicsSparseSeries
+from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.lds import apply_marginal_property, apply_conditional_property, pdf_projection
 
 
-class TruncatedGaussianCoordinationInferenceFromVocalics:
+class TruncatedGaussianCoordinationInferenceFromVocalics(InferenceEngine):
 
     def __init__(self, vocalic_series: VocalicsSparseSeries, mean_prior_coordination: float,
                  std_prior_coordination: float, std_coordination_drifting: float, mean_prior_vocalics: np.array,
@@ -34,7 +35,7 @@ class TruncatedGaussianCoordinationInferenceFromVocalics:
         return self._rts_smoother(filter_params)
 
     def filter(self) -> np.ndarray:
-        return self._kalman_filter(True)
+        return self._kalman_filter()
 
     def _kalman_filter(self) -> np.ndarray:
         var_C = self._std_coordination_drifting ** 2
