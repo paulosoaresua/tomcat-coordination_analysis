@@ -1,34 +1,37 @@
 from typing import Callable
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm, truncnorm
 
 from coordination.component.speech.common import VocalicsSparseSeries
 from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.particle_filter import ParticleFilter
 
-from scipy.special import expit
+MIN_VALUE = 0
+MAX_VALUE = 1
 
 
-class LogisticCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter):
+class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFilter):
 
-    def __init__(self, vocalic_series: VocalicsSparseSeries,
-                 mean_prior_coordination_logit: float, std_prior_coordination_logit: float,
-                 std_coordination_logit_drifting: float, mean_prior_vocalics: np.array, std_prior_vocalics: np.array,
+    def __init__(self, vocalic_series: VocalicsSparseSeries, mean_prior_coordination: float,
+                 std_prior_coordination: float, std_coordination_drifting: float, mean_prior_vocalics: np.array,
+                 std_prior_vocalics: np.array, std_uncoordinated_vocalics: np.ndarray,
                  std_coordinated_vocalics: np.ndarray, f: Callable = lambda x, s: x,
                  fix_coordination_on_second_half: bool = True, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         assert len(mean_prior_vocalics) == vocalic_series.num_series
         assert len(std_prior_vocalics) == vocalic_series.num_series
+        assert len(std_uncoordinated_vocalics) == vocalic_series.num_series
         assert len(std_coordinated_vocalics) == vocalic_series.num_series
 
         self._vocalic_series = vocalic_series
-        self._mean_prior_coordination_logit = mean_prior_coordination_logit
-        self._std_prior_coordination_logit = std_prior_coordination_logit
-        self._std_coordination_logit_drifting = std_coordination_logit_drifting
+        self._mean_prior_coordination = mean_prior_coordination
+        self._std_prior_coordination = std_prior_coordination
+        self._std_coordination_drifting = std_coordination_drifting
         self._mean_prior_vocalics = mean_prior_vocalics
         self._std_prior_vocalics = std_prior_vocalics
+        self._std_uncoordinated_vocalics = std_uncoordinated_vocalics
         self._std_coordinated_vocalics = std_coordinated_vocalics
         self._f = f
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
@@ -42,23 +45,28 @@ class LogisticCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter)
         params = np.zeros((2, num_time_steps))
         for t in range(0, num_time_steps):
             self.next()
-            mean = self.states[-1][:, 1].mean()
-            variance = self.states[-1][:, 1].var()
+            mean = self.states[-1].mean()
+            variance = self.states[-1].var()
             params[:, t] = [mean, variance]
 
         return params
 
     def _sample_from_prior(self):
-        mean = np.ones(self.num_particles) * self._mean_prior_coordination_logit
-        std = np.ones(self.num_particles) * self._std_prior_coordination_logit
-        d = norm(loc=mean, scale=std).rvs()
-        c = expit(d)
-        return np.hstack([d[:, np.newaxis], c[:, np.newaxis]])
+        if self._std_prior_coordination == 0:
+            return np.ones(self.num_particles) * self._mean_prior_coordination
+        else:
+            mean = np.ones(self.num_particles) * self._mean_prior_coordination
+            std = np.ones(self.num_particles) * self._std_prior_coordination
+            a = (MIN_VALUE - self._mean_prior_coordination) / self._std_prior_coordination
+            b = (MAX_VALUE - self._mean_prior_coordination) / self._std_prior_coordination
+
+            return truncnorm(loc=mean, scale=std, a=a, b=b).rvs()
 
     def _sample_from_transition_to(self, time_step: int):
-        d = norm(loc=self.states[time_step - 1][:, 0], scale=self._std_coordination_logit_drifting).rvs()
-        c = expit(d)
-        return np.hstack([d[:, np.newaxis], c[:, np.newaxis]])
+        std = np.ones(self.num_particles) * self._std_coordination_drifting
+        a = (MIN_VALUE - self.states[time_step - 1]) / std
+        b = (MAX_VALUE - self.states[time_step - 1]) / std
+        return truncnorm(loc=self.states[time_step - 1], scale=std, a=a, b=b).rvs()
 
     def _calculate_log_likelihood_at(self, time_step: int):
         final_time_step = time_step
@@ -75,12 +83,22 @@ class LogisticCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter)
                 self._vocalic_series.values[:, self._vocalic_series.previous_from_other[t]], 1)
 
             if self._vocalic_series.mask[t] == 1 and B_prev is not None:
-                if A_prev is None:
-                    A_prev = self._mean_prior_vocalics
+                u = np.random.rand(self.num_particles)
+                means = np.zeros((self.num_particles, len(A_t)))
+                stds = np.zeros_like(means)
 
-                D = B_prev - A_prev
-                log_likelihoods += norm(loc=D * self.states[time_step][:, 1][:, np.newaxis] + A_prev,
-                                        scale=self._std_coordinated_vocalics).logpdf(A_t).sum(axis=1)
+                if A_prev is None:
+                    means[u <= self.states[time_step]] = B_prev
+                    means[u > self.states[time_step]] = self._mean_prior_vocalics
+                    stds[u <= self.states[time_step]] = self._std_coordinated_vocalics
+                    stds[u > self.states[time_step]] = self._std_prior_vocalics
+                else:
+                    means[u <= self.states[time_step]] = B_prev
+                    means[u > self.states[time_step]] = A_prev
+                    stds[u <= self.states[time_step]] = self._std_coordinated_vocalics
+                    stds[u > self.states[time_step]] = self._std_uncoordinated_vocalics
+
+                log_likelihoods += norm(loc=means, scale=stds).logpdf(A_t).sum(axis=1)
 
         return log_likelihoods
 
