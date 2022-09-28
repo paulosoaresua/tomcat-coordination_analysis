@@ -5,7 +5,6 @@ import argparse
 from glob import glob
 import logging
 import os
-import pickle
 import random
 
 import matplotlib.pyplot as plt
@@ -316,7 +315,7 @@ if __name__ == "__main__":
     parser.add_argument("--mv", type=float, required=False, default=0, help="Mean of vocalics.")
     parser.add_argument("--sv", type=float, required=False, default=1, help="Std of vocalics.")
     parser.add_argument("--scv", type=int, required=False, default=1, help="Std of coupled vocalics.")
-    parser.add_argument("--num_particles", type=float, required=False, default=10000,
+    parser.add_argument("--num_particles", type=int, required=False, default=10000,
                         help="Number of particles for the particle based model.")
     parser.add_argument("--seed", type=int, required=False, help="Seed for the particle based model.")
 
