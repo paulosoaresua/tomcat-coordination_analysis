@@ -7,7 +7,7 @@ from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.lds import apply_marginal_property, apply_conditional_property, pdf_projection
 
 
-class TruncatedGaussianCoordinationInferenceFromVocalics(InferenceEngine):
+class TruncatedGaussianCoordinationBlendingInference(InferenceEngine):
 
     def __init__(self, vocalic_series: VocalicsSparseSeries, mean_prior_coordination: float,
                  std_prior_coordination: float, std_coordination_drifting: float, mean_prior_vocalics: np.array,
