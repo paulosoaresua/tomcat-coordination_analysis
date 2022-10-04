@@ -22,7 +22,8 @@ class ContinuousCoordinationVocalicsBlendingGenerator(VocalicsGenerator):
         self._mean_prior_vocalics = mean_prior_vocalics
         self._std_coordinated_vocalics = std_coordinated_vocalics
 
-    def _sample(self, previous_self: Optional[float], previous_other: Optional[float], coordination: float):
+    def _sample(self, previous_self: Optional[float], previous_other: Optional[float],
+                coordination: float) -> np.ndarray:
         if previous_other is None:
             distribution = self._prior_vocalics
         else:
@@ -36,4 +37,3 @@ class ContinuousCoordinationVocalicsBlendingGenerator(VocalicsGenerator):
                                     scale=self._std_coordinated_vocalics)
 
         return distribution.rvs()
-

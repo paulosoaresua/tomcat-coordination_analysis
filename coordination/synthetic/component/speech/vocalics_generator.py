@@ -89,5 +89,6 @@ class VocalicsGenerator:
 
         return mask_a, mask_b
 
-    def _sample(self, previous_self: Optional[float], previous_other: Optional[float], coordination: float):
-        raise Exception("Not implemented in this class.")
+    def _sample(self, previous_self: Optional[float], previous_other: Optional[float],
+                coordination: float) -> np.ndarray:
+        raise NotImplementedError

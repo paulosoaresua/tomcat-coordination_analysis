@@ -26,7 +26,8 @@ class ContinuousCoordinationVocalicsMixtureGenerator(VocalicsGenerator):
         self._std_uncoordinated_vocalics = std_uncoordinated_vocalics
         self._std_coordinated_vocalics = std_coordinated_vocalics
 
-    def _sample(self, previous_self: Optional[float], previous_other: Optional[float], coordination: float):
+    def _sample(self, previous_self: Optional[float], previous_other: Optional[float],
+                coordination: float) -> np.ndarray:
         if previous_other is None:
             distribution = self._prior_vocalics
         else:
