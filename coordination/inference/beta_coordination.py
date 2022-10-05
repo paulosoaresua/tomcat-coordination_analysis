@@ -1,16 +1,14 @@
-from typing import Callable, Optional
-
-import random
+from typing import Callable
 
 import numpy as np
 from scipy.stats import beta, norm
 
 from coordination.component.speech.common import VocalicsSparseSeries
 from coordination.inference.inference_engine import InferenceEngine
-from coordination.inference.particle_filter import ParticleFilter
+from coordination.inference.particle_filter import Particles, ParticleFilter
 
 
-class BetaCoordinationInferenceFromVocalics(ParticleFilter):
+class BetaCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter):
 
     def __init__(self, vocalic_series: VocalicsSparseSeries, prior_a: float, prior_b: float,
                  std_coordination_drifting: float, mean_prior_vocalics: np.array, std_prior_vocalics: np.array,
@@ -34,30 +32,26 @@ class BetaCoordinationInferenceFromVocalics(ParticleFilter):
 
         self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
 
-    def estimate_means_and_variances(self, seed: Optional[float]) -> np.ndarray:
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-
+    def estimate_means_and_variances(self) -> np.ndarray:
         M = int(self._time_steps / 2)
         num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
 
         params = np.zeros((2, num_time_steps))
         for t in range(0, num_time_steps):
             self.next()
-            mean = self.states[-1].mean()
-            variance = self.states[-1].var()
+            mean = self.states[-1].coordination.mean()
+            variance = self.states[-1].coordination.var()
             params[:, t] = [mean, variance]
 
         return params
 
-    def _sample_from_prior(self):
+    def _sample_from_prior(self) -> Particles:
         a = np.ones(self.num_particles) * self._prior_a
         b = np.ones(self.num_particles) * self._prior_b
         return beta(a, b).rvs()
 
-    def _sample_from_transition_to(self, time_step: int):
-        return self._get_transition_distribution(self.states[time_step - 1]).rvs()
+    def _sample_from_transition_to(self, time_step: int) -> Particles:
+        return self._get_transition_distribution(self.states[time_step - 1].coordination).rvs()
 
     def _get_transition_distribution(self, previous_coordination: np.ndarray):
         """
@@ -97,7 +91,7 @@ class BetaCoordinationInferenceFromVocalics(ParticleFilter):
 
         return beta(a, b)
 
-    def _calculate_log_likelihood_at(self, time_step: int):
+    def _calculate_log_likelihood_at(self, time_step: int) -> np.ndarray:
         final_time_step = time_step
         M = int(self._time_steps / 2)
         if self._fix_coordination_on_second_half and time_step == M:
@@ -116,12 +110,11 @@ class BetaCoordinationInferenceFromVocalics(ParticleFilter):
                     A_prev = self._mean_prior_vocalics
 
                 D = B_prev - A_prev
-                log_likelihoods += norm(loc=D * self.states[time_step][:, np.newaxis] + A_prev,
+                log_likelihoods += norm(loc=D * self.states[time_step].coordination[:, np.newaxis] + A_prev,
                                         scale=self._std_coordinated_vocalics).logpdf(A_t).sum(axis=1)
 
         return log_likelihoods
 
     def _resample_at(self, time_step: int):
-        B_prev = None if self._vocalic_series.previous_from_other[time_step] is None else self._f(
-            self._vocalic_series.values[:, self._vocalic_series.previous_from_other[time_step]], 1)
-        return self._vocalic_series.mask[time_step] == 1 and B_prev is not None
+        return self._vocalic_series.mask[time_step] == 1 and self._vocalic_series.previous_from_other[
+            time_step] is not None

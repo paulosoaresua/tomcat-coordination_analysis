@@ -23,6 +23,9 @@ class SegmentedUtterance:
     def from_utterance(cls, utterance: Utterance, start: datetime, end: datetime) -> SegmentedUtterance:
         return cls(utterance.subject_id, start, end, utterance.text)
 
+    def __repr__(self):
+        return f"{self.subject_id}: {self.text}"
+
 
 class VocalicsSparseSeries(SparseSeries):
 
@@ -36,6 +39,7 @@ class VocalicsSparseSeries(SparseSeries):
         """
         super().__init__(*args, **kwargs)
 
+        self.subjects = set([u.subject_id for u in utterances if u is not None])
         self.utterances = utterances
         self.previous_from_self = previous_from_self
         self.previous_from_other = previous_from_other
@@ -46,9 +50,7 @@ class VocalicsSparseSeries(SparseSeries):
         """
         self.values = self.values.astype(float)
 
-        subjects = set([u.subject_id for u in self.utterances if u is not None])
-
-        for subject in subjects:
+        for subject in self.subjects:
             valid_indices = [t for t, mask in enumerate(self.mask) if
                              mask == 1 and self.utterances[t].subject_id == subject]
 

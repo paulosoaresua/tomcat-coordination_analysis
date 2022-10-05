@@ -55,14 +55,17 @@ class LatentVocalicsGenerator:
                         continue
 
                     # Most recent vocalics from a different speaker
-                    previous_time_other = previous_time_other if previous_time_other is None else max(
-                        previous_time_other, time)
+                    previous_time_other = time if previous_time_other is None else max(previous_time_other, time)
 
-                previous_self = None if previous_time_self is None else latent_values[:, previous_time_self]
-                previous_other = None if previous_time_other is None else latent_values[:, previous_time_other]
+                previous_value_self = None if previous_time_self is None else latent_values[:, previous_time_self]
+                previous_value_other = None if previous_time_other is None else latent_values[:, previous_time_other]
 
-                latent_values[:, t] = self._sample_latent(previous_self, previous_other, current_coordination)
+                latent_values[:, t] = self._sample_latent(previous_value_self, previous_value_other,
+                                                          current_coordination)
                 observed_values[:, t] = self._sample_observed(latent_values[:, t])
+
+                previous_self[t] = previous_time_self
+                previous_other[t] = previous_time_other
 
                 # Dummy utterance
                 utterances[t] = SegmentedUtterance(f"Speaker {speakers[t]}", datetime.now(), datetime.now(), "")
@@ -76,11 +79,11 @@ class LatentVocalicsGenerator:
         return latent_series, observed_series
 
     def _generate_random_speakers(self) -> List[Optional[str]]:
-        # The last speaker represents None
-        transition_matrix = np.ones((self._num_speakers + 1, self._num_speakers + 1))
+        # We always change speakers between time steps when generating vocalics
+        transition_matrix = 1 - np.eye(self._num_speakers + 1)
 
-        transition_matrix *= self._time_scale_density / self._num_speakers
-        transition_matrix[:, -1] = 1 - self._time_scale_density
+        transition_matrix *= self._time_scale_density / (self._num_speakers - 1)
+        transition_matrix[:-1, -1] = 1 - self._time_scale_density
 
         prior = np.ones(self._num_speakers + 1) * self._time_scale_density / self._num_speakers
         prior[-1] = 1 - self._time_scale_density
