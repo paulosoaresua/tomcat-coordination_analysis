@@ -7,7 +7,6 @@ from coordination.component.speech.common import VocalicsSparseSeries
 from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.particle_filter import Particles, ParticleFilter
 
-
 MIN_VALUE = 0
 MAX_VALUE = 1
 
@@ -33,8 +32,8 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(InferenceEngi
                  mean_prior_coordination: float, std_prior_coordination: float,
                  std_coordination_drifting: float, mean_prior_latent_vocalics: np.array,
                  std_prior_latent_vocalics: np.array, std_coordinated_latent_vocalics: np.ndarray,
-                 std_observed_vocalics: np.ndarray, f: Callable = lambda x: x,
-                 fix_coordination_on_second_half: bool = True, *args, **kwargs):
+                 std_observed_vocalics: np.ndarray, f: Callable = lambda x, s: x,
+                 fix_coordination_on_second_half: bool = True, g: Callable = lambda x: x, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         assert len(mean_prior_latent_vocalics) == vocalic_series.num_series
@@ -51,6 +50,7 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(InferenceEngi
         self._std_coordinated_latent_vocalics = std_coordinated_latent_vocalics
         self._std_observed_vocalics = std_observed_vocalics
         self._f = f
+        self._g = g
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
         self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
@@ -106,14 +106,14 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(InferenceEngi
             speaker = self._vocalic_series.utterances[time_step].subject_id
             A_prev = self.states[time_step - 1].latent_vocalics[speaker]
 
-            A_prev = A_prev if A_prev is not None else np.ones(
+            A_prev = self._f(A_prev, 0) if A_prev is not None else np.ones(
                 (self.num_particles, self._vocalic_series.num_series)) * self._mean_prior_latent_vocalics
             if self._vocalic_series.previous_from_other[time_step] is None:
                 latent_vocalics_particles[speaker] = norm(loc=A_prev, scale=self._std_prior_latent_vocalics).rvs()
             else:
                 other_speaker = self._vocalic_series.utterances[
                     self._vocalic_series.previous_from_other[time_step]].subject_id
-                B_prev = self.states[time_step - 1].latent_vocalics[other_speaker]
+                B_prev = self._f(self.states[time_step - 1].latent_vocalics[other_speaker], 1)
                 D = B_prev - A_prev
                 mean = D * coordination_particles[:, np.newaxis] + A_prev
                 latent_vocalics_particles[speaker] = norm(loc=mean, scale=self._std_coordinated_latent_vocalics).rvs()
@@ -125,7 +125,7 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(InferenceEngi
             speaker = self._vocalic_series.utterances[time_step].subject_id
             A_t = self.states[time_step].latent_vocalics[speaker]
             O_t = self._vocalic_series.values[:, time_step]
-            log_likelihoods = norm(loc=self._f(A_t), scale=self._std_observed_vocalics).logpdf(O_t).sum(axis=1)
+            log_likelihoods = norm(loc=self._g(A_t), scale=self._std_observed_vocalics).logpdf(O_t).sum(axis=1)
         else:
             log_likelihoods = 0
 
