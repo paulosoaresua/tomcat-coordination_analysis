@@ -5,7 +5,7 @@ from scipy.stats import norm, truncnorm
 
 from coordination.component.speech.common import VocalicsSparseSeries
 from coordination.inference.inference_engine import InferenceEngine
-from coordination.inference.particle_filter import ParticleFilter
+from coordination.inference.particle_filter import Particles, ParticleFilter
 
 MIN_VALUE = 0
 MAX_VALUE = 1
@@ -45,13 +45,13 @@ class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFil
         params = np.zeros((2, num_time_steps))
         for t in range(0, num_time_steps):
             self.next()
-            mean = self.states[-1].mean()
-            variance = self.states[-1].var()
+            mean = self.states[-1].coordination.mean()
+            variance = self.states[-1].coordination.var()
             params[:, t] = [mean, variance]
 
         return params
 
-    def _sample_from_prior(self):
+    def _sample_from_prior(self) -> Particles:
         if self._std_prior_coordination == 0:
             return np.ones(self.num_particles) * self._mean_prior_coordination
         else:
@@ -62,13 +62,13 @@ class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFil
 
             return truncnorm(loc=mean, scale=std, a=a, b=b).rvs()
 
-    def _sample_from_transition_to(self, time_step: int):
+    def _sample_from_transition_to(self, time_step: int) -> Particles:
         std = np.ones(self.num_particles) * self._std_coordination_drifting
-        a = (MIN_VALUE - self.states[time_step - 1]) / std
-        b = (MAX_VALUE - self.states[time_step - 1]) / std
+        a = (MIN_VALUE - self.states[time_step - 1].coordination) / std
+        b = (MAX_VALUE - self.states[time_step - 1].coordination) / std
         return truncnorm(loc=self.states[time_step - 1], scale=std, a=a, b=b).rvs()
 
-    def _calculate_log_likelihood_at(self, time_step: int):
+    def _calculate_log_likelihood_at(self, time_step: int) -> np.ndarray:
         final_time_step = time_step
         M = int(self._time_steps / 2)
         if self._fix_coordination_on_second_half and time_step == M:
@@ -88,21 +88,20 @@ class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFil
                 stds = np.zeros_like(means)
 
                 if A_prev is None:
-                    means[u <= self.states[time_step]] = B_prev
-                    means[u > self.states[time_step]] = self._mean_prior_vocalics
-                    stds[u <= self.states[time_step]] = self._std_coordinated_vocalics
-                    stds[u > self.states[time_step]] = self._std_prior_vocalics
+                    means[u <= self.states[time_step].coordination] = B_prev
+                    means[u > self.states[time_step].coordination] = self._mean_prior_vocalics
+                    stds[u <= self.states[time_step].coordination] = self._std_coordinated_vocalics
+                    stds[u > self.states[time_step].coordination] = self._std_prior_vocalics
                 else:
-                    means[u <= self.states[time_step]] = B_prev
-                    means[u > self.states[time_step]] = A_prev
-                    stds[u <= self.states[time_step]] = self._std_coordinated_vocalics
-                    stds[u > self.states[time_step]] = self._std_uncoordinated_vocalics
+                    means[u <= self.states[time_step].coordination] = B_prev
+                    means[u > self.states[time_step].coordination] = A_prev
+                    stds[u <= self.states[time_step].coordination] = self._std_coordinated_vocalics
+                    stds[u > self.states[time_step].coordination] = self._std_uncoordinated_vocalics
 
                 log_likelihoods += norm(loc=means, scale=stds).logpdf(A_t).sum(axis=1)
 
         return log_likelihoods
 
     def _resample_at(self, time_step: int):
-        B_prev = None if self._vocalic_series.previous_from_other[time_step] is None else self._f(
-            self._vocalic_series.values[:, self._vocalic_series.previous_from_other[time_step]], 1)
-        return self._vocalic_series.mask[time_step] == 1 and B_prev is not None
+        return self._vocalic_series.mask[time_step] == 1 and self._vocalic_series.previous_from_other[
+            time_step] is not None

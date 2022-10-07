@@ -3,14 +3,14 @@ import numpy as np
 
 # Custom code
 from coordination.component.speech.common import VocalicsSparseSeries
-from coordination.inference.beta_coordination import BetaCoordinationInferenceFromVocalics
-from coordination.inference.logistic_coordination import LogisticCoordinationInferenceFromVocalics
+from coordination.inference.truncated_gaussian_coordination_blending_latent_vocalics import \
+    TruncatedGaussianCoordinationBlendingInferenceLatentVocalics
 from coordination.plot.coordination import plot_continuous_coordination, add_continuous_coordination_bar
 from coordination.plot.vocalics import plot_vocalic_features
-from coordination.synthetic.coordination.beta_coordination_generator import BetaCoordinationGenerator
-from coordination.synthetic.coordination.logistic_coordination_generator import LogisticCoordinationGenerator
-from coordination.synthetic.component.speech.continuous_coordination_vocalics_blending_generator import \
-    ContinuousCoordinationVocalicsBlendingGenerator
+from coordination.synthetic.coordination.truncated_gaussian_coordination_generator import \
+    TruncatedGaussianCoordinationGenerator
+from coordination.synthetic.component.speech.continuous_coordination_latent_vocalics_blending_generator import \
+    ContinuousCoordinationLatentVocalicsBlendingGenerator
 
 if __name__ == "__main__":
     # Constants
@@ -21,42 +21,43 @@ if __name__ == "__main__":
     NUM_FEATURES = 2
 
     # Parameters of the distributions
-    A0 = 1E-16
-    B0 = 1E16  # The process starts with no coordination
-    STD_COORDINATION_DRIFT = 0.5  # Coordination drifts by a little
+    MEAN_COORDINATION_PRIOR = 0
+    STD_COORDINATION_PRIOR = 1E-16  # The process starts with no coordination
+    STD_COORDINATION_DRIFT = 0.1  # Coordination drifts by a little
     MEAN_PRIOR_VOCALICS = np.zeros(NUM_FEATURES)
     STD_PRIOR_VOCALICS = np.ones(NUM_FEATURES)
     STD_COORDINATED_VOCALICS = np.ones(NUM_FEATURES)
+    STD_OBSERVED_VOCALICS = np.ones(NUM_FEATURES) * 0.1
 
-    generator = LogisticCoordinationGenerator(num_time_steps=NUM_TIME_STEPS,
-                                              transition_std=STD_COORDINATION_DRIFT)
+    generator = TruncatedGaussianCoordinationGenerator(num_time_steps=NUM_TIME_STEPS,
+                                                       mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+                                                       std_prior_coordination=STD_COORDINATION_PRIOR,
+                                                       std_coordination_drifting=STD_COORDINATION_DRIFT)
     continuous_cs = generator.generate(SEED)
     continuous_cs[M:] = continuous_cs[M]
 
-    fig = plt.figure(figsize=(15, 5))
-    plot_continuous_coordination(ax=fig.gca(),
-                                 coordination=continuous_cs,
-                                 color="tab:blue",
-                                 title="Synthetic Continuous Coordination",
-                                 xaxis_label="Time Steps (seconds)")
-    plt.show()
+    generator = ContinuousCoordinationLatentVocalicsBlendingGenerator(coordination_series=continuous_cs,
+                                                                      num_vocalic_features=NUM_FEATURES,
+                                                                      time_scale_density=OBSERVATION_DENSITY,
+                                                                      mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+                                                                      std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+                                                                      std_coordinated_vocalics=STD_COORDINATED_VOCALICS,
+                                                                      std_observed_vocalics=STD_OBSERVED_VOCALICS,
+                                                                      num_speakers=2)
 
-    generator = ContinuousCoordinationVocalicsBlendingGenerator(coordination_series=continuous_cs,
-                                                                num_vocalic_features=NUM_FEATURES,
-                                                                time_scale_density=OBSERVATION_DENSITY,
-                                                                mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
-                                                                std_prior_vocalics=STD_PRIOR_VOCALICS,
-                                                                std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
-    vocalic_series = generator.generate(SEED)
+    latent_vocalics, observed_vocalics = generator.generate(SEED)
 
-    inference_engine = LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                                 std_coordination_drifting=STD_COORDINATION_DRIFT,
-                                                                 mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
-                                                                 std_prior_vocalics=STD_PRIOR_VOCALICS,
-                                                                 std_coordinated_vocalics=STD_COORDINATED_VOCALICS,
-                                                                 num_particles=10000)
+    inference_engine = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=observed_vocalics,
+                                                                                    mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+                                                                                    std_prior_coordination=STD_COORDINATION_PRIOR,
+                                                                                    std_coordination_drifting=STD_COORDINATION_DRIFT,
+                                                                                    mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+                                                                                    std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+                                                                                    std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+                                                                                    std_observed_vocalics=STD_OBSERVED_VOCALICS,
+                                                                                    num_particles=10000)
 
-    params = inference_engine.estimate_means_and_variances(SEED)
+    params = inference_engine.estimate_means_and_variances()
     mean_cs = params[0]
     var_cs = params[1]
     fig = plt.figure(figsize=(10, 5))
