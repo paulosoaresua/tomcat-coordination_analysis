@@ -47,6 +47,7 @@ class AudioAlignmentReport:
                 if self.title is not None:
                     with tag("h1"):
                         text(self.title)
+                self._build_subtitle(doc, tag, text)
                 with tag("table", klass="styled-table"):
                     with tag("thead"):
                         for i, header_row in enumerate(header_texts):
@@ -187,3 +188,26 @@ class AudioAlignmentReport:
         seconds = str(seconds) if seconds > 9 else f"0{seconds}"
 
         return f"{minutes}:{seconds}"
+
+    def _build_subtitle(self, doc, tag, text):
+        # List of all utterances sorted by start time
+        utterances: List[Utterance] = []
+        for u in self.trial.vocalics.utterances_per_subject.values():
+            utterances.extend(u)
+        utterances.sort(key=lambda utterance: utterance.start)
+
+        null_vocalics = 0
+        subjects = set()
+        for i, utterance in enumerate(utterances):
+            if utterance.vocalic_series.size == 0 or np.allclose(utterance.vocalic_series.values[0], 0) or \
+                    np.allclose(utterance.vocalic_series.values[1], 0):
+                null_vocalics += 1
+                subjects.add(utterance.subject_id)
+
+        with tag("ul"):
+            with tag("li"):
+                text(f"{len(utterances)} utterances")
+
+            with tag("li"):
+                subjects = ", ".join(sorted(subjects))
+                text(f"{null_vocalics} null vocalics - [ { subjects } ]")
