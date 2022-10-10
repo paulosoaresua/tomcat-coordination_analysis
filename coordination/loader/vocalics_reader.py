@@ -1,7 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-from datetime import datetime
-from dateutil.parser import parse
+from datetime import datetime, timedelta
 import logging
 
 import psycopg2
@@ -51,24 +50,13 @@ class VocalicsReader:
             records = VocalicsReader._read_records(connection, trial_metadata.id, self._features, time_range)
 
             if len(records) > 0:
-                timestamp_offset = None
-                if baseline_time is not None:
-                    # When vocalics are generated offline, they take the execution data as timestamp. We might want to
-                    # correct that by providing a baseline such that the first vocalics matches with that time.
-                    earliest_times = VocalicsReader._read_earliest_timestamp(connection, trial_metadata.id)
-                    timestamp_offset = {}
-                    for subject, earliest_timestamp in earliest_times.items():
-                        timestamp_offset[trial_metadata.subject_id_map[subject]] = baseline_time - earliest_timestamp
-
                 # Records are already sorted by timestamp
                 vocalics_per_subject: Dict[str, Tuple[List[float], List[datetime]]] = {}
                 pbar = tqdm(total=len(records), desc="Parsing vocalics")
-                for subject_id, timestamp_str, *feature_values in records:
+                for subject_id, seconds_offset, *feature_values in records:
                     subject_id = trial_metadata.subject_id_map[subject_id]
 
-                    timestamp = parse(timestamp_str)
-                    if baseline_time is not None:
-                        timestamp += timestamp_offset[subject_id]
+                    timestamp = baseline_time + timedelta(seconds=seconds_offset)
 
                     values = []  # List with one value per feature
                     for feature_value in feature_values:
@@ -104,38 +92,21 @@ class VocalicsReader:
         return connection
 
     @staticmethod
-    def _read_earliest_timestamp(connection: Any,
-                                 trial_id: str) -> Dict[str, datetime]:
-
-        query = f"SELECT participant, min(timestamp) FROM features WHERE trial_id = %s GROUP BY participant"
-
-        cursor = connection.cursor()
-        cursor.execute(
-            query, (trial_id,))
-
-        earliest_times = {}
-
-        for participant, timestamp in cursor.fetchall():
-            earliest_times[participant] = parse(timestamp)
-
-        return earliest_times
-
-    @staticmethod
     def _read_records(connection: Any, trial_id: str, features: List[str],
-                      time_range: Optional[Tuple[datetime, datetime]]) -> List[Tuple[Any]]:
+                      time_range: Optional[Tuple[float, float]]) -> List[Tuple[Any]]:
 
         db_feature_names = [VocalicsReader.__FEATURE_MAP[feature] for feature in features]
         db_feature_list = ",".join(db_feature_names)
 
         if time_range is None:
-            query = f"SELECT participant, timestamp, {db_feature_list} FROM features WHERE " + \
-                    "trial_id = %s ORDER BY participant, timestamp"
+            query = f"SELECT participant, seconds_offset, {db_feature_list} FROM features WHERE " + \
+                    "trial_id = %s ORDER BY participant, seconds_offset"
             cursor = connection.cursor()
             cursor.execute(query, (trial_id,))
         else:
-            query = f"SELECT participant, timestamp, {db_feature_list} FROM features WHERE " + \
-                    "trial_id = %s AND timestamp BETWEEN %s AND %s ORDER BY participant, timestamp"
+            query = f"SELECT participant, seconds_offset, {db_feature_list} FROM features WHERE " + \
+                    "trial_id = %s AND seconds_offset BETWEEN %f AND %f ORDER BY participant, seconds_offset"
             cursor = connection.cursor()
-            cursor.execute(query, (trial_id, time_range[0].isoformat(), time_range[1].isoformat(),))
+            cursor.execute(query, (trial_id, time_range[0], time_range[1],))
 
         return cursor.fetchall()
