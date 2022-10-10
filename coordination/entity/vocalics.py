@@ -118,7 +118,6 @@ class Vocalics:
         Reads vocalic feature values for a series of parsed utterances.
         """
 
-        print("Reading vocalics...")
         # Because we can have utterances that started before the mission and ended after the mission as long as they
         # overlap with times within the mission, we retrieve all the vocalics within a trial instead of passing a
         # time range to the read function.

@@ -82,6 +82,7 @@ class TrialAudio:
         for filepath in filepaths:
             result = re.search(r".+_Member-(.+)_CondBtwn.+", filepath)
             subject_id = result.group(1)
-            audio_series = AudioSeries(subject_id, *wavfile.read(filepath),
+            frame_rate, data = wavfile.read(filepath)
+            audio_series = AudioSeries(subject_id, frame_rate, data,
                                        baseline_timestamp=self._trial_metadata.trial_start)
             self.audio_per_participant[self._trial_metadata.subject_id_map[subject_id]] = audio_series
