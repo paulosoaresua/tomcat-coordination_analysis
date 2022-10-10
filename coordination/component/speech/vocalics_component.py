@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import copy
 from datetime import datetime
@@ -70,7 +70,8 @@ class VocalicsComponent:
 
         return cls(segmented_utterances, feature_names)
 
-    def sparse_series(self, num_time_steps: int, mission_start: datetime) -> VocalicsSparseSeries:
+    def sparse_series(self, num_time_steps: int, mission_start: datetime,
+                      vocalics_aggregation: Callable = lambda values: values.mean(axis=1)) -> VocalicsSparseSeries:
         values = np.zeros((self.segmented_utterances[0].vocalic_series.num_series, num_time_steps))
         mask = np.zeros(num_time_steps)  # 1 for time steps with observation, 0 otherwise
         timestamps: List[Optional[datetime]] = [None] * num_time_steps
@@ -95,7 +96,7 @@ class VocalicsComponent:
                 # A previous utterance finished at the same time. Discard this one.
                 continue
 
-            values[:, time_step] = utterance.vocalic_series.values.mean(axis=1)
+            values[:, time_step] = vocalics_aggregation(utterance.vocalic_series.values)
             mask[time_step] = 1
             timestamps[time_step] = utterance.end
             sparse_utterances[time_step] = utterance
@@ -231,31 +232,34 @@ class VocalicsComponent:
         Remove utterances with no vocalics.
         """
 
-        utterance_missing_vocalics_short_duration = []
-        utterance_missing_vocalics_long_duration = []
-
         def filter_criteria(utterance: Utterance):
-            # We filter out utterances with no vocalics. We keep a list of the utterances to write to the log later.
+            # We filter out utterances with no vocalics or zero flat vocalics.
             if utterance.vocalic_series.size == 0:
                 if utterance.duration_in_seconds < UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD:
-                    utterance_missing_vocalics_short_duration.append(utterance)
+                    logger.warning(f"Utterance starting at {utterance.start.isoformat()} and ending "
+                                   f"at {utterance.end.isoformat()} is SHORT and does not have any vocalics. "
+                                   f"Text: {utterance.text}")
                 else:
-                    utterance_missing_vocalics_long_duration.append(utterance)
+                    logger.warning(f"Utterance starting at {utterance.start.isoformat()} and ending "
+                                   f"at {utterance.end.isoformat()} is LONG and does not have any vocalics. "
+                                   f"Text: {utterance.text}""")
+
+                return False
+            elif np.allclose(utterance.vocalic_series.values, 0):
+                if utterance.duration_in_seconds < UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD:
+                    logger.warning(f"Utterance starting at {utterance.start.isoformat()} and ending "
+                                   f"at {utterance.end.isoformat()} is SHORT and has flat vocalics. "
+                                   f"Text: {utterance.text}")
+                else:
+                    logger.warning(f"Utterance starting at {utterance.start.isoformat()} and ending "
+                                   f"at {utterance.end.isoformat()} is LONG and has flat vocalics. "
+                                   f"Text: {utterance.text}""")
 
                 return False
 
             return True
 
         utterances = list(filter(filter_criteria, utterances))
-
-        # Log utterances with no vocalics
-        for utterance in utterance_missing_vocalics_short_duration:
-            logger.warning(f"""Utterance starting at {utterance.start.isoformat()} and ending 
-                    at {utterance.end.isoformat()} is short and does not have any vocalics. Text: {utterance.text}""")
-
-        for utterance in utterance_missing_vocalics_long_duration:
-            logger.warning(f"""Utterance starting at {utterance.start.isoformat()} and ending 
-                    at {utterance.end.isoformat()} is long and does not have any vocalics. Text: {utterance.text}""")
 
         return utterances
 
