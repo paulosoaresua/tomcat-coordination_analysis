@@ -55,9 +55,10 @@ class VocalicsReader:
                 if baseline_time is not None:
                     # When vocalics are generated offline, they take the execution data as timestamp. We might want to
                     # correct that by providing a baseline such that the first vocalics matches with that time.
-                    earliest_timestamp = VocalicsReader._read_earliest_timestamp(connection, trial_metadata.id)
-                    earliest_vocalics_timestamp = parse(earliest_timestamp)
-                    timestamp_offset = baseline_time - earliest_vocalics_timestamp
+                    earliest_times = VocalicsReader._read_earliest_timestamp(connection, trial_metadata.id)
+                    timestamp_offset = {}
+                    for subject, earliest_timestamp in earliest_times.items():
+                        timestamp_offset[trial_metadata.subject_id_map[subject]] = baseline_time - earliest_timestamp
 
                 # Records are already sorted by timestamp
                 vocalics_per_subject: Dict[str, Tuple[List[float], List[datetime]]] = {}
@@ -66,8 +67,8 @@ class VocalicsReader:
                     subject_id = trial_metadata.subject_id_map[subject_id]
 
                     timestamp = parse(timestamp_str)
-                    if timestamp_offset is not None:
-                        timestamp += timestamp_offset
+                    if baseline_time is not None:
+                        timestamp += timestamp_offset[subject_id]
 
                     values = []  # List with one value per feature
                     for feature_value in feature_values:
@@ -104,14 +105,20 @@ class VocalicsReader:
 
     @staticmethod
     def _read_earliest_timestamp(connection: Any,
-                                 trial_id: str) -> str:
+                                 trial_id: str) -> Dict[str, datetime]:
 
-        query = f"SELECT min(timestamp) FROM features WHERE trial_id = %s"
+        query = f"SELECT participant, min(timestamp) FROM features WHERE trial_id = %s GROUP BY participant"
 
         cursor = connection.cursor()
         cursor.execute(
             query, (trial_id,))
-        return cursor.fetchall()[0][0]
+
+        earliest_times = {}
+
+        for participant, timestamp in cursor.fetchall():
+            earliest_times[participant] = parse(timestamp)
+
+        return earliest_times
 
     @staticmethod
     def _read_records(connection: Any, trial_id: str, features: List[str],

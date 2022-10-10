@@ -180,7 +180,7 @@ class AudioAlignmentReport:
 
     @staticmethod
     def _get_relative_time(time: datetime, start_time: datetime):
-        seconds = (time - start_time).total_seconds()
+        seconds = int((time - start_time).total_seconds())
         minutes = int(seconds / 60)
         seconds = int(seconds % 60)
 

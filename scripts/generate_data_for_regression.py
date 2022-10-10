@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from coordination.common.log import configure_log
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent, VocalicsSparseSeries
 from coordination.entity.trial import Trial
 from coordination.inference.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
@@ -22,7 +23,6 @@ from coordination.inference.truncated_gaussian_coordination_mixture import Trunc
 from coordination.inference.truncated_gaussian_coordination_blending_latent_vocalics import \
     TruncatedGaussianCoordinationBlendingInferenceLatentVocalics
 from coordination.plot.coordination import add_discrete_coordination_bar
-from scripts.utils import configure_log
 
 ANTI_PHASE_FUNCTION = lambda x, s: -x if s == 0 else x
 EITHER_PHASE_FUNCTION = lambda x, s: np.abs(x)
