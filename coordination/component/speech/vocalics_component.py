@@ -245,7 +245,7 @@ class VocalicsComponent:
                                    f"Text: {utterance.text}""")
 
                 return False
-            elif np.allclose(utterance.vocalic_series.values, 0):
+            elif np.all(utterance.vocalic_series.values.var(axis=1) < 1E-16):
                 if utterance.duration_in_seconds < UTTERANCE_MISSING_VOCALICS_DURATION_THRESHOLD:
                     logger.warning(f"Utterance starting at {utterance.start.isoformat()} and ending "
                                    f"at {utterance.end.isoformat()} is SHORT and has flat vocalics. "

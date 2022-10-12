@@ -1,12 +1,11 @@
 from __future__ import annotations
-from typing import List
 
 import os
 
-from coordination.config.database_config import DatabaseConfig
 from coordination.entity.trial_metadata import TrialMetadata
 from coordination.entity.vocalics import Vocalics
 from coordination.loader.metadata_reader import MetadataReader
+from coordination.loader.vocalics_reader import VocalicsReader
 
 
 class Trial:
@@ -19,12 +18,11 @@ class Trial:
         self.vocalics = vocalics
 
     @classmethod
-    def from_metadata_file(cls, metadata_filepath: str, database_config: DatabaseConfig,
-                           vocalic_features: List[str]) -> Trial:
+    def from_metadata_file(cls, metadata_filepath: str, vocalics_reader: VocalicsReader) -> Trial:
         """
         Gets relevant information about a trial by parsing a .metadata file
         """
-        loader = MetadataReader(metadata_filepath, database_config, vocalic_features)
+        loader = MetadataReader(metadata_filepath, vocalics_reader)
         return cls(*loader.load())
 
     @classmethod

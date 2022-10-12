@@ -7,7 +7,7 @@ import logging
 
 from coordination.entity.trial_metadata import TrialMetadata
 from coordination.entity.vocalics import Vocalics
-from coordination.config.database_config import DatabaseConfig
+from coordination.loader.vocalics_reader import VocalicsReader
 
 logger = logging.getLogger()
 
@@ -23,10 +23,9 @@ class MetadataReader:
     SCOREBOARD_TOPIC = "observations/events/scoreboard"
     MISSION_STATE_TOPIC = "observations/events/mission"
 
-    def __init__(self, metadata_filepath: str, database_config: DatabaseConfig, vocalic_features: List[str]):
+    def __init__(self, metadata_filepath: str, vocalics_reader: VocalicsReader):
         self._metadata_filepath = metadata_filepath
-        self._database_config = database_config
-        self._vocalic_features = vocalic_features
+        self._vocalics_reader = vocalics_reader
 
     def load(self) -> Tuple[TrialMetadata, Vocalics]:
         trial_metadata = TrialMetadata()
@@ -55,8 +54,7 @@ class MetadataReader:
                     logger.error(f"Bad json line of len: {len(line)}, {line}")
 
         trial_metadata.check_validity()
-        vocalics = Vocalics.from_asr_messages(asr_messages, trial_metadata, self._database_config,
-                                              self._vocalic_features)
+        vocalics = Vocalics.from_asr_messages(asr_messages, trial_metadata, self._vocalics_reader)
 
         return trial_metadata, vocalics
 

@@ -13,7 +13,6 @@ import numpy as np
 
 from coordination.entity.trial_metadata import TrialMetadata
 from coordination.entity.vocalics_series import VocalicsSeries
-from coordination.config.database_config import DatabaseConfig
 from coordination.loader.vocalics_reader import VocalicsReader
 
 logger = logging.getLogger()
@@ -42,8 +41,7 @@ class Vocalics:
         self.utterances_per_subject = utterances_per_subject
 
     @classmethod
-    def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata, database_config: DatabaseConfig,
-                          features: List[str]) -> Vocalics:
+    def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata, vocalics_reader: VocalicsReader) -> Vocalics:
         """
         Parses a list of ASR messages to extract utterances and their corresponding vocalic features.
         """
@@ -88,10 +86,9 @@ class Vocalics:
 
             pbar.update()
 
-        vocalics_reader = VocalicsReader(database_config, features)
         Vocalics._read_vocalic_features(trial_metadata, utterances_per_subject, vocalics_reader)
 
-        return cls(features, utterances_per_subject)
+        return cls(vocalics_reader.features, utterances_per_subject)
 
     @classmethod
     def from_trial_directory(cls, trial_dir: str) -> Vocalics:
