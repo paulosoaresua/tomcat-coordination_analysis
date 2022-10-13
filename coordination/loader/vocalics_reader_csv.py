@@ -7,7 +7,6 @@ import os
 
 import pandas as pd
 
-from coordination.config.database_config import DatabaseConfig
 from coordination.entity.trial_metadata import TrialMetadata
 from coordination.loader.vocalics_reader import VocalicsReader
 

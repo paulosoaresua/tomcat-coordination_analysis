@@ -54,7 +54,7 @@ class CoordinationBlendingInferenceLatentVocalics(InferenceEngine, ParticleFilte
         self.states: List[LatentVocalicsParticles] = []
 
     def estimate_means_and_variances(self) -> np.ndarray:
-        M = 570 #int(self._time_steps / 2)
+        M = int(self._time_steps / 2)
         num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
 
         params = np.zeros((2, num_time_steps))
@@ -86,7 +86,7 @@ class CoordinationBlendingInferenceLatentVocalics(InferenceEngine, ParticleFilte
         return latent_vocalics_particles
 
     def _sample_from_transition_to(self, time_step: int):
-        M = 570 #int(self._time_steps / 2)
+        M = int(self._time_steps / 2)
         previous_coordination = self.states[time_step - 1].coordination
         if not self._fix_coordination_on_second_half or time_step <= M:
             coordination_particles = self._sample_coordination_from_transition(previous_coordination)

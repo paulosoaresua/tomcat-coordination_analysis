@@ -69,7 +69,7 @@ if __name__ == "__main__":
         # converged = np.abs(new_alpha - alpha) < 1E-10 and np.abs(new_beta - beta) < 1E-10
         # converged = np.abs(new_alpha - alpha) < 1E-10
         converged = np.abs(new_beta - beta) < 1E-10
-        alpha = new_alpha
+        # alpha = new_alpha
         beta = new_beta
 
         alphas.append(alpha)

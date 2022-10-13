@@ -2,8 +2,6 @@ import numpy as np
 from scipy.stats import norm
 
 from coordination.inference.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics
-from coordination.inference.inference_engine import InferenceEngine
-from coordination.inference.particle_filter import ParticleFilter
 
 
 class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingInferenceLatentVocalics):
@@ -15,6 +13,12 @@ class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingIn
         self._mean_prior_coordination = mean_prior_coordination
         self._std_prior_coordination = std_prior_coordination
         self._std_coordination_drifting = std_coordination_drifting
+
+    def estimate_means_and_variances(self) -> np.ndarray:
+        params = super().estimate_means_and_variances()
+
+        params[0] = np.clip(params[0], a_min=0, a_max=1)
+        return params
 
     def _sample_coordination_from_prior(self) -> np.ndarray:
         mean = np.ones(self.num_particles) * self._mean_prior_coordination

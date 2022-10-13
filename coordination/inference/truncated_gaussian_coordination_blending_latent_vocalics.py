@@ -2,8 +2,6 @@ import numpy as np
 from scipy.stats import truncnorm
 
 from coordination.inference.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics
-from coordination.inference.inference_engine import InferenceEngine
-from coordination.inference.particle_filter import ParticleFilter
 
 MIN_VALUE = 0
 MAX_VALUE = 1

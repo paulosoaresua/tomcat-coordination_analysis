@@ -277,8 +277,10 @@ def estimate(trials_dir: str, out_dir: str, plot_coordination: bool, model: str,
     }
 
     vocalics_aggregation = {
-        "mean": lambda values: values.mean(axis=1),
-        "variance": lambda values: values.var(axis=1)
+        "mean": lambda values: np.mean(values, axis=1),
+        "median": lambda values: np.median(values, axis=1),
+        "max": lambda values: np.max(values, axis=1),
+        "variance": lambda values: np.var(values, axis=1),
     }
 
     if not os.path.exists(trials_dir):
@@ -411,7 +413,9 @@ def plot(means: np.ndarray, stds: np.ndarray, masks: List[int], filepath):
 
     fig = plt.figure(figsize=(20, 6))
     plt.plot(range(len(means)), means, marker="o", color="tab:orange", linestyle="--")
-    plt.fill_between(range(len(means)), means - stds, means + stds, color='tab:orange', alpha=0.2)
+    lb = np.clip(means - stds, a_min=0, a_max=1)
+    ub = np.clip(means + stds, a_min=0, a_max=1)
+    plt.fill_between(range(len(means)), lb, ub, color='tab:orange', alpha=0.2)
     times, masks = list(zip(*[(t, mask) for t, mask in enumerate(masks) if mask > 0 and t < len(means)]))
     plt.scatter(times, masks, color="tab:green", marker="+")
     plt.xlabel("Time Steps (seconds)")

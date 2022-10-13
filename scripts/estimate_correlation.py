@@ -18,8 +18,8 @@ def estimate(data_df_path: str, out_dir: str, plot_regression: bool):
 
     # Proportion of coordination above 0.5
     data_df["order"] = data_df['trial'].apply(lambda trial_number: 1 if int(trial_number[1:]) % 2 != 0 else 2)
-    data_df["mean_second_half"] = data_df['means'].apply(lambda m: np.mean(m[570:]))
-    data_df["variance_second_half"] = data_df['means'].apply(lambda m: np.var(m[570:]))
+    data_df["mean_second_half"] = data_df['means'].apply(lambda m: np.mean(m[int(len(m)/2):]))
+    data_df["variance_second_half"] = data_df['means'].apply(lambda m: np.var(m[int(len(m)/2):]))
     data_df["prop"] = data_df['means'].apply(lambda m: np.sum(m > 0.5) / len(m))
 
     # Fixed coordination on second half
@@ -45,15 +45,19 @@ def estimate(data_df_path: str, out_dir: str, plot_regression: bool):
             measures = ["mean", "variance", "mean_second_half", "variance_second_half", "prop"]
             xlims = [[0, 1], [0, 0.2], [0, 1], [0, 0.2], [0, 1]]
         for i, measure in enumerate(measures):
-            for aggregation in ["mean", "variance"]:
+            for aggregation in ["mean", "variance", "median", "max"]:
                 data_estimation_df = data_df[
                     (data_df["estimation_name"] == estimation_name) & (data_df["vocalics_aggregation"] == aggregation)]
-                data_estimation_df = data_estimation_df[~data_estimation_df["trial"].isin(
-                    ["T000719", "T000720", "T000766", "T000798", "T000821", "T000822", "T000853", "T000854"])]
+                # data_estimation_df = data_estimation_df[~data_estimation_df["trial"].isin(
+                #     ["T000719", "T000720", "T000766", "T000798", "T000821", "T000822", "T000853", "T000854"])]
                 if not data_estimation_df[measure].isnull().any():
-                    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
-                    for order in [1, 2]:
-                        data_order_df = data_estimation_df[data_estimation_df["order"] == order]
+                    fig, axs = plt.subplots(1, 3, figsize=(18, 4))
+                    for order in [1, 2, 3]:
+                        if order == 3:
+                            data_order_df = data_estimation_df
+                        else:
+                            data_order_df = data_estimation_df[data_estimation_df["order"] == order]
+
                         xs = data_order_df[measure]
                         ys = data_order_df["score"]
 
@@ -87,7 +91,10 @@ def estimate(data_df_path: str, out_dir: str, plot_regression: bool):
                             axs[order - 1].set_ylabel("Final Team Score")
                             axs[order - 1].set_xlim(xlims[i])
                             axs[order - 1].set_ylim([0, 950])
-                            axs[order - 1].set_title(f"Mission {order}")
+                            if order == 3:
+                                axs[order - 1].set_title("All Missions")
+                            else:
+                                axs[order - 1].set_title(f"Mission {order}")
                             axs[order - 1].legend()
 
                     if plot_regression:

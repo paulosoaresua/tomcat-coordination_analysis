@@ -15,7 +15,10 @@ from coordination.loader.vocalics_reader_db import VocalicsReaderDB
 
 def serialize_single_trial(metadata_filepath: str, out_dir: str, verbose: bool, log_dir: str,
                            vocalics_reader: VocalicsReader, overwrite: bool):
-    out_filepaths = set([dir_path.rsplit("/", 1)[-1] for dir_path in os.listdir(out_dir)])
+    if os.path.exists(out_dir):
+        out_filepaths = set([dir_path.rsplit("/", 1)[-1] for dir_path in os.listdir(out_dir)])
+    else:
+        out_filepaths = []
     trial_number = re.match(R".*(T000\d+).*", metadata_filepath).group(1)
     if not overwrite and trial_number in out_filepaths:
         print(f"Skipping {trial_number}. Serialized version found in {out_dir}.")
