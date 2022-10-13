@@ -1,13 +1,10 @@
 import numpy as np
-from scipy.stats import truncnorm
+from scipy.stats import norm
 
 from coordination.inference.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics
 
-MIN_VALUE = 0
-MAX_VALUE = 1
 
-
-class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingInferenceLatentVocalics):
+class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingInferenceLatentVocalics):
 
     def __init__(self, mean_prior_coordination: float, std_prior_coordination: float, std_coordination_drifting: float,
                  *args, **kwargs):
@@ -17,14 +14,18 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(CoordinationB
         self._std_prior_coordination = std_prior_coordination
         self._std_coordination_drifting = std_coordination_drifting
 
+    def estimate_means_and_variances(self) -> np.ndarray:
+        params = super().estimate_means_and_variances()
+
+        params[0] = np.clip(params[0], a_min=0, a_max=1)
+        return params
+
     def _sample_coordination_from_prior(self) -> np.ndarray:
         mean = np.ones(self.num_particles) * self._mean_prior_coordination
-        a = (MIN_VALUE - mean) / self._std_prior_coordination
-        b = (MAX_VALUE - mean) / self._std_prior_coordination
-        return truncnorm(loc=mean, scale=self._std_prior_coordination, a=a, b=b).rvs()
+        return norm(loc=mean, scale=self._std_prior_coordination).rvs()
 
     def _sample_coordination_from_transition(self, previous_coordination_particles: np.ndarray):
-        a = (MIN_VALUE - previous_coordination_particles) / self._std_coordination_drifting
-        b = (MAX_VALUE - previous_coordination_particles) / self._std_coordination_drifting
-        return truncnorm(loc=previous_coordination_particles, scale=self._std_coordination_drifting, a=a,
-                         b=b).rvs()
+        return norm(loc=previous_coordination_particles, scale=self._std_coordination_drifting).rvs()
+
+    def _transform_coordination(self, coordination_particles: np.ndarray) -> np.ndarray:
+        return np.clip(coordination_particles, a_min=0, a_max=1)

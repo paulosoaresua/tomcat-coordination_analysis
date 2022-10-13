@@ -16,7 +16,11 @@ from coordination.common.log import configure_log
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent, VocalicsSparseSeries
 from coordination.entity.trial import Trial
 from coordination.inference.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
+from coordination.inference.gaussian_coordination_blending_latent_vocalics import \
+    GaussianCoordinationBlendingInferenceLatentVocalics
 from coordination.inference.logistic_coordination import LogisticCoordinationInferenceFromVocalics
+from coordination.inference.logistic_coordination_blending_latent_vocalics import \
+    LogisticCoordinationBlendingInferenceLatentVocalics
 from coordination.inference.truncated_gaussian_coordination_blending import \
     TruncatedGaussianCoordinationBlendingInference
 from coordination.inference.truncated_gaussian_coordination_mixture import TruncatedGaussianCoordinationMixtureInference
@@ -24,92 +28,38 @@ from coordination.inference.truncated_gaussian_coordination_blending_latent_voca
     TruncatedGaussianCoordinationBlendingInferenceLatentVocalics
 from coordination.plot.coordination import add_discrete_coordination_bar
 
-ANTI_PHASE_FUNCTION = lambda x, s: -x if s == 0 else x
-EITHER_PHASE_FUNCTION = lambda x, s: np.abs(x)
+filters = {
+    "in_phase": lambda x, s: x,
+    "anti_phase": lambda x, s: -x if s == 0 else x,
+    "either_phase": lambda x, s: np.abs(x)
+}
+
+
+def _get_engine_name(model_name: str, filter_name: str, fixed_coordination: bool) -> str:
+    return f"{model_name}_{filter_name}_{'fixed_second_half' if fixed_coordination else 'variable'}"
 
 
 def get_discrete_inference_engines(vocalic_series: VocalicsSparseSeries, p_prior_coordination: float,
                                    p_coordination_transition: float, mean_prior_vocalics: np.ndarray,
                                    std_prior_vocalics: np.ndarray, std_uncoordinated_vocalics: np.ndarray,
                                    std_coordinated_vocalics: np.ndarray):
-    inference_engines = [
-        (
-            "discrete_in_phase_fixed_second_half",
-            "last",
-            DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      p_prior_coordination=p_prior_coordination,
-                                                      p_coordination_transition=p_coordination_transition,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      fix_coordination_on_second_half=True)
-        ),
-        (
-            "discrete_anti_phase_fixed_second_half",
-            "last",
-            DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      p_prior_coordination=p_prior_coordination,
-                                                      p_coordination_transition=p_coordination_transition,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      f=ANTI_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=True)
-        ),
-        (
-            "discrete_either_phase_fixed_second_half",
-            "last",
-            DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      p_prior_coordination=p_prior_coordination,
-                                                      p_coordination_transition=p_coordination_transition,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      f=EITHER_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=True)
-        ),
-        (
-            "discrete_in_phase_variable",
-            "all",
-            DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      p_prior_coordination=p_prior_coordination,
-                                                      p_coordination_transition=p_coordination_transition,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      fix_coordination_on_second_half=False)
-        ),
-        (
-            "discrete_anti_phase_variable",
-            "all",
-            DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      p_prior_coordination=p_prior_coordination,
-                                                      p_coordination_transition=p_coordination_transition,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      f=ANTI_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=False)
-        ),
-        (
-            "discrete_either_phase_variable",
-            "all",
-            DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      p_prior_coordination=p_prior_coordination,
-                                                      p_coordination_transition=p_coordination_transition,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      f=EITHER_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=False)
-        )
-    ]
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("discrete", filter_name, fixed_coordination),
+                fixed_coordination,
+                DiscreteCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
+                                                          p_prior_coordination=p_prior_coordination,
+                                                          p_coordination_transition=p_coordination_transition,
+                                                          mean_prior_vocalics=mean_prior_vocalics,
+                                                          std_prior_vocalics=std_prior_vocalics,
+                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
+                                                          std_coordinated_vocalics=std_coordinated_vocalics,
+                                                          f=filter_function,
+                                                          fix_coordination_on_second_half=True)
+            )
+            inference_engines.append(engine)
 
     return inference_engines
 
@@ -119,84 +69,23 @@ def get_truncated_gaussian_blending_inference_engines(vocalic_series: VocalicsSp
                                                       std_prior_coordination: float, std_coordination_drifting: float,
                                                       mean_prior_vocalics: np.ndarray, std_prior_vocalics: np.ndarray,
                                                       std_coordinated_vocalics: np.ndarray):
-    inference_engines = [
-        (
-            "continuous_in_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
-                                                           mean_prior_coordination=mean_prior_coordination,
-                                                           std_prior_coordination=std_prior_coordination,
-                                                           std_coordination_drifting=std_coordination_drifting,
-                                                           mean_prior_vocalics=mean_prior_vocalics,
-                                                           std_prior_vocalics=std_prior_vocalics,
-                                                           std_coordinated_vocalics=std_coordinated_vocalics,
-                                                           fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_anti_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
-                                                           mean_prior_coordination=mean_prior_coordination,
-                                                           std_prior_coordination=std_prior_coordination,
-                                                           std_coordination_drifting=std_coordination_drifting,
-                                                           mean_prior_vocalics=mean_prior_vocalics,
-                                                           std_prior_vocalics=std_prior_vocalics,
-                                                           std_coordinated_vocalics=std_coordinated_vocalics,
-                                                           f=ANTI_PHASE_FUNCTION,
-                                                           fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_either_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
-                                                           mean_prior_coordination=mean_prior_coordination,
-                                                           std_prior_coordination=std_prior_coordination,
-                                                           std_coordination_drifting=std_coordination_drifting,
-                                                           mean_prior_vocalics=mean_prior_vocalics,
-                                                           std_prior_vocalics=std_prior_vocalics,
-                                                           std_coordinated_vocalics=std_coordinated_vocalics,
-                                                           f=EITHER_PHASE_FUNCTION,
-                                                           fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_in_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
-                                                           mean_prior_coordination=mean_prior_coordination,
-                                                           std_prior_coordination=std_prior_coordination,
-                                                           std_coordination_drifting=std_coordination_drifting,
-                                                           mean_prior_vocalics=mean_prior_vocalics,
-                                                           std_prior_vocalics=std_prior_vocalics,
-                                                           std_coordinated_vocalics=std_coordinated_vocalics,
-                                                           fix_coordination_on_second_half=False)
-        ),
-        (
-            "continuous_anti_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
-                                                           mean_prior_coordination=mean_prior_coordination,
-                                                           std_prior_coordination=std_prior_coordination,
-                                                           std_coordination_drifting=std_coordination_drifting,
-                                                           mean_prior_vocalics=mean_prior_vocalics,
-                                                           std_prior_vocalics=std_prior_vocalics,
-                                                           std_coordinated_vocalics=std_coordinated_vocalics,
-                                                           f=ANTI_PHASE_FUNCTION,
-                                                           fix_coordination_on_second_half=False)
-        ),
-        (
-            "continuous_either_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
-                                                           mean_prior_coordination=mean_prior_coordination,
-                                                           std_prior_coordination=std_prior_coordination,
-                                                           std_coordination_drifting=std_coordination_drifting,
-                                                           mean_prior_vocalics=mean_prior_vocalics,
-                                                           std_prior_vocalics=std_prior_vocalics,
-                                                           std_coordinated_vocalics=std_coordinated_vocalics,
-                                                           f=EITHER_PHASE_FUNCTION,
-                                                           fix_coordination_on_second_half=False)
-        )
-    ]
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("continuous", filter_name, fixed_coordination),
+                fixed_coordination,
+                TruncatedGaussianCoordinationBlendingInference(vocalic_series=vocalic_series,
+                                                               mean_prior_coordination=mean_prior_coordination,
+                                                               std_prior_coordination=std_prior_coordination,
+                                                               std_coordination_drifting=std_coordination_drifting,
+                                                               mean_prior_vocalics=mean_prior_vocalics,
+                                                               std_prior_vocalics=std_prior_vocalics,
+                                                               std_coordinated_vocalics=std_coordinated_vocalics,
+                                                               f=filter_function,
+                                                               fix_coordination_on_second_half=fixed_coordination)
+            )
+            inference_engines.append(engine)
 
     return inference_engines
 
@@ -205,90 +94,24 @@ def get_logistic_inference_engines(vocalic_series: VocalicsSparseSeries, mean_pr
                                    std_prior_coordination_logit: float, std_coordination_logit_drifting: float,
                                    mean_prior_vocalics: np.ndarray, std_prior_vocalics: np.ndarray,
                                    std_coordinated_vocalics: np.ndarray, num_particles: int):
-    inference_engines = [
-        (
-            "continuous_in_phase_fixed_second_half",
-            "last",
-            LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      mean_prior_coordination_logit=mean_prior_coordination_logit,
-                                                      std_prior_coordination_logit=std_prior_coordination_logit,
-                                                      std_coordination_logit_drifting=std_coordination_logit_drifting,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      num_particles=num_particles,
-                                                      fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_anti_phase_fixed_second_half",
-            "last",
-            LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      mean_prior_coordination_logit=mean_prior_coordination_logit,
-                                                      std_prior_coordination_logit=std_prior_coordination_logit,
-                                                      std_coordination_logit_drifting=std_coordination_logit_drifting,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      num_particles=num_particles,
-                                                      f=ANTI_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_either_phase_fixed_second_half",
-            "last",
-            LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      mean_prior_coordination_logit=mean_prior_coordination_logit,
-                                                      std_prior_coordination_logit=std_prior_coordination_logit,
-                                                      std_coordination_logit_drifting=std_coordination_logit_drifting,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      num_particles=num_particles,
-                                                      f=EITHER_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_in_phase_variable",
-            "all",
-            LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      mean_prior_coordination_logit=mean_prior_coordination_logit,
-                                                      std_prior_coordination_logit=std_prior_coordination_logit,
-                                                      std_coordination_logit_drifting=std_coordination_logit_drifting,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      num_particles=num_particles,
-                                                      fix_coordination_on_second_half=False)
-        ),
-        (
-            "continuous_anti_phase_variable",
-            "all",
-            LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      mean_prior_coordination_logit=mean_prior_coordination_logit,
-                                                      std_prior_coordination_logit=std_prior_coordination_logit,
-                                                      std_coordination_logit_drifting=std_coordination_logit_drifting,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      num_particles=num_particles,
-                                                      f=ANTI_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=False)
-        ),
-        (
-            "continuous_either_phase_variable",
-            "all",
-            LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
-                                                      mean_prior_coordination_logit=mean_prior_coordination_logit,
-                                                      std_prior_coordination_logit=std_prior_coordination_logit,
-                                                      std_coordination_logit_drifting=std_coordination_logit_drifting,
-                                                      mean_prior_vocalics=mean_prior_vocalics,
-                                                      std_prior_vocalics=std_prior_vocalics,
-                                                      std_coordinated_vocalics=std_coordinated_vocalics,
-                                                      num_particles=num_particles,
-                                                      f=EITHER_PHASE_FUNCTION,
-                                                      fix_coordination_on_second_half=False)
-        )
-    ]
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("continuous", filter_name, fixed_coordination),
+                fixed_coordination,
+                LogisticCoordinationInferenceFromVocalics(vocalic_series=vocalic_series,
+                                                          mean_prior_coordination_logit=mean_prior_coordination_logit,
+                                                          std_prior_coordination_logit=std_prior_coordination_logit,
+                                                          std_coordination_logit_drifting=std_coordination_logit_drifting,
+                                                          mean_prior_vocalics=mean_prior_vocalics,
+                                                          std_prior_vocalics=std_prior_vocalics,
+                                                          std_coordinated_vocalics=std_coordinated_vocalics,
+                                                          num_particles=num_particles,
+                                                          f=filter_function,
+                                                          fix_coordination_on_second_half=fixed_coordination)
+            )
+            inference_engines.append(engine)
 
     return inference_engines
 
@@ -300,96 +123,25 @@ def get_truncated_gaussian_inference_mixture_engines(vocalic_series: VocalicsSpa
                                                      mean_prior_vocalics: np.ndarray, std_prior_vocalics: np.ndarray,
                                                      std_uncoordinated_vocalics: np.ndarray,
                                                      std_coordinated_vocalics: np.ndarray, num_particles: int):
-    inference_engines = [
-        (
-            "continuous_in_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
-                                                          mean_prior_coordination=mean_prior_coordination,
-                                                          std_prior_coordination=std_prior_coordination,
-                                                          std_coordination_drifting=std_coordination_drifting,
-                                                          mean_prior_vocalics=mean_prior_vocalics,
-                                                          std_prior_vocalics=std_prior_vocalics,
-                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                          std_coordinated_vocalics=std_coordinated_vocalics,
-                                                          num_particles=num_particles,
-                                                          fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_anti_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
-                                                          mean_prior_coordination=mean_prior_coordination,
-                                                          std_prior_coordination=std_prior_coordination,
-                                                          std_coordination_drifting=std_coordination_drifting,
-                                                          mean_prior_vocalics=mean_prior_vocalics,
-                                                          std_prior_vocalics=std_prior_vocalics,
-                                                          std_coordinated_vocalics=std_coordinated_vocalics,
-                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                          num_particles=num_particles,
-                                                          f=ANTI_PHASE_FUNCTION,
-                                                          fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_either_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
-                                                          mean_prior_coordination=mean_prior_coordination,
-                                                          std_prior_coordination=std_prior_coordination,
-                                                          std_coordination_drifting=std_coordination_drifting,
-                                                          mean_prior_vocalics=mean_prior_vocalics,
-                                                          std_prior_vocalics=std_prior_vocalics,
-                                                          std_coordinated_vocalics=std_coordinated_vocalics,
-                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                          num_particles=num_particles,
-                                                          f=EITHER_PHASE_FUNCTION,
-                                                          fix_coordination_on_second_half=True)
-        ),
-        (
-            "continuous_in_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
-                                                          mean_prior_coordination=mean_prior_coordination,
-                                                          std_prior_coordination=std_prior_coordination,
-                                                          std_coordination_drifting=std_coordination_drifting,
-                                                          mean_prior_vocalics=mean_prior_vocalics,
-                                                          std_prior_vocalics=std_prior_vocalics,
-                                                          std_coordinated_vocalics=std_coordinated_vocalics,
-                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                          num_particles=num_particles,
-                                                          fix_coordination_on_second_half=False)
-        ),
-        (
-            "continuous_anti_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
-                                                          mean_prior_coordination=mean_prior_coordination,
-                                                          std_prior_coordination=std_prior_coordination,
-                                                          std_coordination_drifting=std_coordination_drifting,
-                                                          mean_prior_vocalics=mean_prior_vocalics,
-                                                          std_prior_vocalics=std_prior_vocalics,
-                                                          std_coordinated_vocalics=std_coordinated_vocalics,
-                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                          num_particles=num_particles,
-                                                          f=ANTI_PHASE_FUNCTION,
-                                                          fix_coordination_on_second_half=False)
-        ),
-        (
-            "continuous_either_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
-                                                          mean_prior_coordination=mean_prior_coordination,
-                                                          std_prior_coordination=std_prior_coordination,
-                                                          std_coordination_drifting=std_coordination_drifting,
-                                                          mean_prior_vocalics=mean_prior_vocalics,
-                                                          std_prior_vocalics=std_prior_vocalics,
-                                                          std_coordinated_vocalics=std_coordinated_vocalics,
-                                                          std_uncoordinated_vocalics=std_uncoordinated_vocalics,
-                                                          num_particles=num_particles,
-                                                          f=EITHER_PHASE_FUNCTION,
-                                                          fix_coordination_on_second_half=False)
-        )
-    ]
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("continuous", filter_name, fixed_coordination),
+                fixed_coordination,
+                TruncatedGaussianCoordinationMixtureInference(vocalic_series=vocalic_series,
+                                                              mean_prior_coordination=mean_prior_coordination,
+                                                              std_prior_coordination=std_prior_coordination,
+                                                              std_coordination_drifting=std_coordination_drifting,
+                                                              mean_prior_vocalics=mean_prior_vocalics,
+                                                              std_prior_vocalics=std_prior_vocalics,
+                                                              std_coordinated_vocalics=std_coordinated_vocalics,
+                                                              std_uncoordinated_vocalics=std_uncoordinated_vocalics,
+                                                              num_particles=num_particles,
+                                                              f=filter_function,
+                                                              fix_coordination_on_second_half=fixed_coordination)
+            )
+            inference_engines.append(engine)
 
     return inference_engines
 
@@ -403,107 +155,100 @@ def get_truncated_gaussian_blending_latent_vocalics_inference_engines(vocalic_se
                                                                       std_coordinated_latent_vocalics: np.ndarray,
                                                                       std_observed_vocalics: np.ndarray,
                                                                       num_particles: int):
-    inference_engines = [
-        (
-            "continuous_in_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
-                                                                         mean_prior_coordination=mean_prior_coordination,
-                                                                         std_prior_coordination=std_prior_coordination,
-                                                                         std_coordination_drifting=std_coordination_drifting,
-                                                                         mean_prior_latent_vocalics=mean_prior_latent_vocalics,
-                                                                         std_prior_latent_vocalics=std_prior_latent_vocalics,
-                                                                         std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
-                                                                         std_observed_vocalics=std_observed_vocalics,
-                                                                         fix_coordination_on_second_half=True,
-                                                                         num_particles=num_particles)
-        ),
-        (
-            "continuous_anti_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
-                                                                         mean_prior_coordination=mean_prior_coordination,
-                                                                         std_prior_coordination=std_prior_coordination,
-                                                                         std_coordination_drifting=std_coordination_drifting,
-                                                                         mean_prior_latent_vocalics=mean_prior_latent_vocalics,
-                                                                         std_prior_latent_vocalics=std_prior_latent_vocalics,
-                                                                         std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
-                                                                         std_observed_vocalics=std_observed_vocalics,
-                                                                         f=ANTI_PHASE_FUNCTION,
-                                                                         fix_coordination_on_second_half=True,
-                                                                         num_particles=num_particles)
-        ),
-        (
-            "continuous_either_phase_fixed_second_half",
-            "last",
-            TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
-                                                                         mean_prior_coordination=mean_prior_coordination,
-                                                                         std_prior_coordination=std_prior_coordination,
-                                                                         std_coordination_drifting=std_coordination_drifting,
-                                                                         mean_prior_latent_vocalics=mean_prior_latent_vocalics,
-                                                                         std_prior_latent_vocalics=std_prior_latent_vocalics,
-                                                                         std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
-                                                                         std_observed_vocalics=std_observed_vocalics,
-                                                                         f=EITHER_PHASE_FUNCTION,
-                                                                         fix_coordination_on_second_half=True,
-                                                                         num_particles=num_particles)
-        ),
-        (
-            "continuous_in_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
-                                                                         mean_prior_coordination=mean_prior_coordination,
-                                                                         std_prior_coordination=std_prior_coordination,
-                                                                         std_coordination_drifting=std_coordination_drifting,
-                                                                         mean_prior_latent_vocalics=mean_prior_latent_vocalics,
-                                                                         std_prior_latent_vocalics=std_prior_latent_vocalics,
-                                                                         std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
-                                                                         std_observed_vocalics=std_observed_vocalics,
-                                                                         fix_coordination_on_second_half=False,
-                                                                         num_particles=num_particles)
-        ),
-        (
-            "continuous_anti_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
-                                                                         mean_prior_coordination=mean_prior_coordination,
-                                                                         std_prior_coordination=std_prior_coordination,
-                                                                         std_coordination_drifting=std_coordination_drifting,
-                                                                         mean_prior_latent_vocalics=mean_prior_latent_vocalics,
-                                                                         std_prior_latent_vocalics=std_prior_latent_vocalics,
-                                                                         std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
-                                                                         std_observed_vocalics=std_observed_vocalics,
-                                                                         f=ANTI_PHASE_FUNCTION,
-                                                                         fix_coordination_on_second_half=False,
-                                                                         num_particles=num_particles)
-        ),
-        (
-            "continuous_either_phase_variable",
-            "all",
-            TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
-                                                                         mean_prior_coordination=mean_prior_coordination,
-                                                                         std_prior_coordination=std_prior_coordination,
-                                                                         std_coordination_drifting=std_coordination_drifting,
-                                                                         mean_prior_latent_vocalics=mean_prior_latent_vocalics,
-                                                                         std_prior_latent_vocalics=std_prior_latent_vocalics,
-                                                                         std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
-                                                                         std_observed_vocalics=std_observed_vocalics,
-                                                                         f=EITHER_PHASE_FUNCTION,
-                                                                         fix_coordination_on_second_half=False,
-                                                                         num_particles=num_particles)
-        )
-    ]
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("continuous", filter_name, fixed_coordination),
+                fixed_coordination,
+                TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
+                                                                             mean_prior_coordination=mean_prior_coordination,
+                                                                             std_prior_coordination=std_prior_coordination,
+                                                                             std_coordination_drifting=std_coordination_drifting,
+                                                                             mean_prior_latent_vocalics=mean_prior_latent_vocalics,
+                                                                             std_prior_latent_vocalics=std_prior_latent_vocalics,
+                                                                             std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
+                                                                             std_observed_vocalics=std_observed_vocalics,
+                                                                             f=filter_function,
+                                                                             fix_coordination_on_second_half=fixed_coordination,
+                                                                             num_particles=num_particles)
+            )
+            inference_engines.append(engine)
 
     return inference_engines
 
 
-def estimate(trials_dir: str, data_dir: str, plot_coordination: bool, model: str, p_prior_coordination,
+def get_gaussian_blending_latent_vocalics_inference_engines(vocalic_series: VocalicsSparseSeries,
+                                                            mean_prior_coordination: float,
+                                                            std_prior_coordination: float,
+                                                            std_coordination_drifting: float,
+                                                            mean_prior_latent_vocalics: np.ndarray,
+                                                            std_prior_latent_vocalics: np.ndarray,
+                                                            std_coordinated_latent_vocalics: np.ndarray,
+                                                            std_observed_vocalics: np.ndarray,
+                                                            num_particles: int):
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("continuous", filter_name, fixed_coordination),
+                fixed_coordination,
+                GaussianCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
+                                                                    mean_prior_coordination=mean_prior_coordination,
+                                                                    std_prior_coordination=std_prior_coordination,
+                                                                    std_coordination_drifting=std_coordination_drifting,
+                                                                    mean_prior_latent_vocalics=mean_prior_latent_vocalics,
+                                                                    std_prior_latent_vocalics=std_prior_latent_vocalics,
+                                                                    std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
+                                                                    std_observed_vocalics=std_observed_vocalics,
+                                                                    f=filter_function,
+                                                                    fix_coordination_on_second_half=fixed_coordination,
+                                                                    num_particles=num_particles)
+            )
+            inference_engines.append(engine)
+
+    return inference_engines
+
+
+def get_logistic_blending_latent_vocalics_inference_engines(vocalic_series: VocalicsSparseSeries,
+                                                            mean_prior_coordination_logit: float,
+                                                            std_prior_coordination_logit: float,
+                                                            std_coordination_logit_drifting: float,
+                                                            mean_prior_latent_vocalics: np.ndarray,
+                                                            std_prior_latent_vocalics: np.ndarray,
+                                                            std_coordinated_latent_vocalics: np.ndarray,
+                                                            std_observed_vocalics: np.ndarray,
+                                                            num_particles: int):
+    inference_engines = []
+    for filter_name, filter_function in filters.items():
+        for fixed_coordination in [True, False]:
+            engine = (
+                _get_engine_name("continuous", filter_name, fixed_coordination),
+                fixed_coordination,
+                LogisticCoordinationBlendingInferenceLatentVocalics(vocalic_series=vocalic_series,
+                                                                    mean_prior_coordination=mean_prior_coordination_logit,
+                                                                    std_prior_coordination=std_prior_coordination_logit,
+                                                                    std_coordination_drifting=std_coordination_logit_drifting,
+                                                                    mean_prior_latent_vocalics=mean_prior_latent_vocalics,
+                                                                    std_prior_latent_vocalics=std_prior_latent_vocalics,
+                                                                    std_coordinated_latent_vocalics=std_coordinated_latent_vocalics,
+                                                                    std_observed_vocalics=std_observed_vocalics,
+                                                                    f=filter_function,
+                                                                    fix_coordination_on_second_half=fixed_coordination,
+                                                                    num_particles=num_particles)
+            )
+            inference_engines.append(engine)
+
+    return inference_engines
+
+
+def estimate(trials_dir: str, out_dir: str, plot_coordination: bool, model: str, p_prior_coordination,
              p_coordination_transition, mean_prior_coordination: float, std_prior_coordination: float,
              std_coordination_drifting: float, mean_prior_vocalics: float, std_prior_vocalics: float,
              std_uncoordinated_vocalics: float, std_coordinated_vocalics: float, std_observed_vocalics: float,
              num_particles: int, seed: Optional[int]):
-    logs_dir = f"{data_dir}/logs"
-    plots_dir = f"{data_dir}/plots"
+    logs_dir = f"{out_dir}/logs"
+    plots_dir = f"{out_dir}/plots"
 
     os.makedirs(logs_dir, exist_ok=True)
     if plot_coordination:
@@ -522,12 +267,20 @@ def estimate(trials_dir: str, data_dir: str, plot_coordination: bool, model: str
     data_table = {
         "trial": [],
         "estimation_name": [],
-        "aggregation": [],
+        "vocalics_aggregation": [],
+        "fixed_coordination_second_half": [],
         "mean": [],
         "variance": [],
         "means": [],
         "variances": [],
         "score": []
+    }
+
+    vocalics_aggregation = {
+        "mean": lambda values: np.mean(values, axis=1),
+        "median": lambda values: np.median(values, axis=1),
+        "max": lambda values: np.max(values, axis=1),
+        "variance": lambda values: np.var(values, axis=1),
     }
 
     if not os.path.exists(trials_dir):
@@ -544,85 +297,115 @@ def estimate(trials_dir: str, data_dir: str, plot_coordination: bool, model: str
             vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics,
                                                                  segmentation_method=SegmentationMethod.KEEP_ALL)
 
-            vocalic_series = vocalics_component.sparse_series(NUM_TIME_STEPS, trial.metadata.mission_start)
-            vocalic_series.normalize_per_subject()
+            for aggregation, aggregation_function in vocalics_aggregation.items():
+                vocalic_series = vocalics_component.sparse_series(NUM_TIME_STEPS, trial.metadata.mission_start,
+                                                                  aggregation_function)
+                vocalic_series.normalize_per_subject()
 
-            if model == "discrete":
-                inference_engines = get_discrete_inference_engines(vocalic_series, p_prior_coordination,
-                                                                   p_coordination_transition,
-                                                                   mean_prior_vocalics, std_prior_vocalics,
-                                                                   std_uncoordinated_vocalics,
-                                                                   std_coordinated_vocalics)
+                if model == "discrete":
+                    inference_engines = get_discrete_inference_engines(vocalic_series, p_prior_coordination,
+                                                                       p_coordination_transition,
+                                                                       mean_prior_vocalics, std_prior_vocalics,
+                                                                       std_uncoordinated_vocalics,
+                                                                       std_coordinated_vocalics)
 
-            elif model == "truncated_gaussian_blending":
-                inference_engines = get_truncated_gaussian_blending_inference_engines(vocalic_series,
-                                                                                      mean_prior_coordination,
-                                                                                      std_prior_coordination,
-                                                                                      std_coordination_drifting,
-                                                                                      mean_prior_vocalics,
-                                                                                      std_prior_vocalics,
-                                                                                      std_coordinated_vocalics)
-            elif model == "logistic":
-                # mean_prior_coordination and std_coordination_drifting should in reality be mean and std of the
-                # coordination logits, before sigmoid function application.
-                inference_engines = get_logistic_inference_engines(vocalic_series, mean_prior_coordination,
-                                                                   std_prior_coordination, std_coordination_drifting,
-                                                                   mean_prior_vocalics, std_prior_vocalics,
-                                                                   std_coordinated_vocalics, num_particles)
+                elif model == "truncated_gaussian_blending":
+                    inference_engines = get_truncated_gaussian_blending_inference_engines(vocalic_series,
+                                                                                          mean_prior_coordination,
+                                                                                          std_prior_coordination,
+                                                                                          std_coordination_drifting,
+                                                                                          mean_prior_vocalics,
+                                                                                          std_prior_vocalics,
+                                                                                          std_coordinated_vocalics)
+                elif model == "logistic":
+                    # mean_prior_coordination and std_coordination_drifting should in reality be mean and std of the
+                    # coordination logits, before sigmoid function application.
+                    inference_engines = get_logistic_inference_engines(vocalic_series, mean_prior_coordination,
+                                                                       std_prior_coordination,
+                                                                       std_coordination_drifting,
+                                                                       mean_prior_vocalics, std_prior_vocalics,
+                                                                       std_coordinated_vocalics, num_particles)
 
-            elif model == "truncated_gaussian_mixture":
-                inference_engines = get_truncated_gaussian_inference_mixture_engines(vocalic_series,
-                                                                                     mean_prior_coordination,
-                                                                                     std_prior_coordination,
-                                                                                     std_coordination_drifting,
-                                                                                     mean_prior_vocalics,
-                                                                                     std_prior_vocalics,
-                                                                                     std_uncoordinated_vocalics,
-                                                                                     std_coordinated_vocalics,
-                                                                                     num_particles)
+                elif model == "truncated_gaussian_mixture":
+                    inference_engines = get_truncated_gaussian_inference_mixture_engines(vocalic_series,
+                                                                                         mean_prior_coordination,
+                                                                                         std_prior_coordination,
+                                                                                         std_coordination_drifting,
+                                                                                         mean_prior_vocalics,
+                                                                                         std_prior_vocalics,
+                                                                                         std_uncoordinated_vocalics,
+                                                                                         std_coordinated_vocalics,
+                                                                                         num_particles)
 
-            elif model == "truncated_gaussian_blending_latent_vocalics":
-                inference_engines = get_truncated_gaussian_blending_latent_vocalics_inference_engines(vocalic_series,
-                                                                                                      mean_prior_coordination,
-                                                                                                      std_prior_coordination,
-                                                                                                      std_coordination_drifting,
-                                                                                                      mean_prior_vocalics,
-                                                                                                      std_prior_vocalics,
-                                                                                                      std_coordinated_vocalics,
-                                                                                                      std_observed_vocalics,
-                                                                                                      num_particles)
-            else:
-                raise Exception(f"Invalid model {model}.")
+                elif model == "truncated_gaussian_blending_latent_vocalics":
+                    inference_engines = get_truncated_gaussian_blending_latent_vocalics_inference_engines(
+                        vocalic_series,
+                        mean_prior_coordination,
+                        std_prior_coordination,
+                        std_coordination_drifting,
+                        mean_prior_vocalics,
+                        std_prior_vocalics,
+                        std_coordinated_vocalics,
+                        std_observed_vocalics,
+                        num_particles)
 
-            for estimation_name, aggregation, inference_engine in inference_engines:
-                if seed is not None:
-                    np.random.seed(seed)
-                    random.seed(seed)
+                elif model == "gaussian_blending_latent_vocalics":
+                    inference_engines = get_gaussian_blending_latent_vocalics_inference_engines(
+                        vocalic_series,
+                        mean_prior_coordination,
+                        std_prior_coordination,
+                        std_coordination_drifting,
+                        mean_prior_vocalics,
+                        std_prior_vocalics,
+                        std_coordinated_vocalics,
+                        std_observed_vocalics,
+                        num_particles)
 
-                params = inference_engine.estimate_means_and_variances()
-                means = params[0]
-                variances = params[1]
+                elif model == "logistic_blending_latent_vocalics":
+                    inference_engines = get_logistic_blending_latent_vocalics_inference_engines(
+                        vocalic_series,
+                        mean_prior_coordination,
+                        std_prior_coordination,
+                        std_coordination_drifting,
+                        mean_prior_vocalics,
+                        std_prior_vocalics,
+                        std_coordinated_vocalics,
+                        std_observed_vocalics,
+                        num_particles)
 
-                mean = means[-1] if aggregation == "last" else np.mean(means)
-                variance = variances[-1] if aggregation == "last" else np.var(means)
+                else:
+                    raise Exception(f"Invalid model {model}.")
 
-                data_table["trial"].append(trial.metadata.number)
-                data_table["estimation_name"].append(estimation_name)
-                data_table["aggregation"].append(aggregation)
-                data_table["mean"].append(mean)
-                data_table["variance"].append(variance)
-                data_table["means"].append(means)
-                data_table["variances"].append(variances)
-                data_table["score"].append(trial.metadata.team_score)
+                for estimation_name, fixed_coordination_second_half, inference_engine in inference_engines:
+                    if seed is not None:
+                        np.random.seed(seed)
+                        random.seed(seed)
 
-                if plot_coordination:
-                    filepath = f"{plots_dir}/{estimation_name}/{trial.metadata.number}.png"
-                    plot(means, np.sqrt(variances), vocalic_series.mask, filepath)
+                    params = inference_engine.estimate_means_and_variances()
+                    means = params[0]
+                    variances = params[1]
+
+                    mean = means[-1] if fixed_coordination_second_half else np.mean(means[120:])
+                    variance = variances[-1] if fixed_coordination_second_half else np.var(means[120:])
+
+                    data_table["trial"].append(trial.metadata.number)
+                    data_table["estimation_name"].append(estimation_name)
+                    data_table["fixed_coordination_second_half"].append(fixed_coordination_second_half)
+                    data_table["vocalics_aggregation"].append(aggregation)
+                    data_table["mean"].append(mean)
+                    data_table["variance"].append(variance)
+                    data_table["means"].append(means)
+                    data_table["variances"].append(variances)
+                    data_table["score"].append(trial.metadata.team_score)
+
+                    if plot_coordination:
+                        filepath = f"{plots_dir}/{aggregation}/{estimation_name}/{trial.metadata.number}.png"
+                        plot(means, np.sqrt(variances), vocalic_series.mask, filepath)
 
             pbar.update()
 
     df = pd.DataFrame(data_table)
-    df.to_pickle(f"{data_dir}/score_regression_data.pkl")
+    df.to_pickle(f"{out_dir}/score_regression_data.pkl")
 
 
 def plot(means: np.ndarray, stds: np.ndarray, masks: List[int], filepath):
@@ -630,7 +413,9 @@ def plot(means: np.ndarray, stds: np.ndarray, masks: List[int], filepath):
 
     fig = plt.figure(figsize=(20, 6))
     plt.plot(range(len(means)), means, marker="o", color="tab:orange", linestyle="--")
-    plt.fill_between(range(len(means)), means - stds, means + stds, color='tab:orange', alpha=0.2)
+    lb = np.clip(means - stds, a_min=0, a_max=1)
+    ub = np.clip(means + stds, a_min=0, a_max=1)
+    plt.fill_between(range(len(means)), lb, ub, color='tab:orange', alpha=0.2)
     times, masks = list(zip(*[(t, mask) for t, mask in enumerate(masks) if mask > 0 and t < len(means)]))
     plt.scatter(times, masks, color="tab:green", marker="+")
     plt.xlabel("Time Steps (seconds)")
@@ -649,9 +434,9 @@ if __name__ == "__main__":
         description="Estimates coordination and plot estimates from a list of trials."
     )
     parser.add_argument("--trials_dir", type=str, required=True, help="Directory where serialized trials are located.")
-    parser.add_argument("--data_dir", type=str, required=True, help="Directory where the data must be saved.")
+    parser.add_argument("--out_dir", type=str, required=True, help="Directory where the data must be saved.")
     parser.add_argument("--plot_coordination", action="store_true", required=False, default=False,
-                        help="Whether plots must be generated. If so, they will be saved under data_dir/plots.")
+                        help="Whether plots must be generated. If so, they will be saved under out_dir/plots.")
     parser.add_argument("--model", type=str, required=True, help="Inference model: truncated_gaussian or logistic.")
     parser.add_argument("--pc", type=float, required=False, default=0, help="Probability of C_0 = 1")
     parser.add_argument("--pcc", type=float, required=False, default=0.1, help="Probability of C_t != C_{t-1}")
@@ -669,9 +454,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    estimate(args.trials_dir, args.data_dir, args.plot_coordination, args.model, args.pc, args.pcc, args.mc, args.sc,
+    estimate(args.trials_dir, args.out_dir, args.plot_coordination, args.model, args.pc, args.pcc, args.mc, args.sc,
              args.scc, args.mv, args.sv, args.suv, args.scv, args.sov, args.num_particles, args.seed)
 
     # Save hyper-parameters
-    with open(f"{args.data_dir}/hyper_params.txt", "w") as f:
+    with open(f"{args.out_dir}/hyper_params.txt", "w") as f:
         json.dump(vars(args), f, indent=4)

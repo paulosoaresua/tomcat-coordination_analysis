@@ -199,8 +199,7 @@ class AudioAlignmentReport:
         null_vocalics = 0
         subjects = set()
         for i, utterance in enumerate(utterances):
-            if utterance.vocalic_series.size == 0 or np.allclose(utterance.vocalic_series.values[0], 0) or \
-                    np.allclose(utterance.vocalic_series.values[1], 0):
+            if utterance.vocalic_series.size == 0 or np.all(utterance.vocalic_series.values.var(axis=1) < 1E-16):
                 null_vocalics += 1
                 subjects.add(utterance.subject_id)
 
@@ -210,4 +209,4 @@ class AudioAlignmentReport:
 
             with tag("li"):
                 subjects = ", ".join(sorted(subjects))
-                text(f"{null_vocalics} null vocalics - [ { subjects } ]")
+                text(f"{null_vocalics} null vocalics - [ {subjects} ]")
