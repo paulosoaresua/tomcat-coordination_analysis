@@ -7,8 +7,9 @@ from datetime import datetime
 import numpy as np
 from scipy.stats import norm
 
+from coordination.common.dataset import Dataset, SeriesData
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
-from coordination.inference.vocalics import DiscreteCoordinationInferenceFromVocalics
+from coordination.inference.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
 
 
 class DiscreteCoordinationParameters:
@@ -35,6 +36,7 @@ class DiscreteCoordinationParameters:
     vocalic_series = VocalicsSparseSeries(values=values, mask=mask, utterances=utterances,
                                           previous_from_self=previous_from_self,
                                           previous_from_other=previous_from_other)
+    dataset = Dataset([SeriesData(vocalic_series)])
 
     p_prior_coordination = 0
     p_coordination_transition = 0.1
@@ -43,13 +45,13 @@ class DiscreteCoordinationParameters:
     std_uncoordinated_vocalics = np.array([1, 1])
     std_coordinated_vocalics = np.array([1, 1])
 
-    inference_engine = DiscreteCoordinationInferenceFromVocalics(vocalic_series,
-                                                                 p_prior_coordination,
+    inference_engine = DiscreteCoordinationInferenceFromVocalics(p_prior_coordination,
                                                                  p_coordination_transition,
                                                                  mean_prior_vocalics,
                                                                  std_prior_vocalics,
                                                                  std_uncoordinated_vocalics,
-                                                                 std_coordinated_vocalics)
+                                                                 std_coordinated_vocalics,
+                                                                 fix_coordination_on_second_half=True)
 
 
 class TestDiscreteCoordinationInference(unittest.TestCase):
@@ -120,7 +122,8 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
             norm.pdf([0.8, 0.9], loc=[0.6, 0.7], scale=self.params.std_coordinated_vocalics))
 
         # Message from components to coordination
-        m_comp2coord_actual = self.params.inference_engine._get_messages_from_components_to_coordination()
+        m_comp2coord_actual = self.params.inference_engine._get_messages_from_components_to_coordination(
+            self.params.dataset.series[0])
 
         np.testing.assert_allclose(m_comp2coord_expected.T, m_comp2coord_actual, atol=1e-5)
 
@@ -178,7 +181,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
         m_forward_expected[6] = m_forward_expected[6] / np.sum(m_forward_expected[6])
 
         # Message from components to coordination
-        m_forward_actual = self.params.inference_engine._forward(m_comp2coord)
+        m_forward_actual = self.params.inference_engine._forward(m_comp2coord, self.params.dataset.series[0])
 
         np.testing.assert_allclose(m_forward_expected.T, m_forward_actual, atol=1e-5)
 
@@ -207,7 +210,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
 
         # t = 6 = M
         m_backwards_expected[6] = np.array([0.2, 0.8]) * [0.7, 0.5] * [0.1, 0.9] * [0.5, 0.9] * \
-                                                         [0.2, 0.2] * [0.3, 0.4]
+                                  [0.2, 0.2] * [0.3, 0.4]
         m_backwards_expected[6] = m_backwards_expected[6] / np.sum(m_backwards_expected[6])
 
         # t = 5
@@ -235,7 +238,7 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
         m_backwards_expected[0] = m_backwards_expected[0] / np.sum(m_backwards_expected[0])
 
         # Message from components to coordination
-        m_backwards_actual = self.params.inference_engine._backwards(m_comp2coord)
+        m_backwards_actual = self.params.inference_engine._backwards(m_comp2coord, self.params.dataset.series[0])
 
         np.testing.assert_allclose(m_backwards_expected.T, m_backwards_actual, atol=1e-5)
 
@@ -357,9 +360,9 @@ class TestDiscreteCoordinationInference(unittest.TestCase):
                                    [0.2, 0.2],
                                    [0.3, 0.4]]).T
         )
-        m_marginals_actual = mock_inference.estimate_marginals()
+        m_marginals_actual = mock_inference.predict(self.params.dataset)[0][0]
 
-        np.testing.assert_allclose(m_marginals_expected.T, m_marginals_actual, atol=1e-5)
+        np.testing.assert_allclose(m_marginals_expected[:, 1], m_marginals_actual, atol=1e-5)
 
 
 if __name__ == '__main__':

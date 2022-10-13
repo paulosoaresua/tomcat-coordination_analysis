@@ -1,7 +1,6 @@
 import argparse
 from glob import glob
 import os
-import re
 from tqdm import tqdm
 
 from coordination.audio.audio import TrialAudio

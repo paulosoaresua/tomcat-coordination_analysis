@@ -17,7 +17,9 @@ class TruncatedGaussianCoordinationBlendingInference(InferenceEngine):
                  std_prior_vocalics: np.array,
                  std_coordinated_vocalics: np.ndarray,
                  f: Callable = lambda x, s: x,
-                 fix_coordination_on_second_half: bool = True):
+                 fix_coordination_on_second_half: bool = True,
+                 *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self._mean_prior_coordination = mean_prior_coordination
         self._std_prior_coordination = std_prior_coordination

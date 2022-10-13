@@ -19,7 +19,8 @@ class DiscreteCoordinationInferenceFromVocalics(InferenceEngine):
                  std_uncoordinated_vocalics: np.ndarray,
                  std_coordinated_vocalics: np.ndarray,
                  f: Callable = lambda x, s: x,
-                 fix_coordination_on_second_half: bool = True):
+                 fix_coordination_on_second_half: bool = True,
+                 *args, **kwargs):
         """
         This class estimates discrete coordination with message passing.
 
@@ -31,6 +32,7 @@ class DiscreteCoordinationInferenceFromVocalics(InferenceEngine):
         @param std_coordinated_vocalics: standard deviation of the vocalic series when there's coordination.
         @param fix_coordination_on_second_half: whether coordination in the second half of the mission should be fixed.
         """
+        super().__init__(*args, **kwargs)
 
         self._p_prior_coordination = p_prior_coordination
         self._mean_prior_vocalics = mean_prior_vocalics
@@ -51,20 +53,20 @@ class DiscreteCoordinationInferenceFromVocalics(InferenceEngine):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         raise NotImplementedError
 
-    def predict(self, input_features: Dataset, num_particles: int = 0, *args, **kwargs) -> List[np.ndarray]:
+    def predict(self, input_features: Dataset, *args, **kwargs) -> List[np.ndarray]:
         if input_features.num_trials > 0:
-            assert len(self._mean_prior_vocalics) == input_features.series[0].vocalics.num_series
-            assert len(self._std_prior_vocalics) == input_features.series[0].vocalics.num_series
-            assert len(self._std_uncoordinated_vocalics) == input_features.series[0].vocalics.num_series
-            assert len(self._std_coordinated_vocalics) == input_features.series[0].vocalics.num_series
+            assert len(self._mean_prior_vocalics) == input_features.series[0].vocalics.num_features
+            assert len(self._std_prior_vocalics) == input_features.series[0].vocalics.num_features
+            assert len(self._std_uncoordinated_vocalics) == input_features.series[0].vocalics.num_features
+            assert len(self._std_coordinated_vocalics) == input_features.series[0].vocalics.num_features
 
         result = []
         for d in range(input_features.num_trials):
             series = input_features.series[d]
 
             m_comp2coord = self._get_messages_from_components_to_coordination(series)
-            m_forward = self._forward(m_comp2coord)
-            m_backwards = self._backwards(m_comp2coord)
+            m_forward = self._forward(m_comp2coord, series)
+            m_backwards = self._backwards(m_comp2coord, series)
 
             m_backwards = np.roll(m_backwards, shift=-1, axis=1)
             m_backwards[:, -1] = 1

@@ -1,11 +1,23 @@
-from typing import Dict, Optional
+from typing import List
 
 import numpy as np
 from scipy.special import expit
 from scipy.stats import norm
 
+from coordination.common.dataset import Dataset
 from coordination.inference.gaussian_coordination_blending_latent_vocalics import \
-    GaussianCoordinationBlendingInferenceLatentVocalics
+    GaussianCoordinationBlendingInferenceLatentVocalics, LatentVocalicsParticles
+
+
+class LogisticLatentVocalicsParticles(LatentVocalicsParticles):
+    coordination_logit: np.ndarray
+
+    def _keep_particles_at(self, indices: np.ndarray):
+        super()._keep_particles_at(indices)
+        self.coordination_logit = self.coordination_logit[indices]
+
+    def squeeze(self):
+        self.coordination = expit(self.coordination_logit)
 
 
 class LogisticCoordinationBlendingInferenceLatentVocalics(GaussianCoordinationBlendingInferenceLatentVocalics):
@@ -13,22 +25,23 @@ class LogisticCoordinationBlendingInferenceLatentVocalics(GaussianCoordinationBl
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def estimate_means_and_variances(self) -> np.ndarray:
-        M = int(self._time_steps / 2)
-        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+        self.states: List[LogisticLatentVocalicsParticles] = []
 
-        params = np.zeros((2, num_time_steps))
-        for t in range(0, self._time_steps):
-            self.next()
+    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+            **kwargs):
+        # MCMC to train parameters? We start by choosing with cross validation instead.
+        raise NotImplementedError
 
-            # We keep generating latent vocalics after M but not coordination. The fixed coordination is given by
-            # the set of particles after the last latent vocalics was generated
-            real_time = min(t, M) if self._fix_coordination_on_second_half else t
-            mean = expit(self.states[-1].coordination).mean()
-            variance = expit(self.states[-1].coordination).var()
-            params[:, real_time] = [mean, variance]
+    def _sample_coordination_from_prior(self, new_particles: LogisticLatentVocalicsParticles):
+        mean = np.ones(self.num_particles) * self._mean_prior_coordination
+        new_particles.coordination_logit = norm(loc=mean, scale=self._std_prior_coordination).rvs()
+        new_particles.squeeze()
 
-        return params
+    def _sample_coordination_from_transition(self, previous_particles: LogisticLatentVocalicsParticles,
+                                             new_particles: LogisticLatentVocalicsParticles):
+        new_particles.coordination_logit = norm(loc=previous_particles.coordination_logit,
+                                                scale=self._std_coordination_drifting).rvs()
+        new_particles.squeeze()
 
-    def _transform_coordination(self, coordination_particles: np.ndarray) -> np.ndarray:
-        return expit(coordination_particles)
+    def _create_new_particles(self) -> LatentVocalicsParticles:
+        return LogisticLatentVocalicsParticles()

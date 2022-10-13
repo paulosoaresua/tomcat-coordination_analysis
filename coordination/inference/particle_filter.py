@@ -7,13 +7,25 @@ from coordination.common.dataset import SeriesData
 
 class Particles:
 
-    def __init__(self, coordination: np.ndarray):
-        self.coordination = coordination
+    coordination: np.ndarray
 
     def resample(self, importance_weights: np.ndarray):
+        indices = Particles.resample_particle_indices(importance_weights)
+        self._keep_particles_at(indices)
+
+    def _keep_particles_at(self, indices: np.ndarray):
+        self.coordination = self.coordination[indices]
+
+    def mean(self):
+        return self.coordination.mean()
+
+    def var(self):
+        return self.coordination.var()
+
+    @staticmethod
+    def resample_particle_indices(importance_weights: np.ndarray) -> np.ndarray:
         num_particles = len(importance_weights)
-        new_particles = np.random.choice(num_particles, num_particles, replace=True, p=importance_weights)
-        self.coordination = self.coordination[new_particles]
+        return np.random.choice(num_particles, num_particles, replace=True, p=importance_weights)
 
 
 class ParticleFilter:

@@ -1,9 +1,9 @@
-from typing import Callable
+from typing import Callable, List
 
 import numpy as np
 from scipy.stats import norm, truncnorm
 
-from coordination.component.speech.common import VocalicsSparseSeries
+from coordination.common.dataset import Dataset, SeriesData
 from coordination.inference.inference_engine import InferenceEngine
 from coordination.inference.particle_filter import Particles, ParticleFilter
 
@@ -13,19 +13,19 @@ MAX_VALUE = 1
 
 class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFilter):
 
-    def __init__(self, vocalic_series: VocalicsSparseSeries, mean_prior_coordination: float,
-                 std_prior_coordination: float, std_coordination_drifting: float, mean_prior_vocalics: np.array,
-                 std_prior_vocalics: np.array, std_uncoordinated_vocalics: np.ndarray,
-                 std_coordinated_vocalics: np.ndarray, f: Callable = lambda x, s: x,
-                 fix_coordination_on_second_half: bool = True, *args, **kwargs):
+    def __init__(self,
+                 mean_prior_coordination: float,
+                 std_prior_coordination: float,
+                 std_coordination_drifting: float,
+                 mean_prior_vocalics: np.array,
+                 std_prior_vocalics: np.array,
+                 std_uncoordinated_vocalics: np.ndarray,
+                 std_coordinated_vocalics: np.ndarray,
+                 f: Callable = lambda x, s: x,
+                 fix_coordination_on_second_half: bool = True,
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        assert len(mean_prior_vocalics) == vocalic_series.num_series
-        assert len(std_prior_vocalics) == vocalic_series.num_series
-        assert len(std_uncoordinated_vocalics) == vocalic_series.num_series
-        assert len(std_coordinated_vocalics) == vocalic_series.num_series
-
-        self._vocalic_series = vocalic_series
         self._mean_prior_coordination = mean_prior_coordination
         self._std_prior_coordination = std_prior_coordination
         self._std_coordination_drifting = std_coordination_drifting
@@ -36,53 +36,79 @@ class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFil
         self._f = f
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
-        self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
+    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+            **kwargs):
+        # MCMC to train parameters? We start by choosing with cross validation instead.
+        raise NotImplementedError
 
-    def estimate_means_and_variances(self) -> np.ndarray:
-        M = int(self._time_steps / 2)
-        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+    def predict(self, input_features: Dataset, num_particles: int = 0, *args, **kwargs) -> List[np.ndarray]:
+        if input_features.num_trials > 0:
+            assert len(self._mean_prior_vocalics) == input_features.series[0].vocalics.num_series
+            assert len(self._std_prior_vocalics) == input_features.series[0].vocalics.num_series
+            assert len(self._std_uncoordinated_vocalics) == input_features.series[0].vocalics.num_series
+            assert len(self._std_coordinated_vocalics) == input_features.series[0].vocalics.num_series
 
-        params = np.zeros((2, num_time_steps))
-        for t in range(0, num_time_steps):
-            self.next()
-            mean = self.states[-1].coordination.mean()
-            variance = self.states[-1].coordination.var()
-            params[:, t] = [mean, variance]
+        # Set the number of particles to be used by the particle filter estimator
+        self.num_particles = num_particles
 
-        return params
+        result = []
+        for d in range(input_features.num_trials):
+            self.reset_particles()
+            series = input_features.series[d]
 
-    def _sample_from_prior(self) -> Particles:
+            M = int(series.num_time_steps / 2)
+            num_time_steps = M + 1 if self._fix_coordination_on_second_half else series.num_time_steps
+
+            params = np.zeros((2, num_time_steps))
+            for t in range(0, num_time_steps):
+                self.next(series)
+                mean = self.states[-1].mean()
+                variance = self.states[-1].var()
+                params[:, t] = [mean, variance]
+
+            result.append(params)
+
+        return result
+
+    def _sample_from_prior(self, series: SeriesData) -> Particles:
+        new_particles = Particles()
         if self._std_prior_coordination == 0:
-            return np.ones(self.num_particles) * self._mean_prior_coordination
+            new_particles.coordination = np.ones(self.num_particles) * self._mean_prior_coordination
         else:
             mean = np.ones(self.num_particles) * self._mean_prior_coordination
             std = np.ones(self.num_particles) * self._std_prior_coordination
             a = (MIN_VALUE - self._mean_prior_coordination) / self._std_prior_coordination
             b = (MAX_VALUE - self._mean_prior_coordination) / self._std_prior_coordination
 
-            return truncnorm(loc=mean, scale=std, a=a, b=b).rvs()
+            new_particles.coordination = truncnorm(loc=mean, scale=std, a=a, b=b).rvs()
 
-    def _sample_from_transition_to(self, time_step: int) -> Particles:
+        return new_particles
+
+    def _sample_from_transition_to(self, time_step: int, series: SeriesData) -> Particles:
         std = np.ones(self.num_particles) * self._std_coordination_drifting
         a = (MIN_VALUE - self.states[time_step - 1].coordination) / std
         b = (MAX_VALUE - self.states[time_step - 1].coordination) / std
-        return truncnorm(loc=self.states[time_step - 1], scale=std, a=a, b=b).rvs()
 
-    def _calculate_log_likelihood_at(self, time_step: int) -> np.ndarray:
+        new_particles = Particles()
+        new_particles.coordination = truncnorm(loc=self.states[time_step - 1], scale=std, a=a, b=b).rvs()
+
+        return new_particles
+
+    def _calculate_log_likelihood_at(self, time_step: int, series: SeriesData) -> np.ndarray:
         final_time_step = time_step
-        M = int(self._time_steps / 2)
+        M = int(series.num_time_steps / 2)
         if self._fix_coordination_on_second_half and time_step == M:
-            final_time_step = self._time_steps - 1
+            final_time_step = series.num_time_steps - 1
 
         log_likelihoods = 0
         for t in range(time_step, final_time_step + 1):
-            A_t = self._f(self._vocalic_series.values[:, t], 0)
-            A_prev = None if self._vocalic_series.previous_from_self[t] is None else self._f(
-                self._vocalic_series.values[:, self._vocalic_series.previous_from_self[t]], 0)
-            B_prev = None if self._vocalic_series.previous_from_other[t] is None else self._f(
-                self._vocalic_series.values[:, self._vocalic_series.previous_from_other[t]], 1)
+            A_t = self._f(series.vocalics.values[:, t], 0)
+            A_prev = None if series.vocalics.previous_from_self[t] is None else self._f(
+                series.vocalics.values[:, series.vocalics.previous_from_self[t]], 0)
+            B_prev = None if series.vocalics.previous_from_other[t] is None else self._f(
+                series.vocalics.values[:, series.vocalics.previous_from_other[t]], 1)
 
-            if self._vocalic_series.mask[t] == 1 and B_prev is not None:
+            if series.vocalics.mask[t] == 1 and B_prev is not None:
                 u = np.random.rand(self.num_particles)
                 means = np.zeros((self.num_particles, len(A_t)))
                 stds = np.zeros_like(means)
@@ -102,6 +128,6 @@ class TruncatedGaussianCoordinationMixtureInference(InferenceEngine, ParticleFil
 
         return log_likelihoods
 
-    def _resample_at(self, time_step: int):
-        return self._vocalic_series.mask[time_step] == 1 and self._vocalic_series.previous_from_other[
+    def _resample_at(self, time_step: int, series: SeriesData):
+        return series.vocalics.mask[time_step] == 1 and series.vocalics.previous_from_other[
             time_step] is not None
