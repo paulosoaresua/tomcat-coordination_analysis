@@ -57,3 +57,7 @@ class VocalicsSparseSeries(SparseSeries):
             mean = self.values[:, valid_indices].mean(axis=1)[:, np.newaxis]
             std = self.values[:, valid_indices].std(axis=1)[:, np.newaxis]
             self.values[:, valid_indices] = (self.values[:, valid_indices] - mean) / std
+
+    @property
+    def num_features(self) -> int:
+        return self.num_series
