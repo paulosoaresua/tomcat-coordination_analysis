@@ -9,7 +9,7 @@ from scipy.stats import norm
 
 from coordination.common.dataset import Dataset, SeriesData
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
-from coordination.inference.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
+from coordination.model.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
 
 
 class DiscreteCoordinationParameters:

@@ -2,7 +2,7 @@ import numpy as np
 from scipy.stats import truncnorm
 
 from coordination.common.dataset import Dataset
-from coordination.inference.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics, \
+from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics, \
     LatentVocalicsParticles
 
 MIN_VALUE = 0

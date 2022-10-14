@@ -5,7 +5,7 @@ from scipy.special import expit
 from scipy.stats import norm
 
 from coordination.common.dataset import Dataset
-from coordination.inference.gaussian_coordination_blending_latent_vocalics import \
+from coordination.model.gaussian_coordination_blending_latent_vocalics import \
     GaussianCoordinationBlendingInferenceLatentVocalics, LatentVocalicsParticles
 
 
@@ -30,7 +30,7 @@ class LogisticCoordinationBlendingInferenceLatentVocalics(GaussianCoordinationBl
     def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
-        raise NotImplementedError
+        return self
 
     def _sample_coordination_from_prior(self, new_particles: LogisticLatentVocalicsParticles):
         mean = np.ones(self.num_particles) * self._mean_prior_coordination

@@ -4,8 +4,8 @@ import numpy as np
 from scipy.stats import norm
 
 from coordination.common.dataset import Dataset, SeriesData
-from coordination.inference.inference_engine import InferenceEngine
-from coordination.inference.particle_filter import Particles, ParticleFilter
+from coordination.model.coordination_model import CoordinationModel
+from coordination.model.particle_filter import Particles, ParticleFilter
 
 from scipy.special import expit
 
@@ -23,7 +23,7 @@ class LogisticCoordinationParticles(Particles):
         self.coordination_logit = self.coordination_logit[new_particles]
 
 
-class LogisticCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter):
+class LogisticCoordinationInferenceFromVocalics(CoordinationModel, ParticleFilter):
 
     def __init__(self,
                  mean_prior_coordination_logit: float,
@@ -50,7 +50,7 @@ class LogisticCoordinationInferenceFromVocalics(InferenceEngine, ParticleFilter)
     def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
-        raise NotImplementedError
+        return self
 
     def predict(self, input_features: Dataset, num_particles: int = 0, *args, **kwargs) -> List[np.ndarray]:
         if input_features.num_trials > 0:

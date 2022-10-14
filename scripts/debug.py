@@ -7,19 +7,22 @@ from coordination.common.dataset import Dataset, SeriesData
 from coordination.audio.audio import TrialAudio
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent
 from coordination.entity.trial import Trial
-from coordination.inference.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
-from coordination.inference.truncated_gaussian_coordination_blending import \
+from coordination.model.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
+from coordination.model.truncated_gaussian_coordination_blending import \
     TruncatedGaussianCoordinationBlendingInference
-from coordination.inference.logistic_coordination import LogisticCoordinationInferenceFromVocalics
-from coordination.inference.beta_coordination import BetaCoordinationInferenceFromVocalics
-from coordination.inference.gaussian_coordination_blending_latent_vocalics import \
+from coordination.model.logistic_coordination import LogisticCoordinationInferenceFromVocalics
+from coordination.model.beta_coordination import BetaCoordinationInferenceFromVocalics
+from coordination.model.gaussian_coordination_blending_latent_vocalics import \
     GaussianCoordinationBlendingInferenceLatentVocalics
-from coordination.inference.truncated_gaussian_coordination_blending_latent_vocalics import \
+from coordination.model.truncated_gaussian_coordination_blending_latent_vocalics import \
     TruncatedGaussianCoordinationBlendingInferenceLatentVocalics
-from coordination.inference.logistic_coordination_blending_latent_vocalics import \
+from coordination.model.logistic_coordination_blending_latent_vocalics import \
     LogisticCoordinationBlendingInferenceLatentVocalics
 from coordination.plot.coordination import add_discrete_coordination_bar
 from coordination.report.coordination_change_report import CoordinationChangeReport
+from sklearn.linear_model import BayesianRidge
+from sklearn.pipeline import Pipeline
+from coordination.model.coordination_transformer import CoordinationTransformer
 
 if __name__ == "__main__":
     # Constants
@@ -49,160 +52,193 @@ if __name__ == "__main__":
     A0 = 1E-16
     B0 = 1E16  # The process starts with no coordination
 
-    trial = Trial.from_directory("../data/study-3_2022/tomcat_agent/trials/T000822/")
-    vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics,
-                                                         segmentation_method=SegmentationMethod.KEEP_ALL)
+    series = []
+    scores = []
+    for trial_number in ["T000671", "T000672", "T000719", "T000720"]:
+        trial = Trial.from_directory(f"../data/study-3_2022/tomcat_agent/trials/{trial_number}/")
+        vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics,
+                                                             segmentation_method=SegmentationMethod.KEEP_ALL)
 
-    vocalic_series = vocalics_component.sparse_series(NUM_TIME_STEPS, trial.metadata.mission_start)
-    vocalic_series.normalize_per_subject()
+        vocalic_series = vocalics_component.sparse_series(NUM_TIME_STEPS, trial.metadata.mission_start)
+        vocalic_series.normalize_per_subject()
 
-    inference_engine = DiscreteCoordinationInferenceFromVocalics(p_prior_coordination=P_COORDINATION,
-                                                                 p_coordination_transition=P_COORDINATION_TRANSITION,
-                                                                 mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
-                                                                 std_prior_vocalics=STD_PRIOR_VOCALICS,
-                                                                 std_uncoordinated_vocalics=STD_UNCOORDINATED_VOCALICS,
-                                                                 std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
+        series.append(SeriesData(vocalic_series))
+        scores.append(trial.metadata.team_score)
 
-    dataset = Dataset([SeriesData(vocalic_series)])
-    start = time.time()
-    params = inference_engine.predict(dataset)[0]
-    end = time.time()
-    print(f"Discrete: {end - start} seconds")
-    marginal_cs = params[0]
-    fig = plt.figure(figsize=(20, 6))
-    plt.plot(range(M + 1), marginal_cs, marker="o", color="tab:orange", linestyle="--")
-    plt.xlabel("Time Steps (seconds)")
-    plt.ylabel("Marginal Probability")
-    plt.title("Discrete Coordination Inference", fontsize=14, weight="bold")
-    times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0 and t <= M]))
-    plt.scatter(times, masks, color="tab:green", marker="+")
-    add_discrete_coordination_bar(main_ax=fig.gca(),
-                                  coordination_series=[np.where(marginal_cs > 0.5, 1, 0)],
-                                  coordination_colors=["tab:orange"],
-                                  labels=["Coordination"])
-    plt.show()
+    dataset = Dataset(series)
 
-    inference_engine = TruncatedGaussianCoordinationBlendingInference(mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-                                                                      std_prior_coordination=STD_COORDINATION_PRIOR,
-                                                                      std_coordination_drifting=STD_COORDINATION_DRIFT,
-                                                                      mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
-                                                                      std_prior_vocalics=STD_PRIOR_VOCALICS,
-                                                                      std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
-    start = time.time()
-    params = inference_engine.predict(dataset)[0]
-    end = time.time()
-    print(f"Truncated Gaussian: {end - start} seconds")
-    mean_cs = params[0]
-    var_cs = params[1]
-    fig = plt.figure(figsize=(20, 6))
-    plt.plot(range(M + 1), mean_cs, marker="o", color="tab:orange", linestyle="--")
-    plt.fill_between(range(M + 1), mean_cs - np.sqrt(var_cs), mean_cs + np.sqrt(var_cs), color='tab:orange', alpha=0.2)
-    times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0 and t <= M]))
-    plt.scatter(times, masks, color="tab:green", marker="+")
-    plt.xlabel("Time Steps (seconds)")
-    plt.ylabel("Coordination")
-    plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
-    add_discrete_coordination_bar(main_ax=fig.gca(),
-                                  coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
-                                  coordination_colors=["tab:orange"],
-                                  labels=["Coordination"])
-    plt.show()
+    model = DiscreteCoordinationInferenceFromVocalics(p_prior_coordination=P_COORDINATION,
+                                                      p_coordination_transition=P_COORDINATION_TRANSITION,
+                                                      mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
+                                                      std_prior_vocalics=STD_PRIOR_VOCALICS,
+                                                      std_uncoordinated_vocalics=STD_UNCOORDINATED_VOCALICS,
+                                                      std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
 
-    np.random.seed(0)
-    inference_engine = GaussianCoordinationBlendingInferenceLatentVocalics(
-        mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-        std_prior_coordination=STD_COORDINATION_PRIOR,
-        std_coordination_drifting=STD_COORDINATION_DRIFT,
-        mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
-        std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
-        std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
-        std_observed_vocalics=STD_OBSERVED_VOCALICS,
-        f=ANTIPHASE_FUNCTION,
-        fix_coordination_on_second_half=False)
+    reg = BayesianRidge(tol=1e-6, fit_intercept=False, compute_score=True)
+    reg.set_params(alpha_init=1, lambda_init=1e-3)
 
-    start = time.time()
-    params = inference_engine.predict(dataset, num_particles=10000)[0]
-    end = time.time()
-    print(f"Gaussian Latent: {end - start} seconds")
-    mean_cs = params[0]
-    var_cs = params[1]
-    fig = plt.figure(figsize=(20, 6))
-    plt.plot(range(NUM_TIME_STEPS), mean_cs, marker="o", color="tab:orange", linestyle="--")
-    plt.fill_between(range(NUM_TIME_STEPS), np.clip(mean_cs - np.sqrt(var_cs), a_min=0, a_max=1),
-                     np.clip(mean_cs + np.sqrt(var_cs), a_min=0, a_max=1), color='tab:orange', alpha=0.2)
-    times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0]))
-    plt.scatter(times, masks, color="tab:green", marker="+")
-    plt.xlabel("Time Steps (seconds)")
-    plt.ylabel("Coordination")
-    plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
-    add_discrete_coordination_bar(main_ax=fig.gca(),
-                                  coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
-                                  coordination_colors=["tab:orange"],
-                                  labels=["Coordination"])
-    plt.show()
+    pipeline = Pipeline([
+        ("coordination", CoordinationTransformer(model)),
+        ("score_regressor", reg),
+    ])
 
-    np.random.seed(0)
-    inference_engine = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(
-        mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-        std_prior_coordination=STD_COORDINATION_PRIOR,
-        std_coordination_drifting=STD_COORDINATION_DRIFT,
-        mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
-        std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
-        std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
-        std_observed_vocalics=STD_OBSERVED_VOCALICS,
-        f=ANTIPHASE_FUNCTION,
-        fix_coordination_on_second_half=False)
+    pipeline.fit(dataset, np.array(scores))
 
-    start = time.time()
-    params = inference_engine.predict(dataset, num_particles=10000)[0]
-    end = time.time()
-    print(f"Truncated Gaussian Latent: {end - start} seconds")
-    mean_cs = params[0]
-    var_cs = params[1]
-    fig = plt.figure(figsize=(20, 6))
-    plt.plot(range(NUM_TIME_STEPS), mean_cs, marker="o", color="tab:orange", linestyle="--")
-    plt.fill_between(range(NUM_TIME_STEPS), np.clip(mean_cs - np.sqrt(var_cs), a_min=0, a_max=1),
-                     np.clip(mean_cs + np.sqrt(var_cs), a_min=0, a_max=1), color='tab:orange', alpha=0.2)
-    times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0]))
-    plt.scatter(times, masks, color="tab:green", marker="+")
-    plt.xlabel("Time Steps (seconds)")
-    plt.ylabel("Coordination")
-    plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
-    add_discrete_coordination_bar(main_ax=fig.gca(),
-                                  coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
-                                  coordination_colors=["tab:orange"],
-                                  labels=["Coordination"])
-    plt.show()
+    ymean, ystd = pipeline.predict(dataset, return_std=True)
 
-    np.random.seed(0)
-    inference_engine = LogisticCoordinationBlendingInferenceLatentVocalics(
-        mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-        std_prior_coordination=STD_COORDINATION_PRIOR,
-        std_coordination_drifting=STD_COORDINATION_DRIFT,
-        mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
-        std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
-        std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
-        std_observed_vocalics=STD_OBSERVED_VOCALICS,
-        f=ANTIPHASE_FUNCTION,
-        fix_coordination_on_second_half=False)
+    print(scores)
+    print(ymean)
+    print(ystd)
 
-    start = time.time()
-    params = inference_engine.predict(dataset, num_particles=10000)[0]
-    end = time.time()
-    print(f"Logistic Latent: {end - start} seconds")
-    mean_cs = params[0]
-    var_cs = params[1]
-    fig = plt.figure(figsize=(20, 6))
-    plt.plot(range(NUM_TIME_STEPS), mean_cs, marker="o", color="tab:orange", linestyle="--")
-    plt.fill_between(range(NUM_TIME_STEPS), np.clip(mean_cs - np.sqrt(var_cs), a_min=0, a_max=1),
-                     np.clip(mean_cs + np.sqrt(var_cs), a_min=0, a_max=1), color='tab:orange', alpha=0.2)
-    times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0]))
-    plt.scatter(times, masks, color="tab:green", marker="+")
-    plt.xlabel("Time Steps (seconds)")
-    plt.ylabel("Coordination")
-    plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
-    add_discrete_coordination_bar(main_ax=fig.gca(),
-                                  coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
-                                  coordination_colors=["tab:orange"],
-                                  labels=["Coordination"])
-    plt.show()
+    # fig = plt.figure(figsize=(8, 4))
+    # plt.plot(x_test, func(x_test), color="blue", label="sin($2\\pi x$)")
+    # plt.scatter(x_train, y_train, s=50, alpha=0.5, label="observation")
+    # plt.plot(x_test, ymean, color="red", label="predict mean")
+    # plt.fill_between(
+    #     x_test, ymean - ystd, ymean + ystd, color="pink", alpha=0.5, label="predict std"
+    # )
+
+
+
+    # start = time.time()
+    # params = inference_engine.predict(dataset)[0]
+    # end = time.time()
+    # print(f"Discrete: {end - start} seconds")
+    # marginal_cs = params[0]
+    # fig = plt.figure(figsize=(20, 6))
+    # plt.plot(range(M + 1), marginal_cs, marker="o", color="tab:orange", linestyle="--")
+    # plt.xlabel("Time Steps (seconds)")
+    # plt.ylabel("Marginal Probability")
+    # plt.title("Discrete Coordination Inference", fontsize=14, weight="bold")
+    # times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0 and t <= M]))
+    # plt.scatter(times, masks, color="tab:green", marker="+")
+    # add_discrete_coordination_bar(main_ax=fig.gca(),
+    #                               coordination_series=[np.where(marginal_cs > 0.5, 1, 0)],
+    #                               coordination_colors=["tab:orange"],
+    #                               labels=["Coordination"])
+    # plt.show()
+    #
+    # inference_engine = TruncatedGaussianCoordinationBlendingInference(mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+    #                                                                   std_prior_coordination=STD_COORDINATION_PRIOR,
+    #                                                                   std_coordination_drifting=STD_COORDINATION_DRIFT,
+    #                                                                   mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
+    #                                                                   std_prior_vocalics=STD_PRIOR_VOCALICS,
+    #                                                                   std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
+    # start = time.time()
+    # params = inference_engine.predict(dataset)[0]
+    # end = time.time()
+    # print(f"Truncated Gaussian: {end - start} seconds")
+    # mean_cs = params[0]
+    # var_cs = params[1]
+    # fig = plt.figure(figsize=(20, 6))
+    # plt.plot(range(M + 1), mean_cs, marker="o", color="tab:orange", linestyle="--")
+    # plt.fill_between(range(M + 1), mean_cs - np.sqrt(var_cs), mean_cs + np.sqrt(var_cs), color='tab:orange', alpha=0.2)
+    # times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0 and t <= M]))
+    # plt.scatter(times, masks, color="tab:green", marker="+")
+    # plt.xlabel("Time Steps (seconds)")
+    # plt.ylabel("Coordination")
+    # plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
+    # add_discrete_coordination_bar(main_ax=fig.gca(),
+    #                               coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
+    #                               coordination_colors=["tab:orange"],
+    #                               labels=["Coordination"])
+    # plt.show()
+    #
+    # np.random.seed(0)
+    # inference_engine = GaussianCoordinationBlendingInferenceLatentVocalics(
+    #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+    #     std_prior_coordination=STD_COORDINATION_PRIOR,
+    #     std_coordination_drifting=STD_COORDINATION_DRIFT,
+    #     mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+    #     std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+    #     std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+    #     std_observed_vocalics=STD_OBSERVED_VOCALICS,
+    #     f=ANTIPHASE_FUNCTION,
+    #     fix_coordination_on_second_half=False)
+    #
+    # start = time.time()
+    # params = inference_engine.predict(dataset, num_particles=10000)[0]
+    # end = time.time()
+    # print(f"Gaussian Latent: {end - start} seconds")
+    # mean_cs = params[0]
+    # var_cs = params[1]
+    # fig = plt.figure(figsize=(20, 6))
+    # plt.plot(range(NUM_TIME_STEPS), mean_cs, marker="o", color="tab:orange", linestyle="--")
+    # plt.fill_between(range(NUM_TIME_STEPS), np.clip(mean_cs - np.sqrt(var_cs), a_min=0, a_max=1),
+    #                  np.clip(mean_cs + np.sqrt(var_cs), a_min=0, a_max=1), color='tab:orange', alpha=0.2)
+    # times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0]))
+    # plt.scatter(times, masks, color="tab:green", marker="+")
+    # plt.xlabel("Time Steps (seconds)")
+    # plt.ylabel("Coordination")
+    # plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
+    # add_discrete_coordination_bar(main_ax=fig.gca(),
+    #                               coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
+    #                               coordination_colors=["tab:orange"],
+    #                               labels=["Coordination"])
+    # plt.show()
+    #
+    # np.random.seed(0)
+    # inference_engine = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(
+    #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+    #     std_prior_coordination=STD_COORDINATION_PRIOR,
+    #     std_coordination_drifting=STD_COORDINATION_DRIFT,
+    #     mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+    #     std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+    #     std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+    #     std_observed_vocalics=STD_OBSERVED_VOCALICS,
+    #     f=ANTIPHASE_FUNCTION,
+    #     fix_coordination_on_second_half=False)
+    #
+    # start = time.time()
+    # params = inference_engine.predict(dataset, num_particles=10000)[0]
+    # end = time.time()
+    # print(f"Truncated Gaussian Latent: {end - start} seconds")
+    # mean_cs = params[0]
+    # var_cs = params[1]
+    # fig = plt.figure(figsize=(20, 6))
+    # plt.plot(range(NUM_TIME_STEPS), mean_cs, marker="o", color="tab:orange", linestyle="--")
+    # plt.fill_between(range(NUM_TIME_STEPS), np.clip(mean_cs - np.sqrt(var_cs), a_min=0, a_max=1),
+    #                  np.clip(mean_cs + np.sqrt(var_cs), a_min=0, a_max=1), color='tab:orange', alpha=0.2)
+    # times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0]))
+    # plt.scatter(times, masks, color="tab:green", marker="+")
+    # plt.xlabel("Time Steps (seconds)")
+    # plt.ylabel("Coordination")
+    # plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
+    # add_discrete_coordination_bar(main_ax=fig.gca(),
+    #                               coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
+    #                               coordination_colors=["tab:orange"],
+    #                               labels=["Coordination"])
+    # plt.show()
+    #
+    # np.random.seed(0)
+    # inference_engine = LogisticCoordinationBlendingInferenceLatentVocalics(
+    #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+    #     std_prior_coordination=STD_COORDINATION_PRIOR,
+    #     std_coordination_drifting=STD_COORDINATION_DRIFT,
+    #     mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+    #     std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+    #     std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+    #     std_observed_vocalics=STD_OBSERVED_VOCALICS,
+    #     f=ANTIPHASE_FUNCTION,
+    #     fix_coordination_on_second_half=False)
+    #
+    # start = time.time()
+    # params = inference_engine.predict(dataset, num_particles=10000)[0]
+    # end = time.time()
+    # print(f"Logistic Latent: {end - start} seconds")
+    # mean_cs = params[0]
+    # var_cs = params[1]
+    # fig = plt.figure(figsize=(20, 6))
+    # plt.plot(range(NUM_TIME_STEPS), mean_cs, marker="o", color="tab:orange", linestyle="--")
+    # plt.fill_between(range(NUM_TIME_STEPS), np.clip(mean_cs - np.sqrt(var_cs), a_min=0, a_max=1),
+    #                  np.clip(mean_cs + np.sqrt(var_cs), a_min=0, a_max=1), color='tab:orange', alpha=0.2)
+    # times, masks = list(zip(*[(t, mask) for t, mask in enumerate(vocalic_series.mask) if mask > 0]))
+    # plt.scatter(times, masks, color="tab:green", marker="+")
+    # plt.xlabel("Time Steps (seconds)")
+    # plt.ylabel("Coordination")
+    # plt.title("Continuous Coordination Inference", fontsize=14, weight="bold")
+    # add_discrete_coordination_bar(main_ax=fig.gca(),
+    #                               coordination_series=[np.where(mean_cs > 0.5, 1, 0)],
+    #                               coordination_colors=["tab:orange"],
+    #                               labels=["Coordination"])
+    # plt.show()

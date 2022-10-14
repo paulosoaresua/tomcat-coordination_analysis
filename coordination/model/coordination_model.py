@@ -4,7 +4,7 @@ from coordination.common.dataset import Dataset
 from sklearn.base import BaseEstimator
 
 
-class InferenceEngine(BaseEstimator):
+class CoordinationModel(BaseEstimator):
 
     def fit(self, input_features: Dataset, *args, **kwargs):
         raise NotImplementedError
