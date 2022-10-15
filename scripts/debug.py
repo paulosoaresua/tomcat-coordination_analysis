@@ -2,8 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
+from sklearn.metrics import mean_squared_error
+from scipy.stats import pearsonr
+from sklearn.model_selection import cross_validate, GridSearchCV
+
 # Custom code
-from coordination.common.dataset import Dataset, SeriesData
+from coordination.common.dataset import Dataset, SeriesData, train_test_split, IndexToDatasetTransformer
 from coordination.audio.audio import TrialAudio
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent
 from coordination.entity.trial import Trial
@@ -52,27 +56,12 @@ if __name__ == "__main__":
     A0 = 1E-16
     B0 = 1E16  # The process starts with no coordination
 
-    series = []
-    scores = []
-    for trial_number in ["T000671", "T000672", "T000719", "T000720"]:
-        trial = Trial.from_directory(f"../data/study-3_2022/tomcat_agent/trials/{trial_number}/")
-        vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics,
-                                                             segmentation_method=SegmentationMethod.KEEP_ALL)
-
-        vocalic_series = vocalics_component.sparse_series(NUM_TIME_STEPS, trial.metadata.mission_start)
-        vocalic_series.normalize_per_subject()
-
-        series.append(SeriesData(vocalic_series))
-        scores.append(trial.metadata.team_score)
-
-    dataset = Dataset(series)
-
-    model = DiscreteCoordinationInferenceFromVocalics(p_prior_coordination=P_COORDINATION,
-                                                      p_coordination_transition=P_COORDINATION_TRANSITION,
-                                                      mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
-                                                      std_prior_vocalics=STD_PRIOR_VOCALICS,
-                                                      std_uncoordinated_vocalics=STD_UNCOORDINATED_VOCALICS,
-                                                      std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
+    # model = DiscreteCoordinationInferenceFromVocalics(p_prior_coordination=P_COORDINATION,
+    #                                                   p_coordination_transition=P_COORDINATION_TRANSITION,
+    #                                                   mean_prior_vocalics=MEAN_PRIOR_VOCALICS,
+    #                                                   std_prior_vocalics=STD_PRIOR_VOCALICS,
+    #                                                   std_uncoordinated_vocalics=STD_UNCOORDINATED_VOCALICS,
+    #                                                   std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
 
     # fig = plt.figure(figsize=(8, 4))
     # plt.plot(x_test, func(x_test), color="blue", label="sin($2\\pi x$)")
@@ -126,17 +115,7 @@ if __name__ == "__main__":
     #                               labels=["Coordination"])
     # plt.show()
     #
-    # np.random.seed(0)
-    # inference_engine = GaussianCoordinationBlendingInferenceLatentVocalics(
-    #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-    #     std_prior_coordination=STD_COORDINATION_PRIOR,
-    #     std_coordination_drifting=STD_COORDINATION_DRIFT,
-    #     mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
-    #     std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
-    #     std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
-    #     std_observed_vocalics=STD_OBSERVED_VOCALICS,
-    #     f=ANTIPHASE_FUNCTION,
-    #     fix_coordination_on_second_half=False)
+
     #
     # start = time.time()
     # params = inference_engine.predict(dataset, num_particles=10000)[0]
@@ -159,17 +138,17 @@ if __name__ == "__main__":
     #                               labels=["Coordination"])
     # plt.show()
     #
-    np.random.seed(0)
-    model = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(
-        mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-        std_prior_coordination=STD_COORDINATION_PRIOR,
-        std_coordination_drifting=STD_COORDINATION_DRIFT,
-        mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
-        std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
-        std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
-        std_observed_vocalics=STD_OBSERVED_VOCALICS,
-        f=ANTIPHASE_FUNCTION,
-        fix_coordination_on_second_half=False)
+    # np.random.seed(0)
+    # model = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(
+    #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+    #     std_prior_coordination=STD_COORDINATION_PRIOR,
+    #     std_coordination_drifting=STD_COORDINATION_DRIFT,
+    #     mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+    #     std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+    #     std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+    #     std_observed_vocalics=STD_OBSERVED_VOCALICS,
+    #     f=ANTIPHASE_FUNCTION,
+    #     fix_coordination_on_second_half=False)
     #
     # start = time.time()
     # params = inference_engine.predict(dataset, num_particles=10000)[0]
@@ -225,30 +204,127 @@ if __name__ == "__main__":
     #                               labels=["Coordination"])
     # plt.show()
 
-    # model.configure_tensorboard("/Users/paulosoares/code/tomcat-coordination/data/tensorboard")
-    # reg = BayesianRidge(tol=1e-6, fit_intercept=False, compute_score=True)
-    # reg.set_params(alpha_init=1, lambda_init=1e-3)
-    #
-    # pipeline = Pipeline([
-    #     ("coordination", CoordinationTransformer(model)),
-    #     ("score_regressor", reg),
-    # ])
-    #
-    # pipeline.fit(X=dataset, y=np.array(scores))
-    #
-    # ymean, ystd = pipeline.predict(X=dataset, return_std=True)
-    #
-    # print(scores)
-    # print(ymean)
-    # print(ystd)
 
-    from glob import glob
-    import pandas as pd
 
-    for trial_dir in glob("/Users/paulosoares/data/study-3_2022/no_advisor/replays/vocalics_csv/T*"):
-        for voc_file in glob(f"{trial_dir}/*.csv"):
-            df_subject = pd.read_csv(voc_file, delimiter=";")
-            df_subject.columns = [column.replace("pcm_", "wave_") if column.startswith("pcm") else column for column in
-                                  df_subject.columns]
-            df_subject.to_csv(voc_file, sep=";", index=False)
+    model = GaussianCoordinationBlendingInferenceLatentVocalics(
+        mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+        std_prior_coordination=STD_COORDINATION_PRIOR,
+        std_coordination_drifting=STD_COORDINATION_DRIFT,
+        mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+        std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+        std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+        std_observed_vocalics=STD_OBSERVED_VOCALICS,
+        f=ANTIPHASE_FUNCTION,
+        fix_coordination_on_second_half=False,
+        num_particles=100,
+        seed=0
+    )
 
+    series = []
+    scores = []
+    trials = ["T000671", "T000672", "T000719", "T000720", "T000725", "T000726", "T000739", "T000740"]
+    for trial_number in trials:
+        trial = Trial.from_directory(f"../data/study-3_2022/tomcat_agent/trials/{trial_number}/")
+        vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics,
+                                                             segmentation_method=SegmentationMethod.KEEP_ALL)
+
+        vocalic_series = vocalics_component.sparse_series(500, trial.metadata.mission_start)
+        vocalic_series.normalize_per_subject()
+
+        series.append(SeriesData(vocalic_series))
+        scores.append(trial.metadata.team_score)
+
+    dataset = Dataset(series, trials)
+
+    print("Starting")
+
+    model.configure_tensorboard("/Users/paulosoares/code/tomcat-coordination/data/tensorboard")
+    reg = BayesianRidge(tol=1e-6, fit_intercept=False, compute_score=True)
+    reg.set_params(alpha_init=1, lambda_init=1e-3)
+
+    transformer = CoordinationTransformer(model)
+    pipeline = Pipeline([
+        ("coordination", transformer),
+        ("score_regressor", reg),
+    ])
+
+    pipeline_cv = Pipeline([
+        ("index_2_dataset", IndexToDatasetTransformer(dataset)),
+        ("coordination", transformer),
+        ("score_regressor", reg),
+    ])
+
+
+    def estimate_single(estimator, X, y):
+        y_hat, _ = estimator.predict(X=X, return_std=True)
+        mse = mean_squared_error(y, y_hat)
+
+        return mse
+
+
+    def estimate(estimator, X, y):
+        pipe = estimator.best_estimator_
+        y_hat, _ = pipe.predict(X=X, return_std=True)
+        mse = mean_squared_error(y, y_hat)
+        nll = pipe.steps[2][1].scores_[-1]
+
+        if len(y) >= 2:
+            r, p = pearsonr(pipe.steps[1][1].output_.flatten(), y_hat)
+        else:
+            r = 0
+            p = -1
+
+        print(estimator.cv_results_)
+
+        return {
+            "mse": mse,
+            "pearson-r": r,
+            "pearson-p": p,
+            "nll": nll
+        }
+
+
+    np.random.seed(0)
+    clf = GridSearchCV(estimator=pipeline_cv,
+                       param_grid={"score_regressor__alpha_init": [1, 1e-3], "score_regressor__lambda_init": [1, 1e-3]},
+                       cv=2,
+                       scoring=estimate_single)
+
+    start = time.time()
+    result = cross_validate(
+        estimator=clf,
+        X=np.arange(dataset.num_trials)[:, np.newaxis],
+        y=scores,
+        cv=2,
+        scoring=estimate,
+        n_jobs=1
+    )
+    print(result)
+    end = time.time()
+    print(f"{(end - start)} seconds.")
+
+    # scores = np.array(scores)
+    # X_train, X_test, y_train, y_test = train_test_split(dataset, scores, test_size=0.5)
+    #
+    # np.random.seed(0)
+    # pipeline.fit(X=X_train, y=y_train)
+    #
+    # y_hat, _ = pipeline.predict(X=X_test, return_std=True)
+    # r, p = pearsonr(transformer.output_.flatten(), y_hat)
+    #
+    # error = mean_squared_error(y_test, y_hat)
+    # print(error) # SME
+    # print(r, p) # Pearson
+    # print(reg.scores_[-1]) # LL
+
+    # from glob import glob
+    # import pandas as pd
+    #
+    # for trial_dir in glob("/Users/paulosoares/data/study-3_2022/tomcat_agent/replays/vocalics_csv/T*"):
+    #     print(trial_dir)
+    #     for voc_file in glob(f"{trial_dir}/*.csv"):
+    #         df_subject = pd.read_csv(voc_file, delimiter=";")
+    #         df_subject.columns = [column.replace("pcm_", "wave_") if column.startswith("pcm") else column for column in
+    #                               df_subject.columns]
+    #
+    #         df_subject.to_csv(voc_file, sep=";", index=False)

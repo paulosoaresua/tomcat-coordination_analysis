@@ -1,7 +1,10 @@
-from typing import Optional
-
+import io
 import logging
 import os
+
+import matplotlib.pyplot as plt
+import PIL.Image
+from torchvision.transforms import ToTensor
 
 
 def _setup_logger(handler):
@@ -31,3 +34,15 @@ def configure_log(verbose: bool, log_filepath: str):
             setup_custom_logger()
     else:
         logging.disable(logging.CRITICAL)
+
+
+def image_to_tensorboard(figure: plt.figure):
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    plt.close(figure)
+    buffer.seek(0)
+
+    image = PIL.Image.open(buffer)
+    image = ToTensor()(image)
+
+    return image

@@ -63,7 +63,7 @@ class LogisticCoordinationInferenceFromVocalics(CoordinationModel, ParticleFilte
 
         result = []
         for d in range(input_features.num_trials):
-            self.reset_particles()
+            self.reset_state()
             series = input_features.series[d]
 
             M = int(series.num_time_steps / 2)

@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 from scipy.stats import norm
@@ -28,13 +28,25 @@ class GaussianLatentVocalicsParticles(LatentVocalicsParticles):
 
 class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingInferenceLatentVocalics):
 
-    def __init__(self, mean_prior_coordination: float, std_prior_coordination: float, std_coordination_drifting: float,
-                 *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self,
+                 mean_prior_coordination: float,
+                 std_prior_coordination: float,
+                 std_coordination_drifting: float,
+                 mean_prior_latent_vocalics: np.array,
+                 std_prior_latent_vocalics: np.array,
+                 std_coordinated_latent_vocalics: np.ndarray,
+                 std_observed_vocalics: np.ndarray,
+                 f: Callable = lambda x, s: x,
+                 g: Callable = lambda x: x,
+                 fix_coordination_on_second_half: bool = True,
+                 num_particles: int = 10000,
+                 seed: Optional[int] = None):
+        super().__init__(mean_prior_latent_vocalics, std_prior_latent_vocalics, std_coordinated_latent_vocalics,
+                         std_observed_vocalics, f, g, fix_coordination_on_second_half, num_particles, seed)
 
-        self._mean_prior_coordination = mean_prior_coordination
-        self._std_prior_coordination = std_prior_coordination
-        self._std_coordination_drifting = std_coordination_drifting
+        self.mean_prior_coordination = mean_prior_coordination
+        self.std_prior_coordination = std_prior_coordination
+        self.std_coordination_drifting = std_coordination_drifting
 
         self.states: List[GaussianLatentVocalicsParticles] = []
 
@@ -44,14 +56,14 @@ class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingIn
         return self
 
     def _sample_coordination_from_prior(self, new_particles: GaussianLatentVocalicsParticles):
-        mean = np.ones(self.num_particles) * self._mean_prior_coordination
-        new_particles.unbounded_coordination = norm(loc=mean, scale=self._std_prior_coordination).rvs()
+        mean = np.ones(self.num_particles) * self.mean_prior_coordination
+        new_particles.unbounded_coordination = norm(loc=mean, scale=self.std_prior_coordination).rvs()
         new_particles.clip()
 
     def _sample_coordination_from_transition(self, previous_particles: GaussianLatentVocalicsParticles,
                                              new_particles: GaussianLatentVocalicsParticles):
         new_particles.unbounded_coordination = norm(loc=previous_particles.unbounded_coordination,
-                                                    scale=self._std_coordination_drifting).rvs()
+                                                    scale=self.std_coordination_drifting).rvs()
         new_particles.clip()
 
     def _create_new_particles(self) -> LatentVocalicsParticles:
