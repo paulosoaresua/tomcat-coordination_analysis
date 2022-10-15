@@ -18,11 +18,6 @@ class VocalicsReaderCSV(VocalicsReader):
     This class reads vocalic features from a database
     """
 
-    __FEATURE_MAP = {
-        "pitch": "F0final_sma",
-        "intensity": "pcm_RMSenergy_sma"
-    }
-
     def __init__(self, vocalics_dir: str, features: List[str]):
         """
         @param vocalics_dir: directory containing a list of trials and csv files with the vocalics for each subject.
@@ -36,6 +31,8 @@ class VocalicsReaderCSV(VocalicsReader):
         df_trial = None
         for vocalics_file in glob(f"{self._vocalics_dir}/{trial_metadata.number}/*.csv"):
             df_subject = pd.read_csv(vocalics_file, delimiter=";")
+            df_subject.columns = ["seconds_offset" if column == "frameTime" else column.lower() for column in
+                                  df_subject.columns]
 
             if time_range is not None:
                 df_subject = df_subject[
@@ -44,7 +41,7 @@ class VocalicsReaderCSV(VocalicsReader):
             subject_id = os.path.basename(vocalics_file)
             subject_id = subject_id[:subject_id.rfind(".")]
             df_subject["participant"] = subject_id
-            cols = ["participant", "frameTime"] + [self.__FEATURE_MAP[feature] for feature in self.features]
+            cols = ["participant", "seconds_offset"] + [self._FEATURE_MAP[feature] for feature in self.features]
 
             if df_trial is None:
                 df_trial = df_subject.loc[:, cols]

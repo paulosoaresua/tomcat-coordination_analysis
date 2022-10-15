@@ -78,6 +78,8 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel, ParticleFil
                 mean = self.states[-1].mean()
                 variance = self.states[-1].var()
                 params[:, real_time] = [mean, variance]
+                if self.tb_writer is not None:
+                    self.tb_writer.add_scalar(f"inference/{d}", mean)
 
             result.append(params)
 

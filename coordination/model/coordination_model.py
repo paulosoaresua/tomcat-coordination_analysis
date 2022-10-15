@@ -1,10 +1,14 @@
 from typing import Any
 
-from coordination.common.dataset import Dataset
 from sklearn.base import BaseEstimator
+from torch.utils.tensorboard import SummaryWriter
+
+from coordination.common.dataset import Dataset
 
 
 class CoordinationModel(BaseEstimator):
+
+    tb_writer: SummaryWriter
 
     def fit(self, input_features: Dataset, *args, **kwargs):
         raise NotImplementedError
@@ -21,3 +25,6 @@ class CoordinationModel(BaseEstimator):
                 setattr(self, key, value)
 
         return self
+
+    def configure_tensorboard(self, out_dir: str):
+        self.tb_writer = SummaryWriter(log_dir=out_dir)

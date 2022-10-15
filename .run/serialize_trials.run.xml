@@ -13,7 +13,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/serialize_trials.py" />
-    <option name="PARAMETERS" value="--input_path=$USER_HOME$/data/study-3_2022/no_advisor/replays/metadata --out_dir=$PROJECT_DIR$/../data/tomcat-coordination/study-3_2022/no_advisor/trials --verbose --log_dir=--out_dir=$PROJECT_DIR$/../data/tomcat-coordination/study-3_2022/no_advisor/logs --vocalics_csv_dir=$USER_HOME$/data/study-3_2022/no_advisor/replays/vocalics_csv --vocalics_src=&quot;csv&quot; --multi" />
+    <option name="PARAMETERS" value="--input_path=&quot;$USER_HOME$/data/study-3_2022/other_agents/replays/metadata&quot; --out_dir=&quot;$PROJECT_DIR$/data/study-3_2022/other_agents/trials&quot; --verbose --log_dir=&quot;$PROJECT_DIR$/data/study-3_2022/other_agents/logs&quot; --vocalics_csv_dir=&quot;$USER_HOME$/data/study-3_2022/other_agents/replays/vocalics_csv&quot; --vocalics_src=&quot;csv&quot; --multi" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />

@@ -32,8 +32,7 @@ class BetaCoordinationInferenceFromVocalics(CoordinationModel, ParticleFilter):
         self._f = f
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
-    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
-            **kwargs):
+    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         return self
 

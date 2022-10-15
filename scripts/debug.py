@@ -74,22 +74,6 @@ if __name__ == "__main__":
                                                       std_uncoordinated_vocalics=STD_UNCOORDINATED_VOCALICS,
                                                       std_coordinated_vocalics=STD_COORDINATED_VOCALICS)
 
-    reg = BayesianRidge(tol=1e-6, fit_intercept=False, compute_score=True)
-    reg.set_params(alpha_init=1, lambda_init=1e-3)
-
-    pipeline = Pipeline([
-        ("coordination", CoordinationTransformer(model)),
-        ("score_regressor", reg),
-    ])
-
-    pipeline.fit(dataset, np.array(scores))
-
-    ymean, ystd = pipeline.predict(dataset, return_std=True)
-
-    print(scores)
-    print(ymean)
-    print(ystd)
-
     # fig = plt.figure(figsize=(8, 4))
     # plt.plot(x_test, func(x_test), color="blue", label="sin($2\\pi x$)")
     # plt.scatter(x_train, y_train, s=50, alpha=0.5, label="observation")
@@ -97,8 +81,6 @@ if __name__ == "__main__":
     # plt.fill_between(
     #     x_test, ymean - ystd, ymean + ystd, color="pink", alpha=0.5, label="predict std"
     # )
-
-
 
     # start = time.time()
     # params = inference_engine.predict(dataset)[0]
@@ -177,17 +159,17 @@ if __name__ == "__main__":
     #                               labels=["Coordination"])
     # plt.show()
     #
-    # np.random.seed(0)
-    # inference_engine = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(
-    #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
-    #     std_prior_coordination=STD_COORDINATION_PRIOR,
-    #     std_coordination_drifting=STD_COORDINATION_DRIFT,
-    #     mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
-    #     std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
-    #     std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
-    #     std_observed_vocalics=STD_OBSERVED_VOCALICS,
-    #     f=ANTIPHASE_FUNCTION,
-    #     fix_coordination_on_second_half=False)
+    np.random.seed(0)
+    model = TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(
+        mean_prior_coordination=MEAN_COORDINATION_PRIOR,
+        std_prior_coordination=STD_COORDINATION_PRIOR,
+        std_coordination_drifting=STD_COORDINATION_DRIFT,
+        mean_prior_latent_vocalics=MEAN_PRIOR_VOCALICS,
+        std_prior_latent_vocalics=STD_PRIOR_VOCALICS,
+        std_coordinated_latent_vocalics=STD_COORDINATED_VOCALICS,
+        std_observed_vocalics=STD_OBSERVED_VOCALICS,
+        f=ANTIPHASE_FUNCTION,
+        fix_coordination_on_second_half=False)
     #
     # start = time.time()
     # params = inference_engine.predict(dataset, num_particles=10000)[0]
@@ -211,7 +193,7 @@ if __name__ == "__main__":
     # plt.show()
     #
     # np.random.seed(0)
-    # inference_engine = LogisticCoordinationBlendingInferenceLatentVocalics(
+    # model = LogisticCoordinationBlendingInferenceLatentVocalics(
     #     mean_prior_coordination=MEAN_COORDINATION_PRIOR,
     #     std_prior_coordination=STD_COORDINATION_PRIOR,
     #     std_coordination_drifting=STD_COORDINATION_DRIFT,
@@ -242,3 +224,31 @@ if __name__ == "__main__":
     #                               coordination_colors=["tab:orange"],
     #                               labels=["Coordination"])
     # plt.show()
+
+    # model.configure_tensorboard("/Users/paulosoares/code/tomcat-coordination/data/tensorboard")
+    # reg = BayesianRidge(tol=1e-6, fit_intercept=False, compute_score=True)
+    # reg.set_params(alpha_init=1, lambda_init=1e-3)
+    #
+    # pipeline = Pipeline([
+    #     ("coordination", CoordinationTransformer(model)),
+    #     ("score_regressor", reg),
+    # ])
+    #
+    # pipeline.fit(X=dataset, y=np.array(scores))
+    #
+    # ymean, ystd = pipeline.predict(X=dataset, return_std=True)
+    #
+    # print(scores)
+    # print(ymean)
+    # print(ystd)
+
+    from glob import glob
+    import pandas as pd
+
+    for trial_dir in glob("/Users/paulosoares/data/study-3_2022/no_advisor/replays/vocalics_csv/T*"):
+        for voc_file in glob(f"{trial_dir}/*.csv"):
+            df_subject = pd.read_csv(voc_file, delimiter=";")
+            df_subject.columns = [column.replace("pcm_", "wave_") if column.startswith("pcm") else column for column in
+                                  df_subject.columns]
+            df_subject.to_csv(voc_file, sep=";", index=False)
+

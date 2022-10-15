@@ -25,7 +25,7 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(CoordinationB
     def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
-        raise NotImplementedError
+        return self
 
     def _sample_coordination_from_prior(self, new_particles: LatentVocalicsParticles):
         mean = np.ones(self.num_particles) * self._mean_prior_coordination

@@ -27,6 +27,11 @@ class VocalicsReader:
     This class is an abstract class to read vocalic features from a specific source
     """
 
+    _FEATURE_MAP = {
+        "pitch": "f0final_sma",
+        "intensity": "wave_rmsenergy_sma"
+    }
+
     def __init__(self, features: List[str]):
         self.features = features
 
