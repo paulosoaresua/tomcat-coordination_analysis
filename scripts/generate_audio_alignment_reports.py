@@ -21,11 +21,9 @@ def generate_reports(input_dir: str, audios_dir: str, out_dir: str, multi: bool)
 
     if multi:
         filepaths = glob(f"{input_dir}/T*")
-        pbar = tqdm(total=len(filepaths), desc="Generating reports...")
-        for i, filepath in tqdm(enumerate(filepaths)):
+        for i, filepath in tqdm(enumerate(filepaths), desc="Generating reports..."):
             if os.path.isdir(filepath):
                 generate_single_report(filepath, audios_dir, out_dir)
-            pbar.update()
     else:
         generate_single_report(input_dir, audios_dir, out_dir)
 

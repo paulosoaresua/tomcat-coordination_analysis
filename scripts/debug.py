@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
+import pandas as pd
 from sklearn.metrics import mean_squared_error
 from scipy.stats import pearsonr
 from sklearn.model_selection import cross_validate, GridSearchCV
@@ -27,6 +28,71 @@ from coordination.report.coordination_change_report import CoordinationChangeRep
 from sklearn.linear_model import BayesianRidge
 from sklearn.pipeline import Pipeline
 from coordination.model.coordination_transformer import CoordinationTransformer
+
+from tqdm import tqdm
+
+
+class CrossValidationHelper:
+
+    def __init__(self, num_outer_splits: int, num_inner_splits: int, create_bars: bool = True):
+        self.num_outer_splits = num_outer_splits
+        self.num_inner_splits = num_inner_splits
+
+        if create_bars:
+            self.outer_pbar = tqdm(total=num_outer_splits, desc="Testing...", position=0)
+            self.inner_pbar = tqdm(total=num_inner_splits, desc="Tuning...", position=1, leave=False)
+
+        self.tuning_results = []
+
+    def estimate_inner(self, estimator, X, y):
+        """
+        Estimates the MSE in the validation set. The inner cross validation splits the training into training and
+        validation to perform hyperparameter tuning.
+        """
+
+        y_hat, _ = estimator.predict(X=X, return_std=True)
+        mse = mean_squared_error(y, y_hat)
+
+        self.inner_pbar.update()
+
+        return mse
+
+    def estimate_outer(self, estimator, X, y):
+        pipe = estimator.best_estimator_
+        y_hat, _ = pipe.predict(X=X, return_std=True)
+        mse = mean_squared_error(y, y_hat)
+        nll = pipe.steps[2][1].scores_[-1]
+
+        if len(y) >= 2:
+            r, p = pearsonr(pipe.steps[1][1].output_.flatten(), y_hat)
+        else:
+            r = 0
+            p = -1
+
+        self.tuning_results.append(estimator.cv_results_)
+        # self.outer_pbar.update()
+
+        return {
+            "mse": mse,
+            "pearson-r": r,
+            "pearson-p": p,
+            "nll": nll
+        }
+
+    def __copy__(self):
+        cp = CrossValidationHelper(self.num_outer_splits, self.num_inner_splits, False)
+        cp.outer_pbar = self.outer_pbar
+        cp.inner_pbar = self.inner_pbar
+
+        return cp
+
+    def __deepcopy__(self, memo):
+        cp = CrossValidationHelper(self.num_outer_splits, self.num_inner_splits, False)
+        cp.outer_pbar = self.outer_pbar
+        cp.inner_pbar = self.inner_pbar
+
+        return cp
+
 
 if __name__ == "__main__":
     # Constants
@@ -204,6 +270,17 @@ if __name__ == "__main__":
     #                               labels=["Coordination"])
     # plt.show()
 
+    # for outer in tqdm([10, 20, 30, 40, 50], desc=" outer", position=0):
+    #     for inner in tqdm(range(outer), desc=" inner loop", position=1, leave=False):
+    #         time.sleep(0.05)
+    # print("done!")
+
+
+
+
+
+
+
 
 
     model = GaussianCoordinationBlendingInferenceLatentVocalics(
@@ -254,77 +331,27 @@ if __name__ == "__main__":
         ("score_regressor", reg),
     ])
 
-
-    def estimate_single(estimator, X, y):
-        y_hat, _ = estimator.predict(X=X, return_std=True)
-        mse = mean_squared_error(y, y_hat)
-
-        return mse
-
-
-    def estimate(estimator, X, y):
-        pipe = estimator.best_estimator_
-        y_hat, _ = pipe.predict(X=X, return_std=True)
-        mse = mean_squared_error(y, y_hat)
-        nll = pipe.steps[2][1].scores_[-1]
-
-        if len(y) >= 2:
-            r, p = pearsonr(pipe.steps[1][1].output_.flatten(), y_hat)
-        else:
-            r = 0
-            p = -1
-
-        print(estimator.cv_results_)
-
-        return {
-            "mse": mse,
-            "pearson-r": r,
-            "pearson-p": p,
-            "nll": nll
-        }
-
+    helper = CrossValidationHelper(2, 8)
 
     np.random.seed(0)
     clf = GridSearchCV(estimator=pipeline_cv,
                        param_grid={"score_regressor__alpha_init": [1, 1e-3], "score_regressor__lambda_init": [1, 1e-3]},
                        cv=2,
-                       scoring=estimate_single)
+                       scoring=helper.estimate_inner)
 
     start = time.time()
-    result = cross_validate(
+    final_result = cross_validate(
         estimator=clf,
         X=np.arange(dataset.num_trials)[:, np.newaxis],
         y=scores,
         cv=2,
-        scoring=estimate,
+        scoring=helper.estimate_outer,
         n_jobs=1
     )
-    print(result)
+
+    for result in helper.tuning_results:
+        print(pd.DataFrame(result))
+
+    print(pd.DataFrame(final_result))
     end = time.time()
     print(f"{(end - start)} seconds.")
-
-    # scores = np.array(scores)
-    # X_train, X_test, y_train, y_test = train_test_split(dataset, scores, test_size=0.5)
-    #
-    # np.random.seed(0)
-    # pipeline.fit(X=X_train, y=y_train)
-    #
-    # y_hat, _ = pipeline.predict(X=X_test, return_std=True)
-    # r, p = pearsonr(transformer.output_.flatten(), y_hat)
-    #
-    # error = mean_squared_error(y_test, y_hat)
-    # print(error) # SME
-    # print(r, p) # Pearson
-    # print(reg.scores_[-1]) # LL
-
-    # from glob import glob
-    # import pandas as pd
-    #
-    # for trial_dir in glob("/Users/paulosoares/data/study-3_2022/tomcat_agent/replays/vocalics_csv/T*"):
-    #     print(trial_dir)
-    #     for voc_file in glob(f"{trial_dir}/*.csv"):
-    #         df_subject = pd.read_csv(voc_file, delimiter=";")
-    #         df_subject.columns = [column.replace("pcm_", "wave_") if column.startswith("pcm") else column for column in
-    #                               df_subject.columns]
-    #
-    #         df_subject.to_csv(voc_file, sep=";", index=False)
