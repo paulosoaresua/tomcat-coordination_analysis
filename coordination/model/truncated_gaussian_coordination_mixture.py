@@ -3,7 +3,7 @@ from typing import Callable, List
 import numpy as np
 from scipy.stats import norm, truncnorm
 
-from coordination.common.dataset import Dataset, SeriesData
+from coordination.common.dataset import InputFeaturesDataset, SeriesData
 from coordination.model.coordination_model import CoordinationModel
 from coordination.model.particle_filter import Particles, ParticleFilter
 
@@ -36,12 +36,12 @@ class TruncatedGaussianCoordinationMixtureInference(CoordinationModel, ParticleF
         self._f = f
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
-    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         return self
 
-    def predict(self, input_features: Dataset, num_particles: int = 0, *args, **kwargs) -> List[np.ndarray]:
+    def predict(self, input_features: InputFeaturesDataset, num_particles: int = 0, *args, **kwargs) -> List[np.ndarray]:
         if input_features.num_trials > 0:
             assert len(self._mean_prior_vocalics) == input_features.series[0].vocalics.num_series
             assert len(self._std_prior_vocalics) == input_features.series[0].vocalics.num_series

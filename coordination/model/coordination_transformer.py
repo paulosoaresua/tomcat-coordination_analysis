@@ -2,7 +2,7 @@ from typing import Any
 
 import numpy as np
 
-from coordination.common.dataset import Dataset
+from coordination.common.dataset import InputFeaturesDataset
 from coordination.model.coordination_model import CoordinationModel
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -14,11 +14,11 @@ class CoordinationTransformer(BaseEstimator, TransformerMixin):
         self.estimates_ = []
         self.output_ = None
 
-    def fit(self, X: Dataset, y: Any = None, *args, **kwargs):
+    def fit(self, X: InputFeaturesDataset, y: Any = None, *args, **kwargs):
         self.coordination_model.fit(X, *args, **kwargs)
         return self
 
-    def transform(self, X: Dataset, y: Any = None, *args, **kwargs) -> Any:
+    def transform(self, X: InputFeaturesDataset, y: Any = None, *args, **kwargs) -> Any:
         # We keep estimated coordination so it can be retrieved for later assessment
         self.estimates_ = self.coordination_model.predict(X, *args, **kwargs)
         # We pass to the next step in the pipeline the mean coordination over an entire trial
@@ -33,7 +33,7 @@ class CoordinationTransformer(BaseEstimator, TransformerMixin):
             return self
 
         for key, value in params.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+            if hasattr(self.coordination_model, key):
+                setattr(self.coordination_model, key, value)
 
         return self

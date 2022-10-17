@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, List, Optional
+from typing import Any, List
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -10,47 +10,56 @@ from coordination.component.speech.vocalics_component import VocalicsSparseSerie
 
 class SeriesData:
 
-    def __init__(self, vocalics: VocalicsSparseSeries):
+    def __init__(self, vocalics: VocalicsSparseSeries, uuid: str):
         self.vocalics = vocalics
+        self.uuid = uuid
 
     @property
     def num_time_steps(self):
         return self.vocalics.num_time_steps
 
 
-class Dataset:
+class InputFeaturesDataset:
 
-    def __init__(self, series: List[SeriesData], series_ids: Optional[List[str]] = None):
+    def __init__(self, series: List[SeriesData]):
         self.series = series
-        self.series_ids = series_ids
 
     @property
     def num_trials(self):
         return len(self.series)
 
-    def get_id(self, series_idx: int) -> str:
-        return self.series_ids[series_idx] if self.series_ids is not None else str(series_idx)
+    def get_subset(self, indices: List[int]) -> InputFeaturesDataset:
+        return InputFeaturesDataset([self.series[i] for i in indices])
 
-    def get_subset(self, indices: List[int]) -> Dataset:
-        series_subset = [self.series[i] for i in indices]
-        series_ids_subset = [self.series_ids[i] for i in indices] if self.series_ids is not None else None
+    @staticmethod
+    def merge_list(datasets: List[InputFeaturesDataset]) -> InputFeaturesDataset:
+        merged_dataset = None
+        for dataset in datasets:
+            if merged_dataset is None:
+                merged_dataset = dataset
+            else:
+                merged_dataset = InputFeaturesDataset.merge(merged_dataset, dataset)
 
-        return Dataset(series_subset, series_ids_subset)
+        return merged_dataset
+
+    @staticmethod
+    def merge(dataset1: InputFeaturesDataset, dataset2: InputFeaturesDataset) -> InputFeaturesDataset:
+        return InputFeaturesDataset(dataset1.series + dataset2.series)
 
 
 class IndexToDatasetTransformer(BaseEstimator, TransformerMixin):
 
-    def __init__(self, complete_dataset: Dataset):
+    def __init__(self, complete_dataset: InputFeaturesDataset):
         self.complete_dataset = complete_dataset
 
     def fit(self, X: np.ndarray, y: Any = None, *args, **kwargs):
         return self
 
-    def transform(self, X: np.ndarray, y: Any = None, *args, **kwargs) -> Dataset:
+    def transform(self, X: np.ndarray, y: Any = None, *args, **kwargs) -> InputFeaturesDataset:
         return self.complete_dataset.get_subset(X.flatten().tolist())
 
 
-def train_test_split(X: Dataset, y: np.ndarray, test_size: float = 0.2, seed: int = 0):
+def train_test_split(X: InputFeaturesDataset, y: np.ndarray, test_size: float = 0.2, seed: int = 0):
     train_indices, test_indices, train_y, test_y = sklearn_train_test_split(np.arange(X.num_trials), y,
                                                                             test_size=test_size, random_state=seed)
 

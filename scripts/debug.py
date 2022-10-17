@@ -8,7 +8,7 @@ from scipy.stats import pearsonr
 from sklearn.model_selection import cross_validate, GridSearchCV
 
 # Custom code
-from coordination.common.dataset import Dataset, SeriesData, train_test_split, IndexToDatasetTransformer
+from coordination.common.dataset import InputFeaturesDataset, SeriesData, train_test_split, IndexToDatasetTransformer
 from coordination.audio.audio import TrialAudio
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent
 from coordination.entity.trial import Trial
@@ -311,7 +311,7 @@ if __name__ == "__main__":
         series.append(SeriesData(vocalic_series))
         scores.append(trial.metadata.team_score)
 
-    dataset = Dataset(series, trials)
+    dataset = InputFeaturesDataset(series, trials)
 
     print("Starting")
 

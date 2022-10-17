@@ -3,7 +3,7 @@ from typing import Callable, Optional
 import numpy as np
 from scipy.stats import truncnorm
 
-from coordination.common.dataset import Dataset
+from coordination.common.dataset import InputFeaturesDataset
 from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics, \
     LatentVocalicsParticles
 
@@ -33,7 +33,7 @@ class TruncatedGaussianCoordinationBlendingInferenceLatentVocalics(CoordinationB
         self.std_prior_coordination = std_prior_coordination
         self.std_coordination_drifting = std_coordination_drifting
 
-    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         return self

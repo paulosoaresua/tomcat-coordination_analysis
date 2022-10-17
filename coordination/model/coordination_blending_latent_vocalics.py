@@ -2,10 +2,13 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Optional
 
 import copy
+import inspect
+
 import numpy as np
 from scipy.stats import norm
+from tqdm import tqdm
 
-from coordination.common.dataset import Dataset, SeriesData
+from coordination.common.dataset import InputFeaturesDataset, SeriesData
 from coordination.model.coordination_model import CoordinationModel
 from coordination.model.particle_filter import Particles, ParticleFilter
 
@@ -21,6 +24,14 @@ class LatentVocalicsParticles(Particles):
                 self.latent_vocalics[speaker] = latent_vocalics[indices, :]
 
 
+def default_f(x: np.ndarray, s: int) -> np.ndarray:
+    return x
+
+
+def default_g(x: np.ndarray) -> np.ndarray:
+    return x
+
+
 class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
 
     def __init__(self,
@@ -28,11 +39,12 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
                  std_prior_latent_vocalics: np.array,
                  std_coordinated_latent_vocalics: np.ndarray,
                  std_observed_vocalics: np.ndarray,
-                 f: Callable = lambda x, s: x,
-                 g: Callable = lambda x: x,
+                 f: Callable = default_f,
+                 g: Callable = default_g,
                  fix_coordination_on_second_half: bool = True,
                  num_particles: int = 10000,
-                 seed: Optional[int] = None):
+                 seed: Optional[int] = None,
+                 show_progress_bar: bool = False):
         super().__init__()
 
         self.mean_prior_latent_vocalics = mean_prior_latent_vocalics
@@ -44,13 +56,14 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
         self.fix_coordination_on_second_half = fix_coordination_on_second_half
         self.num_particles = num_particles
         self.seed = seed
+        self.show_progress_bar = show_progress_bar
 
-    def fit(self, input_features: Dataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         return self
 
-    def predict(self, input_features: Dataset, *args, **kwargs) -> List[np.ndarray]:
+    def predict(self, input_features: InputFeaturesDataset, *args, **kwargs) -> List[np.ndarray]:
         if input_features.num_trials > 0:
             assert len(self.mean_prior_latent_vocalics) == input_features.series[0].vocalics.num_features
             assert len(self.std_prior_latent_vocalics) == input_features.series[0].vocalics.num_features
@@ -66,6 +79,10 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
             seed=self.seed
         )
 
+        pbar_outer = None
+        if self.show_progress_bar:
+            pbar_outer = tqdm(total=input_features.num_trials, desc="Trial", position=0)
+
         result = []
         for d in range(input_features.num_trials):
             particle_filter.reset_state()
@@ -73,6 +90,11 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
 
             M = int(series.num_time_steps / 2)
             num_time_steps = M + 1 if self.fix_coordination_on_second_half else series.num_time_steps
+
+            pbar_inner = None
+            if self.show_progress_bar:
+                pbar_inner = tqdm(total=input_features.series[0].num_time_steps, desc="Time Step", position=1,
+                                  leave=False)
 
             params = np.zeros((2, num_time_steps))
             for t in range(0, series.num_time_steps):
@@ -84,13 +106,20 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
                 mean = particle_filter.states[-1].mean()
                 variance = particle_filter.states[-1].var()
                 params[:, real_time] = [mean, variance]
+
+                if self.show_progress_bar:
+                    pbar_inner.update()
+
                 if self.tb_writer is not None:
-                    self.tb_writer.add_scalar(f"inference/coordination-{input_features.get_id(d)}", mean, t)
+                    self.tb_writer.add_scalar(f"inference/coordination-{series.uuid}", mean, t)
 
             result.append(params)
 
+            if self.show_progress_bar:
+                pbar_outer.update()
+
             if self.tb_writer is not None:
-                self.log_coordination_inference_plot(series, params, input_features.get_id(d))
+                self.log_coordination_inference_plot(series, params, series.uuid)
 
         return result
 
@@ -153,7 +182,8 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
 
         return log_likelihoods
 
-    def _resample_at(self, time_step: int, series: SeriesData):
+    @staticmethod
+    def _resample_at(time_step: int, series: SeriesData):
         return series.vocalics.mask[time_step] == 1 and series.vocalics.previous_from_other[
             time_step] is not None
 
