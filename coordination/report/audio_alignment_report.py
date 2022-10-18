@@ -23,6 +23,7 @@ class AudioAlignmentReport:
 
     def export_to_html(self, filepath: str):
         out_dir = os.path.dirname(filepath)
+        os.makedirs(out_dir, exist_ok=True)
         os.makedirs(f"{out_dir}/audio", exist_ok=True)
 
         doc, tag, text = Doc().tagtext()

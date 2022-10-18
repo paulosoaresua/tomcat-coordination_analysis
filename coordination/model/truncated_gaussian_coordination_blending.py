@@ -1,24 +1,26 @@
-from typing import Callable
+from typing import Callable, List
 
 import numpy as np
 
-from coordination.component.speech.common import VocalicsSparseSeries
-from coordination.inference.inference_engine import InferenceEngine
-from coordination.inference.lds import apply_marginal_property, apply_conditional_property, pdf_projection
+from coordination.common.dataset import InputFeaturesDataset, SeriesData
+from coordination.model.coordination_model import CoordinationModel
+from coordination.model.lds import apply_marginal_property, apply_conditional_property, pdf_projection
 
 
-class TruncatedGaussianCoordinationBlendingInference(InferenceEngine):
+class TruncatedGaussianCoordinationBlendingInference(CoordinationModel):
 
-    def __init__(self, vocalic_series: VocalicsSparseSeries, mean_prior_coordination: float,
-                 std_prior_coordination: float, std_coordination_drifting: float, mean_prior_vocalics: np.array,
-                 std_prior_vocalics: np.array, std_coordinated_vocalics: np.ndarray, f: Callable = lambda x, s: x,
-                 fix_coordination_on_second_half: bool = True):
+    def __init__(self,
+                 mean_prior_coordination: float,
+                 std_prior_coordination: float,
+                 std_coordination_drifting: float,
+                 mean_prior_vocalics: np.array,
+                 std_prior_vocalics: np.array,
+                 std_coordinated_vocalics: np.ndarray,
+                 f: Callable = lambda x, s: x,
+                 fix_coordination_on_second_half: bool = True,
+                 *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        assert len(mean_prior_vocalics) == vocalic_series.num_series
-        assert len(std_prior_vocalics) == vocalic_series.num_series
-        assert len(std_coordinated_vocalics) == vocalic_series.num_series
-
-        self._vocalic_series = vocalic_series
         self._mean_prior_coordination = mean_prior_coordination
         self._std_prior_coordination = std_prior_coordination
         self._std_coordination_drifting = std_coordination_drifting
@@ -28,26 +30,41 @@ class TruncatedGaussianCoordinationBlendingInference(InferenceEngine):
         self._f = f
         self._fix_coordination_on_second_half = fix_coordination_on_second_half
 
-        self._num_features, self._time_steps = vocalic_series.values.shape  # n and T
+    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+            **kwargs):
+        # MCMC to train parameters? We start by choosing with cross validation instead.
+        return self
 
-    def estimate_means_and_variances(self) -> np.ndarray:
-        filter_params = self._kalman_filter()
-        return self._rts_smoother(filter_params)
+    def predict(self, input_features: InputFeaturesDataset, apply_rts_smooth: bool = True, *args, **kwargs) -> List[np.ndarray]:
+        if input_features.num_trials > 0:
+            assert len(self._mean_prior_vocalics) == input_features.series[0].vocalics.num_features
+            assert len(self._std_prior_vocalics) == input_features.series[0].vocalics.num_features
+            assert len(self._std_coordinated_vocalics) == input_features.series[0].vocalics.num_features
 
-    def filter(self) -> np.ndarray:
-        return self._kalman_filter()
+        result = []
+        for d in range(input_features.num_trials):
+            series = input_features.series[d]
 
-    def _kalman_filter(self) -> np.ndarray:
+            params = self._kalman_filter(series)
+
+            if apply_rts_smooth:
+                params = self._rts_smoother(params)
+
+            result.append(params)
+
+        return result
+
+    def _kalman_filter(self, series: SeriesData) -> np.ndarray:
         var_C = self._std_coordination_drifting ** 2
         var_V = self._std_coordinated_vocalics ** 2
 
-        M = int(self._time_steps / 2)
-        num_time_steps = M + 1 if self._fix_coordination_on_second_half else self._time_steps
+        M = int(series.num_time_steps / 2)
+        num_time_steps = M + 1 if self._fix_coordination_on_second_half else series.num_time_steps
 
         params = np.zeros((2, num_time_steps))
         params[:, 0] = np.array([self._mean_prior_coordination, self._std_prior_coordination ** 2])
         mean, var = params[:, 0]
-        for t in range(1, self._time_steps):
+        for t in range(1, series.num_time_steps):
             if t < M or not self._fix_coordination_on_second_half:
                 # No coordination drift from M beyond if coordination in the second half is fixed
                 m_previous, v_previous = params[:, t - 1]
@@ -81,17 +98,17 @@ class TruncatedGaussianCoordinationBlendingInference(InferenceEngine):
                                 to each dimension of A and B.
             """
 
-            A_t = self._f(self._vocalic_series.values[:, t], 0)
-            A_prev = None if self._vocalic_series.previous_from_self[t] is None else self._f(
-                self._vocalic_series.values[:, self._vocalic_series.previous_from_self[t]], 0)
-            B_prev = None if self._vocalic_series.previous_from_other[t] is None else self._f(
-                self._vocalic_series.values[:, self._vocalic_series.previous_from_other[t]], 1)
+            A_t = self._f(series.vocalics.values[:, t], 0)
+            A_prev = None if series.vocalics.previous_from_self[t] is None else self._f(
+                series.vocalics.values[:, series.vocalics.previous_from_self[t]], 0)
+            B_prev = None if series.vocalics.previous_from_other[t] is None else self._f(
+                series.vocalics.values[:, series.vocalics.previous_from_other[t]], 1)
 
-            if self._vocalic_series.mask[t] == 1 and B_prev is not None:
+            if series.vocalics.mask[t] == 1 and B_prev is not None:
                 if A_prev is None:
                     A_prev = self._mean_prior_vocalics
                 D = B_prev - A_prev
-                for i in range(self._num_features):
+                for i in range(series.vocalics.num_features):
                     mean, var = apply_conditional_property(A_t[i], D[i], A_prev[i], var_V[i], mean, var)
 
             if self._fix_coordination_on_second_half:

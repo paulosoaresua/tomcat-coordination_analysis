@@ -16,11 +16,6 @@ class VocalicsReaderDB(VocalicsReader):
     This class reads vocalic features from a database
     """
 
-    __FEATURE_MAP = {
-        "pitch": "f0final_sma",
-        "intensity": "wave_rmsenergy_sma"
-    }
-
     def __init__(self, database_config: DatabaseConfig, features: List[str]):
         super().__init__(features)
         self._database_config = database_config
@@ -40,7 +35,7 @@ class VocalicsReaderDB(VocalicsReader):
         Tuple[Any]]:
 
         with self._connect() as connection:
-            db_feature_names = [self.__FEATURE_MAP[feature] for feature in self.features]
+            db_feature_names = [self._FEATURE_MAP[feature] for feature in self.features]
             db_feature_list = ",".join(db_feature_names)
 
             if time_range is None:

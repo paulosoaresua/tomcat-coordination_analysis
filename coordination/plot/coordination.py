@@ -1,6 +1,8 @@
 from typing import Any, List, Optional
 
+from coordination.common.dataset import SeriesData
 from matplotlib import colors
+import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 
@@ -20,6 +22,34 @@ def plot_continuous_coordination(ax: Any, coordination: np.ndarray, color: str, 
     ax.set_title(title, fontsize=14, weight='bold')
     ax.set_xlabel(xaxis_label)
     ax.set_ylabel("Coordination")
+
+
+def plot_coordination_estimation(mean_coordination: np.ndarray, std_coordination: np.ndarray, series: SeriesData,
+                                 color: str, marker: str = "o"):
+    time_steps = len(mean_coordination)
+
+    fig = plt.figure(figsize=(20, 6))
+
+    xs = range(time_steps)
+    plt.plot(xs, mean_coordination, marker=marker, color=color, linestyle="--")
+    lb = np.clip(mean_coordination - std_coordination, a_min=0, a_max=1)
+    ub = np.clip(mean_coordination + std_coordination, a_min=0, a_max=1)
+    plt.fill_between(xs, lb, ub, color='tab:orange', alpha=0.2)
+
+    times, masks = list(
+        zip(*[(t, mask + 0.02) for t, mask in enumerate(series.vocalics.mask) if mask > 0 and t < time_steps]))
+    plt.scatter(times, masks, color="tab:green", marker="+")
+    plt.xlabel("Time Steps (seconds)")
+    plt.ylabel("Coordination")
+    plt.ylim([-0.05, 1.05])
+    plt.title(f"Coordination Inference - {series.uuid}", fontsize=14, weight="bold")
+
+    add_discrete_coordination_bar(main_ax=fig.gca(),
+                                  coordination_series=[np.where(mean_coordination > 0.5, 1, 0)],
+                                  coordination_colors=["tab:orange"],
+                                  labels=["Coordination"])
+
+    return fig
 
 
 def add_discrete_coordination_bar(main_ax: Any, coordination_series: List[np.array],
@@ -72,7 +102,6 @@ def add_discrete_coordination_bar(main_ax: Any, coordination_series: List[np.arr
 def add_continuous_coordination_bar(main_ax: Any, coordination_series: List[np.array],
                                     coordination_colors: List[str], no_coordination_color: str = "white",
                                     labels: Optional[List[str]] = None):
-
     # For now, we limit the number of coordination series to 2
     assert len(coordination_series) <= 2
     assert labels is None or len(coordination_series) == len(labels)

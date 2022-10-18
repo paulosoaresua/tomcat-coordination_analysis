@@ -1,0 +1,24 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="serialize_trials" type="PythonConfigurationType" factoryName="Python" singleton="false" nameIsGenerated="true">
+    <module name="tomcat-coordination" />
+    <option name="INTERPRETER_OPTIONS" value="" />
+    <option name="PARENT_ENVS" value="true" />
+    <envs>
+      <env name="PYTHONUNBUFFERED" value="1" />
+    </envs>
+    <option name="SDK_HOME" value="$PROJECT_DIR$/.venv/bin/python" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts" />
+    <option name="IS_MODULE_SDK" value="false" />
+    <option name="ADD_CONTENT_ROOTS" value="true" />
+    <option name="ADD_SOURCE_ROOTS" value="true" />
+    <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/serialize_trials.py" />
+    <option name="PARAMETERS" value="--input_path=&quot;$USER_HOME$/data/study-3_2022/other_agents/replays/metadata&quot; --out_dir=&quot;$PROJECT_DIR$/data/study-3_2022/other_agents/trials&quot; --verbose --log_dir=&quot;$PROJECT_DIR$/data/study-3_2022/other_agents/trials/logs&quot; --vocalics_csv_dir=&quot;$USER_HOME$/data/study-3_2022/other_agents/replays/vocalics_csv&quot; --vocalics_src=&quot;csv&quot; --multi" />
+    <option name="SHOW_COMMAND_LINE" value="false" />
+    <option name="EMULATE_TERMINAL" value="true" />
+    <option name="MODULE_MODE" value="false" />
+    <option name="REDIRECT_INPUT" value="false" />
+    <option name="INPUT_FILE" value="" />
+    <method v="2" />
+  </configuration>
+</component>

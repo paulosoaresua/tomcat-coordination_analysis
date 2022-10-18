@@ -17,6 +17,11 @@ class Trial:
         self.metadata = metadata
         self.vocalics = vocalics
 
+    @property
+    def order(self):
+        # Odd trials are the first and even are the second
+        return 1 if int(self.metadata.number[1:]) % 2 != 0 else 2
+
     @classmethod
     def from_metadata_file(cls, metadata_filepath: str, vocalics_reader: VocalicsReader) -> Trial:
         """
