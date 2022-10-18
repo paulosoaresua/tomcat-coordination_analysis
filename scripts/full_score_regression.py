@@ -28,6 +28,7 @@ def estimate_regression(coordination_path: str, dataset_path: str, plot_out_path
     label = f"$r = {r:.2f}, p = {p:.4f}$"
     fig = plot_coordination_vs_score_regression(coordination, scores, regressor, label)
     plt.savefig(plot_out_path)
+    plt.tight_layout()
     plt.close(fig)
 
 
