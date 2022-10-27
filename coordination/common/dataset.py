@@ -8,25 +8,28 @@ from sklearn.model_selection import train_test_split as sklearn_train_test_split
 from coordination.component.speech.vocalics_component import VocalicsSparseSeries
 
 
-class SeriesData:
+class DataSeries:
 
-    def __init__(self, vocalics: VocalicsSparseSeries, uuid: str):
-        self.vocalics = vocalics
+    def __init__(self, uuid: str):
         self.uuid = uuid
 
     @property
     def num_time_steps(self):
-        return self.vocalics.num_time_steps
+        raise NotImplementedError
 
 
 class InputFeaturesDataset:
 
-    def __init__(self, series: List[SeriesData]):
+    def __init__(self, series: List[DataSeries]):
         self.series = series
 
     @property
     def num_trials(self):
         return len(self.series)
+
+    @property
+    def time_steps(self):
+        return 0 if len(self.series) == 0 else self.series[0].num_time_steps
 
     def get_subset(self, indices: List[int]) -> InputFeaturesDataset:
         return InputFeaturesDataset([self.series[i] for i in indices])

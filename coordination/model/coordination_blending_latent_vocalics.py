@@ -14,14 +14,20 @@ from coordination.model.particle_filter import Particles, ParticleFilter
 
 
 class LatentVocalicsParticles(Particles):
+    coordination: np.ndarray
     latent_vocalics: Dict[str, np.ndarray]
 
     def _keep_particles_at(self, indices: np.ndarray):
-        super()._keep_particles_at(indices)
-
+        self.coordination = self.coordination[indices]
         for speaker, latent_vocalics in self.latent_vocalics.items():
             if latent_vocalics is not None:
                 self.latent_vocalics[speaker] = latent_vocalics[indices, :]
+
+    def mean(self):
+        return self.coordination.mean()
+
+    def var(self):
+        return self.coordination.var()
 
 
 def default_f(x: np.ndarray, s: int) -> np.ndarray:

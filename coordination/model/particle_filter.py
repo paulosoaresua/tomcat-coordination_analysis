@@ -8,20 +8,12 @@ from coordination.common.dataset import SeriesData
 
 class Particles:
 
-    coordination: np.ndarray
-
     def resample(self, importance_weights: np.ndarray):
         indices = Particles.resample_particle_indices(importance_weights)
         self._keep_particles_at(indices)
 
     def _keep_particles_at(self, indices: np.ndarray):
-        self.coordination = self.coordination[indices]
-
-    def mean(self):
-        return self.coordination.mean()
-
-    def var(self):
-        return self.coordination.var()
+        raise NotImplementedError
 
     @staticmethod
     def resample_particle_indices(importance_weights: np.ndarray) -> np.ndarray:
@@ -75,15 +67,3 @@ class ParticleFilter:
         log_weights = np.exp(log_weights)
         importance_weights = log_weights / np.sum(log_weights)
         self.states[t].resample(importance_weights)
-
-    # def _resample_at(self, time_step: int, series: SeriesData):
-    #     return True
-    #
-    # def _sample_from_prior(self, series: SeriesData) -> Particles:
-    #     raise NotImplementedError
-    #
-    # def _sample_from_transition_to(self, time_step: int, series: SeriesData) -> Particles:
-    #     raise NotImplementedError
-    #
-    # def _calculate_log_likelihood_at(self, time_step: int, series: SeriesData) -> np.ndarray:
-    #     raise NotImplementedError
