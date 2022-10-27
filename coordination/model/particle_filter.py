@@ -3,7 +3,7 @@ from typing import Callable, List, Optional
 import numpy as np
 import random
 
-from coordination.common.dataset import SeriesData
+from coordination.common.dataset import DataSeries
 
 
 class Particles:
@@ -47,20 +47,20 @@ class ParticleFilter:
             np.random.seed(self.seed)
             random.seed(self.seed)
 
-    def next(self, series: SeriesData):
+    def next(self, series: DataSeries):
         next_time_step = len(self.states)
         self.__transition(series)
         if self.resample_at_fn(next_time_step, series):
             self.__resample(series)
 
-    def __transition(self, series: SeriesData):
+    def __transition(self, series: DataSeries):
         if len(self.states) == 0:
-            self.states.append(self.sample_from_prior_fn(series))
+            self.states.append(self.sample_from_prior_fn(self.num_particles, series))
         else:
             t = len(self.states)
             self.states.append(self.sample_from_transition_fn(t, self.states, series))
 
-    def __resample(self, series: SeriesData):
+    def __resample(self, series: DataSeries):
         t = len(self.states) - 1
         log_weights = self.calculate_log_likelihood_fn(t, self.states, series)
         log_weights -= np.max(log_weights)

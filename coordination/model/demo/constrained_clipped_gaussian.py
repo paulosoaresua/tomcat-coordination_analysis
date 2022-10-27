@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import copy
 from multiprocessing import Pool
@@ -15,7 +15,7 @@ from tqdm import tqdm
 from coordination.common.dataset import InputFeaturesDataset, DataSeries
 from coordination.inference.mcmc import MCMC
 from coordination.model.particle_filter import Particles, ParticleFilter
-from coordination.model.pgm import PGM
+from coordination.model.pgm import PGM, Samples
 
 
 class ClippedGaussianParticles(Particles):
@@ -25,39 +25,53 @@ class ClippedGaussianParticles(Particles):
         self.state = self.state[indices]
 
 
-class ClippedGaussianSamples:
+class ClippedGaussianSamples(Samples):
     states: np.ndarray
     observations: np.ndarray
+
+    @property
+    def size(self):
+        return self.observations.shape[0]
 
 
 class ClippedGaussianParticlesDataSeries(DataSeries):
 
     def __init__(self, states: Optional[np.ndarray], observations: np.ndarray, uuid: str):
+        super().__init__(uuid)
         self.states = states
         self.observations = observations
-        self.uuid = uuid
 
     @property
     def num_time_steps(self):
-        return self.observations.shape[2]
+        return self.observations.shape[1]
+
+    @property
+    def dim_observation(self):
+        return self.observations.shape[0]
 
 
 class ClippedGaussianParticlesDataset(InputFeaturesDataset):
 
-    def __init__(self, series: List[DataSeries]):
+    def __init__(self, series: List[ClippedGaussianParticlesDataSeries]):
         super().__init__(series)
 
-        self.states = np.zeros(len(series), series[0].num_time_steps)
-        self.observations = np.zeros(len(series), series[0].num_time_steps)
+        self.states = None if series[0].states is None else np.zeros((len(series), series[0].num_time_steps))
+        self.observations = np.zeros((len(series), series[0].dim_observation, series[0].num_time_steps))
+
+        for i, series in enumerate(series):
+            if series.states is not None:
+                self.states[i] = series.states
+            self.observations[i] = series.observations
 
 
-class ConstrainedLDSClippedGaussian(PGM):
-    def __init__(self, time_steps: int, initial_state: float, dim_observations: int, a_vst: float, b_vst: float, a_vso: float,
+class ClippedGaussianDemo(PGM):
+    def __init__(self, initial_state: float, dim_observations: int, a_vst: float, b_vst: float, a_vso: float,
                  b_vso: float, tb_writer: Optional[SummaryWriter] = None):
         super().__init__()
 
         self.initial_state = initial_state
         self.dim_observations = dim_observations
+        self.tb_writer = tb_writer
 
         self.var_state_transition: Optional[float] = None
         self.var_state_observation: Optional[np.ndarray] = None
@@ -90,16 +104,19 @@ class ConstrainedLDSClippedGaussian(PGM):
                 samples.states[:, 0] = self.initial_state
             else:
                 transition_distribution = norm(loc=samples.states[:, t - 1], scale=sst)
-                samples.states[:, t] = transition_distribution.rvs()
+                samples.states[:, t] = np.clip(transition_distribution.rvs(), a_min=0, a_max=1)
 
-            emission_distribution = norm(
-                loc=np.clip(samples.states[:, t], a_min=0, a_max=1)[:, np.newaxis].repeat(self.dim_observations,
-                                                                                          axis=1), scale=sso)
+            means = np.clip(samples.states[:, t], a_min=0, a_max=1)[:, np.newaxis].repeat(self.dim_observations,
+                                                                                          axis=1)
+            # means = samples.states[:, t][:, np.newaxis].repeat(self.dim_observations, axis=1)
+            emission_distribution = norm(loc=means, scale=sso)
+
             samples.observations[:, :, t] = emission_distribution.rvs()
 
         return samples
 
-    def _initialize_gibbs(self, burn_in: int, evidence: InputFeaturesDataset):
+    def _initialize_gibbs(self, burn_in: int, evidence: ClippedGaussianParticlesDataset):
+        super()._initialize_gibbs(burn_in, evidence)
         # History of samples and negative log-likelihood in each Gibbs step
         self.state_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.time_steps))
         self.vst_samples_ = np.zeros(burn_in + 1)
@@ -107,8 +124,8 @@ class ConstrainedLDSClippedGaussian(PGM):
         self.nll_ = np.zeros(burn_in + 1)
 
         # 1. Latent variables and parameters initialization
-        if evidence.series[] is None:
-            self.state_samples_[0] = norm(loc=np.zeros((evidence.size, evidence.time_steps)), scale=0.1).rvs()
+        if evidence.states is None:
+            self.state_samples_[0] = norm(loc=np.zeros((evidence.num_trials, evidence.time_steps)), scale=0.1).rvs()
             self.state_samples_[0, :, 0] = self.initial_state
         else:
             self.state_samples_[0] = evidence.states
@@ -123,7 +140,7 @@ class ConstrainedLDSClippedGaussian(PGM):
         else:
             self.vso_samples_[0] = self.var_state_observation
 
-    def _compute_loglikelihood_at(self, gibbs_step: int, evidence: ConstrainedLDSClippedGaussianEvidence) -> float:
+    def _compute_loglikelihood_at(self, gibbs_step: int, evidence: ClippedGaussianParticlesDataset) -> float:
         # Compute initial log-likelihood
         sst = np.sqrt(self.vst_samples_[gibbs_step])
         sso = np.sqrt(self.vso_samples_[gibbs_step])
@@ -139,8 +156,8 @@ class ConstrainedLDSClippedGaussian(PGM):
 
         return ll
 
-    def _gibbs_step(self, gibbs_step: int, evidence: ConstrainedLDSClippedGaussianEvidence, time_steps: np.ndarray,
-                    index: int):
+    def _gibbs_step(self, gibbs_step: int, evidence: ClippedGaussianParticlesDataset, time_steps: np.ndarray,
+                    job_num: int):
         states = self.state_samples_[gibbs_step - 1].copy()
 
         if evidence.states is None:
@@ -148,7 +165,7 @@ class ConstrainedLDSClippedGaussian(PGM):
             sso = np.sqrt(self.vso_samples_[gibbs_step - 1])
 
             state_proposal = lambda x: np.clip(norm(loc=x, scale=0.1).rvs(), a_min=0, a_max=1)
-            for t in tqdm(time_steps, desc="Sampling over time", position=index, leave=False):
+            for t in tqdm(time_steps, desc="Sampling over time", position=job_num, leave=False):
                 def unormalized_log_posterior(sample: np.ndarray):
                     log_posterior = norm(loc=states[:, t - 1], scale=sst).logpdf(sample) + \
                                     norm(loc=np.clip(sample[:, np.newaxis], a_min=0, a_max=1), scale=sso).logpdf(
@@ -170,10 +187,16 @@ class ConstrainedLDSClippedGaussian(PGM):
 
         return states[:, time_steps]
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: ConstrainedLDSClippedGaussianEvidence):
+    def _retain_samples_from_latent(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
+        """
+        The only latent variable return by _gibbs_step is a state variable
+        """
+        self.state_samples_[gibbs_step, :, time_steps] = latents.T
+
+    def _update_latent_parameters(self, gibbs_step: int, evidence: ClippedGaussianParticlesDataset):
         # Variance of the State Transition
         if self.var_state_transition is None:
-            a = self.a_vst + evidence.size * (evidence.time_steps - 1) / 2
+            a = self.a_vst + evidence.num_trials * (evidence.time_steps - 1) / 2
             b = self.b_vst + np.square(
                 self.state_samples_[gibbs_step, :, 1:] - self.state_samples_[gibbs_step, :,
                                                          :evidence.time_steps - 1]).sum() / 2
@@ -184,7 +207,7 @@ class ConstrainedLDSClippedGaussian(PGM):
 
         # Variance of the State Transition
         if self.var_state_observation is None:
-            a = self.a_vso + evidence.size * evidence.time_steps * self.dim_observations / 2
+            a = self.a_vso + evidence.num_trials * evidence.time_steps * self.dim_observations / 2
             b = self.b_vso + np.square(
                 np.clip(self.state_samples_[gibbs_step], a_min=0, a_max=1)[:, np.newaxis,
                 :] - evidence.observations).sum() / 2
@@ -193,229 +216,112 @@ class ConstrainedLDSClippedGaussian(PGM):
             # Given
             self.vso_samples_[gibbs_step] = self.var_state_observation
 
-    def fit(self, evidence: ConstrainedLDSClippedGaussianEvidence, burn_in: int, *args, **kwargs):
-        # n = observations.shape[0]
-        # T = observations.shape[2]
-        #
-        # # To guarantee we have at least 2 time-steps per thread
-        # assert T >= 2 * self.num_jobs
-
-        # We split the PGM along the time axis. To make sure variables in one chunk is not dependent on variables in
-        # another chunk, we create a separate chunk with the variables in the border that will be sampled in the
-        # beginning of the Gibbs step.
-        parallel_time_step_indices = []
-        independent_time_step_indices = []
-
-        if self.num_jobs == 1:
-            # No parallel jobs
-            independent_time_step_indices = np.arange(evidence.time_steps)
-        else:
-            time_chunks = np.array_split(np.arange(evidence.time_steps), self.num_jobs)
-            for i, time_chunk in enumerate(time_chunks):
-                if i == len(time_chunks) - 1:
-                    # No need to add the last time index to the independent list since it does not depend on
-                    # any variable from another chunk
-                    parallel_time_step_indices.append(time_chunk)
-                else:
-                    independent_time_step_indices.append(time_chunk[-1])
-                    parallel_time_step_indices.append(time_chunk[:-1])
-
-        independent_time_step_indices = np.array(independent_time_step_indices)
-
-        # Gibbs Sampling
-
-        # 1. Initialize latent variables
-        self._initialize_gibbs(burn_in, evidence)
-
-        #    1.1 Compute initial NLL
-        self.nll_[0] = -self._compute_loglikelihood_at(0, evidence)
-
-        # 2. Sample the latent variables from their posterior distributions
-        with Pool(self.num_jobs) as pool:
-            for i in tqdm(range(1, burn_in + 1), desc="MCMC Step", position=0):
-                states = self._gibbs_step(i, evidence, independent_time_step_indices, 1)
-                self.state_samples_[i, :, independent_time_step_indices] = states.T
-                if self.num_jobs > 1:
-                    job_args = [(i, evidence, parallel_time_step_indices[j], j+1) for j in range(self.num_jobs)]
-                    for chunk_idx, result in enumerate(pool.starmap(self._gibbs_step, job_args)):
-                        self.state_samples_[i, :, parallel_time_step_indices[chunk_idx]] = result.T
-
-                # self.state_samples_[i] = self._gibbs_step(i, evidence, np.arange(evidence.time_steps))
-
-                self._update_latent_parameters(i, evidence)
-                self.nll_[i] = -self._compute_loglikelihood_at(i, evidence)
-
+    def _retain_parameters(self):
         self.var_state_transition = self.vst_samples_[-1]
         self.var_state_observation = self.vso_samples_[-1]
 
-        return self
+    # ------------------------------------------------
+    # Inference
+    # ------------------------------------------------
 
-    def predict(self, input_features: InputFeaturesDataset, *args, **kwargs) -> List[np.ndarray]:
-        if input_features.num_trials > 0:
-            assert len(self.mean_prior_latent_vocalics) == input_features.series[0].vocalics.num_features
-            assert len(self.std_prior_latent_vocalics) == input_features.series[0].vocalics.num_features
-            assert len(self.std_coordinated_latent_vocalics) == input_features.series[0].vocalics.num_features
-            assert len(self.std_observed_vocalics) == input_features.series[0].vocalics.num_features
+    def _summarize_particles(self, particles: List[ClippedGaussianParticles]) -> np.ndarray:
+        # Mean and variance over time
+        summary = np.zeros((2, len(particles)))
 
-        particle_filter = ParticleFilter(
-            num_particles=self.num_particles,
-            resample_at_fn=self._resample_at,
-            sample_from_prior_fn=self._sample_from_prior,
-            sample_from_transition_fn=self._sample_from_transition_to,
-            calculate_log_likelihood_fn=self._calculate_log_likelihood_at,
-            seed=self.seed
-        )
+        for t, particles_in_time in enumerate(particles):
+            summary[0, t] = particles_in_time.state.mean()
+            summary[1, t] = particles_in_time.state.var()
 
-        pbar_outer = None
-        if self.show_progress_bar:
-            pbar_outer = tqdm(total=input_features.num_trials, desc="Trial", position=0)
+        return summary
 
-        result = []
-        for d in range(input_features.num_trials):
-            particle_filter.reset_state()
-            series = input_features.series[d]
-
-            M = int(series.num_time_steps / 2)
-            num_time_steps = M + 1 if self.fix_coordination_on_second_half else series.num_time_steps
-
-            pbar_inner = None
-            if self.show_progress_bar:
-                pbar_inner = tqdm(total=input_features.series[0].num_time_steps, desc="Time Step", position=1,
-                                  leave=False)
-
-            params = np.zeros((2, num_time_steps))
-            for t in range(0, series.num_time_steps):
-                particle_filter.next(series)
-
-                # We keep generating latent vocalics after M but not coordination. The fixed coordination is given by
-                # the set of particles after the last latent vocalics was generated
-                real_time = min(t, M) if self.fix_coordination_on_second_half else t
-                mean = particle_filter.states[-1].mean()
-                variance = particle_filter.states[-1].var()
-                params[:, real_time] = [mean, variance]
-
-                if self.show_progress_bar:
-                    pbar_inner.update()
-
-                if self.tb_writer is not None:
-                    self.tb_writer.add_scalar(f"inference/coordination-{series.uuid}", mean, t)
-
-            result.append(params)
-
-            if self.show_progress_bar:
-                pbar_outer.update()
-
-            if self.tb_writer is not None:
-                self.log_coordination_inference_plot(series, params, series.uuid)
-
-        return result
-
-    def _sample_from_prior(self, series: SeriesData) -> Particles:
-        new_particles = self._create_new_particles()
-        self._sample_coordination_from_prior(new_particles)
-        self._sample_vocalics_from_prior(series, new_particles)
+    def _sample_from_prior(self, num_particles: int,
+                           series: ClippedGaussianParticlesDataSeries) -> ClippedGaussianParticles:
+        new_particles = ClippedGaussianParticles()
+        new_particles.state = np.ones(num_particles) * self.initial_state
 
         return new_particles
 
-    def _sample_vocalics_from_prior(self, series: SeriesData, new_particles: LatentVocalicsParticles):
-        new_particles.latent_vocalics = {subject: None for subject in series.vocalics.subjects}
-        if series.vocalics.mask[0] == 1:
-            speaker = series.vocalics.utterances[0].subject_id
-            mean = np.ones((self.num_particles, series.vocalics.num_series)) * self.mean_prior_latent_vocalics
-            new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=self.std_prior_latent_vocalics).rvs()
+    def _sample_from_transition_to(self, time_step: int, states: List[ClippedGaussianParticles],
+                                   series: ClippedGaussianParticlesDataSeries) -> ClippedGaussianParticles:
 
-    def _sample_from_transition_to(self, time_step: int, states: List[LatentVocalicsParticles],
-                                   series: SeriesData) -> LatentVocalicsParticles:
-        M = int(series.num_time_steps / 2)
-        if not self.fix_coordination_on_second_half or time_step <= M:
-            new_particles = self._create_new_particles()
-            self._sample_coordination_from_transition(states[time_step - 1], new_particles)
-        else:
-            # Coordination if fixed
-            new_particles = copy.deepcopy(states[time_step - 1])
-
-        self._sample_vocalics_from_transition_to(time_step, states[time_step - 1], new_particles, series)
+        new_particles = ClippedGaussianParticles()
+        means = states[time_step - 1].state
+        new_particles.state = np.clip(norm(loc=means, scale=np.sqrt(self.var_state_transition)).rvs(), a_min=0, a_max=1)
 
         return new_particles
 
-    def _sample_vocalics_from_transition_to(self, time_step: int, previous_particles: LatentVocalicsParticles,
-                                            new_particles: LatentVocalicsParticles, series: SeriesData):
-        new_particles.latent_vocalics = previous_particles.latent_vocalics.copy()
-        if series.vocalics.mask[time_step] == 1:
-            speaker = series.vocalics.utterances[time_step].subject_id
-            A_prev = previous_particles.latent_vocalics[speaker]
+    def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[ClippedGaussianParticles],
+                                              series: ClippedGaussianParticlesDataSeries):
+        means = np.clip(states[time_step - 1].state, a_min=0, a_max=1)[:, np.newaxis]
+        # means = states[time_step - 1].state[:, np.newaxis]
+        lls = norm(loc=means, scale=np.sqrt(self.var_state_observation)).logpdf(series.observations[:, time_step]).sum(
+            axis=1)
 
-            A_prev = self.f(A_prev, 0) if A_prev is not None else np.ones(
-                (self.num_particles, series.vocalics.num_series)) * self.mean_prior_latent_vocalics
-            if series.vocalics.previous_from_other[time_step] is None:
-                new_particles.latent_vocalics[speaker] = norm(loc=A_prev, scale=self.std_prior_latent_vocalics).rvs()
-            else:
-                other_speaker = series.vocalics.utterances[
-                    series.vocalics.previous_from_other[time_step]].subject_id
-                B_prev = self.f(previous_particles.latent_vocalics[other_speaker], 1)
-                D = B_prev - A_prev
-                mean = D * new_particles.coordination[:, np.newaxis] + A_prev
-                new_particles.latent_vocalics[speaker] = norm(loc=mean,
-                                                              scale=self.std_coordinated_latent_vocalics).rvs()
+        return lls
 
-    def _calculate_log_likelihood_at(self, time_step: int, states: List[LatentVocalicsParticles], series: SeriesData):
-        if series.vocalics.mask[time_step] == 1:
-            speaker = series.vocalics.utterances[time_step].subject_id
-            A_t = states[time_step].latent_vocalics[speaker]
-            O_t = series.vocalics.values[:, time_step]
-            log_likelihoods = norm(loc=self.g(A_t), scale=self.std_observed_vocalics).logpdf(O_t).sum(axis=1)
-        else:
-            log_likelihoods = 0
-
-        return log_likelihoods
-
-    @staticmethod
-    def _resample_at(time_step: int, series: SeriesData):
-        return series.vocalics.mask[time_step] == 1 and series.vocalics.previous_from_other[
-            time_step] is not None
-
-    def _sample_coordination_from_prior(self, new_particles: LatentVocalicsParticles):
-        raise NotImplementedError
-
-    def _sample_coordination_from_transition(self, previous_particles: LatentVocalicsParticles,
-                                             new_particles: LatentVocalicsParticles) -> Particles:
-        raise NotImplementedError
-
-    def _create_new_particles(self) -> LatentVocalicsParticles:
-        return LatentVocalicsParticles()
+    # def _resample_at(time_step: int, series: SeriesData):
+    #     True
 
 
 if __name__ == "__main__":
-    model = ConstrainedLDSClippedGaussian(0, 10, 1e-1, 1e-1, 1e-1, 1e-1, num_jobs=10)
+    TIME_STEPS = 20
+    NUM_SAMPLES = 100
+    DIM_OBSERVATION = 100
+    model = ClippedGaussianDemo(0.5, DIM_OBSERVATION, 1e-1, 1e-1, 1e-1, 1e-1)
     model.var_state_transition = 0.1
     model.var_state_observation = 0.5
-    samples, true_nll = model.sample(1020, 100)
 
-    model.var_state_transition = None
-    model.var_state_observation = None
-
-    # model.state_samples_ = samples.states[np.newaxis, :].repeat(101, axis=0)
-
-    evidence = ConstrainedLDSClippedGaussianEvidence(None, samples.observations)
     np.random.seed(0)
     random.seed(0)
-    model.fit(evidence, 5)
+    samples = model.sample(NUM_SAMPLES, TIME_STEPS)
 
-    print(model.var_state_transition)
-    print(model.var_state_observation)
+    full_evidence = ClippedGaussianParticlesDataset(
+        [ClippedGaussianParticlesDataSeries(samples.states[i], samples.observations[i], f"{i}") for i in
+         range(samples.size)])
+    partial_evidence = ClippedGaussianParticlesDataset(
+        [ClippedGaussianParticlesDataSeries(None, samples.observations[i], f"{i}") for i in
+         range(samples.size)])
+    #
+    # model.fit(full_evidence, 1, 1)
+    # true_nll = model.nll_[-1]
+    #
+    # model.var_state_transition = None
+    # model.var_state_observation = None
+    #
+    # # model.state_samples_ = samples.states[np.newaxis, :].repeat(101, axis=0)
+    #
+    # np.random.seed(0)
+    # random.seed(0)
+    # model.fit(partial_evidence, 10, 4)
+    #
+    # print(model.var_state_transition)
+    # print(model.var_state_observation)
+    #
+    # plt.figure()
+    # plt.plot(range(len(model.vst_samples_)), model.vst_samples_)
+    # plt.title("VST")
+    # plt.show()
+    #
+    # plt.figure()
+    # plt.plot(range(len(model.vso_samples_)), model.vso_samples_)
+    # plt.title("VSO")
+    # plt.show()
+    #
+    # plt.figure()
+    # plt.plot(range(len(model.nll_)), model.nll_)
+    # plt.plot(range(len(model.nll_)), np.ones(len(model.nll_)) * true_nll, linestyle="--")
+    # plt.title("NLL")
+    # plt.show()
 
-    plt.figure()
-    plt.plot(range(len(model.vst_samples_)), model.vst_samples_)
-    plt.title("VST")
-    plt.show()
+    single_partial_evidence = partial_evidence.get_subset(list(range(5)))
+    results = model.predict(single_partial_evidence, 10000, 0, 1)
 
-    plt.figure()
-    plt.plot(range(len(model.vso_samples_)), model.vso_samples_)
-    plt.title("VSO")
-    plt.show()
-
-    plt.figure()
-    plt.plot(range(len(model.nll_)), model.nll_)
-    plt.plot(range(len(model.nll_)), np.ones(len(model.nll_)) * true_nll, linestyle="--")
-    plt.title("NLL")
-    plt.show()
+    for d in range(5):
+        result = results[d]
+        plt.figure()
+        ts = np.arange(TIME_STEPS)
+        plt.plot(ts, result[0], color="tab:orange", marker="o")
+        plt.fill_between(ts, result[0] - np.sqrt(result[1]), result[0] + np.sqrt(result[1]), color="tab:orange",
+                         alpha=0.5)
+        plt.plot(ts, samples.states[d], color="tab:blue", marker="o")
+        plt.show()
