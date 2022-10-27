@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 import os
 
-from coordination.common.dataset import InputFeaturesDataset
+from coordination.common.dataset import EvidenceDataset
 
 agents = ["no_advisor", "tomcat_agent", "other_agents"]
 
@@ -27,7 +27,7 @@ for i in [1, 2]:
             estimates = pickle.load(f)
             all_estimates.extend(estimates)
 
-    mission_features = InputFeaturesDataset.merge_list(all_features)
+    mission_features = EvidenceDataset.merge_list(all_features)
     mission_scores = np.concatenate(all_scores)
 
     mission_dataset = (mission_features, mission_scores)

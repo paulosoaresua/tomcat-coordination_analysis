@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, List, Optional, Tuple
-
-import copy
-from multiprocessing import Pool
+from typing import Any, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,20 +9,21 @@ from scipy.stats import norm, invgamma
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from coordination.common.dataset import InputFeaturesDataset, DataSeries
+from coordination.common.log import TensorBoardLogger
+from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.inference.mcmc import MCMC
-from coordination.model.particle_filter import Particles, ParticleFilter
+from coordination.model.particle_filter import Particles
 from coordination.model.pgm import PGM, Samples
 
 
-class ClippedGaussianParticles(Particles):
+class ClippedGaussianDemoParticles(Particles):
     state: np.ndarray
 
     def _keep_particles_at(self, indices: np.ndarray):
         self.state = self.state[indices]
 
 
-class ClippedGaussianSamples(Samples):
+class ClippedGaussianDemoSamples(Samples):
     states: np.ndarray
     observations: np.ndarray
 
@@ -34,7 +32,7 @@ class ClippedGaussianSamples(Samples):
         return self.observations.shape[0]
 
 
-class ClippedGaussianParticlesDataSeries(DataSeries):
+class ClippedGaussianDemoDataSeries(EvidenceDataSeries):
 
     def __init__(self, states: Optional[np.ndarray], observations: np.ndarray, uuid: str):
         super().__init__(uuid)
@@ -50,9 +48,9 @@ class ClippedGaussianParticlesDataSeries(DataSeries):
         return self.observations.shape[0]
 
 
-class ClippedGaussianParticlesDataset(InputFeaturesDataset):
+class ClippedGaussianDemoDataset(EvidenceDataset):
 
-    def __init__(self, series: List[ClippedGaussianParticlesDataSeries]):
+    def __init__(self, series: List[ClippedGaussianDemoDataSeries]):
         super().__init__(series)
 
         self.states = None if series[0].states is None else np.zeros((len(series), series[0].num_time_steps))
@@ -88,12 +86,13 @@ class ClippedGaussianDemo(PGM):
         self.vso_samples_ = np.array([])
         self.state_samples_ = np.array([])
 
-    def sample(self, num_samples: int, time_steps: int) -> ClippedGaussianSamples:
+    def sample(self, num_samples: int, time_steps: int, seed: Optional[int]) -> ClippedGaussianDemoSamples:
         """
         Regular ancestral sampling procedure.
         """
+        super().sample(num_samples, time_steps, seed)
 
-        samples = ClippedGaussianSamples()
+        samples = ClippedGaussianDemoSamples()
         samples.states = np.zeros((num_samples, time_steps))
         samples.observations = np.zeros((num_samples, self.dim_observations, time_steps))
         sst = np.sqrt(self.var_state_transition)
@@ -104,18 +103,17 @@ class ClippedGaussianDemo(PGM):
                 samples.states[:, 0] = self.initial_state
             else:
                 transition_distribution = norm(loc=samples.states[:, t - 1], scale=sst)
-                samples.states[:, t] = np.clip(transition_distribution.rvs(), a_min=0, a_max=1)
+                samples.states[:, t] = transition_distribution.rvs()
 
             means = np.clip(samples.states[:, t], a_min=0, a_max=1)[:, np.newaxis].repeat(self.dim_observations,
                                                                                           axis=1)
-            # means = samples.states[:, t][:, np.newaxis].repeat(self.dim_observations, axis=1)
             emission_distribution = norm(loc=means, scale=sso)
 
             samples.observations[:, :, t] = emission_distribution.rvs()
 
         return samples
 
-    def _initialize_gibbs(self, burn_in: int, evidence: ClippedGaussianParticlesDataset):
+    def _initialize_gibbs(self, burn_in: int, evidence: ClippedGaussianDemoDataset):
         super()._initialize_gibbs(burn_in, evidence)
         # History of samples and negative log-likelihood in each Gibbs step
         self.state_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.time_steps))
@@ -140,7 +138,7 @@ class ClippedGaussianDemo(PGM):
         else:
             self.vso_samples_[0] = self.var_state_observation
 
-    def _compute_loglikelihood_at(self, gibbs_step: int, evidence: ClippedGaussianParticlesDataset) -> float:
+    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset) -> float:
         # Compute initial log-likelihood
         sst = np.sqrt(self.vst_samples_[gibbs_step])
         sso = np.sqrt(self.vso_samples_[gibbs_step])
@@ -156,7 +154,7 @@ class ClippedGaussianDemo(PGM):
 
         return ll
 
-    def _gibbs_step(self, gibbs_step: int, evidence: ClippedGaussianParticlesDataset, time_steps: np.ndarray,
+    def _gibbs_step(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset, time_steps: np.ndarray,
                     job_num: int):
         states = self.state_samples_[gibbs_step - 1].copy()
 
@@ -193,7 +191,7 @@ class ClippedGaussianDemo(PGM):
         """
         self.state_samples_[gibbs_step, :, time_steps] = latents.T
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: ClippedGaussianParticlesDataset):
+    def _update_latent_parameters(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset):
         # Variance of the State Transition
         if self.var_state_transition is None:
             a = self.a_vst + evidence.num_trials * (evidence.time_steps - 1) / 2
@@ -224,7 +222,7 @@ class ClippedGaussianDemo(PGM):
     # Inference
     # ------------------------------------------------
 
-    def _summarize_particles(self, particles: List[ClippedGaussianParticles]) -> np.ndarray:
+    def _summarize_particles(self, particles: List[ClippedGaussianDemoParticles]) -> np.ndarray:
         # Mean and variance over time
         summary = np.zeros((2, len(particles)))
 
@@ -235,25 +233,24 @@ class ClippedGaussianDemo(PGM):
         return summary
 
     def _sample_from_prior(self, num_particles: int,
-                           series: ClippedGaussianParticlesDataSeries) -> ClippedGaussianParticles:
-        new_particles = ClippedGaussianParticles()
+                           series: ClippedGaussianDemoDataSeries) -> ClippedGaussianDemoParticles:
+        new_particles = ClippedGaussianDemoParticles()
         new_particles.state = np.ones(num_particles) * self.initial_state
 
         return new_particles
 
-    def _sample_from_transition_to(self, time_step: int, states: List[ClippedGaussianParticles],
-                                   series: ClippedGaussianParticlesDataSeries) -> ClippedGaussianParticles:
+    def _sample_from_transition_to(self, time_step: int, states: List[ClippedGaussianDemoParticles],
+                                   series: ClippedGaussianDemoDataSeries) -> ClippedGaussianDemoParticles:
 
-        new_particles = ClippedGaussianParticles()
+        new_particles = ClippedGaussianDemoParticles()
         means = states[time_step - 1].state
-        new_particles.state = np.clip(norm(loc=means, scale=np.sqrt(self.var_state_transition)).rvs(), a_min=0, a_max=1)
+        new_particles.state = norm(loc=means, scale=np.sqrt(self.var_state_transition)).rvs()
 
         return new_particles
 
-    def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[ClippedGaussianParticles],
-                                              series: ClippedGaussianParticlesDataSeries):
+    def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[ClippedGaussianDemoParticles],
+                                              series: ClippedGaussianDemoDataSeries):
         means = np.clip(states[time_step - 1].state, a_min=0, a_max=1)[:, np.newaxis]
-        # means = states[time_step - 1].state[:, np.newaxis]
         lls = norm(loc=means, scale=np.sqrt(self.var_state_observation)).logpdf(series.observations[:, time_step]).sum(
             axis=1)
 
@@ -273,48 +270,48 @@ if __name__ == "__main__":
 
     np.random.seed(0)
     random.seed(0)
-    samples = model.sample(NUM_SAMPLES, TIME_STEPS)
+    samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0)
 
-    full_evidence = ClippedGaussianParticlesDataset(
-        [ClippedGaussianParticlesDataSeries(samples.states[i], samples.observations[i], f"{i}") for i in
+    full_evidence = ClippedGaussianDemoDataset(
+        [ClippedGaussianDemoDataSeries(samples.states[i], samples.observations[i], f"{i}") for i in
          range(samples.size)])
-    partial_evidence = ClippedGaussianParticlesDataset(
-        [ClippedGaussianParticlesDataSeries(None, samples.observations[i], f"{i}") for i in
+    partial_evidence = ClippedGaussianDemoDataset(
+        [ClippedGaussianDemoDataSeries(None, samples.observations[i], f"{i}") for i in
          range(samples.size)])
-    #
-    # model.fit(full_evidence, 1, 1)
-    # true_nll = model.nll_[-1]
-    #
-    # model.var_state_transition = None
-    # model.var_state_observation = None
-    #
-    # # model.state_samples_ = samples.states[np.newaxis, :].repeat(101, axis=0)
-    #
-    # np.random.seed(0)
-    # random.seed(0)
-    # model.fit(partial_evidence, 10, 4)
-    #
-    # print(model.var_state_transition)
-    # print(model.var_state_observation)
-    #
-    # plt.figure()
-    # plt.plot(range(len(model.vst_samples_)), model.vst_samples_)
-    # plt.title("VST")
-    # plt.show()
-    #
-    # plt.figure()
-    # plt.plot(range(len(model.vso_samples_)), model.vso_samples_)
-    # plt.title("VSO")
-    # plt.show()
-    #
-    # plt.figure()
-    # plt.plot(range(len(model.nll_)), model.nll_)
-    # plt.plot(range(len(model.nll_)), np.ones(len(model.nll_)) * true_nll, linestyle="--")
-    # plt.title("NLL")
-    # plt.show()
+
+    # Provide complete data to compute true NLL
+    model.fit(full_evidence, 1, seed=0)
+    true_nll = model.nll_[-1]
+
+    model.var_state_transition = None
+    model.var_state_observation = None
+
+    tb_logger = TensorBoardLogger("/Users/paulosoares/code/tomcat-coordination/boards")
+    model.fit(partial_evidence, 10, seed=0, num_jobs=4, logger=tb_logger)
+
+    print(model.var_state_transition)
+    print(model.var_state_observation)
+
+    plt.figure()
+    plt.plot(range(len(model.vst_samples_)), model.vst_samples_)
+    plt.title("VST")
+    plt.show()
+
+    plt.figure()
+    plt.plot(range(len(model.vso_samples_)), model.vso_samples_)
+    plt.title("VSO")
+    plt.show()
+
+    plt.figure()
+    plt.plot(range(len(model.nll_)), model.nll_)
+    plt.plot(range(len(model.nll_)), np.ones(len(model.nll_)) * true_nll, linestyle="--")
+    plt.title("NLL")
+    plt.show()
+
+    # Inference on the 5 first samples
 
     single_partial_evidence = partial_evidence.get_subset(list(range(5)))
-    results = model.predict(single_partial_evidence, 10000, 0, 1)
+    results = model.predict(partial_evidence, 10000, 0, 5)
 
     for d in range(5):
         result = results[d]

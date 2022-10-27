@@ -1,9 +1,9 @@
 from typing import Callable, List, Optional
 
 import numpy as np
-import random
 
-from coordination.common.dataset import DataSeries
+from coordination.common.dataset import EvidenceDataSeries
+from coordination.common.utils import set_seed
 
 
 class Particles:
@@ -43,24 +43,22 @@ class ParticleFilter:
 
     def reset_state(self):
         self.states = []
-        if self.seed is not None:
-            np.random.seed(self.seed)
-            random.seed(self.seed)
+        set_seed(self.seed)
 
-    def next(self, series: DataSeries):
+    def next(self, series: EvidenceDataSeries):
         next_time_step = len(self.states)
         self.__transition(series)
         if self.resample_at_fn(next_time_step, series):
             self.__resample(series)
 
-    def __transition(self, series: DataSeries):
+    def __transition(self, series: EvidenceDataSeries):
         if len(self.states) == 0:
             self.states.append(self.sample_from_prior_fn(self.num_particles, series))
         else:
             t = len(self.states)
             self.states.append(self.sample_from_transition_fn(t, self.states, series))
 
-    def __resample(self, series: DataSeries):
+    def __resample(self, series: EvidenceDataSeries):
         t = len(self.states) - 1
         log_weights = self.calculate_log_likelihood_fn(t, self.states, series)
         log_weights -= np.max(log_weights)

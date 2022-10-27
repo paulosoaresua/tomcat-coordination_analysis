@@ -3,7 +3,7 @@ from typing import Callable, List
 import numpy as np
 from scipy.stats import norm
 
-from coordination.common.dataset import InputFeaturesDataset, SeriesData
+from coordination.common.dataset import EvidenceDataset, SeriesData
 from coordination.model.coordination_model import CoordinationModel
 
 EPSILON = 1E-16
@@ -48,12 +48,12 @@ class DiscreteCoordinationInferenceFromVocalics(CoordinationModel):
             [1 - p_coordination_transition, p_coordination_transition],
             [p_coordination_transition, 1 - p_coordination_transition]])
 
-    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+    def fit(self, input_features: EvidenceDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         return self
 
-    def predict(self, input_features: InputFeaturesDataset, *args, **kwargs) -> List[np.ndarray]:
+    def predict(self, input_features: EvidenceDataset, *args, **kwargs) -> List[np.ndarray]:
         if input_features.num_trials > 0:
             assert len(self._mean_prior_vocalics) == input_features.series[0].vocalics.num_features
             assert len(self._std_prior_vocalics) == input_features.series[0].vocalics.num_features

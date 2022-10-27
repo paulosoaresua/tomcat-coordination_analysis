@@ -8,7 +8,7 @@ import numpy as np
 from scipy.stats import norm
 from tqdm import tqdm
 
-from coordination.common.dataset import InputFeaturesDataset, SeriesData
+from coordination.common.dataset import EvidenceDataset, SeriesData
 from coordination.model.coordination_model import CoordinationModel
 from coordination.model.particle_filter import Particles, ParticleFilter
 
@@ -64,12 +64,12 @@ class CoordinationBlendingInferenceLatentVocalics(CoordinationModel):
         self.seed = seed
         self.show_progress_bar = show_progress_bar
 
-    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
+    def fit(self, input_features: EvidenceDataset, num_particles: int = 0, num_iter: int = 0, discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.
         return self
 
-    def predict(self, input_features: InputFeaturesDataset, *args, **kwargs) -> List[np.ndarray]:
+    def predict(self, input_features: EvidenceDataset, *args, **kwargs) -> List[np.ndarray]:
         if input_features.num_trials > 0:
             assert len(self.mean_prior_latent_vocalics) == input_features.series[0].vocalics.num_features
             assert len(self.std_prior_latent_vocalics) == input_features.series[0].vocalics.num_features

@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 from scipy.stats import norm
 
-from coordination.common.dataset import InputFeaturesDataset
+from coordination.common.dataset import EvidenceDataset
 from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics, \
     LatentVocalicsParticles
 
@@ -52,7 +52,7 @@ class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingIn
 
         self.states: List[GaussianLatentVocalicsParticles] = []
 
-    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0,
+    def fit(self, input_features: EvidenceDataset, num_particles: int = 0, num_iter: int = 0,
             discard_first: int = 0, *args,
             **kwargs):
         # MCMC to train parameters? We start by choosing with cross validation instead.

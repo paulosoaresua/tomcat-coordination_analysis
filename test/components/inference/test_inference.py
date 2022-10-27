@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 from scipy.stats import norm
 
-from coordination.common.dataset import InputFeaturesDataset, SeriesData
+from coordination.common.dataset import EvidenceDataset, SeriesData
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
 from coordination.model.discrete_coordination import DiscreteCoordinationInferenceFromVocalics
 
@@ -36,7 +36,7 @@ class DiscreteCoordinationParameters:
     vocalic_series = VocalicsSparseSeries(values=values, mask=mask, utterances=utterances,
                                           previous_from_self=previous_from_self,
                                           previous_from_other=previous_from_other)
-    dataset = InputFeaturesDataset([SeriesData(vocalic_series)])
+    dataset = EvidenceDataset([SeriesData(vocalic_series)])
 
     p_prior_coordination = 0
     p_coordination_transition = 0.1

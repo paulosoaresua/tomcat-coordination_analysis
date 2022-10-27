@@ -6,12 +6,12 @@ import numpy as np
 from scipy.stats import pearsonr
 from sklearn.linear_model import BayesianRidge
 
-from coordination.common.dataset import InputFeaturesDataset
+from coordination.common.dataset import EvidenceDataset
 from coordination.plot.regression import plot_coordination_vs_score_regression
 
 
 def estimate_regression(coordination_path: str, dataset_path: str, plot_out_path: str):
-    input_features: InputFeaturesDataset
+    input_features: EvidenceDataset
     scores: np.ndarray
     with open(dataset_path, "rb") as f:
         input_features, scores = pickle.load(f)

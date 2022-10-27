@@ -6,7 +6,7 @@ from coordination.common.log import image_to_tensorboard
 from sklearn.base import BaseEstimator
 from torch.utils.tensorboard import SummaryWriter
 
-from coordination.common.dataset import InputFeaturesDataset, SeriesData
+from coordination.common.dataset import EvidenceDataset, SeriesData
 from coordination.plot.coordination import add_discrete_coordination_bar
 
 
@@ -15,10 +15,10 @@ class CoordinationModel(BaseEstimator):
     def __init__(self):
         self.tb_writer: Optional[SummaryWriter] = None
 
-    def fit(self, input_features: InputFeaturesDataset, *args, **kwargs):
+    def fit(self, input_features: EvidenceDataset, *args, **kwargs):
         raise NotImplementedError
 
-    def predict(self, input_features: InputFeaturesDataset, *args, **kwargs) -> Any:
+    def predict(self, input_features: EvidenceDataset, *args, **kwargs) -> Any:
         raise NotImplementedError
 
     def configure_tensorboard(self, out_dir: str):

@@ -1,15 +1,15 @@
 from __future__ import annotations
-
 from typing import Any, List, Optional, Tuple
 
 from multiprocessing import Pool
 
 import numpy as np
 from sklearn.base import BaseEstimator
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from coordination.common.dataset import InputFeaturesDataset, DataSeries
+from coordination.common.log import BaseLogger
+from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
+from coordination.common.utils import set_seed
 from coordination.model.particle_filter import Particles, ParticleFilter
 
 
@@ -21,16 +21,21 @@ class Samples:
 
 
 class PGM(BaseEstimator):
-    def __init__(self, tb_writer: Optional[SummaryWriter] = None):
+    def __init__(self):
         super().__init__()
 
-        self.tb_writer = tb_writer
         self.nll_ = np.array([])
 
-    def sample(self, num_samples: int, time_steps: int) -> Tuple[Samples]:
-        raise NotImplementedError
+    def sample(self, num_samples: int, time_steps: int, seed: Optional[int]) -> Tuple[Samples]:
+        set_seed(seed)
 
-    def fit(self, evidence: InputFeaturesDataset, burn_in: int, num_jobs: int = 1, *args, **kwargs):
+        # To be implemented by a child class
+
+    def fit(self, evidence: EvidenceDataset, burn_in: int, seed: Optional[int], num_jobs: int = 1,
+            logger: BaseLogger = BaseLogger()):
+
+        set_seed(seed)
+
         # We split the PGM along the time axis. To make sure variables in one chunk is not dependent on variables in
         # another chunk, we create a separate chunk with the variables in the border that will be sampled in the
         # beginning of the Gibbs step.
@@ -60,10 +65,9 @@ class PGM(BaseEstimator):
         self._initialize_gibbs(burn_in, evidence)
 
         #    1.1 Compute initial NLL
-        self.nll_[0] = -self._compute_loglikelihood_at(0, evidence)
+        self.nll_[0] = -self._compute_joint_loglikelihood_at(0, evidence)
 
-        if self.tb_writer is not None:
-            self.tb_writer.add_scalar("train/nll", self.nll_[0])
+        logger.add_scalar("train/nll", self.nll_[0], 0)
 
         # 2. Sample the latent variables from their posterior distributions
         with Pool(num_effective_jobs) as pool:
@@ -77,23 +81,22 @@ class PGM(BaseEstimator):
                         self._retain_samples_from_latent(i, result, parallel_time_step_indices[chunk_idx])
 
                 self._update_latent_parameters(i, evidence)
-                self.nll_[i] = -self._compute_loglikelihood_at(i, evidence)
+                self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence)
 
-                if self.tb_writer is not None:
-                    self.tb_writer.add_scalar("train/nll", self.nll_[i])
+                logger.add_scalar("train/nll", self.nll_[i], i)
 
         self._retain_parameters()
 
         return self
 
     # Methods to be implemented by the subclass for parameter estimation
-    def _initialize_gibbs(self, burn_in: int, evidence: InputFeaturesDataset):
+    def _initialize_gibbs(self, burn_in: int, evidence: EvidenceDataset):
         self.nll_ = np.zeros(burn_in + 1)
 
-    def _compute_loglikelihood_at(self, gibbs_step: int, evidence: InputFeaturesDataset) -> float:
+    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: EvidenceDataset) -> float:
         raise NotImplementedError
 
-    def _gibbs_step(self, gibbs_step: int, evidence: InputFeaturesDataset, time_steps: np.ndarray, job_num: int) -> Any:
+    def _gibbs_step(self, gibbs_step: int, evidence: EvidenceDataset, time_steps: np.ndarray, job_num: int) -> Any:
         """
         Return the new samples from the latent variables
         """
@@ -105,7 +108,7 @@ class PGM(BaseEstimator):
         """
         raise NotImplementedError
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: InputFeaturesDataset):
+    def _update_latent_parameters(self, gibbs_step: int, evidence: EvidenceDataset):
         """
         Update parameters with conjugate priors using the sufficient statistics of previously sampled latent variables.
         """
@@ -117,26 +120,25 @@ class PGM(BaseEstimator):
         """
         raise NotImplementedError
 
-    def predict(self, evidence: InputFeaturesDataset, num_particles: int, seed: int, num_jobs: int, *args, **kwargs) -> \
-            List[np.ndarray]:
+    def predict(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1) -> List[
+        np.ndarray]:
 
         num_effective_jobs = min(num_jobs, evidence.num_trials)
         trial_chunks = np.array_split(np.arange(evidence.num_trials), num_effective_jobs)
         results = []
         if num_effective_jobs > 1:
             with Pool(num_effective_jobs) as pool:
-                job_args = [(evidence.get_subset(trial_chunks[j]), num_particles, seed, True) for j in
+                job_args = [(evidence.get_subset(trial_chunks[j]), num_particles, seed, 2 * j) for j in
                             range(num_effective_jobs)]
                 for result in pool.starmap(self._run_particle_filter_inference, job_args):
                     results.extend(result)
         else:
-            results = self._run_particle_filter_inference(evidence, num_particles, seed, True)
+            results = self._run_particle_filter_inference(evidence, num_particles, seed, 0)
 
         return results
 
-    def _run_particle_filter_inference(self, evidence: InputFeaturesDataset, num_particles: int, seed: int,
-                                       show_progress: bool) -> List[
-        np.ndarray]:
+    def _run_particle_filter_inference(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int],
+                                       main_bar_position: int) -> List[np.ndarray]:
         particle_filter = ParticleFilter(
             num_particles=num_particles,
             resample_at_fn=self._resample_at,
@@ -147,53 +149,32 @@ class PGM(BaseEstimator):
         )
 
         results = []
-        pbar_trial = None
-        if show_progress:
-            pbar_trial = tqdm(total=evidence.num_trials, position=0)
-        for d in range(evidence.num_trials):
-            if show_progress:
-                pbar_trial.set_description(f"Trial {evidence.series[d].uuid}", True)
-
+        for d in tqdm(range(evidence.num_trials), "Trial", position=main_bar_position):
             particle_filter.reset_state()
             series = evidence.series[d]
 
-            if show_progress:
-                for _ in tqdm(range(series.num_time_steps), desc="Time Step", position=1, leave=False):
-                    particle_filter.next(series)
-            else:
-                for _ in range(series.num_time_steps):
-                    particle_filter.next(series)
+            for _ in tqdm(range(series.num_time_steps), desc="Time Step", position=main_bar_position + 1,
+                          leave=False):
+                particle_filter.next(series)
 
             results.append(self._summarize_particles(particle_filter.states))
-
-            if show_progress:
-                pbar_trial.update()
 
         return results
 
     # Methods to be implemented by the subclass for inference
-    def _sample_from_prior(self, num_particles: int, series: DataSeries) -> Particles:
+    def _sample_from_prior(self, num_particles: int, series: EvidenceDataSeries) -> Particles:
         raise NotImplementedError
 
     def _sample_from_transition_to(self, time_step: int, new_particles: List[Particles],
-                                   series: DataSeries) -> Particles:
+                                   series: EvidenceDataSeries) -> Particles:
         raise NotImplementedError
 
-    def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[Particles], series: DataSeries):
+    def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[Particles],
+                                              series: EvidenceDataSeries):
         raise NotImplementedError
 
-    def _resample_at(self, time_step: int, series: DataSeries):
+    def _resample_at(self, time_step: int, series: EvidenceDataSeries):
         return True
-
-    def _sample_coordination_from_prior(self, new_particles: Particles):
-        raise NotImplementedError
-
-    def _sample_coordination_from_transition(self, previous_particles: Particles,
-                                             new_particles: Particles) -> Particles:
-        raise NotImplementedError
-
-    def _create_new_particles(self) -> Particles:
-        raise NotImplementedError
 
     def _summarize_particles(self, particles: List[Particles]) -> np.ndarray:
         raise NotImplementedError
