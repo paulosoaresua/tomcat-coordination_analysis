@@ -26,7 +26,7 @@ class EvidenceDataset:
         return len(self.series)
 
     @property
-    def time_steps(self):
+    def num_time_steps(self):
         return 0 if len(self.series) == 0 else self.series[0].num_time_steps
 
     def get_subset(self, indices: List[int]) -> EvidenceDataset:

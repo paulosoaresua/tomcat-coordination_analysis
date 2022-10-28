@@ -26,10 +26,11 @@ class PGM(BaseEstimator):
 
         self.nll_ = np.array([])
 
-    def sample(self, num_samples: int, time_steps: int, seed: Optional[int]) -> Tuple[Samples]:
+    def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> Samples:
         set_seed(seed)
 
         # To be implemented by a child class
+        return Samples()
 
     def fit(self, evidence: EvidenceDataset, burn_in: int, seed: Optional[int], num_jobs: int = 1,
             logger: BaseLogger = BaseLogger()):
@@ -42,12 +43,12 @@ class PGM(BaseEstimator):
         parallel_time_step_indices = []
         independent_time_step_indices = []
 
-        num_effective_jobs = min(evidence.time_steps / 2, num_jobs)
+        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
         if num_effective_jobs == 1:
             # No parallel jobs
-            independent_time_step_indices = np.arange(evidence.time_steps)
+            independent_time_step_indices = np.arange(evidence.num_time_steps)
         else:
-            time_chunks = np.array_split(np.arange(evidence.time_steps), num_effective_jobs)
+            time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
             for i, time_chunk in enumerate(time_chunks):
                 if i == len(time_chunks) - 1:
                     # No need to add the last time index to the independent list since it does not depend on

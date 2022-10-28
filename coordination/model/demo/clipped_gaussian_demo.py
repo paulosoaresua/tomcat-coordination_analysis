@@ -34,7 +34,7 @@ class ClippedGaussianDemoSamples(Samples):
 
 class ClippedGaussianDemoDataSeries(EvidenceDataSeries):
 
-    def __init__(self, states: Optional[np.ndarray], observations: np.ndarray, uuid: str):
+    def __init__(self, uuid: str, observations: np.ndarray, states: Optional[np.ndarray] = None):
         super().__init__(uuid)
         self.states = states
         self.observations = observations
@@ -64,12 +64,11 @@ class ClippedGaussianDemoDataset(EvidenceDataset):
 
 class ClippedGaussianDemo(PGM):
     def __init__(self, initial_state: float, dim_observations: int, a_vst: float, b_vst: float, a_vso: float,
-                 b_vso: float, tb_writer: Optional[SummaryWriter] = None):
+                 b_vso: float):
         super().__init__()
 
         self.initial_state = initial_state
         self.dim_observations = dim_observations
-        self.tb_writer = tb_writer
 
         self.var_state_transition: Optional[float] = None
         self.var_state_observation: Optional[np.ndarray] = None
@@ -80,25 +79,29 @@ class ClippedGaussianDemo(PGM):
         self.a_vso = a_vso
         self.b_vso = b_vso
 
-        # Negative log-likelihood and samples collected during the fit so we can plot at the end:
-        self.nll_ = np.array([])
+        # Negative log-likelihood and samples collected during training
         self.vst_samples_ = np.array([])
         self.vso_samples_ = np.array([])
         self.state_samples_ = np.array([])
 
-    def sample(self, num_samples: int, time_steps: int, seed: Optional[int]) -> ClippedGaussianDemoSamples:
+    # ---------------------------------------------------------
+    # SYNTHETIC DATA GENERATION
+    # ---------------------------------------------------------
+
+    def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args,
+               **kwargs) -> ClippedGaussianDemoSamples:
         """
         Regular ancestral sampling procedure.
         """
-        super().sample(num_samples, time_steps, seed)
+        super().sample(num_samples, num_time_steps, seed)
 
         samples = ClippedGaussianDemoSamples()
-        samples.states = np.zeros((num_samples, time_steps))
-        samples.observations = np.zeros((num_samples, self.dim_observations, time_steps))
+        samples.states = np.zeros((num_samples, num_time_steps))
+        samples.observations = np.zeros((num_samples, self.dim_observations, num_time_steps))
         sst = np.sqrt(self.var_state_transition)
         sso = np.sqrt(self.var_state_observation)
 
-        for t in range(time_steps):
+        for t in range(num_time_steps):
             if t == 0:
                 samples.states[:, 0] = self.initial_state
             else:
@@ -113,17 +116,20 @@ class ClippedGaussianDemo(PGM):
 
         return samples
 
+    # ---------------------------------------------------------
+    # PARAMETER ESTIMATION
+    # ---------------------------------------------------------
+
     def _initialize_gibbs(self, burn_in: int, evidence: ClippedGaussianDemoDataset):
         super()._initialize_gibbs(burn_in, evidence)
-        # History of samples and negative log-likelihood in each Gibbs step
-        self.state_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.time_steps))
+        # History of samples in each Gibbs step
+        self.state_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.num_time_steps))
         self.vst_samples_ = np.zeros(burn_in + 1)
         self.vso_samples_ = np.zeros(burn_in + 1)
-        self.nll_ = np.zeros(burn_in + 1)
 
         # 1. Latent variables and parameters initialization
         if evidence.states is None:
-            self.state_samples_[0] = norm(loc=np.zeros((evidence.num_trials, evidence.time_steps)), scale=0.1).rvs()
+            self.state_samples_[0] = norm(loc=np.zeros((evidence.num_trials, evidence.num_time_steps)), scale=0.1).rvs()
             self.state_samples_[0, :, 0] = self.initial_state
         else:
             self.state_samples_[0] = evidence.states
@@ -139,13 +145,12 @@ class ClippedGaussianDemo(PGM):
             self.vso_samples_[0] = self.var_state_observation
 
     def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset) -> float:
-        # Compute initial log-likelihood
         sst = np.sqrt(self.vst_samples_[gibbs_step])
         sso = np.sqrt(self.vso_samples_[gibbs_step])
 
         ll = 0
         states = self.state_samples_[gibbs_step]
-        for t in range(evidence.time_steps):
+        for t in range(evidence.num_time_steps):
             if t > 0:
                 ll += norm(states[:, t - 1], scale=sst).logpdf(states[:, t]).sum()
 
@@ -162,13 +167,13 @@ class ClippedGaussianDemo(PGM):
             sst = np.sqrt(self.vst_samples_[gibbs_step - 1])
             sso = np.sqrt(self.vso_samples_[gibbs_step - 1])
 
-            state_proposal = lambda x: np.clip(norm(loc=x, scale=0.1).rvs(), a_min=0, a_max=1)
+            state_proposal = lambda x: norm(loc=x, scale=0.1).rvs()
             for t in tqdm(time_steps, desc="Sampling over time", position=job_num, leave=False):
                 def unormalized_log_posterior(sample: np.ndarray):
                     log_posterior = norm(loc=states[:, t - 1], scale=sst).logpdf(sample) + \
                                     norm(loc=np.clip(sample[:, np.newaxis], a_min=0, a_max=1), scale=sso).logpdf(
                                         evidence.observations[:, :, t]).sum(axis=1)
-                    if t < evidence.time_steps - 1:
+                    if t < evidence.num_time_steps - 1:
                         log_posterior += norm(loc=sample, scale=sst).logpdf(states[:, t + 1])
 
                     return log_posterior
@@ -194,10 +199,10 @@ class ClippedGaussianDemo(PGM):
     def _update_latent_parameters(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset):
         # Variance of the State Transition
         if self.var_state_transition is None:
-            a = self.a_vst + evidence.num_trials * (evidence.time_steps - 1) / 2
+            a = self.a_vst + evidence.num_trials * (evidence.num_time_steps - 1) / 2
             b = self.b_vst + np.square(
                 self.state_samples_[gibbs_step, :, 1:] - self.state_samples_[gibbs_step, :,
-                                                         :evidence.time_steps - 1]).sum() / 2
+                                                         :evidence.num_time_steps - 1]).sum() / 2
             self.vst_samples_[gibbs_step] = invgamma(a=a, scale=b).rvs()
         else:
             # Given
@@ -205,7 +210,7 @@ class ClippedGaussianDemo(PGM):
 
         # Variance of the State Transition
         if self.var_state_observation is None:
-            a = self.a_vso + evidence.num_trials * evidence.time_steps * self.dim_observations / 2
+            a = self.a_vso + evidence.num_trials * evidence.num_time_steps * self.dim_observations / 2
             b = self.b_vso + np.square(
                 np.clip(self.state_samples_[gibbs_step], a_min=0, a_max=1)[:, np.newaxis,
                 :] - evidence.observations).sum() / 2
@@ -218,9 +223,9 @@ class ClippedGaussianDemo(PGM):
         self.var_state_transition = self.vst_samples_[-1]
         self.var_state_observation = self.vso_samples_[-1]
 
-    # ------------------------------------------------
-    # Inference
-    # ------------------------------------------------
+    # ---------------------------------------------------------
+    # INFERENCE
+    # ---------------------------------------------------------
 
     def _summarize_particles(self, particles: List[ClippedGaussianDemoParticles]) -> np.ndarray:
         # Mean and variance over time
@@ -273,10 +278,10 @@ if __name__ == "__main__":
     samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0)
 
     full_evidence = ClippedGaussianDemoDataset(
-        [ClippedGaussianDemoDataSeries(samples.states[i], samples.observations[i], f"{i}") for i in
+        [ClippedGaussianDemoDataSeries(f"{i}", samples.observations[i], samples.states[i]) for i in
          range(samples.size)])
     partial_evidence = ClippedGaussianDemoDataset(
-        [ClippedGaussianDemoDataSeries(None, samples.observations[i], f"{i}") for i in
+        [ClippedGaussianDemoDataSeries(f"{i}", samples.observations[i]) for i in
          range(samples.size)])
 
     # Provide complete data to compute true NLL
