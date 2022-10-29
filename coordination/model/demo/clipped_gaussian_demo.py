@@ -6,10 +6,9 @@ from typing import Any, List, Optional
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm, invgamma
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from coordination.common.log import TensorBoardLogger
+from coordination.common.log import BaseLogger, TensorBoardLogger
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.inference.mcmc import MCMC
 from coordination.model.particle_filter import Particles
@@ -196,7 +195,7 @@ class ClippedGaussianDemo(PGM):
         """
         self.state_samples_[gibbs_step, :, time_steps] = latents.T
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset):
+    def _update_latent_parameters(self, gibbs_step: int, evidence: ClippedGaussianDemoDataset, logger: BaseLogger):
         # Variance of the State Transition
         if self.var_state_transition is None:
             a = self.a_vst + evidence.num_trials * (evidence.num_time_steps - 1) / 2

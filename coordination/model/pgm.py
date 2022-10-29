@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from multiprocessing import Pool
 
@@ -81,7 +81,7 @@ class PGM(BaseEstimator):
                     for chunk_idx, result in enumerate(pool.starmap(self._gibbs_step, job_args)):
                         self._retain_samples_from_latent(i, result, parallel_time_step_indices[chunk_idx])
 
-                self._update_latent_parameters(i, evidence)
+                self._update_latent_parameters(i, evidence, logger)
                 self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence)
 
                 logger.add_scalar("train/nll", self.nll_[i], i)
@@ -109,7 +109,7 @@ class PGM(BaseEstimator):
         """
         raise NotImplementedError
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: EvidenceDataset):
+    def _update_latent_parameters(self, gibbs_step: int, evidence: EvidenceDataset, logger: BaseLogger):
         """
         Update parameters with conjugate priors using the sufficient statistics of previously sampled latent variables.
         """
