@@ -174,7 +174,71 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
 
 
 if __name__ == "__main__":
-    TIME_STEPS = 50
+    # mask = np.array([
+    #     # [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+    #     # [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1]
+    #     [0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+    #     [0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
+    # ])
+    #
+    # Ns = np.array([
+    #     [-1, 4, 3, 8, 10, -1, -1, -1, -1, -1, 13, 12, 14, 15, 17, 16, -1, -1],
+    #     [-1, 4, 3, 8, 10, -1, -1, -1, -1, -1, 13, 12, 14, 15, 17, 16, -1, -1]
+    # ])
+    #
+    # No = np.array([
+    #     [-1, 2, 4, 4, 11, -1, -1, -1, -1, -1, 12, 13, 13, 14, 15, 17, 17, -1],
+    #     [-1, 2, 4, 4, 11, -1, -1, -1, -1, -1, 12, 13, 13, 14, 15, 17, 17, -1]
+    # ])
+    #
+    # B = np.array_split(np.arange(18), 3)
+    # M = np.array_split(mask, 3, axis=-1)
+    #
+    # time_steps = Ns.shape[1]
+    # num_trials = Ns.shape[0]
+    # index_mask = np.arange(time_steps)[np.newaxis, :].repeat(num_trials, axis=0)
+    #
+    # # For indexes in which the next speaker does not exist, we replace with the current index. That is, there's
+    # # no dependency in the future
+    # Ns = np.where(Ns == -1, index_mask, Ns)
+    # No = np.where(No == -1, index_mask, No)
+    #
+    # parallel_time_steps = []
+    # independent_time_steps = []
+    # j = 0
+    # while j < len(B) - 1:
+    #     block_size = len(B[j])
+    #
+    #     if block_size > 0:
+    #         # Last indexes where M[j] = 1 per column
+    #         last_indices_with_speaker = block_size - np.argmax(np.flip(M[j], axis=1), axis=1) - 1
+    #         last_times_with_speaker = B[j][last_indices_with_speaker]
+    #         next_block_time_step_self = np.take_along_axis(Ns, last_times_with_speaker[:, np.newaxis], axis=-1)
+    #         next_block_time_step_other = np.take_along_axis(No, last_times_with_speaker[:, np.newaxis], axis=-1)
+    #         last_time_step_independent_block = np.maximum(np.max(next_block_time_step_self), np.max(next_block_time_step_other))
+    #
+    #         if last_time_step_independent_block > B[j][-1]:
+    #             # There is a dependency with the next block
+    #             independent_range = np.arange(B[j][-1] + 1, last_time_step_independent_block + 1)
+    #             independent_time_steps.extend(independent_range)
+    #
+    #         parallel_time_steps.append(B[j])
+    #
+    #         while last_time_step_independent_block > B[j + 1][-1]:
+    #             j += 1
+    #         next_parallel_range = np.arange(last_time_step_independent_block + 1, B[j + 1][-1] + 1)
+    #
+    #         B[j + 1] = next_parallel_range
+    #
+    #     j += 1
+
+    # if len(B[-1]) > 0:
+    #     parallel_time_steps.append(B[-1])
+    #
+    # print(independent_time_steps)
+    # print(parallel_time_steps)
+
+    TIME_STEPS = 20
     NUM_SAMPLES = 100
     NUM_FEATURES = 2
     model = GaussianCoordinationBlendingLatentVocalics(
@@ -206,6 +270,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     ts = np.arange(TIME_STEPS)
+
     # plt.figure()
     # plt.title("Coordination")
     # plt.plot(ts, samples.coordination[0], color="tab:red", marker="o")
@@ -312,12 +377,14 @@ if __name__ == "__main__":
     # plt.plot(ts, evidence_with_latent_vocalics.latent_vocalics[:, 0].mean(axis=0), color="tab:blue", marker="o")
     # plt.show()
 
+    # ---------------------
+
     model.var_cc = None
     model.var_a = None
     model.var_aa = None
     model.var_o = None
-    tb_logger = TensorBoardLogger("/Users/paulosoares/code/tomcat-coordination/boards/partial_evidence")
-    model.fit(partial_evidence, burn_in=100, seed=0, num_jobs=1, logger=tb_logger)
+    tb_logger = TensorBoardLogger("/Users/paulosoares/code/tomcat-coordination/boards/partial_evidence_small_density")
+    model.fit(partial_evidence, burn_in=100, seed=0, num_jobs=2, logger=tb_logger)
     print(f"Estimated var_cc / True var_cc = {model.var_cc} / {VAR_CC}")
     print(f"Estimated var_a / True var_a = {model.var_a} / {VAR_A}")
     print(f"Estimated var_aa / True var_aa = {model.var_aa} / {VAR_AA}")

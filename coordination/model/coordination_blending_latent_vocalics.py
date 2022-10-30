@@ -381,6 +381,75 @@ class CoordinationBlendingLatentVocalics(PGM):
 
         return coordination[:, time_steps], latent_vocalics[:, :, time_steps]
 
+    def _get_time_step_blocks_for_parallel_fitting(self, evidence: LatentVocalicsDataset, num_jobs: int):
+        parallel_time_step_blocks = []
+        single_thread_time_steps = []
+
+        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
+        if num_effective_jobs == 1:
+            # No parallel jobs
+            single_thread_time_steps = np.arange(evidence.num_time_steps)
+        else:
+            # A vocalics in a time step depends on two previous vocalics from different time steps: one from the same
+            # speaker, and one from a different speaker. Therefore, we cannot simply add the border of the blocks in the
+            # list of single-threaded time steps.
+            # The strategy here will be to first split the time steps in as many blocks as the number of jobs. For each
+            # block, we take the last time step in which there was observation across the trials, and from there we take
+            # the next timestep from the same speaker and other speaker. We then take the maximum among all these time
+            # steps. That yields the earliest time step in the next block, the current block depends on. We than take
+            # the portion between the beginning of the next block and that computed time step to be part of the list of
+            # single threaded time steps.
+            time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
+            masks = np.array_split(evidence.vocalics_mask, num_effective_jobs, axis=-1)
+
+            all_time_steps = np.arange(evidence.num_time_steps)[np.newaxis, :].repeat(evidence.num_trials, axis=0)
+
+            # For indexes in which the next speaker does not exist, we replace with the current index. That is, there's
+            # no dependency in the future
+            next_time_steps_from_self = np.where(evidence.next_vocalics_from_self == -1, all_time_steps,
+                                                 evidence.next_vocalics_from_self)
+            next_time_steps_from_other = np.where(evidence.next_vocalics_from_other == -1, all_time_steps,
+                                                  evidence.next_vocalics_from_other)
+            j = 0
+            while j < len(time_chunks) - 1:
+                block_size = len(time_chunks[j])
+
+                if block_size > 0:
+                    # Last indexes where M[j] = 1 per column
+                    last_indices_with_speaker = block_size - np.argmax(np.flip(masks[j], axis=1), axis=1) - 1
+                    last_times_with_speaker = time_chunks[j][last_indices_with_speaker]
+                    next_block_time_step_self = np.take_along_axis(next_time_steps_from_self,
+                                                                   last_times_with_speaker[:, np.newaxis], axis=-1)
+                    next_block_time_step_other = np.take_along_axis(next_time_steps_from_other,
+                                                                    last_times_with_speaker[:, np.newaxis], axis=-1)
+                    last_time_step_independent_block = np.maximum(np.max(next_block_time_step_self),
+                                                                  np.max(next_block_time_step_other))
+
+                    if last_time_step_independent_block > time_chunks[j][-1]:
+                        # There is a dependency with the next block
+                        independent_range = np.arange(time_chunks[j][-1] + 1, last_time_step_independent_block + 1)
+                        single_thread_time_steps.extend(independent_range)
+
+                    parallel_time_step_blocks.append(time_chunks[j])
+
+                    # Sometimes, the dependency might be with time steps in a block that is not the subsequent one.
+                    # The loop below will skip intermediary blocks until we find the one in which the dependent time
+                    # step is.
+                    while last_time_step_independent_block > time_chunks[j + 1][-1]:
+                        j += 1
+                    next_parallel_range = np.arange(last_time_step_independent_block + 1, time_chunks[j + 1][-1] + 1)
+
+                    time_chunks[j + 1] = next_parallel_range
+
+                j += 1
+
+            if len(time_chunks[-1]) > 0:
+                parallel_time_step_blocks.append(time_chunks[-1])
+
+            single_thread_time_steps = np.array(single_thread_time_steps)
+
+        return parallel_time_step_blocks, single_thread_time_steps
+
     def _sample_coordination_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray,
                                     job_num: int) -> np.ndarray:
         raise NotImplementedError
@@ -446,6 +515,9 @@ class CoordinationBlendingLatentVocalics(PGM):
             m3 = ((m1 / v1) + ((m2a * u2a * M2a) / v2a) + ((m2b * u2b * M2b) / v2b) + (Obs / vo)) * M1
 
             v_inv = ((1 / v1) + (((u2a ** 2) * M2a) / v2a) + (((u2b ** 2) * M2b) / v2b) + (1 / vo)) * M1
+
+            # For numerical stability
+            v_inv = np.maximum(v_inv, 1E-16)
 
             v = 1 / v_inv
             m = m3 * v
