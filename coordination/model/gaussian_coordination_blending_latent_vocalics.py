@@ -1,15 +1,25 @@
 from __future__ import annotations
 
-from typing import Callable, List
+import random
+from typing import Callable, List, Tuple, Union
 
 import numpy as np
-from scipy.stats import norm, invgamma
+from scipy.stats import norm, invgamma, truncnorm
 from tqdm import tqdm
 
 from coordination.inference.mcmc import MCMC
 from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingLatentVocalics, \
-    LatentVocalicsDataset, LatentVocalicsParticles
-from coordination.model.coordination_blending_latent_vocalics import default_f, default_g
+    LatentVocalicsDataset, LatentVocalicsDataSeries, LatentVocalicsParticles
+from coordination.model.coordination_blending_latent_vocalics import clip_coordination, default_f, default_g
+
+
+def truncate_norm_mean_offset(mean: Union[float, np.ndarray], std: [float, np.ndarray]) -> Tuple[
+    Union[float, np.ndarray], ...]:
+    a = (0 - mean) / std
+    b = (1 - mean) / std
+    offset = (norm().pdf(a) - norm().pdf(b)) * 0.1 / (norm().cdf(b) - norm().cdf(a))
+
+    return offset, a, b
 
 
 class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics):
@@ -43,7 +53,11 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
             if t == 0:
                 samples[:, 0] = self.initial_coordination
             else:
-                transition_distribution = norm(loc=samples[:, t - 1], scale=scc)
+                # The mean of a truncated Gaussian distribution is given by mu + an offset. We remove the offset here,
+                # such that the previous sample is indeed the mean of the truncated Gaussian.
+                mean = samples[:, t - 1]
+                offset, a, b = truncate_norm_mean_offset(mean, scc)
+                transition_distribution = truncnorm(loc=mean - offset, scale=scc, a=a, b=b)
                 samples[:, t] = transition_distribution.rvs()
 
         return samples
@@ -59,7 +73,9 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
         coordination = self.coordination_samples_[gibbs_step]
         for t in range(evidence.num_time_steps):
             if t > 0:
-                ll += norm(coordination[:, t - 1], scale=scc).logpdf(coordination[:, t]).sum()
+                mean = coordination[:, t - 1]
+                offset, a, b = truncate_norm_mean_offset(mean, scc)
+                ll += truncnorm(loc=mean - offset, scale=scc, a=a, b=b).logpdf(coordination[:, t]).sum()
 
         return ll
 
@@ -73,7 +89,9 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
             saa = np.sqrt(self.vaa_samples_[gibbs_step - 1])
 
             def coordination_proposal(previous_coordination_sample: np.ndarray):
-                new_coordination_sample = norm(loc=previous_coordination_sample, scale=0.1).rvs()
+                offset, a, b = truncate_norm_mean_offset(previous_coordination_sample, scc)
+                new_coordination_sample = truncnorm(loc=previous_coordination_sample - offset, scale=0.1, a=a,
+                                                    b=b).rvs()
 
                 if previous_coordination_sample.shape[0] == 1:
                     # The norm.rvs function does not preserve the dimensions of a unidimensional array.
@@ -84,29 +102,32 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
 
             trial_indices = np.arange(evidence.num_trials)
             for t in tqdm(time_steps, desc="Sampling Coordination", position=job_num, leave=False):
-                M = evidence.vocalics_mask[:, t]
-                Mb = evidence.previous_vocalics_from_other_mask[:, t]
-
-                # If coordination does not affect latent vocalics in a given time step, we can find a closed-form
-                # solution for its posterior and avoid using MCMC
-                trials_steps_mcmc = trial_indices[M * Mb == 1]
-                trials_steps_closed_form = trial_indices[M * Mb == 0]
-
                 def unormalized_log_posterior(sample: np.ndarray):
-                    log_posterior = norm(loc=coordination[trials_steps_mcmc, t - 1], scale=scc).logpdf(sample)
+                    mean = coordination[:, t - 1]
+                    offset, a, b = truncate_norm_mean_offset(mean, scc)
+                    log_posterior = truncnorm(loc=mean - offset, scale=scc, a=a, b=b).logpdf(sample)
                     if t < evidence.num_time_steps - 1:
-                        log_posterior += norm(loc=sample, scale=scc).logpdf(coordination[trials_steps_mcmc, t + 1])
+                        offset, a, b = truncate_norm_mean_offset(sample, scc)
+                        log_posterior += truncnorm(loc=sample - offset, scale=scc, a=a, b=b).logpdf(
+                            coordination[:, t + 1])
 
                     # Latent vocalics entrainment
-                    V = latent_vocalics[trials_steps_mcmc, :, t]
-                    A = latent_vocalics[trials_steps_mcmc, :,
-                        evidence.previous_vocalics_from_self[trials_steps_mcmc, t]]
-                    B = latent_vocalics[trials_steps_mcmc, :,
-                        evidence.previous_vocalics_from_other[trials_steps_mcmc, t]]
-                    Ma = evidence.previous_vocalics_from_self_mask[trials_steps_mcmc, t][:, np.newaxis]
+                    M = evidence.vocalics_mask[:, t]
+                    Mb = evidence.previous_vocalics_from_other_mask[:, t]
 
-                    log_posterior += norm(loc=(B - A * Ma) * np.clip(sample[:, np.newaxis], a_min=0, a_max=1) + A * Ma,
-                                          scale=saa).logpdf(V).sum()
+                    # Trials in which coordination affects latent vocalics
+                    trials_with_latent_dependency = trial_indices[M * Mb == 1]
+                    if len(trials_with_latent_dependency) > 0:
+                        V = latent_vocalics[trials_with_latent_dependency, :, t]
+                        A = latent_vocalics[trials_with_latent_dependency, :,
+                            evidence.previous_vocalics_from_self[trials_with_latent_dependency, t]]
+                        B = latent_vocalics[trials_with_latent_dependency, :,
+                            evidence.previous_vocalics_from_other[trials_with_latent_dependency, t]]
+                        Ma = evidence.previous_vocalics_from_self_mask[trials_with_latent_dependency, t][:, np.newaxis]
+
+                        mean = (B - A * Ma) * clip_coordination(sample[trials_with_latent_dependency, np.newaxis])
+                        log_posterior[trials_with_latent_dependency] += norm(loc=mean + A * Ma, scale=saa).logpdf(
+                            V).sum()
 
                     return log_posterior
 
@@ -117,23 +138,8 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
                     return np.minimum(1, np.exp(p2 - p1))
 
                 if t > 0:
-                    # MCMC
-                    if len(trials_steps_mcmc) > 0:
-                        sampler = MCMC(1, 100, 1, coordination_proposal, acceptance_criterion)
-                        coordination[trials_steps_mcmc, t] = \
-                            sampler.generate_samples(coordination[trials_steps_mcmc, t])[0]
-
-                    # Closed-form
-                    if len(trials_steps_closed_form) > 0:
-                        if t < evidence.num_time_steps - 1:
-                            mean = (coordination[trials_steps_closed_form, t - 1] + coordination[
-                                trials_steps_closed_form, t + 1]) / 2
-                            std = scc / np.sqrt(2)
-                        else:
-                            mean = coordination[trials_steps_closed_form, t - 1]
-                            std = scc
-
-                        coordination[trials_steps_closed_form, t] = norm(loc=mean, scale=std).rvs()
+                    sampler = MCMC(1, 100, 1, coordination_proposal, acceptance_criterion)
+                    coordination[:, t] = sampler.generate_samples(coordination[:, t])[0]
 
         return coordination
 
@@ -155,25 +161,103 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
     # INFERENCE
     # ---------------------------------------------------------
 
-    def _summarize_particles(self, particles: List[LatentVocalicsParticles]) -> np.ndarray:
+    def _summarize_particles(self, series: LatentVocalicsDataSeries,
+                             particles: List[LatentVocalicsParticles]) -> np.ndarray:
         # Mean and variance over time
-        summary = np.zeros((2, len(particles)))
+        summary = np.zeros((4, len(particles)))
 
         for t, particles_in_time in enumerate(particles):
-            summary[0, t] = particles_in_time.coordination.mean()
-            summary[1, t] = particles_in_time.coordination.var()
+            if t == 0:
+                summary[0, t] = self.initial_coordination
+                summary[1, t] = 0
+            else:
+                summary[0, t] = particles_in_time.coordination.mean()
+                summary[1, t] = particles_in_time.coordination.var()
+
+            if series.observed_vocalics.mask[t] == 1:
+                speaker = series.observed_vocalics.utterances[t].subject_id
+                summary[2, t] = particles_in_time.latent_vocalics[speaker][:, 0].mean()
+                summary[3, t] = particles_in_time.latent_vocalics[speaker][:, 0].var()
+            else:
+                summary[2, t] = -1
+                summary[3, t] = 0
 
         return summary
 
     def _sample_coordination_from_transition(self, previous_particles: LatentVocalicsParticles,
                                              new_particles: LatentVocalicsParticles):
-        new_particles.coordination = norm(loc=previous_particles.coordination, scale=np.sqrt(self.var_cc)).rvs()
+        mean = previous_particles.coordination
+        scc = np.sqrt(self.var_cc)
+        offset, a, b = truncate_norm_mean_offset(mean, scc)
+        new_particles.coordination = truncnorm(loc=mean - offset, scale=scc, a=a, b=b).rvs()
 
     def _create_new_particles(self) -> LatentVocalicsParticles:
         return LatentVocalicsParticles()
 
 
+def infer_var():
+    import matplotlib.pyplot as plt
+    from scipy.stats import lognorm
+
+    v = 0.3
+    m = np.ones(100) * 0.5
+    offset, a, b = truncate_norm_mean_offset(m, np.sqrt(v))
+    data = truncnorm(loc=m - offset, scale=np.sqrt(v), a=a, b=b).rvs()
+
+    def proposal(previous_var_sample: np.ndarray) -> np.ndarray:
+        # The mean of an inverse gamma is b / (a-1). We want to sample the next var from an inverse gamma cenetered in
+        # the previous var. If I fix b = 1, then I get the following equation for a:
+
+        # a = 1 / previous_var_sample + 1
+        # sample = invgamma(a=a, scale=1).rvs()
+        sample = norm(loc=previous_var_sample).rvs()
+
+        if np.ndim(previous_var_sample) == 1:
+            sample = np.array([sample])
+
+        return sample
+
+    def unormalized_log_posterior(sample: np.ndarray):
+        std = np.sqrt(np.exp(sample))
+        offset, a, b = truncate_norm_mean_offset(m[:, np.newaxis], std)
+        log_posterior = truncnorm(loc=m[:, np.newaxis] - offset, scale=std, a=a, b=b).logpdf(data[:, np.newaxis]).sum(
+            axis=0)
+        log_posterior += invgamma(a=1e-1, scale=1e-3).logpdf(sample) + np.exp(sample)
+
+        return log_posterior
+
+    def acceptance_criterion(previous_sample: np.ndarray, new_sample: np.ndarray):
+        p1 = unormalized_log_posterior(new_sample)
+        p2 = unormalized_log_posterior(previous_sample)
+
+        return np.minimum(1, np.exp(p1 - p2))
+
+    from coordination.common.utils import set_seed
+    set_seed(0)
+
+    sampler = MCMC(100, 0, 1, proposal, acceptance_criterion)
+    initial_sample = np.array([np.log(invgamma(a=1, scale=1).rvs())])
+    var_samples = sampler.generate_samples(initial_sample)
+
+    plt.figure()
+    plt.plot(range(100), [np.exp(v).mean() for v in var_samples])
+    print(f"Real/ Estimated: {v} / {np.exp(var_samples[-1]).mean()}")
+    plt.show()
+
+    # plt.figure()
+    # plt.hist(np.exp(var_samples[-1]))
+    # plt.show()
+
+    plt.figure()
+    plt.plot(range(len(sampler.acceptance_rates)), sampler.acceptance_rates)
+    plt.show()
+
+
 if __name__ == "__main__":
+    infer_var()
+
+    breakpoint()
+
     # mask = np.array([
     #     # [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
     #     # [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1]
@@ -238,8 +322,8 @@ if __name__ == "__main__":
     # print(independent_time_steps)
     # print(parallel_time_steps)
 
-    TIME_STEPS = 20
-    NUM_SAMPLES = 100
+    TIME_STEPS = 100
+    NUM_SAMPLES = 1
     NUM_FEATURES = 2
     model = GaussianCoordinationBlendingLatentVocalics(
         initial_coordination=0,
@@ -255,7 +339,7 @@ if __name__ == "__main__":
         b_vo=1
     )
 
-    VAR_CC = 0.1
+    VAR_CC = 0.01
     VAR_A = 1
     VAR_AA = 0.5
     VAR_O = 1
@@ -265,9 +349,9 @@ if __name__ == "__main__":
     model.var_aa = VAR_AA
     model.var_o = VAR_O
 
-    samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0, time_scale_density=0.5)
-
     import matplotlib.pyplot as plt
+
+    samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0, time_scale_density=1)
 
     ts = np.arange(TIME_STEPS)
 
@@ -379,13 +463,55 @@ if __name__ == "__main__":
 
     # ---------------------
 
-    model.var_cc = None
-    model.var_a = None
-    model.var_aa = None
-    model.var_o = None
-    tb_logger = TensorBoardLogger("/Users/paulosoares/code/tomcat-coordination/boards/partial_evidence_small_density")
-    model.fit(partial_evidence, burn_in=100, seed=0, num_jobs=2, logger=tb_logger)
-    print(f"Estimated var_cc / True var_cc = {model.var_cc} / {VAR_CC}")
-    print(f"Estimated var_a / True var_a = {model.var_a} / {VAR_A}")
-    print(f"Estimated var_aa / True var_aa = {model.var_aa} / {VAR_AA}")
-    print(f"Estimated var_o / True var_o = {model.var_o} / {VAR_O}")
+    # model.var_cc = None
+    # model.var_a = None
+    # model.var_aa = None
+    # model.var_o = None
+    # tb_logger = TensorBoardLogger("/Users/paulosoares/code/tomcat-coordination/boards/partial_evidence_small_density")
+    # model.fit(partial_evidence, burn_in=100, seed=0, num_jobs=2, logger=tb_logger)
+    # print(f"Estimated var_cc / True var_cc = {model.var_cc} / {VAR_CC}")
+    # print(f"Estimated var_a / True var_a = {model.var_a} / {VAR_A}")
+    # print(f"Estimated var_aa / True var_aa = {model.var_aa} / {VAR_AA}")
+    # print(f"Estimated var_o / True var_o = {model.var_o} / {VAR_O}")
+
+    estimates = model.predict(evidence=evidence_with_latent_vocalics, num_particles=10000, seed=0, num_jobs=1)
+
+    plt.figure(figsize=(15, 8))
+    means = estimates[0][0]
+    stds = np.sqrt(estimates[0][1])
+    plt.plot(ts, means, color="tab:orange", marker="o")
+    plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
+    plt.plot(ts, samples.coordination[0], color="tab:blue", marker="o", alpha=0.5)
+    plt.show()
+
+    plt.figure()
+    means = estimates[0][2]
+    stds = np.sqrt(estimates[0][3])
+    plt.plot(ts, means, color="tab:orange", marker="o")
+    plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
+    plt.plot(ts, samples.latent_vocalics[0].values[0], color="tab:blue", marker="o", alpha=0.5)
+    plt.show()
+
+    means = []
+    means_offset = []
+
+    ini = 1
+    start = np.ones(50000) * ini
+    means.append(start.mean())
+    # means_offset.append(np.clip((start - offset).mean(), a_min=0, a_max=1))
+    # start -= offset
+    for t in range(1, 100):
+        offset, a, b = truncate_norm_mean_offset(start, 0.1)
+        # offset = (norm().pdf(a) - norm().pdf(b)) * 0.1 / (norm().cdf(b) - norm().cdf(a))
+        start = truncnorm(loc=start - offset, scale=0.1, a=a, b=b).rvs()
+        # start = norm(loc=start, scale=0.1).rvs()
+        means.append(start.mean())
+        # means_offset.append(np.clip((start - offset).mean(), a_min=0, a_max=1))
+        # start -= offset
+
+    plt.figure()
+    plt.plot(range(100), means, marker="o", label="raw")
+    # plt.plot(range(100), means_offset, marker="o", label="offset")
+    plt.legend()
+    plt.ylim([0, 1])
+    plt.show()

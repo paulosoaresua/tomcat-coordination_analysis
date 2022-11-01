@@ -19,10 +19,15 @@ class LatentVocalicsParticles(Particles):
     latent_vocalics: Dict[str, np.ndarray]
 
     def _keep_particles_at(self, indices: np.ndarray):
-        self.coordination = self.coordination[indices]
+        if isinstance(self.coordination, np.ndarray):
+            # otherwise, coordination is given and it will be a single number
+            self.coordination = self.coordination[indices]
+
         for speaker, latent_vocalics in self.latent_vocalics.items():
             if latent_vocalics is not None:
-                self.latent_vocalics[speaker] = latent_vocalics[indices, :]
+                if np.ndim(latent_vocalics) > 1:
+                    # otherwise, coordination is given and it will be a single number
+                    self.latent_vocalics[speaker] = latent_vocalics[indices, :]
 
 
 class LatentVocalicsSamples(Samples):
@@ -43,6 +48,10 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
         self.coordination = coordination
         self.latent_vocalics = latent_vocalics
         self.observed_vocalics = observed_vocalics
+
+    @property
+    def is_complete(self) -> bool:
+        return self.coordination is not None and self.latent_vocalics is not None
 
     @property
     def num_time_steps(self):
@@ -97,12 +106,17 @@ class LatentVocalicsDataset(EvidenceDataset):
                     self.next_vocalics_from_other[i, self.previous_vocalics_from_other[i, t]] = t
 
 
-def default_f(latent_vocalics: np.ndarray, speaker_mask: int):
+def default_f(latent_vocalics: np.ndarray, speaker_mask: int) -> np.ndarray:
     return latent_vocalics
 
 
-def default_g(latent_vocalics: np.ndarray):
+def default_g(latent_vocalics: np.ndarray) -> np.ndarray:
     return latent_vocalics
+
+
+def clip_coordination(coordination: np.ndarray) -> np.ndarray:
+    return np.clip(coordination, a_min=0, a_max=1)
+    # return coordination
 
 
 class CoordinationBlendingLatentVocalics(PGM):
@@ -231,10 +245,11 @@ class CoordinationBlendingLatentVocalics(PGM):
         transition_matrix = 1 - np.eye(self.num_speakers + 1)
 
         transition_matrix *= time_scale_density / (self.num_speakers - 1)
-        transition_matrix[:-1, -1] = 1 - time_scale_density
+        transition_matrix[:, -1] = 1 - time_scale_density
 
         prior = np.ones(self.num_speakers + 1) * time_scale_density / self.num_speakers
         prior[-1] = 1 - time_scale_density
+        transition_matrix[-1] = prior
 
         initial_speaker = np.random.choice(self.num_speakers + 1, 1, p=prior)[0]
         initial_speaker = None if initial_speaker == self.num_speakers else initial_speaker
@@ -259,11 +274,10 @@ class CoordinationBlendingLatentVocalics(PGM):
         else:
             if previous_self is None:
                 D = previous_other
-                distribution = norm(loc=D * np.clip(coordination, a_min=0, a_max=1), scale=np.sqrt(self.var_aa))
+                distribution = norm(loc=D * clip_coordination(coordination), scale=np.sqrt(self.var_aa))
             else:
                 D = previous_other - previous_self
-                distribution = norm(loc=D * np.clip(coordination, a_min=0, a_max=1) + previous_self,
-                                    scale=np.sqrt(self.var_aa))
+                distribution = norm(loc=D * clip_coordination(coordination) + previous_self, scale=np.sqrt(self.var_aa))
 
         return distribution.rvs()
 
@@ -354,7 +368,7 @@ class CoordinationBlendingLatentVocalics(PGM):
             v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)
 
             # Clipping has no effect in models that do not sample coordination outside the range [0, 1].
-            means = (B - A * Ma) * Mb * np.clip(C, a_min=0, a_max=1) + A * Ma
+            means = (B - A * Ma) * Mb * clip_coordination(C) + A * Ma
 
             # Do not count LL if no speaker is talking at time t (mask M tells us that)
             ll += (norm(loc=means, scale=np.sqrt(v)).logpdf(V) * M).sum()
@@ -446,7 +460,10 @@ class CoordinationBlendingLatentVocalics(PGM):
             if len(time_chunks[-1]) > 0:
                 parallel_time_step_blocks.append(time_chunks[-1])
 
-            single_thread_time_steps = np.array(single_thread_time_steps)
+            if len(parallel_time_step_blocks) == 1:
+                single_thread_time_steps.extend(parallel_time_step_blocks[0])
+                single_thread_time_steps = np.array(single_thread_time_steps)
+                parallel_time_step_blocks = []
 
         return parallel_time_step_blocks, single_thread_time_steps
 
@@ -463,7 +480,7 @@ class CoordinationBlendingLatentVocalics(PGM):
 
         latent_vocalics = self.latent_vocalics_samples_[gibbs_step - 1].copy()
         for t in tqdm(time_steps, desc="Sampling Latent Vocalics", position=job_num, leave=False):
-            C1 = np.clip(coordination[:, t][:, np.newaxis], a_min=0, a_max=1)
+            C1 = clip_coordination(coordination[:, t][:, np.newaxis])
             M1 = evidence.vocalics_mask[:, t][:, np.newaxis]
 
             previous_times_from_self = evidence.previous_vocalics_from_self[:, t]
@@ -478,7 +495,7 @@ class CoordinationBlendingLatentVocalics(PGM):
 
             # Time steps in which the next speaker is the same
             t2a = evidence.next_vocalics_from_self[:, t]
-            C2a = np.clip(np.take_along_axis(coordination, t2a[:, np.newaxis], axis=-1), a_min=0, a_max=1)
+            C2a = clip_coordination(np.take_along_axis(coordination, t2a[:, np.newaxis], axis=-1))
             V2a = np.take_along_axis(latent_vocalics, t2a[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
             M2a = np.take_along_axis(evidence.vocalics_mask, t2a[:, np.newaxis], axis=-1)
             Ma2a = np.where(t2a >= 0, 1, 0)[:, np.newaxis]
@@ -489,7 +506,7 @@ class CoordinationBlendingLatentVocalics(PGM):
 
             # Time steps in which the next speaker is different
             t2b = evidence.next_vocalics_from_other[:, t]
-            C2b = np.clip(np.take_along_axis(coordination, t2b[:, np.newaxis], axis=-1), a_min=0, a_max=1)
+            C2b = clip_coordination(np.take_along_axis(coordination, t2b[:, np.newaxis], axis=-1))
             V2b = np.take_along_axis(latent_vocalics, t2b[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
             M2b = np.take_along_axis(evidence.vocalics_mask, t2b[:, np.newaxis], axis=-1)
             previous_times_from_self = np.take_along_axis(evidence.previous_vocalics_from_self, t2b[:, np.newaxis],
@@ -578,7 +595,7 @@ class CoordinationBlendingLatentVocalics(PGM):
             A = np.take_along_axis(V, np.expand_dims(evidence.previous_vocalics_from_self, axis=1), axis=-1)
             B = np.take_along_axis(V, np.expand_dims(evidence.previous_vocalics_from_other, axis=1), axis=-1)
 
-            m = (B - A * Ma) * np.clip(coordination, a_min=0, a_max=1) * Mb + A * Ma
+            m = (B - A * Ma) * clip_coordination(coordination) * Mb + A * Ma
             x = (V - m) * Ml
 
             a = self.a_vaa + Ml.sum() * self.num_vocalic_features / 2
@@ -623,13 +640,24 @@ class CoordinationBlendingLatentVocalics(PGM):
     # INFERENCE
     # ---------------------------------------------------------
 
-    def _summarize_particles(self, particles: List[Particles]) -> np.ndarray:
+    def _summarize_particles(self, series: LatentVocalicsDataSeries, particles: List[Particles]) -> np.ndarray:
         raise NotImplementedError
 
     def _sample_from_prior(self, num_particles: int, series: LatentVocalicsDataSeries) -> Particles:
         new_particles = self._create_new_particles()
-        self._sample_coordination_from_prior(num_particles, new_particles)
-        self._sample_vocalics_from_prior(num_particles, series, new_particles)
+
+        if series.coordination is None:
+            self._sample_coordination_from_prior(num_particles, new_particles)
+        else:
+            new_particles.coordination = np.ones(num_particles) * series.coordination[0]
+
+        if series.latent_vocalics is None:
+            self._sample_vocalics_from_prior(num_particles, series, new_particles)
+        else:
+            new_particles.latent_vocalics = {subject: None for subject in series.observed_vocalics.subjects}
+            if series.observed_vocalics.mask[0] == 1:
+                speaker = series.observed_vocalics.utterances[0].subject_id
+                new_particles.latent_vocalics[speaker] = np.ones((num_particles, 1)) * series.latent_vocalics.values[:, 0]
 
         return new_particles
 
@@ -644,51 +672,114 @@ class CoordinationBlendingLatentVocalics(PGM):
             mean = np.zeros((num_particles, series.observed_vocalics.num_features))
             new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.var_a)).rvs()
 
-    def _sample_from_transition_to(self, time_step: int, states: List[LatentVocalicsParticles],
+    def _sample_from_transition_to(self, time_step: int, num_particles: int, states: List[LatentVocalicsParticles],
                                    series: LatentVocalicsDataSeries) -> LatentVocalicsParticles:
 
         new_particles = self._create_new_particles()
-        self._sample_coordination_from_transition(states[time_step - 1], new_particles)
-        self._sample_vocalics_from_transition_to(time_step, states[time_step - 1], new_particles, series)
+
+        if series.coordination is None:
+            self._sample_coordination_from_transition(states[time_step - 1], new_particles)
+        else:
+            # Ground truth. Just use 1 particle.
+            new_particles.coordination = np.ones(num_particles) * series.coordination[time_step]
+
+        if series.latent_vocalics is None:
+            self._sample_vocalics_from_transition_to(time_step, states[time_step - 1], new_particles, series)
+        else:
+            # Ground truth. Just use 1 particle.
+            new_particles.latent_vocalics = states[time_step - 1].latent_vocalics.copy()
+            if series.observed_vocalics.mask[time_step] == 1:
+                speaker = series.observed_vocalics.utterances[time_step].subject_id
+                new_particles.latent_vocalics[speaker] = np.ones((num_particles, 1)) * series.latent_vocalics.values[:,
+                                                                                  time_step]
 
         return new_particles
 
     def _sample_vocalics_from_transition_to(self, time_step: int, previous_particles: LatentVocalicsParticles,
                                             new_particles: LatentVocalicsParticles, series: LatentVocalicsDataSeries):
         new_particles.latent_vocalics = previous_particles.latent_vocalics.copy()
+
         if series.observed_vocalics.mask[time_step] == 1:
             speaker = series.observed_vocalics.utterances[time_step].subject_id
 
-            A = previous_particles.latent_vocalics[speaker]
-            A = self.f(A, 0) if A is not None else np.zeros_like(previous_particles.latent_vocalics)
+            if series.observed_vocalics.previous_from_self[time_step] is None:
+                # Mean of the prior distribution
+                num_particles = len(new_particles.coordination)
+                A = np.zeros((num_particles, self.num_vocalic_features))
+            else:
+                # Sample from dependency on previous vocalics from the same speaker
+                A = self.f(previous_particles.latent_vocalics[speaker], 0)
 
             if series.observed_vocalics.previous_from_other[time_step] is None:
                 if series.observed_vocalics.previous_from_self[time_step] is None:
+                    # Sample from prior
                     new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.var_a)).rvs()
                 else:
+                    # Sample from dependency on previous vocalics from the same speaker
                     new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.var_aa)).rvs()
             else:
+                C = new_particles.coordination[:, np.newaxis]
                 other_speaker = series.observed_vocalics.utterances[
                     series.observed_vocalics.previous_from_other[time_step]].subject_id
                 B = self.f(previous_particles.latent_vocalics[other_speaker], 1)
-                mean = (B - A) * new_particles.coordination[:, np.newaxis] + A
+                mean = (B - A) * clip_coordination(C) + A
                 new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.var_aa)).rvs()
 
     def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[LatentVocalicsParticles],
                                               series: LatentVocalicsDataSeries):
-        if series.observed_vocalics.mask[time_step] == 1:
-            speaker = series.observed_vocalics.utterances[time_step].subject_id
-            Vt = states[time_step].latent_vocalics[speaker]
-            Ot = series.observed_vocalics.values[:, time_step]
-            log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.var_o)).logpdf(Ot).sum(axis=1)
+        if series.is_complete:
+            return 0
+
+        if series.latent_vocalics is None:
+            # Observed vocalics as evidence for latent vocalics
+            if series.observed_vocalics.mask[time_step] == 1:
+                speaker = series.observed_vocalics.utterances[time_step].subject_id
+                Vt = states[time_step].latent_vocalics[speaker]
+                Ot = series.observed_vocalics.values[:, time_step]
+
+                if np.ndim(Vt) > 1:
+                    # particles x features
+                    log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.var_o)).logpdf(Ot).sum(axis=1)
+                else:
+                    # 1 particle only when ground truth for the latent vocalics is provided
+                    log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.var_o)).logpdf(Ot).sum()
+            else:
+                log_likelihoods = np.zeros(len(states[time_step].coordination))
         else:
-            log_likelihoods = 0
+            # Latent vocalics is evidence for coordination
+            if series.observed_vocalics.mask[time_step] == 1 and series.observed_vocalics.previous_from_other[
+                time_step] is not None:
+
+                # Coordination only plays a whole in latent vocalics when there's previous vocalics from a different
+                # speaker.
+                if series.observed_vocalics.previous_from_self[time_step] is None:
+                    # Mean of the prior distribution
+                    A = 0
+                else:
+                    # Sample from dependency on previous vocalics from the same speaker
+                    A = series.latent_vocalics.values[:, series.observed_vocalics.previous_from_self[time_step]]
+
+                B = series.latent_vocalics.values[:, series.observed_vocalics.previous_from_other[time_step]]
+                mean = (B - A) * clip_coordination(states[time_step].coordination[:, np.newaxis]) + A
+
+                Vt = series.latent_vocalics.values[:, time_step]
+                log_likelihoods = norm(loc=mean, scale=np.sqrt(self.var_aa)).logpdf(Vt).sum(axis=1)
+            else:
+                log_likelihoods = np.zeros(len(states[time_step].coordination))
 
         return log_likelihoods
 
     def _resample_at(self, time_step: int, series: LatentVocalicsDataSeries):
-        return series.observed_vocalics.mask[time_step] == 1 and series.observed_vocalics.previous_from_other[
-            time_step] is not None
+        if series.is_complete:
+            return False
+
+        if series.latent_vocalics is None:
+            return series.observed_vocalics.mask[time_step] == 1
+        else:
+            # Only coordination is latent, but we only need to sample it if there's a link between the
+            # current vocalics and previous vocalics from a different speaker.
+            return series.observed_vocalics.mask[time_step] == 1 and series.observed_vocalics.previous_from_other[
+                time_step] is not None
 
     def _sample_coordination_from_transition(self, previous_particles: LatentVocalicsParticles,
                                              new_particles: LatentVocalicsParticles) -> Particles:

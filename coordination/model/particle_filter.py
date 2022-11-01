@@ -56,7 +56,7 @@ class ParticleFilter:
             self.states.append(self.sample_from_prior_fn(self.num_particles, series))
         else:
             t = len(self.states)
-            self.states.append(self.sample_from_transition_fn(t, self.states, series))
+            self.states.append(self.sample_from_transition_fn(t, self.num_particles, self.states, series))
 
     def __resample(self, series: EvidenceDataSeries):
         t = len(self.states) - 1

@@ -55,13 +55,14 @@ class PGM(BaseEstimator):
         logger.add_scalar("train/nll", self.nll_[0], 0)
 
         # 2. Sample the latent variables from their posterior distributions
-        with Pool(num_effective_jobs) as pool:
+        with Pool(max(len(parallel_time_step_blocks), 1)) as pool:
             for i in tqdm(range(1, burn_in + 1), desc="Gibbs Step", position=0):
                 latents = self._gibbs_step(i, evidence, single_thread_time_steps, 1)
                 self._retain_samples_from_latent(i, latents, single_thread_time_steps)
 
-                if num_effective_jobs > 1:
-                    job_args = [(i, evidence, parallel_time_step_blocks[j], j + 1) for j in range(num_effective_jobs)]
+                if len(parallel_time_step_blocks) > 1:
+                    job_args = [(i, evidence, parallel_time_step_blocks[j], j + 1) for j in
+                                range(len(parallel_time_step_blocks))]
                     for chunk_idx, result in enumerate(pool.starmap(self._gibbs_step, job_args)):
                         self._retain_samples_from_latent(i, result, parallel_time_step_blocks[chunk_idx])
 
@@ -164,7 +165,7 @@ class PGM(BaseEstimator):
                           leave=False):
                 particle_filter.next(series)
 
-            results.append(self._summarize_particles(particle_filter.states))
+            results.append(self._summarize_particles(series, particle_filter.states))
 
         return results
 
@@ -172,7 +173,7 @@ class PGM(BaseEstimator):
     def _sample_from_prior(self, num_particles: int, series: EvidenceDataSeries) -> Particles:
         raise NotImplementedError
 
-    def _sample_from_transition_to(self, time_step: int, new_particles: List[Particles],
+    def _sample_from_transition_to(self, time_step: int, num_particles: int, new_particles: List[Particles],
                                    series: EvidenceDataSeries) -> Particles:
         raise NotImplementedError
 
@@ -183,5 +184,5 @@ class PGM(BaseEstimator):
     def _resample_at(self, time_step: int, series: EvidenceDataSeries):
         return True
 
-    def _summarize_particles(self, particles: List[Particles]) -> np.ndarray:
+    def _summarize_particles(self, series: EvidenceDataSeries, particles: List[Particles]) -> np.ndarray:
         raise NotImplementedError
