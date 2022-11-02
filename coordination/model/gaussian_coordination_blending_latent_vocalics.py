@@ -203,7 +203,7 @@ def infer_var():
     set_seed(0)
 
     NUM_SAMPLES = 100
-    v = np.ones(NUM_SAMPLES) * 0.01
+    v = np.ones(NUM_SAMPLES) * 0.09
     m = np.ones(NUM_SAMPLES) * 0.7
     offset, a, b = truncate_norm_mean_offset(m, np.sqrt(v))
     data = truncnorm(loc=m - offset, scale=np.sqrt(v), a=a, b=b).rvs()
@@ -216,15 +216,22 @@ def infer_var():
         # sample = invgamma(a=a, scale=1).rvs()
 
         # sample = norm(loc=previous_var_sample, scale=10).rvs()
-        std = 0.1
-        offset, a, b = truncate_norm_mean_offset(previous_var_sample, std)
-        sample = truncnorm(loc=previous_var_sample - offset, scale=std, a=a, b=b).rvs()
+        # std = 0.1
+        # offset, a, b = truncate_norm_mean_offset(previous_var_sample, std)
+        # sample = truncnorm(loc=previous_var_sample - offset, scale=std, a=a, b=b).rvs()
+        #
+        # denominator = truncnorm(loc=previous_var_sample - offset, scale=std, a=a, b=b).logpdf(sample)
+        #
+        # offset, a, b = truncate_norm_mean_offset(previous_var_sample, std)
+        # nominator = truncnorm(loc=sample - offset, scale=std, a=a, b=b).logpdf(previous_var_sample)
+        #
+        # factor = np.exp(nominator - denominator).sum(axis=1)
 
-        denominator = truncnorm(loc=previous_var_sample - offset, scale=std, a=a, b=b).logpdf(sample)
+        s = 0.005
+        sample = lognorm(loc=0, s=s, scale=previous_var_sample).rvs()
 
-        offset, a, b = truncate_norm_mean_offset(previous_var_sample, std)
-        nominator = truncnorm(loc=sample - offset, scale=std, a=a, b=b).logpdf(previous_var_sample)
-
+        nominator = lognorm(loc=0, s=s, scale=sample).logpdf(previous_var_sample)
+        denominator = lognorm(loc=0, s=s, scale=previous_var_sample).logpdf(sample)
         factor = np.exp(nominator - denominator).sum(axis=1)
 
         if isinstance(sample, float):
@@ -241,12 +248,18 @@ def infer_var():
         # # log_posterior += invgamma(a=1e-1, scale=1e-3).logpdf(sample) + np.exp(sample)
         # log_posterior += np.exp(sample)
 
-        s = np.sqrt(m[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0))
+        # s = np.sqrt(m[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0))
+        # data = data[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0)
+        # sample = sample[:, np.newaxis, :].repeat(data.shape[1], axis=1)
+        #
+        # offset, a, b = truncate_norm_mean_offset(sample, s)
+        # log_posterior = truncnorm(loc=sample - offset, scale=s, a=a, b=b).logpdf(data).sum(axis=2).sum(axis=1)
+
         data = data[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0)
         sample = sample[:, np.newaxis, :].repeat(data.shape[1], axis=1)
-
-        offset, a, b = truncate_norm_mean_offset(sample, s)
-        log_posterior = truncnorm(loc=sample - offset, scale=s, a=a, b=b).logpdf(data).sum(axis=2).sum(axis=1)
+        std = np.sqrt(np.log(sample))
+        offset, a, b = truncate_norm_mean_offset(m, std)
+        log_posterior = truncnorm(loc=m - offset, scale=std, a=a, b=b).logpdf(data).sum(axis=2).sum(axis=1)
 
         # offset, a, b = truncate_norm_mean_offset(0, 0.1)
         # log_posterior += truncnorm(loc=0 - offset, scale=0.1, a=0, b=1).logpdf(sample).sum(axis=2).sum(axis=1)
@@ -255,18 +268,16 @@ def infer_var():
 
         return log_posterior
 
-
-
-    sampler = MCMC(proposal, {}, log_prob, {"m": v, "data": data})
+    sampler = MCMC(proposal, {}, log_prob, {"m": m, "data": data})
     # initial_sample = np.array([[np.log(invgamma(a=1, scale=1).rvs())]])
-    initial_sample = np.array([[0], [0.1], [0.2]])
-    var_samples = sampler.generate_samples(initial_sample, 100, 50, 2)
+    initial_sample = np.exp(np.array([[0.1], [0.2], [0.3]]))
+    var_samples = np.log(sampler.generate_samples(initial_sample, 500, 0, 1))
 
     plt.figure()
     plt.plot(np.arange(var_samples.shape[0]), var_samples[:, 0, 0], label="C1")
     plt.plot(np.arange(var_samples.shape[0]), var_samples[:, 1, 0], label="C2")
     plt.plot(np.arange(var_samples.shape[0]), var_samples[:, 2, 0], label="C3")
-    print(f"Real/ Estimated: {m[0]} / {var_samples[-1, :, 0].mean()}")
+    print(f"Real/ Estimated: {v[0]} / {var_samples[-1, :, 0]}")
     plt.title("Var")
     plt.legend()
     plt.show()
@@ -289,6 +300,16 @@ def infer_var():
 
 
 if __name__ == "__main__":
+    # from scipy.stats import lognorm
+    #
+    # import matplotlib.pyplot as plt
+    #
+    # plt.plot(np.linspace(0, 10, 1000), lognorm(loc=0, s=1, scale=np.exp(0.2)).pdf(np.linspace(0, 10, 1000)))
+    # plt.show()
+    #
+    # print(lognorm(loc=0, s=1, scale=np.exp(0.2)).pdf(0))
+    # print(lognorm(loc=0, s=1, scale=np.exp(0.2)).pdf(0.1))
+    # print(lognorm(loc=0, s=1, scale=np.exp(0.2)).pdf(0.2))
     infer_var()
 
     breakpoint()
