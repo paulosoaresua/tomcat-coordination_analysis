@@ -199,57 +199,92 @@ def infer_var():
     import matplotlib.pyplot as plt
     from scipy.stats import lognorm
 
-    v = 0.3
-    m = np.ones(100) * 0.5
+    from coordination.common.utils import set_seed
+    set_seed(0)
+
+    NUM_SAMPLES = 100
+    v = np.ones(NUM_SAMPLES) * 0.01
+    m = np.ones(NUM_SAMPLES) * 0.7
     offset, a, b = truncate_norm_mean_offset(m, np.sqrt(v))
     data = truncnorm(loc=m - offset, scale=np.sqrt(v), a=a, b=b).rvs()
 
-    def proposal(previous_var_sample: np.ndarray) -> np.ndarray:
+    def proposal(previous_var_sample: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # The mean of an inverse gamma is b / (a-1). We want to sample the next var from an inverse gamma cenetered in
         # the previous var. If I fix b = 1, then I get the following equation for a:
 
         # a = 1 / previous_var_sample + 1
         # sample = invgamma(a=a, scale=1).rvs()
-        sample = norm(loc=previous_var_sample).rvs()
 
-        if np.ndim(previous_var_sample) == 1:
-            sample = np.array([sample])
+        # sample = norm(loc=previous_var_sample, scale=10).rvs()
+        std = 0.1
+        offset, a, b = truncate_norm_mean_offset(previous_var_sample, std)
+        sample = truncnorm(loc=previous_var_sample - offset, scale=std, a=a, b=b).rvs()
 
-        return sample
+        denominator = truncnorm(loc=previous_var_sample - offset, scale=std, a=a, b=b).logpdf(sample)
 
-    def unormalized_log_posterior(sample: np.ndarray):
-        std = np.sqrt(np.exp(sample))
-        offset, a, b = truncate_norm_mean_offset(m[:, np.newaxis], std)
-        log_posterior = truncnorm(loc=m[:, np.newaxis] - offset, scale=std, a=a, b=b).logpdf(data[:, np.newaxis]).sum(
-            axis=0)
-        log_posterior += invgamma(a=1e-1, scale=1e-3).logpdf(sample) + np.exp(sample)
+        offset, a, b = truncate_norm_mean_offset(previous_var_sample, std)
+        nominator = truncnorm(loc=sample - offset, scale=std, a=a, b=b).logpdf(previous_var_sample)
+
+        factor = np.exp(nominator - denominator).sum(axis=1)
+
+        if isinstance(sample, float):
+            sample = np.array([[sample]])
+
+        return sample, factor
+
+    def log_prob(sample: np.ndarray, m: np.ndarray, data: np.ndarray):
+        # std = np.sqrt(np.exp(sample))
+        # m = m[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0)
+        # data = data[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0)
+        # offset, a, b = truncate_norm_mean_offset(m, std)
+        # log_posterior = truncnorm(loc=m - offset, scale=std, a=a, b=b).logpdf(data).sum(axis=1)
+        # # log_posterior += invgamma(a=1e-1, scale=1e-3).logpdf(sample) + np.exp(sample)
+        # log_posterior += np.exp(sample)
+
+        s = np.sqrt(m[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0))
+        data = data[np.newaxis, :, np.newaxis].repeat(sample.shape[0], axis=0)
+        sample = sample[:, np.newaxis, :].repeat(data.shape[1], axis=1)
+
+        offset, a, b = truncate_norm_mean_offset(sample, s)
+        log_posterior = truncnorm(loc=sample - offset, scale=s, a=a, b=b).logpdf(data).sum(axis=2).sum(axis=1)
+
+        # offset, a, b = truncate_norm_mean_offset(0, 0.1)
+        # log_posterior += truncnorm(loc=0 - offset, scale=0.1, a=0, b=1).logpdf(sample).sum(axis=2).sum(axis=1)
+        # # log_posterior += invgamma(a=1e-1, scale=1e-3).logpdf(sample) + np.exp(sample)
+        # log_posterior += np.exp(sample)
 
         return log_posterior
 
-    def acceptance_criterion(previous_sample: np.ndarray, new_sample: np.ndarray):
-        p1 = unormalized_log_posterior(new_sample)
-        p2 = unormalized_log_posterior(previous_sample)
 
-        return np.minimum(1, np.exp(p1 - p2))
 
-    from coordination.common.utils import set_seed
-    set_seed(0)
-
-    sampler = MCMC(100, 0, 1, proposal, acceptance_criterion)
-    initial_sample = np.array([np.log(invgamma(a=1, scale=1).rvs())])
-    var_samples = sampler.generate_samples(initial_sample)
+    sampler = MCMC(proposal, {}, log_prob, {"m": v, "data": data})
+    # initial_sample = np.array([[np.log(invgamma(a=1, scale=1).rvs())]])
+    initial_sample = np.array([[0], [0.1], [0.2]])
+    var_samples = sampler.generate_samples(initial_sample, 100, 50, 2)
 
     plt.figure()
-    plt.plot(range(100), [np.exp(v).mean() for v in var_samples])
-    print(f"Real/ Estimated: {v} / {np.exp(var_samples[-1]).mean()}")
+    plt.plot(np.arange(var_samples.shape[0]), var_samples[:, 0, 0], label="C1")
+    plt.plot(np.arange(var_samples.shape[0]), var_samples[:, 1, 0], label="C2")
+    plt.plot(np.arange(var_samples.shape[0]), var_samples[:, 2, 0], label="C3")
+    print(f"Real/ Estimated: {m[0]} / {var_samples[-1, :, 0].mean()}")
+    plt.title("Var")
+    plt.legend()
     plt.show()
 
-    # plt.figure()
-    # plt.hist(np.exp(var_samples[-1]))
-    # plt.show()
+    plt.figure()
+    plt.plot(np.arange(sampler.acceptance_rates_.shape[0]), sampler.acceptance_rates_[:, 0], label="C1")
+    plt.plot(np.arange(sampler.acceptance_rates_.shape[0]), sampler.acceptance_rates_[:, 1], label="C2")
+    plt.plot(np.arange(sampler.acceptance_rates_.shape[0]), sampler.acceptance_rates_[:, 2], label="C3")
+    plt.title("Acceptance Rate")
+    plt.legend()
+    plt.show()
 
     plt.figure()
-    plt.plot(range(len(sampler.acceptance_rates)), sampler.acceptance_rates)
+    plt.plot(np.arange(sampler.log_probs_.shape[0]), -sampler.log_probs_[:, 0], label="C1")
+    plt.plot(np.arange(sampler.log_probs_.shape[0]), -sampler.log_probs_[:, 1], label="C2")
+    plt.plot(np.arange(sampler.log_probs_.shape[0]), -sampler.log_probs_[:, 2], label="C3")
+    plt.title("NLL")
+    plt.legend()
     plt.show()
 
 
