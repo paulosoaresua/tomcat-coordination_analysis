@@ -24,6 +24,8 @@ class PGM(BaseEstimator):
     def __init__(self):
         super().__init__()
 
+        # List of hyperparameters to be logged by the logger. It must be saved by the child class.
+        self._hyper_params = {}
         self.nll_ = np.array([])
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> Samples:
@@ -35,6 +37,13 @@ class PGM(BaseEstimator):
     def fit(self, evidence: EvidenceDataset, burn_in: int, seed: Optional[int], num_jobs: int = 1,
             logger: BaseLogger = BaseLogger()):
 
+        hparams = self._hyper_params.copy()
+        hparams["burn_in"] = burn_in
+        hparams["seed"] = seed
+        hparams["num_jobs"] = num_jobs
+        hparams["num_trials"] = evidence.num_trials
+        hparams["num_time_steps"] = evidence.num_time_steps
+        logger.add_hyper_params(hparams)
         set_seed(seed)
 
         # We split the PGM along the time axis. To make sure variables in one chunk is not dependent on variables in
@@ -57,14 +66,22 @@ class PGM(BaseEstimator):
         # 2. Sample the latent variables from their posterior distributions
         with Pool(max(len(parallel_time_step_blocks), 1)) as pool:
             for i in tqdm(range(1, burn_in + 1), desc="Gibbs Step", position=0):
+                # for b in np.array_split(np.arange(evidence.num_time_steps), 4):
+                #     latents = self._gibbs_step(i, evidence, b, 1)
+                #     self._retain_samples_from_latent(i, latents, b)
+
+                # for b in parallel_time_step_blocks:
+                #     latents = self._gibbs_step(i, evidence, b, 1)
+                #     self._retain_samples_from_latent(i, latents, b)
+                #
                 latents = self._gibbs_step(i, evidence, single_thread_time_steps, 1)
                 self._retain_samples_from_latent(i, latents, single_thread_time_steps)
 
                 if len(parallel_time_step_blocks) > 1:
                     job_args = [(i, evidence, parallel_time_step_blocks[j], j + 1) for j in
                                 range(len(parallel_time_step_blocks))]
-                    for chunk_idx, result in enumerate(pool.starmap(self._gibbs_step, job_args)):
-                        self._retain_samples_from_latent(i, result, parallel_time_step_blocks[chunk_idx])
+                    for chunk_idx, latents in enumerate(pool.starmap(self._gibbs_step, job_args)):
+                        self._retain_samples_from_latent(i, latents, parallel_time_step_blocks[chunk_idx])
 
                 self._update_latent_parameters(i, evidence, logger)
                 self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence)

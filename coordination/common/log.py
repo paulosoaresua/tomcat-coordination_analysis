@@ -1,5 +1,7 @@
-from typing import Optional
+import json
+from typing import Any, Dict, Optional
 
+from datetime import datetime
 import io
 import logging
 import os
@@ -60,18 +62,29 @@ class BaseLogger:
         # Don't do anything
         pass
 
+    def add_hyper_params(self, hyper_params: Dict[str, Any]):
+        # Don't do anything
+        pass
+
 
 class TensorBoardLogger(BaseLogger):
 
     def __init__(self, out_dir: str, measure_suffix: Optional[str] = None):
         super().__init__(measure_suffix)
 
-        os.makedirs(out_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
+        self.log_dir = f"{out_dir}/{timestamp}"
 
-        self.tb_writer = SummaryWriter(out_dir)
+        os.makedirs(self.log_dir, exist_ok=True)
+
+        self.tb_writer = SummaryWriter(self.log_dir)
         self.measure_suffix = measure_suffix
 
     def add_scalar(self, name: str, value: float, step: int):
         if self.measure_suffix is not None:
             name = f"{name}_{self.measure_suffix}"
         self.tb_writer.add_scalar(name, value, step)
+
+    def add_hyper_params(self, hyper_params: Dict[str, Any]):
+        with open(f"{self.log_dir}/hyper_params.json", "w") as f:
+            json.dump(hyper_params, f, indent=4)

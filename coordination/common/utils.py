@@ -19,3 +19,7 @@ def set_seed(seed: Optional[int]):
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
+
+
+def safe_divide(x: np.ndarray, y: np.ndarray, tol: float = 1e-6) -> np.ndarray:
+    return np.where(np.isclose(y, tol), 0, x / y)
