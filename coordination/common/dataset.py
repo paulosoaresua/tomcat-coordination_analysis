@@ -30,7 +30,7 @@ class EvidenceDataset:
         return 0 if len(self.series) == 0 else self.series[0].num_time_steps
 
     def get_subset(self, indices: List[int]) -> EvidenceDataset:
-        return EvidenceDataset([self.series[i] for i in indices])
+        return self.__class__([self.series[i] for i in indices])
 
     @staticmethod
     def merge_list(datasets: List[EvidenceDataset]) -> EvidenceDataset:
@@ -45,7 +45,7 @@ class EvidenceDataset:
 
     @staticmethod
     def merge(dataset1: EvidenceDataset, dataset2: EvidenceDataset) -> EvidenceDataset:
-        return EvidenceDataset(dataset1.series + dataset2.series)
+        return dataset1.__class__(dataset1.series + dataset2.series)
 
 
 class IndexToDatasetTransformer(BaseEstimator, TransformerMixin):

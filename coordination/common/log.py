@@ -57,6 +57,10 @@ class BaseLogger:
 
     def __init__(self, measure_suffix: str = ""):
         self.measure_suffix = measure_suffix
+        self._logger_info = {}
+
+    def add_info(self, name: str, value: Any):
+        self._logger_info[name] = value
 
     def add_scalar(self, name: str, value: float, step: int):
         # Don't do anything
@@ -86,5 +90,6 @@ class TensorBoardLogger(BaseLogger):
         self.tb_writer.add_scalar(name, value, step)
 
     def add_hyper_params(self, hyper_params: Dict[str, Any]):
+        hyper_params.update(self._logger_info)
         with open(f"{self.log_dir}/hyper_params.json", "w") as f:
             json.dump(hyper_params, f, indent=4)

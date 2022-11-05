@@ -182,6 +182,12 @@ class CoordinationBlendingLatentVocalics(PGM):
         self.coordination_samples_ = np.array([])
         self.latent_vocalics_samples_ = np.array([])
 
+    def reset_parameters(self):
+        self.var_cc = None
+        self.var_a = None
+        self.var_aa = None
+        self.var_o = None
+
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
     # ---------------------------------------------------------
@@ -495,6 +501,7 @@ class CoordinationBlendingLatentVocalics(PGM):
                     # step is.
                     while last_time_step_independent_block > time_chunks[j + 1][-1]:
                         j += 1
+
                     next_parallel_range = np.arange(last_time_step_independent_block + 1, time_chunks[j + 1][-1] + 1)
 
                     time_chunks[j + 1] = next_parallel_range
