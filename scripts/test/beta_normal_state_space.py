@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     THETA_0 = logit(0.3)
     THETA_STD = 0.05
-    R_STD = 0.05
+    R_STD = 0.06
     C_STD = 0.01
 
     np.random.seed(0)
