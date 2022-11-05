@@ -1,73 +1,101 @@
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, List
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import invgamma, norm
 
-from coordination.common.dataset import InputFeaturesDataset
-from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingInferenceLatentVocalics, \
-    LatentVocalicsParticles
-
-
-class GaussianLatentVocalicsParticles(LatentVocalicsParticles):
-    latent_vocalics: Dict[str, np.ndarray]
-    unbounded_coordination: np.ndarray
-
-    def _keep_particles_at(self, indices: np.ndarray):
-        super()._keep_particles_at(indices)
-        self.unbounded_coordination = self.unbounded_coordination[indices]
-
-    def clip(self):
-        self.coordination = np.clip(self.unbounded_coordination, a_min=0, a_max=1)
-
-    def mean(self):
-        return np.clip(self.unbounded_coordination.mean(), a_min=0, a_max=1)
-
-    def var(self):
-        return self.unbounded_coordination.var()
+from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingLatentVocalics, \
+    LatentVocalicsDataset, LatentVocalicsDataSeries, LatentVocalicsParticles
+from coordination.model.coordination_blending_latent_vocalics import default_f, default_g
 
 
-class GaussianCoordinationBlendingInferenceLatentVocalics(CoordinationBlendingInferenceLatentVocalics):
+class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics):
 
     def __init__(self,
-                 mean_prior_coordination: float,
-                 std_prior_coordination: float,
-                 std_coordination_drifting: float,
-                 mean_prior_latent_vocalics: np.array,
-                 std_prior_latent_vocalics: np.array,
-                 std_coordinated_latent_vocalics: np.ndarray,
-                 std_observed_vocalics: np.ndarray,
-                 f: Callable = lambda x, s: x,
-                 g: Callable = lambda x: x,
-                 fix_coordination_on_second_half: bool = True,
-                 num_particles: int = 10000,
-                 seed: Optional[int] = None,
-                 show_progress_bar: bool = False):
-        super().__init__(mean_prior_latent_vocalics, std_prior_latent_vocalics, std_coordinated_latent_vocalics,
-                         std_observed_vocalics, f, g, fix_coordination_on_second_half, num_particles, seed,
-                         show_progress_bar)
+                 initial_coordination: float,
+                 num_vocalic_features: int,
+                 num_speakers: int,
+                 a_vcc: float,
+                 b_vcc: float,
+                 a_va: float,
+                 b_va: float,
+                 a_vaa: float,
+                 b_vaa: float,
+                 a_vo: float,
+                 b_vo: float,
+                 f: Callable = default_f,
+                 g: Callable = default_g):
+        super().__init__(initial_coordination, num_vocalic_features, num_speakers, a_vcc, b_vcc, a_va, b_va, a_vaa,
+                         b_vaa, a_vo, b_vo, f, g)
 
-        self.mean_prior_coordination = mean_prior_coordination
-        self.std_prior_coordination = std_prior_coordination
-        self.std_coordination_drifting = std_coordination_drifting
+    def _get_coordination_distribution(self, mean: np.ndarray, std: np.ndarray) -> Any:
+        return norm(mean, std)
 
-        self.states: List[GaussianLatentVocalicsParticles] = []
+    # ---------------------------------------------------------
+    # PARAMETER ESTIMATION
+    # ---------------------------------------------------------
+    def _get_initial_coordination_for_gibbs(self, evidence: LatentVocalicsDataset) -> np.ndarray:
+        means = np.zeros((evidence.num_trials, evidence.num_time_steps))
+        samples = norm(means, 0.1).rvs()
+        samples[0] = self.initial_coordination
 
-    def fit(self, input_features: InputFeaturesDataset, num_particles: int = 0, num_iter: int = 0,
-            discard_first: int = 0, *args,
-            **kwargs):
-        # MCMC to train parameters? We start by choosing with cross validation instead.
-        return self
+        return samples
 
-    def _sample_coordination_from_prior(self, new_particles: GaussianLatentVocalicsParticles):
-        mean = np.ones(self.num_particles) * self.mean_prior_coordination
-        new_particles.unbounded_coordination = norm(loc=mean, scale=self.std_prior_coordination).rvs()
-        new_particles.clip()
+    def _get_coordination_proposal(self, previous_coordination_sample: np.ndarray):
 
-    def _sample_coordination_from_transition(self, previous_particles: GaussianLatentVocalicsParticles,
-                                             new_particles: GaussianLatentVocalicsParticles):
-        new_particles.unbounded_coordination = norm(loc=previous_particles.unbounded_coordination,
-                                                    scale=self.std_coordination_drifting).rvs()
-        new_particles.clip()
+        # Since coordination is constrained to 0 and 1, we don't expect a high variance.
+        # We set variance to be smaller than 0.01 such that MCMC don't do big jumps and ends up
+        # overestimating coordination.
+        std = 0.005
+        new_coordination_sample = norm(previous_coordination_sample, std).rvs()
 
-    def _create_new_particles(self) -> LatentVocalicsParticles:
-        return GaussianLatentVocalicsParticles()
+        if previous_coordination_sample.shape[0] == 1:
+            # The norm.rvs function does not preserve the dimensions of a unidimensional array.
+            # We need to correct that if we are working with a single trial sample.
+            new_coordination_sample = np.array([[new_coordination_sample]])
+
+        # Hastings factor
+        # nominator = truncnorm(new_coordination_sample, std).logpdf(previous_coordination_sample)
+        # denominator = truncnorm(previous_coordination_sample, std).logpdf(new_coordination_sample)
+        # factor = np.exp(nominator - denominator).sum(axis=1)
+        factor = 1
+
+        return new_coordination_sample, factor
+
+    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset):
+        # Variance of the State Transition
+        if self.var_cc is None:
+            a = self.a_vcc + evidence.num_trials * (evidence.num_time_steps - 1) / 2
+            x = self.coordination_samples_[gibbs_step, :, 1:]
+            y = self.coordination_samples_[gibbs_step, :, :evidence.num_time_steps - 1]
+            b = self.b_vcc + np.square(x - y).sum() / 2
+            self.vcc_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
+            if self.vcc_samples_[gibbs_step] == np.nan:
+                self.vcc_samples_[gibbs_step] = np.inf
+        else:
+            # Given
+            self.vcc_samples_[gibbs_step] = self.var_cc
+
+    # ---------------------------------------------------------
+    # INFERENCE
+    # ---------------------------------------------------------
+
+    def _summarize_particles(self, series: LatentVocalicsDataSeries,
+                             particles: List[LatentVocalicsParticles]) -> np.ndarray:
+        # Mean and variance over time
+        summary = np.zeros((2 + 2 * series.num_vocalic_features, len(particles)))
+
+        for t, particles_in_time in enumerate(particles):
+            if t == 0:
+                summary[0, t] = self.initial_coordination
+                summary[1, t] = 0
+            else:
+                summary[0, t] = particles_in_time.coordination.mean()
+                summary[1, t] = particles_in_time.coordination.var()
+
+            if series.observed_vocalics.mask[t] == 1:
+                for k in range(series.num_vocalic_features):
+                    speaker = series.observed_vocalics.utterances[t].subject_id
+                    summary[2 + 2*k, t] = particles_in_time.latent_vocalics[speaker][:, k].mean()
+                    summary[3 + 2*k, t] = particles_in_time.latent_vocalics[speaker][:, k].var()
+
+        return summary

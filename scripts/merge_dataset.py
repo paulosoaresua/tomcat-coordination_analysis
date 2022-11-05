@@ -3,21 +3,21 @@ import numpy as np
 import os
 import pickle
 
-from coordination.common.dataset import InputFeaturesDataset
+from coordination.common.dataset import EvidenceDataset
 
 
 def merge_dataset(dataset1_path: str, dataset2_path: str, out_path: str):
-    input_features1: InputFeaturesDataset
+    input_features1: EvidenceDataset
     scores1: np.ndarray
     with open(dataset1_path, "rb") as f:
         input_features1, scores1 = pickle.load(f)
 
-    input_features2: InputFeaturesDataset
+    input_features2: EvidenceDataset
     scores2: np.ndarray
     with open(dataset2_path, "rb") as f:
         input_features2, scores2 = pickle.load(f)
 
-    input_features = InputFeaturesDataset.merge([input_features1, input_features2])
+    input_features = EvidenceDataset.merge([input_features1, input_features2])
     scores = np.concatenate([scores1, scores2])
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

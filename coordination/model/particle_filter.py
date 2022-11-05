@@ -1,27 +1,19 @@
 from typing import Callable, List, Optional
 
 import numpy as np
-import random
 
-from coordination.common.dataset import SeriesData
+from coordination.common.dataset import EvidenceDataSeries
+from coordination.common.utils import set_seed
 
 
 class Particles:
-
-    coordination: np.ndarray
 
     def resample(self, importance_weights: np.ndarray):
         indices = Particles.resample_particle_indices(importance_weights)
         self._keep_particles_at(indices)
 
     def _keep_particles_at(self, indices: np.ndarray):
-        self.coordination = self.coordination[indices]
-
-    def mean(self):
-        return self.coordination.mean()
-
-    def var(self):
-        return self.coordination.var()
+        raise NotImplementedError
 
     @staticmethod
     def resample_particle_indices(importance_weights: np.ndarray) -> np.ndarray:
@@ -51,39 +43,25 @@ class ParticleFilter:
 
     def reset_state(self):
         self.states = []
-        if self.seed is not None:
-            np.random.seed(self.seed)
-            random.seed(self.seed)
+        set_seed(self.seed)
 
-    def next(self, series: SeriesData):
+    def next(self, series: EvidenceDataSeries):
         next_time_step = len(self.states)
         self.__transition(series)
         if self.resample_at_fn(next_time_step, series):
             self.__resample(series)
 
-    def __transition(self, series: SeriesData):
+    def __transition(self, series: EvidenceDataSeries):
         if len(self.states) == 0:
-            self.states.append(self.sample_from_prior_fn(series))
+            self.states.append(self.sample_from_prior_fn(self.num_particles, series))
         else:
             t = len(self.states)
-            self.states.append(self.sample_from_transition_fn(t, self.states, series))
+            self.states.append(self.sample_from_transition_fn(t, self.num_particles, self.states, series))
 
-    def __resample(self, series: SeriesData):
+    def __resample(self, series: EvidenceDataSeries):
         t = len(self.states) - 1
         log_weights = self.calculate_log_likelihood_fn(t, self.states, series)
         log_weights -= np.max(log_weights)
         log_weights = np.exp(log_weights)
         importance_weights = log_weights / np.sum(log_weights)
         self.states[t].resample(importance_weights)
-
-    # def _resample_at(self, time_step: int, series: SeriesData):
-    #     return True
-    #
-    # def _sample_from_prior(self, series: SeriesData) -> Particles:
-    #     raise NotImplementedError
-    #
-    # def _sample_from_transition_to(self, time_step: int, series: SeriesData) -> Particles:
-    #     raise NotImplementedError
-    #
-    # def _calculate_log_likelihood_at(self, time_step: int, series: SeriesData) -> np.ndarray:
-    #     raise NotImplementedError

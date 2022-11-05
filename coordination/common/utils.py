@@ -1,4 +1,9 @@
+from typing import Optional
+
 from datetime import datetime
+import random
+
+import numpy as np
 
 
 def json_serial(obj):
@@ -8,3 +13,13 @@ def json_serial(obj):
         return obj.isoformat()
 
     raise TypeError(f"Type {type(obj)} is not serializable")
+
+
+def set_seed(seed: Optional[int]):
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
+
+
+def safe_divide(x: np.ndarray, y: np.ndarray, tol: float = 1e-6) -> np.ndarray:
+    return np.where(np.isclose(y, tol), 0, x / y)

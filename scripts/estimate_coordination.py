@@ -5,14 +5,14 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 
-from coordination.common.dataset import InputFeaturesDataset
+from coordination.common.dataset import EvidenceDataset
 from coordination.model.gaussian_coordination_blending_latent_vocalics import \
     GaussianCoordinationBlendingInferenceLatentVocalics
 from coordination.plot.coordination import plot_coordination_estimation
 
 
 def estimate_coordination(dataset_path: str, out_dir: str, num_particles: int, seed: int, num_jobs: int):
-    input_features: InputFeaturesDataset
+    input_features: EvidenceDataset
     scores: np.ndarray
     with open(dataset_path, "rb") as f:
         dataset = pickle.load(f)

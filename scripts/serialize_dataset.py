@@ -6,7 +6,7 @@ import pickle
 
 from tqdm import tqdm
 
-from coordination.common.dataset import InputFeaturesDataset, SeriesData
+from coordination.common.dataset import EvidenceDataset, SeriesData
 from coordination.common.log import configure_log
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent
 from coordination.entity.trial import Trial
@@ -51,9 +51,9 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
 
         pbar.update()
 
-    mission1_features = InputFeaturesDataset(mission1_series)
-    mission2_features = InputFeaturesDataset(mission2_series)
-    all_missions_features = InputFeaturesDataset(all_missions_series)
+    mission1_features = EvidenceDataset(mission1_series)
+    mission2_features = EvidenceDataset(mission2_series)
+    all_missions_features = EvidenceDataset(all_missions_series)
 
     mission1_dataset = (mission1_features, np.array(mission1_scores))
     mission2_dataset = (mission2_features, np.array(mission2_scores))

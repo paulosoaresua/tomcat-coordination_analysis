@@ -17,7 +17,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from torch.utils.tensorboard import SummaryWriter
 
-from coordination.common.dataset import InputFeaturesDataset, IndexToDatasetTransformer
+from coordination.common.dataset import EvidenceDataset, IndexToDatasetTransformer
 from coordination.model.coordination_transformer import CoordinationTransformer
 from coordination.model.gaussian_coordination_blending_latent_vocalics import \
     GaussianCoordinationBlendingInferenceLatentVocalics
@@ -115,7 +115,7 @@ class CrossValidationHelper:
 
 
 def cross_validate(dataset_path: str, out_dir: str, num_particles: int, cv: int, seed: int, num_jobs: int):
-    input_features: InputFeaturesDataset
+    input_features: EvidenceDataset
     scores: np.ndarray
     with open(dataset_path, "rb") as f:
         input_features, scores = pickle.load(f)
