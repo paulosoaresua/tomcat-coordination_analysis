@@ -27,13 +27,20 @@ if __name__ == "__main__":
     for t in range(NUM_TIME_STEPS):
         if t == 0:
             thetas.append(np.ones(NUM_SAMPLES) * THETA_0)
+            cs.append(np.ones(NUM_SAMPLES) * sigmoid(THETA_0))
         else:
             thetas.append(norm(thetas[t - 1], THETA_STD).rvs())
+            m = cs[t-1]
+            a = m / C_STD + m
+            a = np.where(a <= 0, 1e-6, a)
+            b = (1 - m) * (1 - C_STD) / C_STD
+            b = np.where(b <= 0, 1e-6, b)
+            cs.append(beta(a=a, b=b).rvs())
 
-        r = norm(np.zeros(NUM_SAMPLES), R_STD).rvs()
-
-        m = sigmoid(thetas[t] + r)
-        cs.append(beta(a=m / C_STD + m, b=(1 - m) * (1 - C_STD) / C_STD).rvs())
+        # r = norm(np.zeros(NUM_SAMPLES), R_STD).rvs()
+        #
+        # m = sigmoid(thetas[t] + r)
+        # cs.append(beta(a=m / C_STD + m, b=(1 - m) * (1 - C_STD) / C_STD).rvs())
 
     thetas = np.array(thetas).T
     cs = np.array(cs).T
