@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, List, Optional
+from typing import Any, Generic, List, Optional, TypeVar
 
 from multiprocessing import Pool
 
@@ -20,7 +20,15 @@ class Samples:
         raise NotImplementedError
 
 
-class PGM(BaseEstimator):
+class ParticlesSummary:
+    pass
+
+
+SP = TypeVar('SP')
+S = TypeVar('S')
+
+
+class PGM(BaseEstimator, Generic[SP, S]):
     def __init__(self):
         super().__init__()
 
@@ -28,11 +36,10 @@ class PGM(BaseEstimator):
         self._hyper_params = {}
         self.nll_ = np.array([])
 
-    def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> Samples:
+    def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
         set_seed(seed)
 
-        # To be implemented by a child class
-        return Samples()
+        return None
 
     def fit(self, evidence: EvidenceDataset, burn_in: int, seed: Optional[int], num_jobs: int = 1,
             logger: BaseLogger = BaseLogger()):
@@ -66,14 +73,6 @@ class PGM(BaseEstimator):
         # 2. Sample the latent variables from their posterior distributions
         with Pool(max(len(parallel_time_step_blocks), 1)) as pool:
             for i in tqdm(range(1, burn_in + 1), desc="Gibbs Step", position=0):
-                # for b in np.array_split(np.arange(evidence.num_time_steps), 4):
-                #     latents = self._gibbs_step(i, evidence, b, 1)
-                #     self._retain_samples_from_latent(i, latents, b)
-
-                # for b in parallel_time_step_blocks:
-                #     latents = self._gibbs_step(i, evidence, b, 1)
-                #     self._retain_samples_from_latent(i, latents, b)
-                #
                 latents = self._gibbs_step(i, evidence, single_thread_time_steps, 1)
                 self._retain_samples_from_latent(i, latents, single_thread_time_steps)
 
@@ -145,8 +144,7 @@ class PGM(BaseEstimator):
         """
         raise NotImplementedError
 
-    def predict(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1) -> List[
-        np.ndarray]:
+    def predict(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1) -> List[S]:
 
         num_effective_jobs = min(num_jobs, evidence.num_trials)
         trial_chunks = np.array_split(np.arange(evidence.num_trials), num_effective_jobs)
@@ -163,7 +161,7 @@ class PGM(BaseEstimator):
         return results
 
     def _run_particle_filter_inference(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int],
-                                       main_bar_position: int) -> List[np.ndarray]:
+                                       main_bar_position: int) -> List[ParticlesSummary]:
         particle_filter = ParticleFilter(
             num_particles=num_particles,
             resample_at_fn=self._resample_at,
@@ -201,5 +199,5 @@ class PGM(BaseEstimator):
     def _resample_at(self, time_step: int, series: EvidenceDataSeries):
         return True
 
-    def _summarize_particles(self, series: EvidenceDataSeries, particles: List[Particles]) -> np.ndarray:
+    def _summarize_particles(self, series: EvidenceDataSeries, particles: List[Particles]) -> ParticlesSummary:
         raise NotImplementedError

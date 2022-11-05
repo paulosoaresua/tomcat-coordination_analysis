@@ -4,13 +4,17 @@ import numpy as np
 from scipy.stats import invgamma, norm
 from tqdm import tqdm
 
+from coordination.common.log import BaseLogger
 from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingLatentVocalics, \
-    LatentVocalicsDataset, LatentVocalicsDataSeries, LatentVocalicsParticles, LatentVocalicsSamples
-from coordination.model.coordination_blending_latent_vocalics import clip_coordination, default_f, default_g
+    LatentVocalicsDataset, LatentVocalicsDataSeries, LatentVocalicsParticles, LatentVocalicsSamples, \
+    LatentVocalicsParticlesSummary
+from coordination.model.coordination_blending_latent_vocalics import default_f, default_g
 from coordination.inference.mcmc import MCMC
 
 
-class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics):
+class GaussianCoordinationBlendingLatentVocalics(
+    CoordinationBlendingLatentVocalics[
+        LatentVocalicsSamples, LatentVocalicsParticlesSummary]):
 
     def __init__(self,
                  initial_coordination: float,
@@ -28,9 +32,6 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
                  g: Callable = default_g):
         super().__init__(initial_coordination, num_vocalic_features, num_speakers, a_vcc, b_vcc, a_va, b_va, a_vaa,
                          b_vaa, a_vo, b_vo, f, g)
-
-    def _get_coordination_distribution(self, mean: np.ndarray, std: np.ndarray) -> Any:
-        return norm(mean, std)
 
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
@@ -78,7 +79,7 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
                                     job_num: int) -> Tuple[np.ndarray, ...]:
 
         if evidence.coordination is not None:
-            return self.coordination_samples_[gibbs_step - 1].copy(),
+            return self.coordination_samples_[gibbs_step - 1].copy(), ()
 
         # The retain method copies the estimate in one gibbs step to the next one. Therefore, accessing the values in
         # the current gibbs step will give us the latest values of the estimates.
@@ -113,7 +114,7 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
                                                                  retain_every=1)[0, :, 0]
                 coordination[:, t] = inferred_coordination
 
-        return coordination,
+        return coordination, ()
 
     @staticmethod
     def _get_coordination_proposal(previous_coordination_sample: np.ndarray):
@@ -134,8 +135,8 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
 
         return new_coordination_sample, factor
 
-    @staticmethod
-    def _get_coordination_posterior_unormalized_logprob(proposed_coordination_sample: np.ndarray,
+    def _get_coordination_posterior_unormalized_logprob(self,
+                                                        proposed_coordination_sample: np.ndarray,
                                                         previous_coordination_sample: np.ndarray,
                                                         next_coordination_sample: Optional[np.ndarray],
                                                         scc: float,
@@ -155,7 +156,8 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
 
         return log_posterior
 
-    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset):
+    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+                                               logger: BaseLogger):
         if self.var_cc is None:
             a = self.a_vcc + evidence.num_trials * (evidence.num_time_steps - 1) / 2
             x = self.coordination_samples_[gibbs_step, :, 1:]
@@ -182,27 +184,5 @@ class GaussianCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocal
         if series.coordination is None:
             new_particles.coordination = norm(previous_particles.coordination, np.sqrt(self.var_cc)).rvs()
         else:
-            # Ground truth.
             num_particles = len(previous_particles.coordination)
             new_particles.coordination = np.ones(num_particles) * series.coordination[time_step]
-
-    def _summarize_particles(self, series: LatentVocalicsDataSeries,
-                             particles: List[LatentVocalicsParticles]) -> np.ndarray:
-        # Mean and variance over time
-        summary = np.zeros((2 + 2 * series.num_vocalic_features, len(particles)))
-
-        for t, particles_in_time in enumerate(particles):
-            if t == 0:
-                summary[0, t] = self.initial_coordination
-                summary[1, t] = 0
-            else:
-                summary[0, t] = particles_in_time.coordination.mean()
-                summary[1, t] = particles_in_time.coordination.var()
-
-            if series.observed_vocalics.mask[t] == 1:
-                for k in range(series.num_vocalic_features):
-                    speaker = series.observed_vocalics.utterances[t].subject_id
-                    summary[2 + 2 * k, t] = particles_in_time.latent_vocalics[speaker][:, k].mean()
-                    summary[3 + 2 * k, t] = particles_in_time.latent_vocalics[speaker][:, k].var()
-
-        return summary

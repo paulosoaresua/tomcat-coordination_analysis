@@ -4,10 +4,12 @@ import numpy as np
 from scipy.stats import invgamma, norm
 from tqdm import tqdm
 
+from coordination.common.log import BaseLogger
 from coordination.common.distribution import beta
 from coordination.common.utils import logit, sigmoid
 from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingLatentVocalics, \
-    LatentVocalicsDataset, LatentVocalicsDataSeries, LatentVocalicsParticles, LatentVocalicsSamples
+    LatentVocalicsDataset, LatentVocalicsDataSeries, LatentVocalicsParticles, LatentVocalicsSamples, \
+    LatentVocalicsParticlesSummary
 from coordination.model.coordination_blending_latent_vocalics import default_f, default_g
 from coordination.inference.mcmc import MCMC
 from coordination.component.speech.common import VocalicsSparseSeries
@@ -21,6 +23,21 @@ class BetaCoordinationLatentVocalicsParticles(LatentVocalicsParticles):
 
         if isinstance(self.unbounded_coordination, np.ndarray):
             self.unbounded_coordination = self.unbounded_coordination[indices]
+
+
+class BetaCoordinationLatentVocalicsParticlesSummary(LatentVocalicsParticlesSummary):
+    unbounded_coordination_mean: np.ndarray
+    unbounded_coordination_var: np.ndarray
+
+    @classmethod
+    def from_latent_vocalics_particles_summary(cls, summary: LatentVocalicsParticlesSummary):
+        new_summary = cls()
+        new_summary.coordination_mean = summary.coordination_mean
+        new_summary.coordination_var = summary.coordination_var
+        new_summary.latent_vocalics_mean = summary.latent_vocalics_mean
+        new_summary.latent_vocalics_var = summary.latent_vocalics_var
+
+        return new_summary
 
 
 class BetaCoordinationLatentVocalicsSamples(LatentVocalicsSamples):
@@ -41,11 +58,13 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
     def __init__(self, series: List[BetaCoordinationLatentVocalicsDataSeries]):
         super().__init__(series)
 
-        self.unbounded_coordination = None if series[0].coordination is None else np.array(
-            [s.unbounded_coordination for s in series]).T
+        self.unbounded_coordination = None if series[0].unbounded_coordination is None else np.array(
+            [s.unbounded_coordination for s in series])
 
 
-class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics):
+class BetaCoordinationBlendingLatentVocalics(
+    CoordinationBlendingLatentVocalics[
+        BetaCoordinationLatentVocalicsSamples, BetaCoordinationLatentVocalicsParticlesSummary]):
 
     def __init__(self,
                  initial_coordination: float,
@@ -66,6 +85,8 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
         super().__init__(initial_coordination, num_vocalic_features, num_speakers, a_vcc, b_vcc, a_va, b_va, a_vaa,
                          b_vaa, a_vo, b_vo, f, g)
 
+        # var_cc in this model is the dispersion of the reparameterized beta
+
         self.var_uc: Optional[float] = None
 
         self.a_vuc = a_vuc
@@ -80,22 +101,15 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
         super().reset_parameters()
         self.var_uc = None
 
-    def _get_coordination_distribution(self, mean: np.ndarray, std: np.ndarray) -> Any:
-        return norm(mean, std)
-
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
     # ---------------------------------------------------------
-    def _create_new_samples(self) -> BetaCoordinationLatentVocalicsSamples:
-        return BetaCoordinationLatentVocalicsSamples()
-
     def _generate_coordination_samples(self, num_samples: int, num_time_steps: int,
                                        samples: BetaCoordinationLatentVocalicsSamples):
         samples.unbounded_coordination = np.zeros((num_samples, num_time_steps))
         samples.coordination = np.zeros((num_samples, num_time_steps))
 
         suc = np.sqrt(self.var_uc)
-        vcc = self.var_cc
 
         for t in tqdm(range(num_time_steps), desc="Coordination", position=0, leave=False):
             if t == 0:
@@ -104,10 +118,10 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
                 # The mean of a truncated Gaussian distribution is given by mu + an offset. We remove the offset here,
                 # such that the previous sample is indeed the mean of the truncated Gaussian.
                 mean = samples.unbounded_coordination[:, t - 1]
-                samples.unbounded_coordination[:, t] = self._get_coordination_distribution(mean, suc).rvs()
+                samples.unbounded_coordination[:, t] = norm(mean, suc).rvs()
 
             m = sigmoid(samples.unbounded_coordination[:, t])
-            samples.coordination = beta(m, vcc).rvs()
+            samples.coordination[:, t] = beta(m, self.var_cc).rvs()
 
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
@@ -158,7 +172,7 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
             if t > 0:
                 ll += norm(unbounded_coordination[:, t - 1], suc).logpdf(unbounded_coordination[:, t]).sum()
 
-            ll += beta(sigmoid(unbounded_coordination[:, t]), vcc).logpdf(coordination[t])
+            ll += beta(sigmoid(unbounded_coordination[:, t]), vcc).logpdf(coordination[:, t]).sum()
 
         return ll
 
@@ -169,7 +183,7 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
         unbounded_coordination = self._sample_unbounded_coordination_on_fit(gibbs_step, evidence, time_steps, job_num)
 
         if evidence.coordination is not None:
-            return self.coordination_samples_[gibbs_step - 1].copy(), unbounded_coordination[:, time_steps]
+            return self.coordination_samples_[gibbs_step - 1].copy(), unbounded_coordination
 
         # The retain method copies the estimate in one gibbs step to the next one. Therefore, accessing the values in
         # the current gibbs step will give us the latest values of the estimates.
@@ -216,7 +230,7 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
                                               time_steps: np.ndarray, job_num: int) -> np.ndarray:
 
         if evidence.unbounded_coordination is not None:
-            return self.unbounded_coordination_samples_[gibbs_step - 1].copy(),
+            return self.unbounded_coordination_samples_[gibbs_step - 1].copy()
 
         # The retain method copies the estimate in one gibbs step to the next one. Therefore, accessing the values in
         # the current gibbs step will give us the latest values of the estimates.
@@ -236,7 +250,7 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
                     "next_unbounded_coordination_sample": next_unbounded_coordination,
                     "suc": suc,
                     "vcc": vcc,
-                    "coordination": coordination
+                    "coordination": coordination[:, t][:, np.newaxis]
                 }
 
                 sampler = MCMC(proposal_fn=self._get_unbounded_coordination_proposal,
@@ -284,7 +298,7 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
 
         log_posterior += beta(sigmoid(proposed_unbounded_coordination_sample), vcc).logpdf(coordination)
 
-        return log_posterior
+        return log_posterior.flatten()
 
     @staticmethod
     def _get_coordination_proposal(previous_coordination_sample: np.ndarray,
@@ -308,8 +322,8 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
 
         return new_coordination_sample, factor
 
-    @staticmethod
-    def _get_coordination_posterior_unormalized_logprob(proposed_coordination_sample: np.ndarray,
+    def _get_coordination_posterior_unormalized_logprob(self,
+                                                        proposed_coordination_sample: np.ndarray,
                                                         current_unbounded_coordination_sample: np.ndarray,
                                                         vcc: float,
                                                         saa: float,
@@ -333,7 +347,8 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
         if gibbs_step < self.unbounded_coordination_samples_.shape[0] - 1:
             self.unbounded_coordination_samples_[gibbs_step + 1] = self.unbounded_coordination_samples_[gibbs_step]
 
-    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset):
+    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+                                               logger: BaseLogger):
         if self.var_uc is None:
             a = self.a_vuc + evidence.num_trials * (evidence.num_time_steps - 1) / 2
             x = self.unbounded_coordination_samples_[gibbs_step, :, 1:]
@@ -345,7 +360,11 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
 
         if self.var_cc is None:
             # TODO: I am using a uniform prior for now (no prior). Reassess that later.
-            self.var_cc = self.coordination_samples_[gibbs_step].var()
+            # The variance in this model is actually the dispersion of the reparameterized beta
+            m = self.coordination_samples_[gibbs_step].var()
+            self.var_cc = self.coordination_samples_[gibbs_step].var() / (m * (1 - m))
+
+        logger.add_scalar("train/var_uc", self.vuc_samples_[gibbs_step], gibbs_step)
 
     def _retain_parameters(self):
         super()._retain_parameters()
@@ -354,7 +373,8 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
     # ---------------------------------------------------------
     # INFERENCE
     # ---------------------------------------------------------
-    def _sample_coordination_from_prior(self, num_particles: int, new_particles: BetaCoordinationLatentVocalicsParticles,
+    def _sample_coordination_from_prior(self, num_particles: int,
+                                        new_particles: BetaCoordinationLatentVocalicsParticles,
                                         series: BetaCoordinationLatentVocalicsDataSeries):
         if series.unbounded_coordination is None:
             new_particles.unbounded_coordination = np.ones(num_particles) * logit(self.initial_coordination)
@@ -366,12 +386,14 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
         else:
             new_particles.coordination = np.ones(num_particles) * series.coordination[0]
 
-    def _sample_coordination_from_transition_to(self, time_step: int, states: List[BetaCoordinationLatentVocalicsParticles],
+    def _sample_coordination_from_transition_to(self, time_step: int,
+                                                states: List[BetaCoordinationLatentVocalicsParticles],
                                                 new_particles: BetaCoordinationLatentVocalicsParticles,
                                                 series: BetaCoordinationLatentVocalicsDataSeries):
         previous_particles = states[time_step - 1]
         if series.unbounded_coordination is None:
-            new_particles.unbounded_coordination = norm(previous_particles.unbounded_coordination, np.sqrt(self.var_uc)).rvs()
+            new_particles.unbounded_coordination = norm(previous_particles.unbounded_coordination,
+                                                        np.sqrt(self.var_uc)).rvs()
         else:
             num_particles = len(previous_particles.unbounded_coordination)
             new_particles.unbounded_coordination = np.ones(num_particles) * series.unbounded_coordination[time_step]
@@ -382,23 +404,18 @@ class BetaCoordinationBlendingLatentVocalics(CoordinationBlendingLatentVocalics)
             num_particles = len(previous_particles.coordination)
             new_particles.coordination = np.ones(num_particles) * series.coordination[time_step]
 
-    def _summarize_particles(self, series: LatentVocalicsDataSeries,
-                             particles: List[LatentVocalicsParticles]) -> np.ndarray:
-        # Mean and variance over time
-        summary = np.zeros((2 + 2 * series.num_vocalic_features, len(particles)))
+    def _create_new_particles(self) -> BetaCoordinationLatentVocalicsParticles:
+        return BetaCoordinationLatentVocalicsParticles()
+
+    def _summarize_particles(self, series: BetaCoordinationLatentVocalicsDataSeries,
+                             particles: List[
+                                 BetaCoordinationLatentVocalicsParticles]) -> BetaCoordinationLatentVocalicsParticlesSummary:
+
+        summary = super()._summarize_particles(series, particles)
+        summary = BetaCoordinationLatentVocalicsParticlesSummary.from_latent_vocalics_particles_summary(summary)
 
         for t, particles_in_time in enumerate(particles):
-            if t == 0:
-                summary[0, t] = self.initial_coordination
-                summary[1, t] = 0
-            else:
-                summary[0, t] = particles_in_time.coordination.mean()
-                summary[1, t] = particles_in_time.coordination.var()
-
-            if series.observed_vocalics.mask[t] == 1:
-                for k in range(series.num_vocalic_features):
-                    speaker = series.observed_vocalics.utterances[t].subject_id
-                    summary[2 + 2 * k, t] = particles_in_time.latent_vocalics[speaker][:, k].mean()
-                    summary[3 + 2 * k, t] = particles_in_time.latent_vocalics[speaker][:, k].var()
+            summary.unbounded_coordination_mean[t] = particles_in_time.unbounded_coordination.mean()
+            summary.unbounded_coordination_var[t] = particles_in_time.unbounded_coordination.var()
 
         return summary

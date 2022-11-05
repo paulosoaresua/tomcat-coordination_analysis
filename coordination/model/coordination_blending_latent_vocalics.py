@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar
 
 from datetime import datetime
 
@@ -12,7 +12,7 @@ from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.inference.mcmc import MCMC
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
 from coordination.model.particle_filter import Particles
-from coordination.model.pgm import PGM, Samples
+from coordination.model.pgm import PGM, ParticlesSummary, Samples
 
 
 class LatentVocalicsParticles(Particles):
@@ -29,6 +29,13 @@ class LatentVocalicsParticles(Particles):
                 if np.ndim(latent_vocalics) > 1:
                     # otherwise, coordination is given and it will be a single number
                     self.latent_vocalics[speaker] = latent_vocalics[indices, :]
+
+
+class LatentVocalicsParticlesSummary(ParticlesSummary):
+    coordination_mean: np.ndarray
+    coordination_var: np.ndarray
+    latent_vocalics_mean: np.ndarray
+    latent_vocalics_var: np.ndarray
 
 
 class LatentVocalicsSamples(Samples):
@@ -119,7 +126,11 @@ def clip_coordination(coordination: np.ndarray) -> np.ndarray:
     return np.clip(coordination, a_min=0, a_max=1)
 
 
-class CoordinationBlendingLatentVocalics(PGM):
+SP = TypeVar('SP')
+S = TypeVar('S')
+
+
+class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
     def __init__(self,
                  initial_coordination: float,
@@ -192,14 +203,14 @@ class CoordinationBlendingLatentVocalics(PGM):
     # ---------------------------------------------------------
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], time_scale_density: float = 1, *args,
-               **kwargs) -> LatentVocalicsSamples:
+               **kwargs) -> SP:
         """
         Regular ancestral sampling procedure.
         """
         super().sample(num_samples, num_time_steps, seed)
 
-        samples = self._create_new_samples()
-        samples = self._generate_coordination_samples(num_samples, num_time_steps, samples)
+        samples = LatentVocalicsSamples()
+        self._generate_coordination_samples(num_samples, num_time_steps, samples)
         samples.latent_vocalics = []
         samples.observed_vocalics = []
 
@@ -256,9 +267,6 @@ class CoordinationBlendingLatentVocalics(PGM):
                                      values=observed_vocalics_values, mask=mask))
 
         return samples
-
-    def _create_new_samples(self) -> LatentVocalicsSamples:
-        return LatentVocalicsSamples()
 
     def _generate_coordination_samples(self, num_samples: int, num_time_steps: int, samples: LatentVocalicsSamples):
         raise NotImplementedError
@@ -423,7 +431,7 @@ class CoordinationBlendingLatentVocalics(PGM):
         else:
             latent_vocalics = self.latent_vocalics_samples_[gibbs_step - 1].copy()
 
-        return coordination, latent_vocalics, *extra_variables
+        return coordination, latent_vocalics, extra_variables
 
     def _sample_coordination_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray,
                                     job_num: int) -> Tuple[np.ndarray, ...]:
@@ -552,7 +560,7 @@ class CoordinationBlendingLatentVocalics(PGM):
             self.latent_vocalics_samples_[gibbs_step + 1] = self.latent_vocalics_samples_[gibbs_step]
 
     def _update_latent_parameters(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger):
-        self._update_latent_parameters_coordination(gibbs_step, evidence)
+        self._update_latent_parameters_coordination(gibbs_step, evidence, logger)
 
         if gibbs_step < len(self.vcc_samples_) - 1:
             self.vcc_samples_[gibbs_step + 1] = self.vcc_samples_[gibbs_step]
@@ -624,6 +632,9 @@ class CoordinationBlendingLatentVocalics(PGM):
         logger.add_scalar("train/var_aa", self.vaa_samples_[gibbs_step], gibbs_step)
         logger.add_scalar("train/var_o", self.vo_samples_[gibbs_step], gibbs_step)
 
+    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: EvidenceDataset, logger: BaseLogger):
+        raise NotImplementedError
+
     def _retain_parameters(self):
         self.var_cc = self.vcc_samples_[-1]
         self.var_a = self.va_samples_[-1]
@@ -633,7 +644,6 @@ class CoordinationBlendingLatentVocalics(PGM):
     # ---------------------------------------------------------
     # INFERENCE
     # ---------------------------------------------------------
-
     def _sample_from_prior(self, num_particles: int, series: LatentVocalicsDataSeries) -> Particles:
         new_particles = self._create_new_particles()
 
@@ -773,9 +783,6 @@ class CoordinationBlendingLatentVocalics(PGM):
             return series.observed_vocalics.mask[time_step] == 1 and series.observed_vocalics.previous_from_other[
                 time_step] is not None
 
-    def _create_new_particles(self) -> LatentVocalicsParticles:
-        return LatentVocalicsParticles()
-
     def _get_time_step_blocks_for_parallel_fitting(self, evidence: LatentVocalicsDataset, num_jobs: int):
         parallel_time_step_blocks = []
         single_thread_time_steps = []
@@ -849,13 +856,29 @@ class CoordinationBlendingLatentVocalics(PGM):
 
         return parallel_time_step_blocks, single_thread_time_steps
 
-    # TO BE IMPLEMENTED BY THE SUBCLASSES
+    def _create_new_particles(self) -> LatentVocalicsParticles:
+        return LatentVocalicsParticles()
 
-    def _get_coordination_distribution(self, previous_coordination: np.ndarray, scc: np.ndarray) -> Any:
-        raise NotImplementedError
+    def _summarize_particles(self, series: LatentVocalicsDataSeries,
+                             particles: List[LatentVocalicsParticles]) -> LatentVocalicsParticlesSummary:
 
-    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: EvidenceDataset):
-        raise NotImplementedError
+        summary = LatentVocalicsParticlesSummary()
+        summary.coordination_mean = np.zeros(series.num_time_steps)
+        summary.coordination_var = np.zeros(series.num_time_steps)
+        summary.latent_vocalics_mean = np.zeros((series.num_vocalic_features, series.num_time_steps))
+        summary.latent_vocalics_var = np.zeros((series.num_vocalic_features, series.num_time_steps))
 
-    def _summarize_particles(self, series: LatentVocalicsDataSeries, particles: List[Particles]) -> np.ndarray:
-        raise NotImplementedError
+        for t, particles_in_time in enumerate(particles):
+            summary.coordination_mean[t] = particles_in_time.coordination.mean()
+            summary.coordination_var[t] = particles_in_time.coordination.var()
+
+            if series.observed_vocalics.mask[t] == 1:
+                speaker = series.observed_vocalics.utterances[t].subject_id
+                summary.latent_vocalics_mean[:, t] = particles_in_time.latent_vocalics[speaker].mean(axis=0)
+                summary.latent_vocalics_var[:, t] = particles_in_time.latent_vocalics[speaker].var(axis=0)
+            else:
+                if t > 0:
+                    summary.latent_vocalics_mean[:, t] = summary.latent_vocalics_mean[:, t - 1]
+                    summary.latent_vocalics_var[:, t] = summary.latent_vocalics_var[:, t - 1]
+
+        return summary
