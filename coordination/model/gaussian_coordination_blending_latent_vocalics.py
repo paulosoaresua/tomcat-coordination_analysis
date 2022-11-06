@@ -61,7 +61,15 @@ class GaussianCoordinationBlendingLatentVocalics(
             if self.coordination_samples_.shape[0] > 0:
                 self.coordination_samples_[1] = self.coordination_samples_[0]
         else:
-            self.coordination_samples_[0] = evidence.coordination
+            self.coordination_samples_[:] = evidence.coordination[np.newaxis, :]
+
+        if self.var_cc is None:
+            self.vcc_samples_[0] = invgamma(a=self.a_vcc, scale=self.b_vcc).rvs()
+
+            if self.vcc_samples_.shape[0] > 0:
+                self.vcc_samples_[1] = self.vcc_samples_[0]
+        else:
+            self.vcc_samples_[:] = self.var_cc
 
     def _compute_coordination_likelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
         coordination = self.coordination_samples_[gibbs_step]

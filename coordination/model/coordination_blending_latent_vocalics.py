@@ -338,17 +338,11 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             self.latent_vocalics_samples_[0] = norm(
                 loc=np.zeros((evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps)),
                 scale=1).rvs()
+
             if burn_in > 0:
                 self.latent_vocalics_samples_[1] = self.latent_vocalics_samples_[0]
         else:
-            self.latent_vocalics_samples_[0] = evidence.latent_vocalics
-
-        if self.var_cc is None:
-            self.vcc_samples_[0] = invgamma(a=self.a_vcc, scale=self.b_vcc).rvs()
-            if burn_in > 0:
-                self.vcc_samples_[1] = self.vcc_samples_[0]
-        else:
-            self.vcc_samples_[:] = self.var_cc
+            self.latent_vocalics_samples_[:] = evidence.latent_vocalics[np.newaxis, :]
 
         if self.var_a is None:
             self.va_samples_[0] = invgamma(a=self.a_va, scale=self.b_va).rvs()
@@ -578,9 +572,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             b = self.b_va + np.square(first_latent_vocalics).sum() / 2
             self.va_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
 
-            if self.va_samples_[gibbs_step] == np.nan:
-                self.va_samples_[gibbs_step] = np.inf
-
             if gibbs_step < len(self.va_samples_) - 1:
                 self.va_samples_[gibbs_step + 1] = self.va_samples_[gibbs_step]
 
@@ -606,9 +597,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             b = self.b_vaa + np.square(x).sum() / 2
             self.vaa_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
 
-            if self.vaa_samples_[gibbs_step] == np.nan:
-                self.vaa_samples_[gibbs_step] = np.inf
-
             if gibbs_step < len(self.vaa_samples_) - 1:
                 self.vaa_samples_[gibbs_step + 1] = self.vaa_samples_[gibbs_step]
 
@@ -621,8 +609,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             a = self.a_vo + M.sum() * self.num_vocalic_features / 2
             b = self.b_vo + np.square(x).sum() / 2
             self.vo_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
-            if self.vo_samples_[gibbs_step] == np.nan:
-                self.vo_samples_[gibbs_step] = np.inf
 
             if gibbs_step < len(self.vo_samples_) - 1:
                 self.vo_samples_[gibbs_step + 1] = self.vo_samples_[gibbs_step]

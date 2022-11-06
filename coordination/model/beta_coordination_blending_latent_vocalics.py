@@ -14,6 +14,11 @@ from coordination.model.coordination_blending_latent_vocalics import default_f, 
 from coordination.inference.mcmc import MCMC
 from coordination.component.speech.common import VocalicsSparseSeries
 
+import matplotlib.pyplot as plt
+
+# For numerical stability
+EPSILON = 1e-6
+
 
 class BetaCoordinationLatentVocalicsParticles(LatentVocalicsParticles):
     unbounded_coordination: np.ndarray
@@ -121,13 +126,13 @@ class BetaCoordinationBlendingLatentVocalics(
                 samples.unbounded_coordination[:, t] = norm(mean, suc).rvs()
 
             m = sigmoid(samples.unbounded_coordination[:, t])
-            samples.coordination[:, t] = beta(m, self.var_cc).rvs()
+            samples.coordination[:, t] = np.clip(beta(m, self.var_cc).rvs(), a_min=EPSILON, a_max=1 - EPSILON)
 
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
     def _initialize_coordination_for_gibbs(self, evidence: BetaCoordinationLatentVocalicsDataset):
-        burn_in = self.coordination_samples_.shape[0]
+        burn_in = self.coordination_samples_.shape[0] - 1
 
         self.vuc_samples_ = np.zeros(burn_in + 1)
         self.unbounded_coordination_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.num_time_steps))
@@ -140,15 +145,16 @@ class BetaCoordinationBlendingLatentVocalics(
             if self.unbounded_coordination_samples_.shape[0] > 0:
                 self.unbounded_coordination_samples_[1] = self.unbounded_coordination_samples_[0]
         else:
-            self.unbounded_coordination_samples_[0] = evidence.unbounded_coordination
+            self.unbounded_coordination_samples_[:] = evidence.unbounded_coordination[np.newaxis, :]
 
         if evidence.coordination is None:
-            self.coordination_samples_[0] = beta(sigmoid(self.unbounded_coordination_samples_[0]), 0.01).rvs()
+            self.coordination_samples_[0] = np.clip(beta(sigmoid(self.unbounded_coordination_samples_[0]), 0.01).rvs(),
+                                                    a_min=EPSILON, a_max=1 - EPSILON)
 
             if self.coordination_samples_.shape[0] > 0:
                 self.coordination_samples_[1] = self.coordination_samples_[0]
         else:
-            self.coordination_samples_[0] = evidence.coordination
+            self.coordination_samples_[:] = evidence.coordination[np.newaxis, :]
 
         # Parameters of the unbounded coordination distribution
         if self.var_uc is None:
@@ -157,6 +163,15 @@ class BetaCoordinationBlendingLatentVocalics(
                 self.vuc_samples_[1] = self.vuc_samples_[0]
         else:
             self.vuc_samples_[:] = self.var_uc
+
+        if self.var_cc is None:
+            # TODO: uniform prior. It has to be between 0 and 1
+            self.vcc_samples_[0] = np.random.uniform(EPSILON, 1 - EPSILON)
+
+            if self.vcc_samples_.shape[0] > 0:
+                self.vcc_samples_[1] = self.vcc_samples_[0]
+        else:
+            self.vcc_samples_[:] = self.var_cc
 
     def _compute_coordination_likelihood(self, gibbs_step: int,
                                          evidence: BetaCoordinationLatentVocalicsDataset) -> float:
@@ -196,21 +211,17 @@ class BetaCoordinationBlendingLatentVocalics(
 
             for t in tqdm(time_steps, desc="Sampling Coordination", position=job_num, leave=False):
                 if t > 0:
-                    next_coordination = None if t == coordination.shape[1] - 1 else coordination[:, t + 1][:,
-                                                                                    np.newaxis]
                     proposal_fn_params = {
-                        "previous_unbounded_coordination_sample": unbounded_coordination[:, t - 1]
+                        "previous_unbounded_coordination_sample": unbounded_coordination[:, t - 1][:, np.newaxis]
                     }
 
                     log_prob_fn_params = {
-                        "previous_coordination_sample": coordination[:, t - 1][:, np.newaxis],
-                        "next_coordination_sample": next_coordination,
+                        "current_unbounded_coordination_sample": unbounded_coordination[:, t][:, np.newaxis],
                         "vcc": vcc,
                         "saa": saa,
                         "evidence": evidence,
                         "latent_vocalics": latent_vocalics,
-                        "time_step": t,
-                        "unbounded_coordination": unbounded_coordination
+                        "time_step": t
                     }
 
                     sampler = MCMC(proposal_fn=self._get_coordination_proposal,
@@ -268,19 +279,18 @@ class BetaCoordinationBlendingLatentVocalics(
 
     @staticmethod
     def _get_unbounded_coordination_proposal(previous_unbounded_coordination_sample: np.ndarray):
-        # Move unbounded coordination resulting in moving coordination by 0.005
-        std = logit(0.1) - logit(0.1 - 0.005)
-        new_coordination_sample = norm(previous_unbounded_coordination_sample, std).rvs()
+        std = 1
+        new_unbounded_coordination_sample = norm(previous_unbounded_coordination_sample, std).rvs()
 
         if previous_unbounded_coordination_sample.shape[0] == 1:
             # The norm.rvs function does not preserve the dimensions of a unidimensional array.
             # We need to correct that if we are working with a single trial sample.
-            new_coordination_sample = np.array([[new_coordination_sample]])
+            new_unbounded_coordination_sample = np.array([[new_unbounded_coordination_sample]])
 
         # Hastings factor
         factor = 1
 
-        return new_coordination_sample, factor
+        return new_unbounded_coordination_sample, factor
 
     @staticmethod
     def _get_unbounded_coordination_posterior_unormalized_logprob(proposed_unbounded_coordination_sample: np.ndarray,
@@ -307,20 +317,25 @@ class BetaCoordinationBlendingLatentVocalics(
         # Since coordination is constrained to 0 and 1, we don't expect a high variance.
         # We set variance to be smaller than 0.01 such that MCMC don't do big jumps and ends up
         # overestimating coordination.
-        var = 0.005
-        new_coordination_sample = beta(sigmoid(previous_unbounded_coordination_sample), var).rvs()
+        var = 0.05
+        # new_coordination_sample = np.clip(beta(sigmoid(previous_unbounded_coordination_sample), var).rvs(),
+        #                                   a_min=EPSILON, a_max=1 - EPSILON)
+        new_coordination_sample = np.clip(beta(previous_coordination_sample, var).rvs(), a_min=EPSILON,
+                                          a_max=1 - EPSILON)
 
-        if previous_unbounded_coordination_sample.shape[0] == 1:
+        if previous_coordination_sample.shape[0] == 1:
             # The norm.rvs function does not preserve the dimensions of a unidimensional array.
             # We need to correct that if we are working with a single trial sample.
             new_coordination_sample = np.array([[new_coordination_sample]])
 
         # Hastings factor
-        nominator = beta(new_coordination_sample, var).logpdf(sigmoid(previous_unbounded_coordination_sample))
-        denominator = beta(sigmoid(previous_unbounded_coordination_sample), var).logpdf(new_coordination_sample)
+        # nominator = beta(new_coordination_sample, var).logpdf(sigmoid(previous_unbounded_coordination_sample))
+        # denominator = beta(sigmoid(previous_unbounded_coordination_sample), var).logpdf(new_coordination_sample)
+        nominator = beta(new_coordination_sample, var).logpdf(previous_coordination_sample)
+        denominator = beta(previous_coordination_sample, var).logpdf(new_coordination_sample)
         factor = np.exp(nominator - denominator)
 
-        return new_coordination_sample, factor
+        return new_coordination_sample, factor.flatten()
 
     def _get_coordination_posterior_unormalized_logprob(self,
                                                         proposed_coordination_sample: np.ndarray,
@@ -355,14 +370,20 @@ class BetaCoordinationBlendingLatentVocalics(
             y = self.unbounded_coordination_samples_[gibbs_step, :, :evidence.num_time_steps - 1]
             b = self.b_vuc + np.square(x - y).sum() / 2
             self.vuc_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
-            if self.vuc_samples_[gibbs_step] == np.nan:
-                self.vuc_samples_[gibbs_step] = np.inf
+
+            if gibbs_step < len(self.vuc_samples_) - 1:
+                self.vuc_samples_[gibbs_step + 1] = self.vuc_samples_[gibbs_step]
 
         if self.var_cc is None:
             # TODO: I am using a uniform prior for now (no prior). Reassess that later.
             # The variance in this model is actually the dispersion of the reparameterized beta
-            m = self.coordination_samples_[gibbs_step].var()
-            self.var_cc = self.coordination_samples_[gibbs_step].var() / (m * (1 - m))
+            m = sigmoid(self.unbounded_coordination_samples_[gibbs_step])
+            var = np.square(self.coordination_samples_[gibbs_step] - m)
+            s = np.mean(var / (m * (1 - m)))
+            self.vcc_samples_[gibbs_step] = s
+
+            if gibbs_step < len(self.vcc_samples_) - 1:
+                self.vcc_samples_[gibbs_step + 1] = self.vcc_samples_[gibbs_step]
 
         logger.add_scalar("train/var_uc", self.vuc_samples_[gibbs_step], gibbs_step)
 
