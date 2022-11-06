@@ -19,13 +19,13 @@ NUM_JOBS = 1
 
 model_name = "beta_model"
 
-VAR_UC = 0.5
-VAR_CC = 0.005
+VAR_UC = 0.025
+VAR_CC = 0.025
 VAR_A = 1
 VAR_AA = 0.5
 VAR_O = 1
 
-SAMPLE_TO_INFER = 9
+SAMPLE_TO_INFER = 8
 
 
 def estimate_parameters(model: BetaCoordinationBlendingLatentVocalics, evidence, burn_in: int, num_jobs: int,
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     model = BetaCoordinationBlendingLatentVocalics(
         initial_coordination=0.5,
         num_vocalic_features=NUM_FEATURES,
-        num_speakers=3,
+        num_speakers=2,
         a_vcc=1,
         b_vcc=1,
         a_va=1,
@@ -149,15 +149,15 @@ if __name__ == "__main__":
     #                     logger=tb_logger)
 
     # No Coordination
-    print()
-    print("Parameter estimation NO coordination")
-    tb_logger = TensorBoardLogger(
-        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_coordination")
-    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    model.reset_parameters()
-    # model.var_cc = VAR_CC
-    estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=100, num_jobs=NUM_JOBS,
-                        logger=tb_logger)
+    # print()
+    # print("Parameter estimation NO coordination")
+    # tb_logger = TensorBoardLogger(
+    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_coordination")
+    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    # model.reset_parameters()
+    # # model.var_cc = VAR_CC
+    # estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=100, num_jobs=NUM_JOBS,
+    #                     logger=tb_logger)
 
     # No Latent Vocalics
     # print()
@@ -204,13 +204,13 @@ if __name__ == "__main__":
     #                     logger=tb_logger)
 
     # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
-    print()
-    print("Parameter estimation with partial evidence")
-    tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
-    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    model.reset_parameters()
-    model.var_cc = VAR_CC
-    estimate_parameters(model=model, evidence=partial_evidence, burn_in=100, num_jobs=NUM_JOBS, logger=tb_logger)
+    # print()
+    # print("Parameter estimation with partial evidence")
+    # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
+    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    # model.reset_parameters()
+    # model.var_cc = VAR_CC
+    # estimate_parameters(model=model, evidence=partial_evidence, burn_in=100, num_jobs=4, logger=tb_logger)
 
     # Check if we can predict coordination over time for the 1st sample
     model.var_uc = VAR_UC
@@ -218,28 +218,28 @@ if __name__ == "__main__":
     model.var_a = VAR_A
     model.var_aa = VAR_AA
     model.var_o = VAR_O
-    summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=10000, seed=0,
+    summary = model.predict(evidence=evidence_no_unbounded_coordination.get_subset([SAMPLE_TO_INFER]), num_particles=10000, seed=0,
                             num_jobs=1)
 
     # Plot estimated unbounded coordination against the real coordination points
     plt.figure(figsize=(15, 8))
-    means = summary[SAMPLE_TO_INFER].coordination_mean
-    stds = np.sqrt(summary[SAMPLE_TO_INFER].coordination_var)
+    means = summary[0].unbounded_coordination_mean
+    stds = np.sqrt(summary[0].unbounded_coordination_var)
     ts = np.arange(TIME_STEPS)
     plt.plot(ts, means, color="tab:orange", marker="o")
     plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
-    plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
+    plt.plot(ts, samples.unbounded_coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
     plt.title("Unbounded Coordination")
     plt.show()
 
     # Plot estimated coordination against the real coordination points
     plt.figure(figsize=(15, 8))
-    means = summary[SAMPLE_TO_INFER].coordination_mean
-    stds = np.sqrt(summary[SAMPLE_TO_INFER].coordination_var)
+    means = summary[0].coordination_mean
+    stds = np.sqrt(summary[0].coordination_var)
     ts = np.arange(TIME_STEPS)
     plt.plot(ts, means, color="tab:orange", marker="o")
     plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
-    plt.plot(ts, samples.coordination[0], color="tab:blue", marker="o", alpha=0.5)
+    plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
     plt.title("Coordination")
     plt.show()
 
@@ -247,11 +247,11 @@ if __name__ == "__main__":
     true_nll_1st_sample = model.nll_[-1]
 
     latent_vocalics = copy(samples.latent_vocalics[SAMPLE_TO_INFER])
-    latent_vocalics.values = summary[SAMPLE_TO_INFER].latent_vocalics_mean
+    latent_vocalics.values = summary[0].latent_vocalics_mean
     estimated_dataset = BetaCoordinationLatentVocalicsDataset([
         BetaCoordinationLatentVocalicsDataSeries("0", samples.observed_vocalics[SAMPLE_TO_INFER],
-                                                 summary[SAMPLE_TO_INFER].unbounded_coordination_mean,
-                                                 summary[SAMPLE_TO_INFER].coordination_mean,
+                                                 summary[0].unbounded_coordination_mean,
+                                                 summary[0].coordination_mean,
                                                  latent_vocalics)])
 
     model.fit(estimated_dataset, burn_in=1, seed=0, num_jobs=1)

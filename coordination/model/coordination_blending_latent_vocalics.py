@@ -716,7 +716,8 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[LatentVocalicsParticles],
                                               series: LatentVocalicsDataSeries):
         if series.is_complete:
-            return 0
+            num_particles = len(states[time_step].coordination)
+            return np.zeros(num_particles)
 
         if series.latent_vocalics is None:
             # Observed vocalics as evidence for latent vocalics
