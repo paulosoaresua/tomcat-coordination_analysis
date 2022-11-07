@@ -310,6 +310,9 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 D = previous_other - previous_self
                 distribution = norm(loc=D * clip_coordination(coordination) + previous_self, scale=np.sqrt(self.var_aa))
 
+        # TODO - direct dependency
+        # distribution = norm(np.ones(self.num_vocalic_features) * coordination, np.sqrt(self.var_a))
+
         return distribution.rvs()
 
     def _sample_observed_vocalics(self, latent_vocalics: np.array) -> np.ndarray:
@@ -657,6 +660,10 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             speaker = series.observed_vocalics.utterances[0].subject_id
             mean = np.zeros((num_particles, series.observed_vocalics.num_features))
             new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.var_a)).rvs()
+            # TODO - direct dependency
+            # new_particles.latent_vocalics[speaker] = norm(
+            #     loc=new_particles.coordination[:, np.newaxis].repeat(self.num_vocalic_features, axis=1),
+            #     scale=np.sqrt(self.var_a)).rvs()
 
     def _sample_from_transition_to(self, time_step: int, num_particles: int, states: List[LatentVocalicsParticles],
                                    series: LatentVocalicsDataSeries) -> LatentVocalicsParticles:
@@ -668,7 +675,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         if series.latent_vocalics is None:
             self._sample_vocalics_from_transition_to(time_step, states, new_particles, series)
         else:
-            # Ground truth. Just use 1 particle.
             new_particles.latent_vocalics = states[time_step - 1].latent_vocalics.copy()
             if series.observed_vocalics.mask[time_step] == 1:
                 speaker = series.observed_vocalics.utterances[time_step].subject_id
@@ -689,6 +695,11 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         if series.observed_vocalics.mask[time_step] == 1:
             speaker = series.observed_vocalics.utterances[time_step].subject_id
+
+            # TODO - direct dependency
+            # new_particles.latent_vocalics[speaker] = norm(
+            #     loc=new_particles.coordination[:, np.newaxis].repeat(self.num_vocalic_features, axis=1),
+            #     scale=np.sqrt(self.var_a)).rvs()
 
             if series.observed_vocalics.previous_from_self[time_step] is None:
                 # Mean of the prior distribution
@@ -715,7 +726,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
     def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[LatentVocalicsParticles],
                                               series: LatentVocalicsDataSeries):
-        if series.is_complete:
+        if series.coordination is not None and series.latent_vocalics is not None:
             num_particles = len(states[time_step].coordination)
             return np.zeros(num_particles)
 
@@ -739,20 +750,23 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             previous_time_step_from_other = series.observed_vocalics.previous_from_other[time_step]
             if series.observed_vocalics.mask[time_step] == 1 and previous_time_step_from_other is not None:
 
-                # Coordination only plays a whole in latent vocalics when there's previous vocalics from a different
-                # speaker.
-                if series.observed_vocalics.previous_from_self[time_step] is None:
-                    # Mean of the prior distribution
-                    A = 0
-                else:
-                    # Sample from dependency on previous vocalics from the same speaker
-                    A = series.latent_vocalics.values[:, series.observed_vocalics.previous_from_self[time_step]]
-
-                B = series.latent_vocalics.values[:, previous_time_step_from_other]
-                mean = (B - A) * clip_coordination(states[time_step].coordination[:, np.newaxis]) + A
+                # # Coordination only plays a whole in latent vocalics when there's previous vocalics from a different
+                # # speaker.
+                # if series.observed_vocalics.previous_from_self[time_step] is None:
+                #     # Mean of the prior distribution
+                #     A = 0
+                # else:
+                #     # Sample from dependency on previous vocalics from the same speaker
+                #     A = series.latent_vocalics.values[:, series.observed_vocalics.previous_from_self[time_step]]
+                #
+                # B = series.latent_vocalics.values[:, previous_time_step_from_other]
+                # mean = (B - A) * clip_coordination(states[time_step].coordination[:, np.newaxis]) + A
 
                 Vt = series.latent_vocalics.values[:, time_step]
-                log_likelihoods = norm(loc=mean, scale=np.sqrt(self.var_aa)).logpdf(Vt).sum(axis=1)
+                # log_likelihoods = norm(loc=mean, scale=np.sqrt(self.var_aa)).logpdf(Vt).sum(axis=1)
+                log_likelihoods = norm(
+                    states[time_step].coordination[:, np.newaxis].repeat(self.num_vocalic_features, axis=1),
+                    np.sqrt(self.var_a)).logpdf(Vt).sum(axis=1)
             else:
                 log_likelihoods = np.zeros(len(states[time_step].coordination))
 

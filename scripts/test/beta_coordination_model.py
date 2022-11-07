@@ -15,14 +15,14 @@ TIME_STEPS = 50
 NUM_SAMPLES = 100
 NUM_FEATURES = 2
 DATA_TIME_SCALE_DENSITY = 1
-NUM_JOBS = 1
+NUM_JOBS = 4
 
 model_name = "beta_model"
 
-VAR_UC = 0.025
-VAR_CC = 0.025
+VAR_UC = 0.25
+VAR_CC = 1e-6
 VAR_A = 1
-VAR_AA = 0.5
+VAR_AA = 0.25
 VAR_O = 1
 
 SAMPLE_TO_INFER = 8
@@ -41,7 +41,7 @@ def estimate_parameters(model: BetaCoordinationBlendingLatentVocalics, evidence,
 # For parallelism to work, the script has to be called in a __main__ section
 if __name__ == "__main__":
     model = BetaCoordinationBlendingLatentVocalics(
-        initial_coordination=0.5,
+        initial_coordination=0.8,
         num_vocalic_features=NUM_FEATURES,
         num_speakers=2,
         a_vcc=1,
@@ -138,79 +138,72 @@ if __name__ == "__main__":
     estimate_parameters(model=model, evidence=full_evidence, burn_in=1, num_jobs=1)
 
     # No Unbounded Coordination
-    # print()
-    # print("Parameter estimation NO unbounded coordination")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_unbounded_coordination")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=evidence_no_unbounded_coordination, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    print()
+    print("Parameter estimation NO unbounded coordination")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_unbounded_coordination")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_no_unbounded_coordination, burn_in=100, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
 
     # No Coordination
-    # print()
-    # print("Parameter estimation NO coordination")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_coordination")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    print()
+    print("Parameter estimation NO coordination")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_coordination")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=100, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
 
     # No Latent Vocalics
-    # print()
-    # print("Parameter estimation NO latent vocalics")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    print()
+    print("Parameter estimation NO latent vocalics")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=100, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
 
     # With Unbounded Coordination only
-    # print()
-    # print("Parameter estimation with unbounded coordination only")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_unbounded_coordination_only")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=evidence_unbounded_coordination_only, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    print()
+    print("Parameter estimation with unbounded coordination only")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_unbounded_coordination_only")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_unbounded_coordination_only, burn_in=100, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
 
     # With Coordination only
-    # print()
-    # print("Parameter estimation with coordination only")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_coordination_only")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=evidence_coordination_only, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    print()
+    print("Parameter estimation with coordination only")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_coordination_only")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_coordination_only, burn_in=100, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
 
     # With Unbounded Latent Vocalics only
-    # print()
-    # print("Parameter estimation with latent vocalics only")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    print()
+    print("Parameter estimation with latent vocalics only")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=100, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
 
     # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
-    # print()
-    # print("Parameter estimation with partial evidence")
-    # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_cc = VAR_CC
-    # estimate_parameters(model=model, evidence=partial_evidence, burn_in=100, num_jobs=4, logger=tb_logger)
+    print()
+    print("Parameter estimation with partial evidence")
+    tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=partial_evidence, burn_in=100, num_jobs=NUM_JOBS, logger=tb_logger)
 
     # Check if we can predict coordination over time for the 1st sample
     model.var_uc = VAR_UC
@@ -218,7 +211,8 @@ if __name__ == "__main__":
     model.var_a = VAR_A
     model.var_aa = VAR_AA
     model.var_o = VAR_O
-    summary = model.predict(evidence=evidence_no_unbounded_coordination.get_subset([SAMPLE_TO_INFER]), num_particles=10000, seed=0,
+    summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=10000,
+                            seed=0,
                             num_jobs=1)
 
     # Plot estimated unbounded coordination against the real coordination points
@@ -241,6 +235,17 @@ if __name__ == "__main__":
     plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
     plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
     plt.title("Coordination")
+    plt.show()
+
+    plt.figure(figsize=(15, 8))
+    means = summary[0].coordination_mean
+    stds = np.sqrt(summary[0].coordination_var)
+    ts = np.arange(TIME_STEPS)
+    for i in range(NUM_FEATURES):
+        plt.plot(ts, samples.latent_vocalics[SAMPLE_TO_INFER].values[i], marker="o", alpha=0.5,
+                 label=f"Feature {i + 1}")
+    plt.title("Latent Vocalics")
+    plt.legend()
     plt.show()
 
     model.fit(full_evidence.get_subset([SAMPLE_TO_INFER]), burn_in=1, seed=0, num_jobs=1)

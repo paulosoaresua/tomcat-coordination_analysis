@@ -139,9 +139,9 @@ class GaussianCoordinationBlendingLatentVocalics(
             new_coordination_sample = np.array([[new_coordination_sample]])
 
         # Hastings factor
-        factor = 1
+        log_factor = 0
 
-        return new_coordination_sample, factor
+        return new_coordination_sample, log_factor
 
     def _get_coordination_posterior_unormalized_logprob(self,
                                                         proposed_coordination_sample: np.ndarray,
