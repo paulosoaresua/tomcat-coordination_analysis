@@ -44,16 +44,16 @@ class MCMC:
 
             # Compute Hastings ratio
             log_prob_new_sample = self.log_prob_fn(new_sample, **self.log_prob_fn_kwargs)
-            log_A = log_prob_new_sample - self.log_probs_[i - 1] + log_factor
+            log_A = (log_prob_new_sample + log_factor) - self.log_probs_[i - 1]
 
             # To avoid overflow with exp, limit the exponential to 1 which is the maximum value of the acceptance rate
             # we are interested of anyway.
             A = np.exp(np.minimum(0, log_A))
-            samples[i] = np.where((u < A)[:, np.newaxis], new_sample, samples[i - 1])
-            self.log_probs_[i] = np.where((u < A), log_prob_new_sample, self.log_probs_[i - 1])
+            samples[i] = np.where((u <= A)[:, np.newaxis], new_sample, samples[i - 1])
+            self.log_probs_[i] = np.where((u <= A), log_prob_new_sample, self.log_probs_[i - 1])
 
-            accepted_samples += (u < A)
-            self.acceptance_rates_[i] = accepted_samples / (i * num_chains)
+            accepted_samples += (u <= A)
+            self.acceptance_rates_[i] = accepted_samples / i
 
             if i >= burn_in and (i - burn_in - 1) % retain_every == 0:
                 effective_samples[j] = samples[i]
