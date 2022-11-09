@@ -15,7 +15,7 @@ TIME_STEPS = 50
 NUM_SAMPLES = 100
 NUM_FEATURES = 2
 DATA_TIME_SCALE_DENSITY = 1
-NUM_JOBS = 1
+NUM_JOBS = 4
 
 model_name = "beta_model"
 
@@ -41,7 +41,7 @@ def estimate_parameters(model: BetaCoordinationBlendingLatentVocalics, evidence,
 # For parallelism to work, the script has to be called in a __main__ section
 if __name__ == "__main__":
     model = BetaCoordinationBlendingLatentVocalics(
-        initial_coordination=0.8,
+        initial_coordination=0.2,
         num_vocalic_features=NUM_FEATURES,
         num_speakers=2,
         a_vcc=1,
@@ -193,21 +193,21 @@ if __name__ == "__main__":
     #                     logger=tb_logger)
     #
     # With Unbounded Latent Vocalics only
-    print()
-    print("Parameter estimation with latent vocalics only")
-    tb_logger = TensorBoardLogger(
-        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
-    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    model.reset_parameters()
-    model.var_uc = VAR_UC
-    model.var_cc = VAR_CC
-    model.var_a = VAR_A
-    model.var_aa = VAR_AA
-    model.var_o = VAR_O
-    estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=100, num_jobs=NUM_JOBS,
-                        logger=tb_logger)
+    # print()
+    # print("Parameter estimation with latent vocalics only")
+    # tb_logger = TensorBoardLogger(
+    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
+    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    # model.reset_parameters()
+    # model.var_uc = VAR_UC
+    # model.var_cc = VAR_CC
+    # model.var_a = VAR_A
+    # model.var_aa = VAR_AA
+    # model.var_o = VAR_O
+    # estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=100, num_jobs=NUM_JOBS,
+    #                     logger=tb_logger)
     #
-    # # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
+    # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
     # print()
     # print("Parameter estimation with partial evidence")
     # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
@@ -266,9 +266,12 @@ if __name__ == "__main__":
     estimated_dataset = BetaCoordinationLatentVocalicsDataset([
         BetaCoordinationLatentVocalicsDataSeries("0", samples.observed_vocalics[SAMPLE_TO_INFER],
                                                  summary[0].unbounded_coordination_mean,
+                                                 # samples.unbounded_coordination[SAMPLE_TO_INFER],
                                                  summary[0].coordination_mean,
+                                                 # samples.coordination[SAMPLE_TO_INFER],
                                                  latent_vocalics)])
+                                                 # samples.latent_vocalics[SAMPLE_TO_INFER])])
 
-    model.fit(estimated_dataset, burn_in=1, seed=0, num_jobs=1)
+    model.fit(estimated_dataset, burn_in=0, seed=0, num_jobs=1)
     print(f"True NLL 1st Sample = {true_nll_1st_sample}")
     print(f"Estimated NLL = {model.nll_[-1]}")

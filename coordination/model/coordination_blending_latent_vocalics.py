@@ -310,9 +310,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 D = previous_other - previous_self
                 distribution = norm(loc=D * clip_coordination(coordination) + previous_self, scale=np.sqrt(self.var_aa))
 
-        # TODO - direct dependency
-        # distribution = norm(np.ones(self.num_vocalic_features) * coordination, np.sqrt(self.var_a))
-
         return distribution.rvs()
 
     def _sample_observed_vocalics(self, latent_vocalics: np.array) -> np.ndarray:
@@ -379,7 +376,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         coordination = self.coordination_samples_[gibbs_step]
         latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
 
-        ll = self._compute_coordination_likelihood(gibbs_step, evidence)
+        ll = self._compute_coordination_loglikelihood(gibbs_step, evidence)
         for t in range(evidence.num_time_steps):
             # Latent vocalics
             C = coordination[:, t][:, np.newaxis]
@@ -394,13 +391,13 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             A = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_self[:, t]]
 
             # Mask with 1 in the cells in which there are previous vocalics from the same speaker and 0 otherwise
-            Ma = np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
+            Ma = evidence.previous_vocalics_from_self_mask[:, t][:, np.newaxis]#np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
 
             # Vo (n x k) will have the values of vocalics from other speaker per trial
             B = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_other[:, t]]
 
             # Mask with 1 in the cells in which there are previous vocalics from another speaker and 0 otherwise
-            Mb = np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
+            Mb = evidence.previous_vocalics_from_other_mask[:, t][:, np.newaxis]#np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
 
             # Use variance from prior if there are no previous vocalics from any speaker
             v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)
@@ -416,7 +413,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return ll
 
-    def _compute_coordination_likelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+    def _compute_coordination_loglikelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
         raise NotImplementedError
 
     def _gibbs_step(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray, job_num: int):
@@ -453,9 +450,10 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         Ma = evidence.previous_vocalics_from_self_mask[:, time_step][:, np.newaxis]
         Mb = evidence.previous_vocalics_from_other_mask[:, time_step][:, np.newaxis]
 
-        mean = ((B - A * Ma) * clip_coordination(proposed_coordination_sample) * Mb + A * Ma) * M
+        mean = ((B - A * Ma) * clip_coordination(proposed_coordination_sample) * Mb + A * Ma) * M * Mb
 
-        log_posterior = (norm(loc=mean, scale=saa).logpdf(V) * M).sum(axis=1)
+        # Coordination only affects vocalics in times in which there's a dependency on a previous other speaker
+        log_posterior = (norm(loc=mean, scale=saa).logpdf(V) * M * Mb).sum(axis=1)
 
         return log_posterior
 
@@ -807,7 +805,10 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
             masks = np.array_split(evidence.vocalics_mask, num_effective_jobs, axis=-1)
 
+            # Remaining variables depend on the next time step, so we add 1 to all time steps to show that link with
+            # the next time step in case there are no dependencies with vocalics.
             all_time_steps = np.arange(evidence.num_time_steps)[np.newaxis, :].repeat(evidence.num_trials, axis=0)
+            all_time_steps[:, :-1] += 1
 
             # For indexes in which the next speaker does not exist, we replace with the current index. That is, there's
             # no dependency in the future

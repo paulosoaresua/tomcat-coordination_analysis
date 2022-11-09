@@ -71,7 +71,7 @@ class GaussianCoordinationBlendingLatentVocalics(
         else:
             self.vcc_samples_[:] = self.var_cc
 
-    def _compute_coordination_likelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+    def _compute_coordination_loglikelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
         coordination = self.coordination_samples_[gibbs_step]
         scc = np.sqrt(self.vcc_samples_[gibbs_step])
 
