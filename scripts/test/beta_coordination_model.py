@@ -26,6 +26,7 @@ VAR_AA = 0.25
 VAR_O = 1
 
 SAMPLE_TO_INFER = 8
+BURN_IN = 50
 
 
 def estimate_parameters(model: BetaCoordinationBlendingLatentVocalics, evidence, burn_in: int, num_jobs: int,
@@ -57,7 +58,7 @@ if __name__ == "__main__":
         initial_var_unbounded_coordination=1e-4,
         initial_var_coordination=1e-6,
         var_unbounded_coordination_proposal=0.001,
-        var_coordination_proposal=1e-8,
+        var_coordination_proposal=1e-6,
         unbounded_coordination_num_mcmc_iterations=50
     )
 
@@ -131,7 +132,7 @@ if __name__ == "__main__":
         [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i]) for i in range(samples.size)])
 
     # Provide complete data to estimate the true model negative-loglikelihood
-    model.fit(full_evidence, burn_in=1, seed=0, num_jobs=1)
+    model.fit(full_evidence, burn_in=0, seed=0, num_jobs=1)
     true_nll = model.nll_[-1]
 
     print(f"True NLL = {true_nll}")
@@ -149,9 +150,9 @@ if __name__ == "__main__":
     #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_unbounded_coordination")
     # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
     # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_no_unbounded_coordination, burn_in=100, num_jobs=NUM_JOBS,
+    # estimate_parameters(model=model, evidence=evidence_no_unbounded_coordination, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
-    #
+
     # # No Coordination
     # print()
     # print("Parameter estimation NO coordination")
@@ -159,7 +160,7 @@ if __name__ == "__main__":
     #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_coordination")
     # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
     # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=100, num_jobs=NUM_JOBS,
+    # estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
     #
     # # No Latent Vocalics
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
     # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
     # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=100, num_jobs=NUM_JOBS,
+    # estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
     #
     # # With Unbounded Coordination only
@@ -179,9 +180,9 @@ if __name__ == "__main__":
     #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_unbounded_coordination_only")
     # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
     # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_unbounded_coordination_only, burn_in=100, num_jobs=NUM_JOBS,
+    # estimate_parameters(model=model, evidence=evidence_unbounded_coordination_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
-    #
+
     # # With Coordination only
     # print()
     # print("Parameter estimation with coordination only")
@@ -189,31 +190,26 @@ if __name__ == "__main__":
     #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_coordination_only")
     # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
     # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_coordination_only, burn_in=100, num_jobs=NUM_JOBS,
+    # estimate_parameters(model=model, evidence=evidence_coordination_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
-    #
+
     # With Unbounded Latent Vocalics only
-    # print()
-    # print("Parameter estimation with latent vocalics only")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # model.var_uc = VAR_UC
-    # model.var_cc = VAR_CC
-    # model.var_a = VAR_A
-    # model.var_aa = VAR_AA
-    # model.var_o = VAR_O
-    # estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=100, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
-    #
+    print()
+    print("Parameter estimation with latent vocalics only")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
+
     # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
-    # print()
-    # print("Parameter estimation with partial evidence")
-    # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=partial_evidence, burn_in=100, num_jobs=NUM_JOBS, logger=tb_logger)
+    print()
+    print("Parameter estimation with partial evidence")
+    tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=partial_evidence, burn_in=BURN_IN, num_jobs=NUM_JOBS, logger=tb_logger)
 
     # Check if we can predict coordination over time for the 1st sample
     model.var_uc = VAR_UC
@@ -266,11 +262,8 @@ if __name__ == "__main__":
     estimated_dataset = BetaCoordinationLatentVocalicsDataset([
         BetaCoordinationLatentVocalicsDataSeries("0", samples.observed_vocalics[SAMPLE_TO_INFER],
                                                  summary[0].unbounded_coordination_mean,
-                                                 # samples.unbounded_coordination[SAMPLE_TO_INFER],
                                                  summary[0].coordination_mean,
-                                                 # samples.coordination[SAMPLE_TO_INFER],
                                                  latent_vocalics)])
-                                                 # samples.latent_vocalics[SAMPLE_TO_INFER])])
 
     model.fit(estimated_dataset, burn_in=0, seed=0, num_jobs=1)
     print(f"True NLL 1st Sample = {true_nll_1st_sample}")
