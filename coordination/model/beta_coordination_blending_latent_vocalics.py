@@ -488,7 +488,7 @@ class BetaCoordinationBlendingLatentVocalics(
             new_particles.unbounded_coordination = np.ones(num_particles) * series.unbounded_coordination[0]
 
         if series.coordination is None:
-            new_particles.unbounded_coordination = np.ones(num_particles) * self.initial_coordination
+            new_particles.coordination = np.ones(num_particles) * self.initial_coordination
 
             # # Any sample outside the boundaries of variance will have -inf log prob in the adjustment.
             # # For now, we adjust the variance such that we can sample from the beta distribution without any issues.
