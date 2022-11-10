@@ -14,8 +14,6 @@ from coordination.model.coordination_blending_latent_vocalics import default_f, 
 from coordination.inference.mcmc import MCMC
 from coordination.component.speech.common import VocalicsSparseSeries
 
-import matplotlib.pyplot as plt
-
 # For numerical stability
 EPSILON = 1e-6
 MIN_COORDINATION = 2 * EPSILON
@@ -188,28 +186,18 @@ class BetaCoordinationBlendingLatentVocalics(
             self.vcc_samples_[:] = self.var_cc
 
         if evidence.unbounded_coordination is None:
-            suc = np.sqrt(self.vuc_samples_[0])
-            vcc = self.vcc_samples_[0]
-            min_value = logit((1 - np.sqrt(1 - 4 * (vcc + EPSILON))) / 2)
-            max_value = logit((1 + np.sqrt(1 - 4 * (vcc + EPSILON))) / 2)
-            self.unbounded_coordination_samples_[0] = logit(self.initial_coordination)
-            # self.unbounded_coordination_samples_[0, :, 0] = logit(self.initial_coordination)
-            # for t in range(1, evidence.num_time_steps):
-            #     self.unbounded_coordination_samples_[0, :, t] = np.clip(
-            #         norm(self.unbounded_coordination_samples_[0, :, t - 1],
-            #              suc).rvs(), a_min=min_value, a_max=max_value)
-            #
-            # if self.unbounded_coordination_samples_.shape[0] > 0:
-            #     self.unbounded_coordination_samples_[1] = self.unbounded_coordination_samples_[0]
+            # An alternative is to initialize with the transition distribution by calling
+            # _initialize_unbounded_coordination_from_transition_distribution. This approach can lead to fst convergence
+            # or slow convergence depending on the scenario.
+            self.unbounded_coordination_samples_[0, :, 0] = logit(self.initial_coordination)
+            if self.unbounded_coordination_samples_.shape[0] > 0:
+                self.unbounded_coordination_samples_[1] = self.unbounded_coordination_samples_[0]
         else:
             self.unbounded_coordination_samples_[:] = evidence.unbounded_coordination[np.newaxis, :]
 
         if evidence.coordination is None:
             m = sigmoid(self.unbounded_coordination_samples_[0])
             vcc = self.vcc_samples_[0]
-
-            # The variance of a beta distribution cannot be bigger than mean * (1 - mean)
-            # TODO - vcc = np.where(m * (1 - m) < self.vcc_samples_[0], m * (1 - m) - EPSILON, self.vcc_samples_[0])
 
             # Don't let coordination samples be 0 or 1 for numerical stability.
             self.coordination_samples_[0] = np.clip(beta(m, vcc).rvs(), a_min=MIN_COORDINATION, a_max=MAX_COORDINATION)
@@ -219,6 +207,17 @@ class BetaCoordinationBlendingLatentVocalics(
                 self.coordination_samples_[1] = self.coordination_samples_[0]
         else:
             self.coordination_samples_[:] = evidence.coordination[np.newaxis, :]
+
+    def _initialize_unbounded_coordination_from_transition_distribution(self, evidence: BetaCoordinationLatentVocalicsDataset):
+        suc = np.sqrt(self.vuc_samples_[0])
+        vcc = self.vcc_samples_[0]
+        min_value = logit((1 - np.sqrt(1 - 4 * (vcc + EPSILON))) / 2)
+        max_value = logit((1 + np.sqrt(1 - 4 * (vcc + EPSILON))) / 2)
+        self.unbounded_coordination_samples_[0, :, 0] = logit(self.initial_coordination)
+        for t in range(1, evidence.num_time_steps):
+            self.unbounded_coordination_samples_[0, :, t] = np.clip(
+                norm(self.unbounded_coordination_samples_[0, :, t - 1],
+                     suc).rvs(), a_min=min_value, a_max=max_value)
 
     def _compute_coordination_loglikelihood(self, gibbs_step: int,
                                             evidence: BetaCoordinationLatentVocalicsDataset) -> float:
@@ -234,8 +233,6 @@ class BetaCoordinationBlendingLatentVocalics(
             ll += norm(unbounded_coordination[:, t - 1], suc).logpdf(unbounded_coordination[:, t]).sum()
 
             m = sigmoid(unbounded_coordination[:, t])
-            # TODO - var = np.minimum(m * (1 - m) - EPSILON, vcc)
-            # ll += beta(m, var).logpdf(coordination[:, t]).sum()
             ll += beta(m, vcc).logpdf(coordination[:, t]).sum()
 
         return ll
@@ -263,7 +260,6 @@ class BetaCoordinationBlendingLatentVocalics(
         for t in tqdm(time_steps, desc="Sampling Coordination", position=job_num, leave=False):
             if t > 0:
                 # Initial coordination is given
-
                 proposal_fn_params = {
                     "vcc": vcc
                 }
@@ -373,8 +369,6 @@ class BetaCoordinationBlendingLatentVocalics(
                 next_unbounded_coordination_sample)
 
         m = sigmoid(proposed_unbounded_coordination_sample)
-        # TODO var = np.minimum(m * (1 - m) - EPSILON, vcc)
-        # log_posterior += beta(m, var).logpdf(coordination)
         log_posterior += beta(m, vcc).logpdf(coordination)
 
         return log_posterior.flatten()
@@ -417,18 +411,11 @@ class BetaCoordinationBlendingLatentVocalics(
                                                         time_step: int):
 
         m = sigmoid(current_unbounded_coordination_sample)
-        # TODO - var = np.minimum(m * (1 - m), vcc)
-        # log_posterior = beta(m, var).logpdf(proposed_coordination_sample)
         log_posterior = beta(m, vcc).logpdf(proposed_coordination_sample)
 
         log_posterior = log_posterior.flatten()
         log_posterior += super()._get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
             proposed_coordination_sample, saa, evidence, latent_vocalics, time_step)
-
-        # For numerical stability, we never accept samples outside the boundaries
-        # TODO - log_posterior = np.where(
-        #     (proposed_coordination_sample.flatten() < MIN_COORDINATION) | (
-        #             proposed_coordination_sample.flatten() > MAX_COORDINATION), -np.inf, log_posterior)
 
         return log_posterior
 
@@ -456,7 +443,6 @@ class BetaCoordinationBlendingLatentVocalics(
                 self.vuc_samples_[gibbs_step + 1] = self.vuc_samples_[gibbs_step]
 
         if self.var_cc is None:
-            # TODO: I am using a uniform prior for now (no prior). Reassess that later.
             # The variance is computed from the data directly. Do not use the first time step as variance is 0 in this
             # time since initial coordination is given.
             m = sigmoid(self.unbounded_coordination_samples_[gibbs_step])[:, 1:]
@@ -489,14 +475,6 @@ class BetaCoordinationBlendingLatentVocalics(
 
         if series.coordination is None:
             new_particles.coordination = np.ones(num_particles) * self.initial_coordination
-
-            # # Any sample outside the boundaries of variance will have -inf log prob in the adjustment.
-            # # For now, we adjust the variance such that we can sample from the beta distribution without any issues.
-            # m = sigmoid(new_particles.unbounded_coordination)
-            # # TODO - var = np.minimum(m * (1 - m) - EPSILON, self.var_cc)
-            # # new_particles.coordination = np.clip(beta(m, var).rvs(), a_min=MIN_COORDINATION, a_max=MAX_COORDINATION)
-            # new_particles.coordination = np.clip(beta(m, self.var_cc).rvs(), a_min=MIN_COORDINATION,
-            #                                      a_max=MAX_COORDINATION)
         else:
             new_particles.coordination = np.ones(num_particles) * series.coordination[0]
 
@@ -508,9 +486,6 @@ class BetaCoordinationBlendingLatentVocalics(
         if series.unbounded_coordination is None:
             min_value = logit((1 - np.sqrt(1 - 4 * (self.var_cc + EPSILON))) / 2)
             max_value = logit((1 + np.sqrt(1 - 4 * (self.var_cc + EPSILON))) / 2)
-            # new_particles.unbounded_coordination = np.clip(norm(previous_particles.unbounded_coordination,
-            #                                                     np.sqrt(self.var_uc)).rvs(),
-            #                                                a_min=logit(MIN_COORDINATION), a_max=logit(MAX_COORDINATION))
             new_particles.unbounded_coordination = np.clip(norm(previous_particles.unbounded_coordination,
                                                                 np.sqrt(self.var_uc)).rvs(), a_min=min_value,
                                                            a_max=max_value)
@@ -522,8 +497,6 @@ class BetaCoordinationBlendingLatentVocalics(
             # Any sample outside the boundaries of variance will have -inf log prob in the adjustment.
             # For now, we adjust the variance such that we can sample from the beta distribution without any issues.
             m = sigmoid(new_particles.unbounded_coordination)
-            # TODO - var = np.minimum(m * (1 - m) - EPSILON, self.var_cc)
-            # new_particles.coordination = np.clip(beta(m, var).rvs(), a_min=MIN_COORDINATION, a_max=MAX_COORDINATION)
             new_particles.coordination = np.clip(beta(m, self.var_cc).rvs(), a_min=MIN_COORDINATION,
                                                  a_max=MAX_COORDINATION)
         else:
@@ -540,12 +513,7 @@ class BetaCoordinationBlendingLatentVocalics(
 
         m = sigmoid(states[time_step].unbounded_coordination)
         if series.coordination is not None:
-            # TODO - var = np.minimum(m * (1 - m) - EPSILON, self.var_cc)
-            # ll += beta(m, var).logpdf(series.coordination[time_step])
             ll += beta(m, self.var_cc).logpdf(series.coordination[time_step])
-
-        # Samples that are incompatible with the variance of the beta distribution, should be rejected.
-        # TODO - ll[m * (1 - m) <= self.var_cc] = np.log(EPSILON)
 
         return ll
 

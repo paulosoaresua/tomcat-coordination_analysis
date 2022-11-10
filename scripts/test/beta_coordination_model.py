@@ -193,23 +193,23 @@ if __name__ == "__main__":
     estimate_parameters(model=model, evidence=evidence_coordination_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
                         logger=tb_logger)
 
-    # # With Unbounded Latent Vocalics only
-    # print()
-    # print("Parameter estimation with latent vocalics only")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
-    #
-    # # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
-    # print()
-    # print("Parameter estimation with partial evidence")
-    # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=partial_evidence, burn_in=BURN_IN, num_jobs=NUM_JOBS, logger=tb_logger)
+    # With Unbounded Latent Vocalics only
+    print()
+    print("Parameter estimation with latent vocalics only")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_with_latent_vocalics_only")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
+
+    # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
+    print()
+    print("Parameter estimation with partial evidence")
+    tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=partial_evidence, burn_in=BURN_IN, num_jobs=NUM_JOBS, logger=tb_logger)
 
     # Check if we can predict coordination over time for the 1st sample
     model.var_uc = VAR_UC
