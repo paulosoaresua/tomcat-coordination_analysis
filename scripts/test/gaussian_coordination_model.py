@@ -7,7 +7,6 @@ import numpy as np
 
 from coordination.common.log import BaseLogger, TensorBoardLogger
 from coordination.model.gaussian_coordination_blending_latent_vocalics import GaussianCoordinationBlendingLatentVocalics
-# from coordination.model.truncated_gaussian_coordination_blending_latent_vocalics import TruncatedGaussianCoordinationBlendingLatentVocalics
 from coordination.model.coordination_blending_latent_vocalics import LatentVocalicsDataset, LatentVocalicsDataSeries
 
 
@@ -111,12 +110,12 @@ if __name__ == "__main__":
     model.var_a = VAR_A
     model.var_aa = VAR_AA
     model.var_o = VAR_O
-    estimates = model.predict(evidence=partial_evidence.get_subset([0]), num_particles=10000, seed=0, num_jobs=1)
+    summary = model.predict(evidence=partial_evidence.get_subset([0]), num_particles=10000, seed=0, num_jobs=1)
 
     # Plot estimated coordination against the real coordination points
     plt.figure(figsize=(15, 8))
-    means = estimates[0][0]
-    stds = np.sqrt(estimates[0][1])
+    means = summary[0].coordination_mean
+    stds = np.sqrt(summary[0].coordination_var)
     ts = np.arange(TIME_STEPS)
     plt.plot(ts, means, color="tab:orange", marker="o")
     plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
@@ -127,9 +126,9 @@ if __name__ == "__main__":
     true_nll_1st_sample = model.nll_[-1]
 
     latent_vocalics = copy(samples.latent_vocalics[0])
-    latent_vocalics.values = estimates[0][2:estimates[0].shape[0]:2]
+    latent_vocalics.values = summary[0].latent_vocalics_mean
     estimated_dataset = LatentVocalicsDataset([
-        LatentVocalicsDataSeries("0", samples.observed_vocalics[0], estimates[0][0], latent_vocalics)
+        LatentVocalicsDataSeries("0", samples.observed_vocalics[0], summary[0].coordination_mean, latent_vocalics)
     ])
 
     model.fit(estimated_dataset, burn_in=1, seed=0, num_jobs=1)
