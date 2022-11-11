@@ -45,8 +45,6 @@ if __name__ == "__main__":
         initial_coordination=0.2,
         num_vocalic_features=NUM_FEATURES,
         num_speakers=2,
-        a_vcc=1,
-        b_vcc=1,
         a_va=1,
         b_va=1,
         a_vaa=1,
@@ -91,45 +89,28 @@ if __name__ == "__main__":
     plt.savefig(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/images/1st_10_c_samples.png")
     plt.show()
 
-    full_evidence = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  samples.unbounded_coordination[i], samples.coordination[i],
-                                                  samples.latent_vocalics[i]) for i in range(samples.size)])
+    full_evidence = BetaCoordinationLatentVocalicsDataset.from_samples(samples)
 
-    evidence_unbounded_coordination_only = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  unbounded_coordination=samples.unbounded_coordination[i]) for i in
-         range(samples.size)])
+    evidence_unbounded_coordination_only = copy(full_evidence)
+    evidence_unbounded_coordination_only.remove_all(["coordination", "latent_vocalics"])
 
-    evidence_coordination_only = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  coordination=samples.coordination[i]) for i in range(samples.size)])
+    evidence_coordination_only = copy(full_evidence)
+    evidence_coordination_only.remove_all(["unbounded_coordination", "latent_vocalics"])
 
-    evidence_latent_vocalics_only = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  latent_vocalics=samples.latent_vocalics[i]) for i in
-         range(samples.size)])
+    evidence_latent_vocalics_only = copy(full_evidence)
+    evidence_latent_vocalics_only.remove_all(["unbounded_coordination", "coordination"])
 
-    evidence_no_unbounded_coordination = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  coordination=samples.coordination[i],
-                                                  latent_vocalics=samples.latent_vocalics[i]) for i in
-         range(samples.size)])
+    evidence_no_unbounded_coordination = copy(full_evidence)
+    evidence_no_unbounded_coordination.remove_all(["coordination", "latent_vocalics"])
 
-    evidence_no_coordination = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  unbounded_coordination=samples.unbounded_coordination[i],
-                                                  latent_vocalics=samples.latent_vocalics[i]) for i in
-         range(samples.size)])
+    evidence_no_coordination = copy(full_evidence)
+    evidence_no_coordination.remove_all(["unbounded_coordination", "latent_vocalics"])
 
-    evidence_no_latent_vocalics = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                  unbounded_coordination=samples.unbounded_coordination[i],
-                                                  coordination=samples.coordination[i]) for i in
-         range(samples.size)])
+    evidence_no_latent_vocalics = copy(full_evidence)
+    evidence_no_latent_vocalics.remove_all(["unbounded_coordination", "coordination"])
 
-    partial_evidence = BetaCoordinationLatentVocalicsDataset(
-        [BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i]) for i in range(samples.size)])
+    partial_evidence = copy(full_evidence)
+    partial_evidence.remove_all(["unbounded_coordination", "coordination", "latent_vocalics"])
 
     # Provide complete data to estimate the true model negative-loglikelihood
     model.fit(full_evidence, burn_in=0, seed=0, num_jobs=1)
