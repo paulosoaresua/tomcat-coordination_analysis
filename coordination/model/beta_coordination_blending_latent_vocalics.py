@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
@@ -70,6 +71,22 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
         self.unbounded_coordination = None if series[0].unbounded_coordination is None else np.array(
             [s.unbounded_coordination for s in series])
 
+    @classmethod
+    def from_samples(cls, samples: BetaCoordinationLatentVocalicsSamples) -> BetaCoordinationLatentVocalicsDataset:
+        evidence = cls([BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
+                                                                 samples.unbounded_coordination[i],
+                                                                 samples.coordination[i],
+                                                                 samples.latent_vocalics[i]) for i in
+                        range(samples.size)])
+
+        return evidence
+
+    def remove_all(self, variable_names: List[str]):
+        for var_name in variable_names:
+            for i in range(self.num_trials):
+                if hasattr(self.series[i], var_name):
+                    setattr(self.series[i], var_name, None)
+
 
 class BetaCoordinationBlendingLatentVocalics(
     CoordinationBlendingLatentVocalics[
@@ -79,8 +96,6 @@ class BetaCoordinationBlendingLatentVocalics(
                  initial_coordination: float,
                  num_vocalic_features: int,
                  num_speakers: int,
-                 a_vcc: float,
-                 b_vcc: float,
                  a_va: float,
                  b_va: float,
                  a_vaa: float,
@@ -97,7 +112,7 @@ class BetaCoordinationBlendingLatentVocalics(
                  coordination_num_mcmc_iterations: int = 50,
                  f: Callable = default_f,
                  g: Callable = default_g):
-        super().__init__(initial_coordination, num_vocalic_features, num_speakers, a_vcc, b_vcc, a_va, b_va, a_vaa,
+        super().__init__(initial_coordination, num_vocalic_features, num_speakers, 1, 1, a_va, b_va, a_vaa,
                          b_vaa, a_vo, b_vo, f, g)
 
         self.var_uc: Optional[float] = None
@@ -208,7 +223,8 @@ class BetaCoordinationBlendingLatentVocalics(
         else:
             self.coordination_samples_[:] = evidence.coordination[np.newaxis, :]
 
-    def _initialize_unbounded_coordination_from_transition_distribution(self, evidence: BetaCoordinationLatentVocalicsDataset):
+    def _initialize_unbounded_coordination_from_transition_distribution(self,
+                                                                        evidence: BetaCoordinationLatentVocalicsDataset):
         suc = np.sqrt(self.vuc_samples_[0])
         vcc = self.vcc_samples_[0]
         min_value = logit((1 - np.sqrt(1 - 4 * (vcc + EPSILON))) / 2)
