@@ -75,6 +75,8 @@ def create_splits(num_train_val_splits: int, num_train_test_splits: int, num_tra
         tb_logger.add_info("outer_split", outer_split_num)
         tb_logger.add_info("train_indices", train_indices.tolist())
         tb_logger.add_info("test_indices", test_indices.tolist())
+
+        model.reset_parameters()
         model.fit(evidence=evidence.get_subset(train_indices),
                   burn_in=num_train_iter,
                   num_jobs=num_jobs_train,
@@ -97,6 +99,8 @@ def create_splits(num_train_val_splits: int, num_train_test_splits: int, num_tra
             tb_logger.add_info("inner_split", inner_split_num)
             tb_logger.add_info("train_indices", inner_train_indices.tolist())
             tb_logger.add_info("val_indices", val_indices.tolist())
+
+            model.reset_parameters()
             model.fit(evidence=evidence.get_subset(inner_train_indices),
                       burn_in=num_train_iter,
                       num_jobs=num_jobs_train,
