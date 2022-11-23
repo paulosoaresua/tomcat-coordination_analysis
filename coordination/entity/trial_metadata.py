@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, List
 
 from datetime import datetime
 from dateutil.parser import parse
@@ -7,6 +7,23 @@ import json
 import os
 
 from coordination.common.utils import json_serial
+
+
+class Player:
+    id: str
+    name: str
+    avatar_color: str  # (red/green/blue)
+    age: int
+    gender: str  # (M - Male, F- Female, NB - NonBinary, PNA - Prefer Not to Answer)
+    # Survey questions detailed in Appendix L of the pre-registration document in: https://osf.io/83vj2/
+    team_process_scale_survey_answers: List[int]
+    # Survey questions detailed in Appendix M of the pre-registration document in: https://osf.io/83vj2/
+    team_satisfaction_survey_answers: List[int]
+
+    def __init__(self, participant_id: str, participant_name: str, avatar_color: str):
+        self.id = participant_id
+        self.name = participant_name
+        self.avatar_color = avatar_color
 
 
 class TrialMetadata:
@@ -17,7 +34,7 @@ class TrialMetadata:
     mission_start: datetime
     mission_end: datetime
     team_score: int
-    subject_id_map: Dict[str, str]
+    subject_id_map: Dict[str, Player]
 
     def __init__(self):
         self.team_score = 0
