@@ -73,6 +73,11 @@ class MetadataReader:
         trial_metadata.check_validity()
         vocalics = Vocalics.from_asr_messages(asr_messages, trial_metadata, self._vocalics_reader)
 
+        # Remove player name from the entries in TrialMetadata.subject_id_map. We only add it so we can map both id
+        # and name to avatar color because vocalics sometimes are indexed by one or the other.
+        trial_metadata.subject_id_map = {key: value for i, (key, value) in
+                                         enumerate(trial_metadata.subject_id_map.items()) if i % 2 == 0}
+
         return trial_metadata, vocalics
 
     @staticmethod
@@ -109,17 +114,17 @@ class MetadataReader:
 
     @staticmethod
     def _parse_survey_response(json_message: Any, trial_metadata: TrialMetadata):
-        survey_name = json_message["data"]["values"]["surveyname"]
+        survey_name = (json_message["data"]["values"]["surveyname"]).lower()
 
-        if survey_name == "SectionD_IntakeSurvey_Study3":
+        if "intakesurvey" in survey_name:
             MetadataReader._parse_demographic_survey(json_message, trial_metadata)
-        elif "Reflection_Study3" in survey_name:
+        elif "reflection" in survey_name:
             MetadataReader._parse_team_process_scale_survey(json_message, trial_metadata)
             MetadataReader._parse_team_satisfaction_survey(json_message, trial_metadata)
 
     @staticmethod
     def _parse_demographic_survey(json_message: Any, trial_metadata: TrialMetadata):
-        player_id = json_message["data"]["values"]["E000853"]
+        player_id = json_message["data"]["values"]["participantid"]
         player = trial_metadata.subject_id_map[player_id]
 
         player.age = int(json_message["data"]["values"][SurveyMappings.AGE])
@@ -128,7 +133,7 @@ class MetadataReader:
 
     @staticmethod
     def _parse_team_process_scale_survey(json_message: Any, trial_metadata: TrialMetadata):
-        player_id = json_message["data"]["values"]["E000853"]
+        player_id = json_message["data"]["values"]["participantid"]
         player = trial_metadata.subject_id_map[player_id]
 
         answers = [int(json_message["data"]["values"][question_id]) for question_id in SurveyMappings.PROCESS_SCALE]
@@ -136,7 +141,7 @@ class MetadataReader:
 
     @staticmethod
     def _parse_team_satisfaction_survey(json_message: Any, trial_metadata: TrialMetadata):
-        player_id = json_message["data"]["values"]["E000853"]
+        player_id = json_message["data"]["values"]["participantid"]
         player = trial_metadata.subject_id_map[player_id]
 
         answers = [int(json_message["data"]["values"][question_id]) for question_id in SurveyMappings.TEAM_SATISFACTION]

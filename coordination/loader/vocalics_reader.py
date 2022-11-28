@@ -50,7 +50,7 @@ class VocalicsReader:
             vocalics_per_subject: Dict[str, Tuple[List[float], List[datetime]]] = {}
             pbar = tqdm(total=len(records), desc="Parsing vocalics")
             for subject_id, seconds_offset, *feature_values in records:
-                subject_id = trial_metadata.subject_id_map[subject_id].id
+                subject_id = trial_metadata.subject_id_map[subject_id].avatar_color
 
                 timestamp = baseline_time + timedelta(seconds=seconds_offset)
 

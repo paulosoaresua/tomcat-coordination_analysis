@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List
+from typing import Any, Dict
 
 from datetime import datetime
 from dateutil.parser import parse
@@ -10,20 +10,29 @@ from coordination.common.utils import json_serial
 
 
 class Player:
-    id: str
-    name: str
-    avatar_color: str  # (red/green/blue)
-    age: int
-    gender: str  # (M - Male, F- Female, NB - NonBinary, PNA - Prefer Not to Answer)
-    # Survey questions detailed in Appendix L of the pre-registration document in: https://osf.io/83vj2/
-    team_process_scale_survey_answers: List[int]
-    # Survey questions detailed in Appendix M of the pre-registration document in: https://osf.io/83vj2/
-    team_satisfaction_survey_answers: List[int]
 
     def __init__(self, participant_id: str, participant_name: str, avatar_color: str):
         self.id = participant_id
         self.name = participant_name
         self.avatar_color = avatar_color
+
+        self.age = -99
+        self.gender = "PNA"  # (M - Male, F- Female, NB - NonBinary, PNA - Prefer Not to Answer)
+        # Survey questions detailed in Appendix L of the pre-registration document in: https://osf.io/83vj2/
+        self.team_process_scale_survey_answers = [-1] * 9
+        # Survey questions detailed in Appendix M of the pre-registration document in: https://osf.io/83vj2/
+        self.team_satisfaction_survey_answers = [-1] * 5
+
+    def to_json(self):
+        return self.__dict__
+
+    @classmethod
+    def from_dict(cls, player_dict: Dict[str, Any]) -> Player:
+        player = cls(player_dict["id"], player_dict["name"], player_dict["avatar_color"])
+        for k, v in player_dict.items():
+            setattr(player, k, v)
+
+        return player
 
 
 class TrialMetadata:
@@ -51,6 +60,10 @@ class TrialMetadata:
             for k, v in metadata_dict.items():
                 if k in ["trial_start", "trial_end", "mission_start", "mission_end"]:
                     setattr(metadata, k, parse(v))
+                elif k == "subject_id_map":
+                    metadata.subject_id_map = {}
+                    for subject_id, subject_dict in v.items():
+                        metadata.subject_id_map[subject_id] = Player.from_dict(subject_dict)
                 else:
                     setattr(metadata, k, v)
 

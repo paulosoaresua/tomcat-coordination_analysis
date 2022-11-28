@@ -11,6 +11,10 @@ def json_serial(obj):
 
     if isinstance(obj, datetime):
         return obj.isoformat()
+    else:
+        to_json = getattr(obj, "to_json", None)
+        if callable(to_json):
+            return to_json()
 
     raise TypeError(f"Type {type(obj)} is not serializable")
 
