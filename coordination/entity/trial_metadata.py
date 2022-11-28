@@ -52,7 +52,7 @@ class TrialMetadata:
     def from_trial_directory(cls, trial_dir: str) -> TrialMetadata:
         metadata_path = f"{trial_dir}/metadata.json"
         if not os.path.exists(metadata_path):
-            raise Exception(f"Could not find the file info.json in {metadata_path}.")
+            raise Exception(f"Could not find the file metadata.json in {metadata_path}.")
 
         metadata = cls()
         with open(metadata_path, "r") as f:
