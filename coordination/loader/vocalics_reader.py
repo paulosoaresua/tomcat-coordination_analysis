@@ -3,11 +3,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
 
-import psycopg2
 from tqdm import tqdm
 import numpy as np
 
-from coordination.config.database_config import DatabaseConfig
 from coordination.entity.trial_metadata import TrialMetadata
 from coordination.entity.vocalics_series import VocalicsSeries
 
@@ -52,7 +50,7 @@ class VocalicsReader:
             vocalics_per_subject: Dict[str, Tuple[List[float], List[datetime]]] = {}
             pbar = tqdm(total=len(records), desc="Parsing vocalics")
             for subject_id, seconds_offset, *feature_values in records:
-                subject_id = trial_metadata.subject_id_map[subject_id]
+                subject_id = trial_metadata.subject_id_map[subject_id].avatar_color
 
                 timestamp = baseline_time + timedelta(seconds=seconds_offset)
 

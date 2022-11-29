@@ -71,7 +71,7 @@ class Vocalics:
                 continue
 
             # Instead of using the subject id, we use it's callsign to be compatible across all components
-            subject_id = trial_metadata.subject_id_map[asr_message["data"]["participant_id"]]
+            subject_id = trial_metadata.subject_id_map[asr_message["data"]["participant_id"]].avatar_color
             text = asr_message["data"]["text"]
 
             utterance = Utterance(subject_id,
