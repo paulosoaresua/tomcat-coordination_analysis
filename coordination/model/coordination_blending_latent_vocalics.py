@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 from coordination.common.log import BaseLogger
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
-from coordination.inference.mcmc import MCMC
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
 from coordination.model.particle_filter import Particles
 from coordination.model.pgm import PGM, ParticlesSummary, Samples
@@ -72,8 +71,16 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
 
 class LatentVocalicsDataset(EvidenceDataset):
 
-    def __init__(self, series: List[LatentVocalicsDataSeries]):
+    def __init__(self, series: List[LatentVocalicsDataSeries], team_scores: np.ndarray,
+                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
+                 ages: np.ndarray):
         super().__init__(series)
+
+        self.team_scores = team_scores
+        self.team_process_surveys = team_process_surveys
+        self.team_satisfaction_surveys = team_satisfaction_surveys
+        self.genders = genders
+        self.ages = ages
 
         # Keep a matrix representation of the data for fast processing during training
         self.coordination = None if series[0].coordination is None else np.zeros(
@@ -112,6 +119,26 @@ class LatentVocalicsDataset(EvidenceDataset):
 
                 if self.previous_vocalics_from_other[i, t] >= 0:
                     self.next_vocalics_from_other[i, self.previous_vocalics_from_other[i, t]] = t
+
+    def get_subset(self, indices: List[int]) -> LatentVocalicsDataset:
+        return self.__class__(
+            series=[self.series[i] for i in indices],
+            team_scores=self.team_scores[indices],
+            team_process_surveys=np.take_along_axis(self.team_process_surveys, indices, axis=0),
+            team_satisfaction_surveys=np.take_along_axis(self.team_satisfaction_surveys, indices, axis=0),
+            genders=np.take_along_axis(self.genders, indices, axis=0),
+            ages=np.take_along_axis(self.ages, indices, axis=0)
+        )
+
+    def merge(self, dataset2: LatentVocalicsDataset) -> EvidenceDataset:
+        return self.__class__(
+            series=self.series + dataset2.series,
+            team_scores=np.concatenate([self.team_scores, dataset2.team_scores]),
+            team_process_surveys=np.concatenate([self.team_process_surveys, dataset2.team_process_surveys], axis=0),
+            team_satisfaction_surveys=np.concatenate([self.team_satisfaction_surveys, dataset2.team_satisfaction_surveys], axis=0),
+            genders=np.concatenate([self.genders, dataset2.genders], axis=0),
+            ages=np.concatenate([self.ages, dataset2.ages], axis=0),
+        )
 
 
 def default_f(latent_vocalics: np.ndarray, speaker_mask: int) -> np.ndarray:
@@ -391,13 +418,15 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             A = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_self[:, t]]
 
             # Mask with 1 in the cells in which there are previous vocalics from the same speaker and 0 otherwise
-            Ma = evidence.previous_vocalics_from_self_mask[:, t][:, np.newaxis]#np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
+            Ma = evidence.previous_vocalics_from_self_mask[:, t][:,
+                 np.newaxis]  # np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
 
             # Vo (n x k) will have the values of vocalics from other speaker per trial
             B = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_other[:, t]]
 
             # Mask with 1 in the cells in which there are previous vocalics from another speaker and 0 otherwise
-            Mb = evidence.previous_vocalics_from_other_mask[:, t][:, np.newaxis]#np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
+            Mb = evidence.previous_vocalics_from_other_mask[:, t][:,
+                 np.newaxis]  # np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
 
             # Use variance from prior if there are no previous vocalics from any speaker
             v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)

@@ -137,3 +137,4 @@ data/
 .run/
 boards/
 run/
+notebooks/formatting.py

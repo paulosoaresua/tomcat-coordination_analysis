@@ -43,9 +43,8 @@ class EvidenceDataset:
 
         return merged_dataset
 
-    @staticmethod
-    def merge(dataset1: EvidenceDataset, dataset2: EvidenceDataset) -> EvidenceDataset:
-        return dataset1.__class__(dataset1.series + dataset2.series)
+    def merge(self, dataset2: EvidenceDataset) -> EvidenceDataset:
+        return self.__class__(self.series + dataset2.series)
 
 
 class IndexToDatasetTransformer(BaseEstimator, TransformerMixin):
