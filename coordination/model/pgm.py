@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from tqdm import tqdm
 
+from coordination.callback.callback import Callback
 from coordination.common.log import BaseLogger
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.common.utils import set_seed
@@ -32,6 +33,8 @@ class PGM(BaseEstimator, Generic[SP, S]):
     def __init__(self):
         super().__init__()
 
+        self.train = False
+
         # List of hyperparameters to be logged by the logger. It must be saved by the child class.
         self._hyper_params = {}
         self.nll_ = np.array([])
@@ -42,7 +45,15 @@ class PGM(BaseEstimator, Generic[SP, S]):
         return None
 
     def fit(self, evidence: EvidenceDataset, burn_in: int, seed: Optional[int], num_jobs: int = 1,
-            logger: BaseLogger = BaseLogger()):
+            logger: BaseLogger = BaseLogger(), callbacks: List[Callback] = None):
+
+        if callbacks is None:
+            callbacks = []
+
+        self.train = True
+
+        for callback in callbacks:
+            callback.reset()
 
         hparams = self._hyper_params.copy()
         hparams["burn_in"] = burn_in
@@ -86,6 +97,12 @@ class PGM(BaseEstimator, Generic[SP, S]):
                 self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence)
 
                 logger.add_scalar("train/nll", self.nll_[i], i)
+
+                for callback in callbacks:
+                    callback.check(self)
+
+                if not self.train:
+                    break
 
         self._retain_parameters()
 

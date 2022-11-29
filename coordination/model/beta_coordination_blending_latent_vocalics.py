@@ -65,8 +65,12 @@ class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
 
 class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
 
-    def __init__(self, series: List[BetaCoordinationLatentVocalicsDataSeries]):
-        super().__init__(series)
+    def __init__(self, series: List[BetaCoordinationLatentVocalicsDataSeries], team_scores: np.ndarray,
+                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
+                 ages: np.ndarray):
+        super().__init__(series, team_scores, team_process_surveys, team_satisfaction_surveys, genders, ages)
+
+        self.series: List[BetaCoordinationLatentVocalicsDataSeries] = series
 
         self.unbounded_coordination = None if series[0].unbounded_coordination is None else np.array(
             [s.unbounded_coordination for s in series])
@@ -77,9 +81,21 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
                                                                  samples.unbounded_coordination[i],
                                                                  samples.coordination[i],
                                                                  samples.latent_vocalics[i]) for i in
-                        range(samples.size)])
+                        range(samples.size)], np.array([]), np.array([]), np.array([]), np.array([]), np.array([]))
 
         return evidence
+
+    @classmethod
+    def from_latent_vocalics_dataset(cls, dataset: LatentVocalicsDataset):
+        series = []
+        for i in range(dataset.num_trials):
+            s = dataset.series[i]
+            series.append(BetaCoordinationLatentVocalicsDataSeries(uuid=s.uuid, coordination=s.coordination,
+                                                                   latent_vocalics=s.latent_vocalics,
+                                                                   observed_vocalics=s.observed_vocalics))
+        return cls(series=series, team_scores=dataset.team_scores, team_process_surveys=dataset.team_process_surveys,
+                   team_satisfaction_surveys=dataset.team_satisfaction_surveys, ages=dataset.ages,
+                   genders=dataset.genders)
 
     def remove_all(self, variable_names: List[str]):
         for var_name in variable_names:

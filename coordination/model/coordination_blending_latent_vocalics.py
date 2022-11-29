@@ -76,6 +76,8 @@ class LatentVocalicsDataset(EvidenceDataset):
                  ages: np.ndarray):
         super().__init__(series)
 
+        self.series: List[LatentVocalicsDataSeries] = series
+
         self.team_scores = team_scores
         self.team_process_surveys = team_process_surveys
         self.team_satisfaction_surveys = team_satisfaction_surveys
