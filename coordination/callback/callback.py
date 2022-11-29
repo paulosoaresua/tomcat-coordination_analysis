@@ -6,5 +6,5 @@ class Callback:
     def reset(self):
         pass
 
-    def check(self, model: Any):
+    def check(self, model: Any, iter: int):
         pass

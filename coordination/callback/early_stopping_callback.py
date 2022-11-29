@@ -20,10 +20,10 @@ class EarlyStoppingCallback(Callback):
         self.num_no_improvement_iter = 0
         self.last_measurement = np.inf
 
-    def check(self, model: PGM):
+    def check(self, model: PGM, iter: int):
         current_measurement = None
         if self.monitor == "nll":
-            current_measurement = model.nll_[-1]
+            current_measurement = model.nll_[iter]
 
         if current_measurement >= self.last_measurement:
             self.num_no_improvement_iter += 1

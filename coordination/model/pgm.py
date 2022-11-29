@@ -99,7 +99,7 @@ class PGM(BaseEstimator, Generic[SP, S]):
                 logger.add_scalar("train/nll", self.nll_[i], i)
 
                 for callback in callbacks:
-                    callback.check(self)
+                    callback.check(self, i)
 
                 if not self.train:
                     break
