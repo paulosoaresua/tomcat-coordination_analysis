@@ -74,6 +74,8 @@ class PGM(BaseEstimator, Generic[SP, S]):
         # needed, is determined by the amount of blocks in the groups.
         num_effective_jobs = max(len(time_step_blocks[0]), len(time_step_blocks[1]))
 
+        print(f"Number of Effective Jobs = {num_effective_jobs}")
+
         # Gibbs Sampling
 
         # 1. Initialize latent variables
