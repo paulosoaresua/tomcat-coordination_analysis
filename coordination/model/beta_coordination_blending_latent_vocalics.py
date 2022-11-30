@@ -270,11 +270,10 @@ class BetaCoordinationBlendingLatentVocalics(
         return ll
 
     def _sample_coordination_on_fit(self, gibbs_step: int, evidence: BetaCoordinationLatentVocalicsDataset,
-                                    time_steps: np.ndarray,
-                                    job_num: int) -> Tuple[np.ndarray, ...]:
+                                    time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[np.ndarray, ...]:
 
         unbounded_coordination, uc_acceptance_rates = self._sample_unbounded_coordination_on_fit(
-            gibbs_step, evidence, time_steps, job_num)
+            gibbs_step, evidence, time_steps, job_num, group_order)
 
         coordination = self.coordination_samples_[gibbs_step].copy()
         coordination_acceptance_rates = self.coordination_acceptance_rates_.copy()
@@ -289,7 +288,8 @@ class BetaCoordinationBlendingLatentVocalics(
         vcc = self.vcc_samples_[gibbs_step]
         saa = np.sqrt(self.vaa_samples_[gibbs_step])
 
-        for t in tqdm(time_steps, desc="Sampling Coordination", position=job_num, leave=False):
+        for t in tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
+                      leave=False):
             if t > 0:
                 # Initial coordination is given
                 proposal_fn_params = {
@@ -320,7 +320,8 @@ class BetaCoordinationBlendingLatentVocalics(
         return coordination, unbounded_coordination, coordination_acceptance_rates, uc_acceptance_rates
 
     def _sample_unbounded_coordination_on_fit(self, gibbs_step: int, evidence: BetaCoordinationLatentVocalicsDataset,
-                                              time_steps: np.ndarray, job_num: int) -> Tuple[np.ndarray, np.ndarray]:
+                                              time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[
+        np.ndarray, np.ndarray]:
 
         unbounded_coordination = self.unbounded_coordination_samples_[gibbs_step].copy()
         acceptance_rates = self.unbounded_coordination_acceptance_rates_.copy()
@@ -335,7 +336,7 @@ class BetaCoordinationBlendingLatentVocalics(
         suc = np.sqrt(self.vuc_samples_[gibbs_step])
         vcc = self.vcc_samples_[gibbs_step]
 
-        for t in tqdm(time_steps, desc="Sampling Unbounded Coordination", position=job_num, leave=False):
+        for t in tqdm(time_steps, desc=f"Sampling Unbounded Coordination (Group {group_order + 1})", position=job_num, leave=False):
             if t > 0:
                 next_unbounded_coordination = None if t == unbounded_coordination.shape[
                     1] - 1 else unbounded_coordination[:, t + 1][:, np.newaxis]

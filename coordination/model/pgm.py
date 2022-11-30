@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Generic, List, Optional, TypeVar
+from typing import Any, Generic, List, Optional, Tuple, TypeVar
 
 from multiprocessing import Pool
 
@@ -68,8 +68,11 @@ class PGM(BaseEstimator, Generic[SP, S]):
         # another chunk, we create a separate chunk with the variables in the border that will be sampled in the
         # beginning of the Gibbs step.
         num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
-        blocks = self._get_time_step_blocks_for_parallel_fitting(evidence, num_effective_jobs)
-        parallel_time_step_blocks, single_thread_time_steps = blocks
+        time_step_blocks = self._get_time_step_blocks_for_parallel_fitting(evidence, num_effective_jobs)
+
+        # Depending on the dependencies, we might not be able to parallelize much. The final number of processes
+        # needed, is determined by the amount of blocks in the groups.
+        num_effective_jobs = max(len(time_step_blocks[0]), len(time_step_blocks[1]))
 
         # Gibbs Sampling
 
@@ -82,16 +85,19 @@ class PGM(BaseEstimator, Generic[SP, S]):
         logger.add_scalar("train/nll", self.nll_[0], 0)
 
         # 2. Sample the latent variables from their posterior distributions
-        with Pool(max(len(parallel_time_step_blocks), 1)) as pool:
+        with Pool(num_effective_jobs) as pool:
             for i in tqdm(range(1, burn_in + 1), desc="Gibbs Step", position=0):
-                latents = self._gibbs_step(i, evidence, single_thread_time_steps, 1)
-                self._retain_samples_from_latent(i, latents, single_thread_time_steps)
-
-                if len(parallel_time_step_blocks) > 1:
-                    job_args = [(i, evidence, parallel_time_step_blocks[j], j + 1) for j in
-                                range(len(parallel_time_step_blocks))]
-                    for chunk_idx, latents in enumerate(pool.starmap(self._gibbs_step, job_args)):
-                        self._retain_samples_from_latent(i, latents, parallel_time_step_blocks[chunk_idx])
+                if num_effective_jobs == 1:
+                    block = time_step_blocks[0]
+                    latents = self._gibbs_step(i, evidence, block, 1, 0)
+                    self._retain_samples_from_latent(i, latents, block)
+                else:
+                    # Variables were split into 2 groups and parallelization is possible within each group.
+                    for g in range(2):
+                        blocks = time_step_blocks[g]
+                        job_args = [(i, evidence, blocks[j], j + 1, g) for j in range(len(blocks))]
+                        for chunk_idx, latents in enumerate(pool.starmap(self._gibbs_step, job_args)):
+                            self._retain_samples_from_latent(i, latents, blocks[chunk_idx])
 
                 self._update_latent_parameters(i, evidence, logger)
                 self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence)
@@ -108,27 +114,27 @@ class PGM(BaseEstimator, Generic[SP, S]):
 
         return self
 
-    def _get_time_step_blocks_for_parallel_fitting(self, evidence: EvidenceDataset, num_jobs: int):
-        parallel_time_step_blocks = []
-        independent_time_steps = []
+    def _get_time_step_blocks_for_parallel_fitting(self, evidence: EvidenceDataset, num_jobs: int) -> Tuple[
+        List[np.ndarray], List[np.ndarray]]:
+        first_group_time_steps = []
+        second_group_time_steps = []
 
-        if num_jobs == 1:
-            # No parallel jobs
-            independent_time_steps = np.arange(evidence.num_time_steps)
+        num_effective_jobs = int(min(evidence.num_time_steps / 2, num_jobs))
+        if num_effective_jobs == 1:
+            first_group_time_steps = [np.arange(evidence.num_time_steps)]
         else:
-            time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_jobs)
+            time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
             for i, time_chunk in enumerate(time_chunks):
                 if i == len(time_chunks) - 1:
                     # No need to add the last time index to the independent list since it does not depend on
                     # any variable from another chunk
-                    parallel_time_step_blocks.append(time_chunk)
+                    second_group_time_steps.append(time_chunk)
                 else:
-                    independent_time_steps.append(time_chunk[-1])
-                    parallel_time_step_blocks.append(time_chunk[:-1])
+                    # Each block in the 1st group has only one time step
+                    first_group_time_steps.append(np.array([time_chunk[-1]]))
+                    second_group_time_steps.append(time_chunk[:-1])
 
-        independent_time_steps = np.array(independent_time_steps)
-
-        return parallel_time_step_blocks, independent_time_steps
+        return first_group_time_steps, second_group_time_steps
 
     # Methods to be implemented by the subclass for parameter estimation
     def _initialize_gibbs(self, burn_in: int, evidence: EvidenceDataset):
@@ -137,7 +143,7 @@ class PGM(BaseEstimator, Generic[SP, S]):
     def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: EvidenceDataset) -> float:
         raise NotImplementedError
 
-    def _gibbs_step(self, gibbs_step: int, evidence: EvidenceDataset, time_steps: np.ndarray, job_num: int) -> Any:
+    def _gibbs_step(self, gibbs_step: int, evidence: EvidenceDataset, time_steps: np.ndarray, job_num: int, group_order: int = 0) -> Any:
         """
         Return the new samples from the latent variables
         """
