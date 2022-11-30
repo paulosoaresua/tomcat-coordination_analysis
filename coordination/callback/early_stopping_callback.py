@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 
 from coordination.callback.callback import Callback
@@ -13,22 +15,23 @@ class EarlyStoppingCallback(Callback):
         self.monitor = monitor
         self.patience = patience
 
-        self.num_no_improvement_iter = 0
-        self.last_measurement = np.inf
+        self._num_no_improvement_iter = 0
+        self._best_measurement = np.inf
+        self.best_model_ = None
 
     def reset(self):
-        self.num_no_improvement_iter = 0
-        self.last_measurement = np.inf
+        self._num_no_improvement_iter = 0
+        self._best_measurement = np.inf
 
     def check(self, model: PGM, iter: int):
         current_measurement = None
         if self.monitor == "nll":
             current_measurement = model.nll_[iter]
 
-        if current_measurement >= self.last_measurement:
-            self.num_no_improvement_iter += 1
+        if current_measurement >= self._best_measurement:
+            self._num_no_improvement_iter += 1
 
-            if self.patience == self.num_no_improvement_iter:
+            if self.patience == self._num_no_improvement_iter:
                 model.train = False
-
-        self.last_measurement = current_measurement
+        else:
+            self._best_measurement = current_measurement
