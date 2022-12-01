@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from datetime import datetime
+from multiprocessing import Pool
 
 import numpy as np
 from scipy.stats import norm, invgamma
@@ -222,6 +223,15 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         self.coordination_samples_ = np.array([])
         self.latent_vocalics_samples_ = np.array([])
 
+        # The lists below are initialized during training to create blocks of time stamps for which coordination can be
+        # updated in parallel. Latent vocalics will be sampled in sequence to avoid a fancier logic to retrieve
+        # dependencies. This is okay for now because latent vocalics posterior has a closed form and sampling is faster
+        # compared to coordination that is sampled via MCMC.
+        self._unbounded_coordination_time_step_blocks1: List[np.ndarray] = []
+        self._unbounded_coordination_time_steps_blocks2: List[np.ndarray] = []
+        self._coordination_time_step_blocks: List[np.ndarray] = []
+        self._latent_vocalics_time_step_block = np.array([])
+
     def reset_parameters(self):
         self.var_cc = None
         self.var_a = None
@@ -349,9 +359,35 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
 
-    def _initialize_gibbs(self, burn_in: int, evidence: LatentVocalicsDataset):
-        super()._initialize_gibbs(burn_in, evidence)
+    def _initialize_gibbs(self, evidence: LatentVocalicsDataset, burn_in: int, seed: int, num_jobs: int,
+                          logger: BaseLogger):
+        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
+        self._unbounded_coordination_time_step_blocks1 = []
+        self._unbounded_coordination_time_steps_blocks2 = []
+        self._coordination_time_step_blocks = []
 
+        # Latent coordination will be updated in a single process
+        self._latent_vocalics_time_step_block = np.arange(evidence.num_time_steps)
+
+        if num_effective_jobs > 1:
+            self._unbounded_coordination_time_step_blocks1 = np.array_split(np.arange(evidence.num_time_steps),
+                                                                            num_effective_jobs)
+            for i in range(1, len(self._unbounded_coordination_time_step_blocks1)):
+                # Move the last time step in each block from group 1 to a block in group 2.
+                # Blocks in group 2 depends on blocks in group 1. However, within groups, there's no dependency between
+                # coordination, so they can be updated in parallel.
+                self._unbounded_coordination_time_steps_blocks2.append(
+                    np.array([self._unbounded_coordination_time_step_blocks1[i][0]]))
+                self._unbounded_coordination_time_step_blocks1[i] = self._unbounded_coordination_time_step_blocks1[i][
+                                                                    1:]
+
+            self._coordination_time_step_blocks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
+
+        # TODO: review this. No need to keep the history, just the last one.
+        #   Also, it's better to initialize all variables with an manual value instead of sampling from the prior.
+        #   This allow us to use a true uninformative prior for the variances without sampling a value that is infinite.
+        #   If a non-informative prior is to be used, we can pass a sample from that prior as the initial value, without
+        #   sampling it here.
         # History of samples in each Gibbs step
         self.vcc_samples_ = np.zeros(burn_in + 1)
         self.va_samples_ = np.zeros(burn_in + 1)
@@ -398,105 +434,47 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     def _initialize_coordination_for_gibbs(self, evidence: LatentVocalicsDataset):
         raise NotImplementedError
 
-    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
-        sa = np.sqrt(self.va_samples_[gibbs_step])
-        saa = np.sqrt(self.vaa_samples_[gibbs_step])
-        so = np.sqrt(self.vo_samples_[gibbs_step])
+    def _get_max_num_jobs(self) -> int:
+        return max(max(len(self._unbounded_coordination_time_step_blocks1),
+                       len(self._unbounded_coordination_time_steps_blocks2)), 1)
 
-        coordination = self.coordination_samples_[gibbs_step]
-        latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
+    def _update_latent_variables(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger,
+                                 pool: Pool):
+        self._update_coordination(gibbs_step, evidence, logger, pool)
+        self._update_vocalics(gibbs_step, evidence, logger, pool)
 
-        ll = self._compute_coordination_loglikelihood(gibbs_step, evidence)
-        for t in range(evidence.num_time_steps):
-            # Latent vocalics
-            C = coordination[:, t][:, np.newaxis]
-
-            # n x k
-            V = latent_vocalics[:, :, t]
-
-            # n x 1
-            M = evidence.vocalics_mask[:, t][:, np.newaxis]
-
-            # Vs (n x k) will have the values of vocalics from the same speaker per trial
-            A = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_self[:, t]]
-
-            # Mask with 1 in the cells in which there are previous vocalics from the same speaker and 0 otherwise
-            Ma = evidence.previous_vocalics_from_self_mask[:, t][:,
-                 np.newaxis]  # np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
-
-            # Vo (n x k) will have the values of vocalics from other speaker per trial
-            B = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_other[:, t]]
-
-            # Mask with 1 in the cells in which there are previous vocalics from another speaker and 0 otherwise
-            Mb = evidence.previous_vocalics_from_other_mask[:, t][:,
-                 np.newaxis]  # np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
-
-            # Use variance from prior if there are no previous vocalics from any speaker
-            v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)
-
-            # Clipping has no effect in models that do not sample coordination outside the range [0, 1].
-            means = (B - A * Ma) * Mb * clip_coordination(C) + A * Ma
-
-            # Do not count LL if no speaker is talking at time t (mask M tells us that)
-            ll += (norm(loc=means, scale=np.sqrt(v)).logpdf(V) * M).sum()
-
-            # LL from latent to observed vocalics
-            ll += (norm(loc=V, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
-
-        return ll
-
-    def _compute_coordination_loglikelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+    def _update_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger, pool: Pool):
         raise NotImplementedError
 
-    def _gibbs_step(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray, job_num: int,
-                    group_order: int = 0):
-        coordination, *extra_variables = self._sample_coordination_on_fit(gibbs_step, evidence, time_steps, job_num,
-                                                                          group_order)
+    def _update_vocalics(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger, pool: Pool):
+        """
+        Sample vocalics in a single thread. A fancier logic may be applied to sample vocalics in different threads
+        by dealing with the jumps in dependencies such that parallel blocks do not have dependent vocalics, but
+        we don't do this by now since sampling from vocalics is fast.
+        """
 
         if evidence.latent_vocalics is None:
-            latent_vocalics = self._sample_latent_vocalics_on_fit(coordination, gibbs_step, evidence, time_steps,
-                                                                  job_num, group_order)
+            latent_vocalics = self._sample_latent_vocalics_on_fit(gibbs_step, evidence,
+                                                                  self._latent_vocalics_time_step_block, 1, 0)
         else:
             latent_vocalics = self.latent_vocalics_samples_[gibbs_step - 1].copy()
 
-        return coordination, latent_vocalics, *extra_variables
+        self.latent_vocalics_samples_[gibbs_step] = latent_vocalics
+        if gibbs_step < self.latent_vocalics_samples_.shape[0] - 1:
+            # Copy the current estimation to the next step. This is necessary for the parallelization to work properly.
+            # This allows the blocks in the next step to use the values of the previous step (gibbs_step) as a start
+            # point but without indexing the previous step. This is necessary because the execution block that runs in a
+            # single thread, will update the latent values for the current step. If the parallel block execution
+            # indexes the past,they won't have access to the most up-to-date values.
+            self.latent_vocalics_samples_[gibbs_step + 1] = self.latent_vocalics_samples_[gibbs_step]
 
-    def _sample_coordination_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray,
-                                    job_num: int, group_order: int) -> Tuple[np.ndarray, ...]:
-        raise NotImplementedError
-
-    @staticmethod
-    def _get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
-            proposed_coordination_sample: np.ndarray,
-            saa: float,
-            evidence: LatentVocalicsDataset,
-            latent_vocalics: np.ndarray,
-            time_step: int) -> np.ndarray:
-
-        V = latent_vocalics[..., time_step]
-
-        previous_self_time_steps = evidence.previous_vocalics_from_self[:, time_step]
-        previous_other_time_steps = evidence.previous_vocalics_from_other[:, time_step]
-        A = np.take_along_axis(latent_vocalics, previous_self_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
-        B = np.take_along_axis(latent_vocalics, previous_other_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
-
-        M = evidence.vocalics_mask[:, time_step][:, np.newaxis]
-        Ma = evidence.previous_vocalics_from_self_mask[:, time_step][:, np.newaxis]
-        Mb = evidence.previous_vocalics_from_other_mask[:, time_step][:, np.newaxis]
-
-        mean = ((B - A * Ma) * clip_coordination(proposed_coordination_sample) * Mb + A * Ma) * M * Mb
-
-        # Coordination only affects vocalics in times in which there's a dependency on a previous other speaker
-        log_posterior = (norm(loc=mean, scale=saa).logpdf(V) * M * Mb).sum(axis=1)
-
-        return log_posterior
-
-    def _sample_latent_vocalics_on_fit(self, coordination: np.ndarray, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _sample_latent_vocalics_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset,
                                        time_steps: np.ndarray, job_num: int, group_order: int) -> np.ndarray:
 
         va = self.va_samples_[gibbs_step]
         vaa = self.vaa_samples_[gibbs_step]
         vo = self.vo_samples_[gibbs_step]
+        coordination = self.coordination_samples_[gibbs_step]
 
         latent_vocalics = self.latent_vocalics_samples_[gibbs_step].copy()
         for t in tqdm(time_steps, desc=f"Sampling Latent Vocalics (Group {group_order + 1})", position=job_num,
@@ -573,23 +551,103 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return latent_vocalics
 
-    def _retain_samples_from_latent(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
-        """
-        The only latent variable return by _gibbs_step is a state variable
-        """
-        self.coordination_samples_[gibbs_step][:, time_steps] = latents[0][:, time_steps]
-        self.latent_vocalics_samples_[gibbs_step][:, :, time_steps] = latents[1][:, :, time_steps]
+    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+        sa = np.sqrt(self.va_samples_[gibbs_step])
+        saa = np.sqrt(self.vaa_samples_[gibbs_step])
+        so = np.sqrt(self.vo_samples_[gibbs_step])
 
-        if gibbs_step < self.latent_vocalics_samples_.shape[0] - 1:
-            # Copy the current estimation to the next step. This is necessary for the parallelization to work properly.
-            # This allows the blocks in the next step to use the values of the previous step (gibbs_step) as a start
-            # point but without indexing the previous step. This is necessary because the execution block that runs in a
-            # single thread, will update the latent values for the current step. If the parallel block execution
-            # indexes the past,they won't have access to the most up-to-date values.
-            self.coordination_samples_[gibbs_step + 1] = self.coordination_samples_[gibbs_step]
-            self.latent_vocalics_samples_[gibbs_step + 1] = self.latent_vocalics_samples_[gibbs_step]
+        coordination = self.coordination_samples_[gibbs_step]
+        latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger):
+        ll = self._compute_coordination_loglikelihood(gibbs_step, evidence)
+        for t in range(evidence.num_time_steps):
+            # Latent vocalics
+            C = coordination[:, t][:, np.newaxis]
+
+            # n x k
+            V = latent_vocalics[:, :, t]
+
+            # n x 1
+            M = evidence.vocalics_mask[:, t][:, np.newaxis]
+
+            # Vs (n x k) will have the values of vocalics from the same speaker per trial
+            A = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_self[:, t]]
+
+            # Mask with 1 in the cells in which there are previous vocalics from the same speaker and 0 otherwise
+            Ma = evidence.previous_vocalics_from_self_mask[:, t][:,
+                 np.newaxis]  # np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
+
+            # Vo (n x k) will have the values of vocalics from other speaker per trial
+            B = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_other[:, t]]
+
+            # Mask with 1 in the cells in which there are previous vocalics from another speaker and 0 otherwise
+            Mb = evidence.previous_vocalics_from_other_mask[:, t][:,
+                 np.newaxis]  # np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
+
+            # Use variance from prior if there are no previous vocalics from any speaker
+            v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)
+
+            # Clipping has no effect in models that do not sample coordination outside the range [0, 1].
+            means = (B - A * Ma) * Mb * clip_coordination(C) + A * Ma
+
+            # Do not count LL if no speaker is talking at time t (mask M tells us that)
+            ll += (norm(loc=means, scale=np.sqrt(v)).logpdf(V) * M).sum()
+
+            # LL from latent to observed vocalics
+            ll += (norm(loc=V, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
+
+        return ll
+
+    def _compute_coordination_loglikelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+        raise NotImplementedError
+
+    def _sample_coordination_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray,
+                                    job_num: int, group_order: int) -> Tuple[np.ndarray, ...]:
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
+            proposed_coordination_sample: np.ndarray,
+            saa: float,
+            evidence: LatentVocalicsDataset,
+            latent_vocalics: np.ndarray,
+            time_step: int) -> np.ndarray:
+
+        V = latent_vocalics[..., time_step]
+
+        previous_self_time_steps = evidence.previous_vocalics_from_self[:, time_step]
+        previous_other_time_steps = evidence.previous_vocalics_from_other[:, time_step]
+        A = np.take_along_axis(latent_vocalics, previous_self_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
+        B = np.take_along_axis(latent_vocalics, previous_other_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
+
+        M = evidence.vocalics_mask[:, time_step][:, np.newaxis]
+        Ma = evidence.previous_vocalics_from_self_mask[:, time_step][:, np.newaxis]
+        Mb = evidence.previous_vocalics_from_other_mask[:, time_step][:, np.newaxis]
+
+        mean = ((B - A * Ma) * clip_coordination(proposed_coordination_sample) * Mb + A * Ma) * M * Mb
+
+        # Coordination only affects vocalics in times in which there's a dependency on a previous other speaker
+        log_posterior = (norm(loc=mean, scale=saa).logpdf(V) * M * Mb).sum(axis=1)
+
+        return log_posterior
+
+    # def _retain_latent_vocalics(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
+    #     """
+    #     The only latent variable return by _gibbs_step is a state variable
+    #     """
+    #     self.coordination_samples_[gibbs_step][:, time_steps] = latents[0][:, time_steps]
+    #     self.latent_vocalics_samples_[gibbs_step][:, :, time_steps] = latents[1][:, :, time_steps]
+    #
+    #     if gibbs_step < self.latent_vocalics_samples_.shape[0] - 1:
+    #         # Copy the current estimation to the next step. This is necessary for the parallelization to work properly.
+    #         # This allows the blocks in the next step to use the values of the previous step (gibbs_step) as a start
+    #         # point but without indexing the previous step. This is necessary because the execution block that runs in a
+    #         # single thread, will update the latent values for the current step. If the parallel block execution
+    #         # indexes the past,they won't have access to the most up-to-date values.
+    #         self.coordination_samples_[gibbs_step + 1] = self.coordination_samples_[gibbs_step]
+    #         self.latent_vocalics_samples_[gibbs_step + 1] = self.latent_vocalics_samples_[gibbs_step]
+
+    def _update_parameters(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger, pool: Pool):
         self._update_latent_parameters_coordination(gibbs_step, evidence, logger)
 
         if gibbs_step < len(self.vcc_samples_) - 1:

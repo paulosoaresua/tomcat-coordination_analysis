@@ -1,5 +1,7 @@
 from __future__ import annotations
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
+
+from multiprocessing import Pool
 
 import numpy as np
 from scipy.stats import invgamma, norm
@@ -77,11 +79,19 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
 
     @classmethod
     def from_samples(cls, samples: BetaCoordinationLatentVocalicsSamples) -> BetaCoordinationLatentVocalicsDataset:
-        evidence = cls([BetaCoordinationLatentVocalicsDataSeries(f"{i}", samples.observed_vocalics[i],
-                                                                 samples.unbounded_coordination[i],
-                                                                 samples.coordination[i],
-                                                                 samples.latent_vocalics[i]) for i in
-                        range(samples.size)], np.array([]), np.array([]), np.array([]), np.array([]), np.array([]))
+        series = []
+        for i in range(samples.size):
+            unbounded_coordination = samples.unbounded_coordination[
+                i] if samples.unbounded_coordination is not None else None
+            coordination = samples.coordination[i] if samples.coordination is not None else None
+            latent_vocalics = samples.latent_vocalics[i] if samples.latent_vocalics is not None else None
+            series.append(
+                BetaCoordinationLatentVocalicsDataSeries(f"{i}", unbounded_coordination=unbounded_coordination,
+                                                         coordination=coordination,
+                                                         latent_vocalics=latent_vocalics,
+                                                         observed_vocalics=samples.observed_vocalics[i]))
+
+        evidence = cls(series, np.array([]), np.array([]), np.array([]), np.array([]), np.array([]))
 
         return evidence
 
@@ -96,12 +106,6 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
         return cls(series=series, team_scores=dataset.team_scores, team_process_surveys=dataset.team_process_surveys,
                    team_satisfaction_surveys=dataset.team_satisfaction_surveys, ages=dataset.ages,
                    genders=dataset.genders)
-
-    def remove_all(self, variable_names: List[str]):
-        for var_name in variable_names:
-            for i in range(self.num_trials):
-                if hasattr(self.series[i], var_name):
-                    setattr(self.series[i], var_name, None)
 
 
 class BetaCoordinationBlendingLatentVocalics(
@@ -269,55 +273,42 @@ class BetaCoordinationBlendingLatentVocalics(
 
         return ll
 
-    def _sample_coordination_on_fit(self, gibbs_step: int, evidence: BetaCoordinationLatentVocalicsDataset,
-                                    time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[np.ndarray, ...]:
+    def _update_coordination(self, gibbs_step: int, evidence: BetaCoordinationLatentVocalicsDataset, logger: BaseLogger,
+                             pool: Pool):
+        if self._get_max_num_jobs() == 1:
+            # Update coordination in the main process
+            time_steps_in_job = np.arange(evidence.num_time_steps)
 
-        unbounded_coordination, uc_acceptance_rates = self._sample_unbounded_coordination_on_fit(
-            gibbs_step, evidence, time_steps, job_num, group_order)
+            unbounded_coordination, acceptance_rates = self._sample_unbounded_coordination_on_fit(gibbs_step, evidence,
+                                                                                                  time_steps_in_job, 1,
+                                                                                                  0)
+            self._retain_samples_from_unbounded_coordination(gibbs_step, unbounded_coordination, acceptance_rates,
+                                                             time_steps_in_job)
 
-        coordination = self.coordination_samples_[gibbs_step].copy()
-        coordination_acceptance_rates = self.coordination_acceptance_rates_.copy()
+            coordination, acceptance_rates = self._sample_coordination_on_fit(gibbs_step, evidence, time_steps_in_job,
+                                                                              1, 0)
+            self._retain_samples_from_coordination(gibbs_step, coordination, acceptance_rates, time_steps_in_job)
 
-        if evidence.coordination is not None:
-            return coordination, unbounded_coordination, coordination_acceptance_rates, uc_acceptance_rates
+        else:
+            # Unbounded coordination is split in two groups because of the dependency over time.
+            groups = [self._unbounded_coordination_time_step_blocks1, self._unbounded_coordination_time_steps_blocks2]
+            for g, time_step_blocks in enumerate(groups):
+                job_args = [(gibbs_step, evidence, time_step_blocks[j], j + 1, g) for j in range(len(time_step_blocks))]
 
-        # The retain method copies the estimate in one gibbs step to the next one. Therefore, accessing the values in
-        # the current gibbs step will give us the latest values of the estimates.
-        latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
+                for block_idx, (unbounded_coordination, acceptance_rates) in enumerate(
+                        pool.starmap(self._sample_unbounded_coordination_on_fit, job_args)):
+                    self._retain_samples_from_unbounded_coordination(gibbs_step, unbounded_coordination,
+                                                                     acceptance_rates,
+                                                                     time_step_blocks[block_idx])
 
-        vcc = self.vcc_samples_[gibbs_step]
-        saa = np.sqrt(self.vaa_samples_[gibbs_step])
-
-        for t in tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
-                      leave=False):
-            if t > 0:
-                # Initial coordination is given
-                proposal_fn_params = {
-                    "vcc": vcc
-                }
-
-                log_prob_fn_params = {
-                    "current_unbounded_coordination_sample": unbounded_coordination[:, t][:, np.newaxis],
-                    "vcc": vcc,
-                    "saa": saa,
-                    "evidence": evidence,
-                    "latent_vocalics": latent_vocalics,
-                    "time_step": t
-                }
-
-                sampler = MCMC(proposal_fn=self._get_coordination_proposal,
-                               proposal_fn_kwargs=proposal_fn_params,
-                               log_prob_fn=self._get_coordination_posterior_unormalized_logprob,
-                               log_prob_fn_kwargs=log_prob_fn_params)
-                initial_sample = coordination[:, t][:, np.newaxis]
-                inferred_coordination = sampler.generate_samples(initial_sample=initial_sample,
-                                                                 num_samples=1,
-                                                                 burn_in=self.coordination_num_mcmc_iterations,
-                                                                 retain_every=1)[0, :, 0]
-                coordination[:, t] = inferred_coordination
-                coordination_acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
-
-        return coordination, unbounded_coordination, coordination_acceptance_rates, uc_acceptance_rates
+            # Coordination does not depend on other coordination at different time steps, thus we can parallelize a
+            # single group of time steps blocks.
+            job_args = [(gibbs_step, evidence, self._coordination_time_step_blocks[j], j + 1, 0) for j in
+                        range(len(self._coordination_time_step_blocks))]
+            for block_idx, (coordination, acceptance_rates) in enumerate(
+                    pool.starmap(self._sample_coordination_on_fit, job_args)):
+                self._retain_samples_from_coordination(gibbs_step, coordination, acceptance_rates,
+                                                       self._coordination_time_step_blocks[block_idx])
 
     def _sample_unbounded_coordination_on_fit(self, gibbs_step: int, evidence: BetaCoordinationLatentVocalicsDataset,
                                               time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[
@@ -336,7 +327,8 @@ class BetaCoordinationBlendingLatentVocalics(
         suc = np.sqrt(self.vuc_samples_[gibbs_step])
         vcc = self.vcc_samples_[gibbs_step]
 
-        for t in tqdm(time_steps, desc=f"Sampling Unbounded Coordination (Group {group_order + 1})", position=job_num, leave=False):
+        for t in tqdm(time_steps, desc=f"Sampling Unbounded Coordination (Group {group_order + 1})", position=job_num,
+                      leave=False):
             if t > 0:
                 next_unbounded_coordination = None if t == unbounded_coordination.shape[
                     1] - 1 else unbounded_coordination[:, t + 1][:, np.newaxis]
@@ -406,6 +398,55 @@ class BetaCoordinationBlendingLatentVocalics(
 
         return log_posterior.flatten()
 
+    def _sample_coordination_on_fit(self, gibbs_step: int, evidence: BetaCoordinationLatentVocalicsDataset,
+                                    time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[
+        np.ndarray, np.ndarray]:
+
+        coordination = self.coordination_samples_[gibbs_step].copy()
+        acceptance_rates = self.coordination_acceptance_rates_.copy()
+
+        if evidence.coordination is not None:
+            return coordination, acceptance_rates
+
+        unbounded_coordination = self.unbounded_coordination_samples_[gibbs_step]
+        # The retain method copies the estimate in one gibbs step to the next one. Therefore, accessing the values in
+        # the current gibbs step will give us the latest values of the estimates.
+        latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
+
+        vcc = self.vcc_samples_[gibbs_step]
+        saa = np.sqrt(self.vaa_samples_[gibbs_step])
+
+        for t in tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
+                      leave=False):
+            if t > 0:
+                # Initial coordination is given
+                proposal_fn_params = {
+                    "vcc": vcc
+                }
+
+                log_prob_fn_params = {
+                    "current_unbounded_coordination_sample": unbounded_coordination[:, t][:, np.newaxis],
+                    "vcc": vcc,
+                    "saa": saa,
+                    "evidence": evidence,
+                    "latent_vocalics": latent_vocalics,
+                    "time_step": t
+                }
+
+                sampler = MCMC(proposal_fn=self._get_coordination_proposal,
+                               proposal_fn_kwargs=proposal_fn_params,
+                               log_prob_fn=self._get_coordination_posterior_unormalized_logprob,
+                               log_prob_fn_kwargs=log_prob_fn_params)
+                initial_sample = coordination[:, t][:, np.newaxis]
+                inferred_coordination = sampler.generate_samples(initial_sample=initial_sample,
+                                                                 num_samples=1,
+                                                                 burn_in=self.coordination_num_mcmc_iterations,
+                                                                 retain_every=1)[0, :, 0]
+                coordination[:, t] = inferred_coordination
+                acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
+
+        return coordination, acceptance_rates
+
     def _get_coordination_proposal(self, previous_coordination_sample: np.ndarray, vcc: float):
 
         # Since coordination is constrained to 0 and 1, we don't expect a high variance.
@@ -452,16 +493,32 @@ class BetaCoordinationBlendingLatentVocalics(
 
         return log_posterior
 
-    def _retain_samples_from_latent(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
-        super()._retain_samples_from_latent(gibbs_step, latents, time_steps)
+    def _retain_samples_from_coordination(self, gibbs_step: int, coordination: np.ndarray, acceptance_rates: np.ndarray,
+                                          time_steps: np.ndarray):
+        self.coordination_samples_[gibbs_step][:, time_steps] = coordination[:, time_steps]
+        self.coordination_acceptance_rates_[:, time_steps] = acceptance_rates[:, time_steps]
 
-        self.unbounded_coordination_samples_[gibbs_step][:, time_steps] = latents[2][:, time_steps]
+        if gibbs_step < self.coordination_samples_.shape[0] - 1:
+            self.coordination_samples_[gibbs_step + 1] = self.coordination_samples_[gibbs_step]
 
-        self.coordination_acceptance_rates_[:, time_steps] = latents[3][:, time_steps]
-        self.unbounded_coordination_acceptance_rates_[:, time_steps] = latents[4][:, time_steps]
+    def _retain_samples_from_unbounded_coordination(self, gibbs_step: int, unbounded_coordination: np.ndarray,
+                                                    acceptance_rates: np.ndarray, time_steps: np.ndarray):
+        self.unbounded_coordination_samples_[gibbs_step][:, time_steps] = unbounded_coordination[:, time_steps]
+        self.unbounded_coordination_acceptance_rates_[:, time_steps] = acceptance_rates[:, time_steps]
 
         if gibbs_step < self.unbounded_coordination_samples_.shape[0] - 1:
             self.unbounded_coordination_samples_[gibbs_step + 1] = self.unbounded_coordination_samples_[gibbs_step]
+
+    # def _retain_samples_from_latent(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
+    #     super()._retain_samples_from_latent(gibbs_step, latents, time_steps)
+    #
+    #     self.unbounded_coordination_samples_[gibbs_step][:, time_steps] = latents[2][:, time_steps]
+    #
+    #     self.coordination_acceptance_rates_[:, time_steps] = latents[3][:, time_steps]
+    #     self.unbounded_coordination_acceptance_rates_[:, time_steps] = latents[4][:, time_steps]
+    #
+    #     if gibbs_step < self.unbounded_coordination_samples_.shape[0] - 1:
+    #         self.unbounded_coordination_samples_[gibbs_step + 1] = self.unbounded_coordination_samples_[gibbs_step]
 
     def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
                                                logger: BaseLogger):
