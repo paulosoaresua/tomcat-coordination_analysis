@@ -212,7 +212,7 @@ class BetaCoordinationBlendingLatentVocalics(
             # group contains only as many time steps as the number of jobs. We avoid run individual time steps
             # in parallel to decrease overhead of spawning a process for a fast task.
             job_args = [(evidence, train_hyper_parameters, self._unbounded_coordination_time_step_blocks1[j],
-                         j + 1, 0) for j in
+                         -1, 0) for j in
                         range(len(self._unbounded_coordination_time_step_blocks1))]
 
             results = pool.starmap(self._sample_unbounded_coordination_on_fit, job_args)
@@ -225,14 +225,14 @@ class BetaCoordinationBlendingLatentVocalics(
             unbounded_coordination, acceptance_rates = self._sample_unbounded_coordination_on_fit(evidence,
                                                                                                   train_hyper_parameters,
                                                                                                   self._unbounded_coordination_time_steps_block2,
-                                                                                                  1,
+                                                                                                  -1,
                                                                                                   1)
             self._retain_unbounded_coordination_samples(unbounded_coordination, acceptance_rates,
                                                         self._unbounded_coordination_time_steps_block2)
 
             # Coordination does not depend on other coordination at different time steps, thus we can parallelize a
             # single group of time steps blocks.
-            job_args = [(evidence, train_hyper_parameters, self._coordination_time_step_blocks[j], j + 1, 0)
+            job_args = [(evidence, train_hyper_parameters, self._coordination_time_step_blocks[j], -1, 0)
                         for j in
                         range(len(self._coordination_time_step_blocks))]
 
@@ -259,8 +259,12 @@ class BetaCoordinationBlendingLatentVocalics(
         su = np.sqrt(self.parameters.var_u)
         vc = self.parameters.var_c
 
-        for t in tqdm(time_steps, desc=f"Sampling Unbounded Coordination (Group {group_order + 1})", position=job_num,
-                      leave=False):
+        pbar = None
+        if job_num >= 0:
+            pbar = tqdm(time_steps, desc=f"Sampling Unbounded Coordination (Group {group_order + 1})", position=job_num,
+                        leave=False)
+
+        for t in time_steps:
             if t > 0:
                 next_unbounded_coordination = None if t == unbounded_coordination.shape[
                     1] - 1 else unbounded_coordination[:, t + 1][:, np.newaxis]
@@ -290,6 +294,9 @@ class BetaCoordinationBlendingLatentVocalics(
 
                 unbounded_coordination[:, t] = inferred_unbounded_coordination
                 acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
+
+            if pbar is not None:
+                pbar.update()
 
         return unbounded_coordination, acceptance_rates
 
@@ -349,8 +356,12 @@ class BetaCoordinationBlendingLatentVocalics(
         vc = self.parameters.var_c
         saa = np.sqrt(self.parameters.var_aa)
 
-        for t in tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
-                      leave=False):
+        pbar = None
+        if job_num >= 0:
+            pbar = tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
+                        leave=False)
+
+        for t in time_steps:
             if t > 0:
                 # Initial coordination is given
                 proposal_fn_params = {
@@ -378,6 +389,9 @@ class BetaCoordinationBlendingLatentVocalics(
                                                                  retain_every=1)[0, :, 0]
                 coordination[:, t] = inferred_coordination
                 acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
+
+            if pbar is not None:
+                pbar.update()
 
         return coordination, acceptance_rates
 

@@ -265,8 +265,13 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         coordination = self.last_coordination_samples_
 
         latent_vocalics = self.last_latent_vocalics_samples_.copy()
-        for t in tqdm(time_steps, desc=f"Sampling Latent Vocalics (Group {group_order + 1})", position=job_num,
-                      leave=False):
+
+        pbar = None
+        if job_num >= 0:
+            pbar = tqdm(time_steps, desc=f"Sampling Latent Vocalics (Group {group_order + 1})", position=job_num,
+                        leave=False)
+
+        for t in time_steps:
             C1 = clip_coordination(coordination[:, t][:, np.newaxis])
             M1 = evidence.vocalics_mask[:, t][:, np.newaxis]
 
@@ -336,6 +341,9 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 sampled_latent_vocalics = np.where(M1 == 1, sampled_latent_vocalics, latent_vocalics[:, :, t - 1])
 
             latent_vocalics[:, :, t] = sampled_latent_vocalics
+
+            if pbar is not None:
+                pbar.update()
 
         return latent_vocalics
 
