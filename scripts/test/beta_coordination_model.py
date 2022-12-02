@@ -31,8 +31,6 @@ BURN_IN = 2000
 train_hyper_parameters = BetaCoordinationLatentVocalicsTrainingHyperParameters(
     a_vu=1e-6,
     b_vu=1e-6,
-    a_vc=1e-6,
-    b_vc=1e-6,
     a_va=1e-6,
     b_va=1e-6,
     a_vaa=1e-6,
@@ -139,11 +137,11 @@ if __name__ == "__main__":
 
     print(f"True NLL = {true_nll}")
 
-    # # Check if we can estimate the parameters from the complete data
-    # print()
-    # print("Parameter estimation with full evidence")
-    # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=full_evidence, burn_in=1, num_jobs=1)
+    # Check if we can estimate the parameters from the complete data
+    print()
+    print("Parameter estimation with full evidence")
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=full_evidence, burn_in=1, num_jobs=1)
     #
     # # No Unbounded Coordination
     # print()

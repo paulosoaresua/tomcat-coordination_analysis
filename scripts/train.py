@@ -4,15 +4,16 @@ import pickle
 
 from coordination.callback.early_stopping_callback import EarlyStoppingCallback
 from coordination.common.log import TensorBoardLogger
-from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
-    BetaCoordinationBlendingLatentVocalics
+from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
+from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
+    BetaCoordinationLatentVocalicsTrainingHyperParameters
 
 
-def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_jobs: int, initial_coordination: float,
-          a_va: float, b_va: float, a_vaa: float, b_vaa: float, a_vo: float, b_vo: float, a_vuc: float, b_vuc: float,
-          initial_var_unbounded_coordination: float, initial_var_coordination: float,
-          var_unbounded_coordination_proposal: float, var_coordination_proposal: float,
-          unbounded_coordination_num_mcmc_iterations: int, coordination_num_mcmc_iterations: int, out_dir: str):
+def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_jobs: int, c0: float, a_vu: float,
+          b_vu: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float, a_vo: float, b_vo: float,
+          vu0: float, vc0: float, va0: float, vaa0: float, vo0: float, u_mcmc_iter: int, c_mcmc_iter: int,
+          vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str):
+
     # Loading dataset
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
@@ -20,25 +21,30 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
     timestamp = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
     out_dir = f"{out_dir}/{timestamp}"
 
-    model = BetaCoordinationBlendingLatentVocalics(
-        initial_coordination=initial_coordination,
-        num_vocalic_features=dataset.series[0].num_vocalic_features,
-        num_speakers=3,
+    train_hyper_parameters = BetaCoordinationLatentVocalicsTrainingHyperParameters(
+        a_vu=a_vu,
+        b_vu=b_vu,
         a_va=a_va,
         b_va=b_va,
         a_vaa=a_vaa,
         b_vaa=b_vaa,
         a_vo=a_vo,
         b_vo=b_vo,
-        a_vuc=a_vuc,
-        b_vuc=b_vuc,
-        initial_var_unbounded_coordination=initial_var_unbounded_coordination,
-        initial_var_coordination=initial_var_coordination,
-        var_unbounded_coordination_proposal=var_unbounded_coordination_proposal,
-        var_coordination_proposal=var_coordination_proposal,
-        unbounded_coordination_num_mcmc_iterations=unbounded_coordination_num_mcmc_iterations,
-        coordination_num_mcmc_iterations=coordination_num_mcmc_iterations
+        vu0=vu0,
+        vc0=vc0,
+        va0=va0,
+        vaa0=vaa0,
+        vo0=vo0,
+        u_mcmc_iter=u_mcmc_iter,
+        c_mcmc_iter=c_mcmc_iter,
+        vu_mcmc_prop=vu_mcmc_prop,
+        vc_mcmc_prop=vc_mcmc_prop
     )
+
+    model = BetaCoordinationBlendingLatentVocalics(
+        initial_coordination=c0,
+        num_vocalic_features=dataset.series[0].num_vocalic_features,
+        num_speakers=3)
 
     tb_logger = TensorBoardLogger(f"{out_dir}/tensorboard")
 
@@ -49,14 +55,13 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
 
     model.reset_parameters()
     model.fit(evidence=dataset,
+              train_hyper_parameters=train_hyper_parameters,
               burn_in=num_train_iter,
               num_jobs=num_jobs,
               seed=seed,
               logger=tb_logger,
               callbacks=callbacks)
-
-    with open(f"{out_dir}/model.pkl", "wb") as f:
-        pickle.dump(model, f)
+    model.save(out_dir)
 
 
 if __name__ == "__main__":
@@ -72,34 +77,40 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, required=False, default=0, help="Random seed for replication.")
     parser.add_argument("--n_jobs", type=int, required=False, default=1, help="Number of jobs to train in parallel.")
     parser.add_argument("--c0", type=int, required=False, default=0.01, help="Coordination at time 0.")
-    parser.add_argument("--a_vuc", type=float, required=False, default=1,
+    parser.add_argument("--a_vu", type=float, required=False, default=1e-6,
                         help="1st prior parameter of the variance of the unbounded coordination.")
-    parser.add_argument("--b_vuc", type=float, required=False, default=1,
+    parser.add_argument("--b_vu", type=float, required=False, default=1e-6,
                         help="2nd prior parameter of the variance of the unbounded coordination.")
-    parser.add_argument("--a_va", type=float, required=False, default=1,
+    parser.add_argument("--a_va", type=float, required=False, default=1e-6,
                         help="1st prior parameter of the variance of initial latent vocalics.")
-    parser.add_argument("--b_va", type=float, required=False, default=1,
+    parser.add_argument("--b_va", type=float, required=False, default=1e-6,
                         help="2nd prior parameter of the variance of initial latent vocalics.")
-    parser.add_argument("--a_vaa", type=float, required=False, default=1,
+    parser.add_argument("--a_vaa", type=float, required=False, default=1e-6,
                         help="1st prior parameter of the variance of latent vocalics.")
-    parser.add_argument("--b_vaa", type=float, required=False, default=1,
+    parser.add_argument("--b_vaa", type=float, required=False, default=1e-6,
                         help="2nd prior parameter of the variance of latent vocalics.")
-    parser.add_argument("--a_vo", type=float, required=False, default=1,
+    parser.add_argument("--a_vo", type=float, required=False, default=1e-6,
                         help="1st prior parameter of the variance of the observed vocalics.")
-    parser.add_argument("--b_vo", type=float, required=False, default=1,
+    parser.add_argument("--b_vo", type=float, required=False, default=1e-6,
                         help="2nd prior parameter of the variance of the observed vocalics.")
-    parser.add_argument("--vuc0", type=float, required=False, default=1e-4,
+    parser.add_argument("--vu0", type=float, required=False, default=0.001,
                         help="Initial variance of unbounded coordination during training.")
-    parser.add_argument("--vcc0", type=float, required=False, default=1e-6,
+    parser.add_argument("--vc0", type=float, required=False, default=0.001,
                         help="Initial variance of coordination during training.")
-    parser.add_argument("--vuc_prop", type=float, required=False, default=1e-3,
-                        help="Variance of the proposal distribution for unbounded coordination.")
-    parser.add_argument("--vcc_prop", type=float, required=False, default=1e-6,
-                        help="Variance of the proposal distribution for coordination.")
-    parser.add_argument("--n_uc_mcmc_iter", type=int, required=False, default=100,
+    parser.add_argument("--va0", type=float, required=False, default=1,
+                        help="Initial variance of latent vocalics prior.")
+    parser.add_argument("--vaa0", type=float, required=False, default=1,
+                        help="Initial variance of latent vocalics transition.")
+    parser.add_argument("--vo0", type=float, required=False, default=1,
+                        help="Initial variance of latent vocalics emission.")
+    parser.add_argument("--u_mcmc_iter", type=int, required=False, default=100,
                         help="Number of burn-in iterations when sampling unbounded coordination from its posterior.")
-    parser.add_argument("--n_c_mcmc_iter", type=int, required=False, default=100,
+    parser.add_argument("--c_mcmc_iter", type=int, required=False, default=100,
                         help="Number of burn-in iterations when sampling coordination from its posterior.")
+    parser.add_argument("--vu_mcmc_prop", type=float, required=False, default=0.001,
+                        help="Variance of the proposal distribution for unbounded coordination.")
+    parser.add_argument("--vc_mcmc_prop", type=float, required=False, default=0.001,
+                        help="Variance of the proposal distribution for coordination.")
     parser.add_argument("--out_dir", type=str, required=True, help="Directory where to save the model.")
 
     args = parser.parse_args()
@@ -109,19 +120,22 @@ if __name__ == "__main__":
           patience=args.patience,
           seed=args.seed,
           num_jobs=args.n_jobs,
-          initial_coordination=args.c0,
+          c0=args.c0,
+          a_vu=args.a_vu,
+          b_vu=args.b_vu,
           a_va=args.a_va,
           b_va=args.b_va,
           a_vaa=args.a_vaa,
           b_vaa=args.b_vaa,
           a_vo=args.a_vo,
           b_vo=args.b_vo,
-          a_vuc=args.a_vuc,
-          b_vuc=args.b_vuc,
-          initial_var_unbounded_coordination=args.vuc0,
-          initial_var_coordination=args.vcc0,
-          var_unbounded_coordination_proposal=args.vuc_prop,
-          var_coordination_proposal=args.vcc_prop,
-          unbounded_coordination_num_mcmc_iterations=args.n_uc_mcmc_iter,
-          coordination_num_mcmc_iterations=args.n_c_mcmc_iter,
+          vc0=args.vc0,
+          vu0=args.vu0,
+          va0=args.va0,
+          vaa0=args.vaa0,
+          vo0=args.vo0,
+          u_mcmc_iter=args.u_mcmc_iter,
+          c_mcmc_iter=args.c_mcmc_iter,
+          vu_mcmc_prop=args.vu_mcmc_prop,
+          vc_mcmc_prop=args.vc_mcmc_prop,
           out_dir=args.out_dir)

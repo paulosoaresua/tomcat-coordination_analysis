@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from multiprocessing import Pool
+import os
+import pickle
 
 import numpy as np
 from sklearn.base import BaseEstimator
@@ -47,6 +49,12 @@ class PGM(BaseEstimator, Generic[SP, S]):
         # List of hyper-parameters to be logged by the logger.
         self._hyper_params = {}
         self.nll_ = []
+
+    def save(self, out_dir: str):
+        os.makedirs(out_dir, exist_ok=True)
+
+        with open(f"{out_dir}/model.pkl", "wb") as f:
+            pickle.dump(self, f)
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
         set_seed(seed)

@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List, Optional, Tuple
 
 from multiprocessing import Pool
+import pickle
 
 import numpy as np
 from scipy.stats import invgamma, norm
@@ -52,6 +53,11 @@ class BetaCoordinationBlendingLatentVocalics(
         self._unbounded_coordination_time_step_blocks1: List[np.ndarray] = []
         self._unbounded_coordination_time_steps_block2 = np.array([])
         self._coordination_time_step_blocks: List[np.ndarray] = []
+
+    @classmethod
+    def from_pickled_file(cls, filepath: str) -> BetaCoordinationBlendingLatentVocalics:
+        with open(filepath, "rb") as f:
+            return pickle.load(f)
 
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
@@ -142,8 +148,10 @@ class BetaCoordinationBlendingLatentVocalics(
             vc = self.parameters.var_c
 
             # We don't let coordination samples be 0 or 1 for numerical stability.
-            self.last_coordination_samples_ = np.clip(beta(m, vc).rvs(), a_min=MIN_COORDINATION, a_max=MAX_COORDINATION)
+            self.last_coordination_samples_ = np.zeros_like(self.last_unbounded_coordination_samples_)
             self.last_coordination_samples_[:, 0] = self.initial_coordination
+            self.last_coordination_samples_[:, 1:] = np.clip(beta(m[:, 1:], vc).rvs(), a_min=MIN_COORDINATION,
+                                                             a_max=MAX_COORDINATION)
         else:
             self.last_coordination_samples_ = evidence.coordination.copy()
 
@@ -212,7 +220,7 @@ class BetaCoordinationBlendingLatentVocalics(
                 self._retain_unbounded_coordination_samples(unbounded_coordination,
                                                             acceptance_rates,
                                                             self._unbounded_coordination_time_step_blocks1[
-                                                                     block_idx])
+                                                                block_idx])
 
             unbounded_coordination, acceptance_rates = self._sample_unbounded_coordination_on_fit(evidence,
                                                                                                   train_hyper_parameters,

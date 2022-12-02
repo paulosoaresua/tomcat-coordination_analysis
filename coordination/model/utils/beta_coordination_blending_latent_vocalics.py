@@ -97,14 +97,12 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
 
 class BetaCoordinationLatentVocalicsTrainingHyperParameters(LatentVocalicsTrainingHyperParameters):
 
-    def __init__(self, a_vu: float, b_vu: float, a_vc: float, b_vc: float, a_va: float, b_va: float, a_vaa: float,
+    def __init__(self, a_vu: float, b_vu: float, a_va: float, b_va: float, a_vaa: float,
                  b_vaa: float, a_vo: float, b_vo: float, vu0: float, vc0: float, va0: float, vaa0: float, vo0: float,
                  vu_mcmc_prop: float, vc_mcmc_prop: float, u_mcmc_iter: int, c_mcmc_iter: int):
         """
         @param a_vu: 1st parameter of vu prior (inv. gamma)
         @param b_vu: 2nd parameter of vu prior
-        @param a_vc: 1st parameter of vc prior (inv. gamma)
-        @param b_vc: 2nd parameter of vc prior
         @param a_va: 1st parameter of va prior (inv. gamma)
         @param b_va: 2nd parameter of va prior
         @param a_vaa: 1st parameter of vaa prior (inv. gamma)
@@ -121,7 +119,9 @@ class BetaCoordinationLatentVocalicsTrainingHyperParameters(LatentVocalicsTraini
         @param u_mcmc_iter: Number of MCMC samples to discard when sampling unbounded coordination
         @param c_mcmc_iter: Number of MCMC samples to discard when sampling coordination
         """
-        super().__init__(a_vc, b_vc, a_va, b_va, a_vaa, b_vaa, a_vo, b_vo, vc0, va0, vaa0, vo0)
+
+        # var_c has uniform prior so, we can set a_vc and b_vc to 0
+        super().__init__(0, 0, a_va, b_va, a_vaa, b_vaa, a_vo, b_vo, vc0, va0, vaa0, vo0)
 
         self.a_vu = a_vu
         self.b_vu = b_vu
