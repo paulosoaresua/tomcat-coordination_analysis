@@ -46,7 +46,7 @@ class PGM(BaseEstimator, Generic[SP, S]):
 
         # List of hyper-parameters to be logged by the logger.
         self._hyper_params = {}
-        self.nll_ = np.array([])
+        self.nll_ = []
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
         set_seed(seed)
@@ -80,19 +80,17 @@ class PGM(BaseEstimator, Generic[SP, S]):
         # 1. Initialize latent variables
         self._initialize_gibbs(evidence, train_hyper_parameters, burn_in, seed, num_jobs)
 
-        #    1.1 Compute initial NLL
-        self.nll_ = np.zeros(burn_in + 1)
-        self.nll_[0] = -self._compute_joint_loglikelihood_at(0, evidence, train_hyper_parameters)
-
-        logger.add_scalar("train/nll", self.nll_[0], 0)
+        # Compute initial NLL.
+        self.nll_.append(-self._compute_joint_loglikelihood_at(evidence, train_hyper_parameters))
+        logger.add_scalar("train/nll", self.nll_[-1], 0)
 
         with Pool(self._get_max_num_jobs()) as pool:
             for i in tqdm(range(1, burn_in + 1), desc="Gibbs Step", position=0):
-                self._update_latent_variables(i, evidence, train_hyper_parameters, pool)
-                self._update_parameters(i, evidence, train_hyper_parameters, pool)
+                self._update_latent_variables(evidence, train_hyper_parameters, pool)
+                self._update_parameters(evidence, train_hyper_parameters, pool)
 
-                self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence, train_hyper_parameters)
-                logger.add_scalar("train/nll", self.nll_[i], i)
+                self.nll_.append(-self._compute_joint_loglikelihood_at(evidence, train_hyper_parameters))
+                logger.add_scalar("train/nll", self.nll_[-1], i)
                 self._log_parameters(i, logger)
 
                 for callback in callbacks:
@@ -110,18 +108,18 @@ class PGM(BaseEstimator, Generic[SP, S]):
     def _get_max_num_jobs(self) -> int:
         raise NotImplementedError
 
-    def _update_latent_variables(self, gibbs_step: int, evidence: EvidenceDataset,
-                                 train_hyper_parameters: TrainingHyperParameters, pool: Pool):
+    def _update_latent_variables(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters,
+                                 pool: Pool):
         raise NotImplementedError
 
-    def _update_parameters(self, gibbs_step: int, evidence: EvidenceDataset,
+    def _update_parameters(self, evidence: EvidenceDataset,
                            train_hyper_parameters: TrainingHyperParameters, pool: Pool):
         """
         Update parameters with conjugate priors using the sufficient statistics of previously sampled latent variables.
         """
         raise NotImplementedError
 
-    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: EvidenceDataset,
+    def _compute_joint_loglikelihood_at(self, evidence: EvidenceDataset,
                                         train_hyper_parameters: TrainingHyperParameters) -> float:
         raise NotImplementedError
 

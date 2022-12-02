@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Optional, Tuple, TypeVar
+from typing import Dict, List, Optional, TypeVar
 
 from datetime import datetime
 from multiprocessing import Pool
@@ -9,7 +9,6 @@ from scipy.stats import norm, invgamma
 from tqdm import tqdm
 
 from coordination.common.log import BaseLogger
-from coordination.common.dataset import EvidenceDataset
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
 from coordination.model.particle_filter import Particles
 from coordination.model.pgm import PGM
@@ -48,13 +47,9 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         # Trainable parameters of the model
         self.parameters = LatentVocalicsModelParameters()
 
-        # Samples collected during training
-        self.vc_samples_ = np.array([])
-        self.va_samples_ = np.array([])
-        self.vaa_samples_ = np.array([])
-        self.vo_samples_ = np.array([])
-        self.coordination_samples_ = np.array([])
-        self.latent_vocalics_samples_ = np.array([])
+        # Last sampled value of coordination and latent vocalics during training
+        self.last_coordination_samples_ = np.array([])
+        self.last_latent_vocalics_samples_ = np.array([])
 
         # The variable below is initialized during training to create blocks of time stamps for which variables can be
         # updated in parallel. Latent vocalics will be sampled in sequence (single process) to avoid a fancier logic to
@@ -201,41 +196,18 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
     def _initialize_parameters(self, evidence: LatentVocalicsDataset,
                                train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int, seed: int):
-        # History of samples in each Gibbs step
-        self.vc_samples_ = np.zeros(burn_in + 1)
-        self.va_samples_ = np.zeros(burn_in + 1)
-        self.vaa_samples_ = np.zeros(burn_in + 1)
-        self.vo_samples_ = np.zeros(burn_in + 1)
 
         # Dependent on the subclass implementation
         self._initialize_coordination_parameters_for_fit(evidence, train_hyper_parameters, burn_in, seed)
 
-        if self.parameters.var_a_frozen:
-            self.va_samples_[:] = self.parameters.var_a
-        else:
-            self.va_samples_[0] = train_hyper_parameters.va0
+        if not self.parameters.var_a_frozen:
             self.parameters.set_var_a(train_hyper_parameters.va0, freeze=False)
 
-            if burn_in > 0:
-                self.va_samples_[1] = self.va_samples_[0]
-
-        if self.parameters.var_aa_frozen:
-            self.vaa_samples_[:] = self.parameters.var_aa
-        else:
-            self.vaa_samples_[0] = train_hyper_parameters.vaa0
+        if not self.parameters.var_aa_frozen:
             self.parameters.set_var_aa(train_hyper_parameters.vaa0, freeze=False)
 
-            if burn_in > 0:
-                self.vaa_samples_[1] = self.vaa_samples_[0]
-
-        if self.parameters.var_o_frozen:
-            self.vo_samples_[:] = self.parameters.var_o
-        else:
-            self.vo_samples_[0] = train_hyper_parameters.vo0
+        if not self.parameters.var_o_frozen:
             self.parameters.set_var_o(train_hyper_parameters.vo0, freeze=False)
-
-            if burn_in > 0:
-                self.vo_samples_[1] = self.vo_samples_[0]
 
     def _initialize_coordination_parameters_for_fit(self, evidence: LatentVocalicsDataset,
                                                     train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
@@ -246,23 +218,16 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     def _initialize_latent_variables(self, evidence: LatentVocalicsDataset,
                                      train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int,
                                      seed: int):
-        self.coordination_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.num_time_steps))
-        self.latent_vocalics_samples_ = np.zeros(
-            (burn_in + 1, evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps))
 
         # Dependent on the subclass implementation
         self._initialize_coordination_for_fit(evidence, train_hyper_parameters, burn_in, seed)
 
         if evidence.latent_vocalics is None:
             # Initialize it from a standard normal
-            self.latent_vocalics_samples_[0] = norm(
-                loc=np.zeros((evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps)),
-                scale=1).rvs()
-
-            if burn_in > 0:
-                self.latent_vocalics_samples_[1] = self.latent_vocalics_samples_[0]
+            self.last_latent_vocalics_samples_ = norm(
+                loc=np.zeros((evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps)), scale=1).rvs()
         else:
-            self.latent_vocalics_samples_[:] = evidence.latent_vocalics[np.newaxis, :]
+            self.last_latent_vocalics_samples_ = evidence.latent_vocalics.copy()
 
     def _initialize_coordination_for_fit(self, evidence: LatentVocalicsDataset,
                                          train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
@@ -272,18 +237,17 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     def _get_max_num_jobs(self) -> int:
         raise NotImplementedError
 
-    def _update_latent_variables(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _update_latent_variables(self, evidence: LatentVocalicsDataset,
                                  train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
                                  pool: Pool):
-        self._update_coordination(gibbs_step, evidence, train_hyper_parameters, pool)
-        self._update_vocalics(gibbs_step, evidence, train_hyper_parameters, pool)
+        self._update_coordination(evidence, train_hyper_parameters, pool)
+        self._update_vocalics(evidence)
 
-    def _update_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _update_coordination(self, evidence: LatentVocalicsDataset,
                              train_hyper_parameters: LatentVocalicsTrainingHyperParameters, pool: Pool):
         raise NotImplementedError
 
-    def _update_vocalics(self, gibbs_step: int, evidence: LatentVocalicsDataset,
-                         train_hyper_parameters: LatentVocalicsTrainingHyperParameters, pool: Pool):
+    def _update_vocalics(self, evidence: LatentVocalicsDataset):
         """
         Sample vocalics in a single thread. A fancier logic may be applied to sample vocalics in different threads
         by dealing with the jumps in dependencies such that parallel blocks do not have dependent vocalics, but
@@ -291,29 +255,19 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         """
 
         if evidence.latent_vocalics is None:
-            latent_vocalics = self._sample_latent_vocalics_on_fit(gibbs_step, evidence,
-                                                                  self._latent_vocalics_time_step_block, 1, 0)
-        else:
-            latent_vocalics = self.latent_vocalics_samples_[gibbs_step - 1].copy()
+            self.last_latent_vocalics_samples_ = self._sample_latent_vocalics_on_fit(evidence,
+                                                                                     self._latent_vocalics_time_step_block,
+                                                                                     1, 0)
 
-        self.latent_vocalics_samples_[gibbs_step] = latent_vocalics
-        if gibbs_step < self.latent_vocalics_samples_.shape[0] - 1:
-            # Copy the current estimation to the next step. This is necessary for the parallelization to work properly.
-            # This allows the blocks in the next step to use the values of the previous step (gibbs_step) as a start
-            # point but without indexing the previous step. This is necessary because the execution block that runs in a
-            # single thread, will update the latent values for the current step. If the parallel block execution
-            # indexes the past,they won't have access to the most up-to-date values.
-            self.latent_vocalics_samples_[gibbs_step + 1] = self.latent_vocalics_samples_[gibbs_step]
-
-    def _sample_latent_vocalics_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _sample_latent_vocalics_on_fit(self, evidence: LatentVocalicsDataset,
                                        time_steps: np.ndarray, job_num: int, group_order: int) -> np.ndarray:
 
         va = self.parameters.var_a
         vaa = self.parameters.var_aa
         vo = self.parameters.var_o
-        coordination = self.coordination_samples_[gibbs_step]
+        coordination = self.last_coordination_samples_
 
-        latent_vocalics = self.latent_vocalics_samples_[gibbs_step].copy()
+        latent_vocalics = self.last_latent_vocalics_samples_.copy()
         for t in tqdm(time_steps, desc=f"Sampling Latent Vocalics (Group {group_order + 1})", position=job_num,
                       leave=False):
             C1 = clip_coordination(coordination[:, t][:, np.newaxis])
@@ -388,16 +342,16 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return latent_vocalics
 
-    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _compute_joint_loglikelihood_at(self, evidence: LatentVocalicsDataset,
                                         train_hyper_parameters: LatentVocalicsTrainingHyperParameters) -> float:
         sa = np.sqrt(self.parameters.var_a)
         saa = np.sqrt(self.parameters.var_aa)
         so = np.sqrt(self.parameters.var_o)
 
-        coordination = self.coordination_samples_[gibbs_step]
-        latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
+        coordination = self.last_coordination_samples_
+        latent_vocalics = self.last_latent_vocalics_samples_
 
-        ll = self._compute_coordination_loglikelihood(gibbs_step, evidence)
+        ll = self._compute_coordination_loglikelihood(evidence)
         for t in range(evidence.num_time_steps):
             # Latent vocalics
             C = coordination[:, t][:, np.newaxis]
@@ -436,7 +390,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return ll
 
-    def _compute_coordination_loglikelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+    def _compute_coordination_loglikelihood(self, evidence: LatentVocalicsDataset) -> float:
         raise NotImplementedError
 
     @staticmethod
@@ -465,14 +419,15 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return log_posterior
 
-    def _update_parameters(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _update_parameters(self, evidence: LatentVocalicsDataset,
                            train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
                            pool: Pool):
-        self._update_parameters_coordination(gibbs_step, evidence, train_hyper_parameters)
+
+        self._update_coordination_parameters(evidence, train_hyper_parameters)
 
         # Variance of the latent vocalics prior
         if not self.parameters.var_a_frozen:
-            V = self.latent_vocalics_samples_[gibbs_step]
+            V = self.last_latent_vocalics_samples_
             M = evidence.vocalics_mask
 
             first_time_steps = np.argmax(M, axis=1)
@@ -481,17 +436,14 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
             a = train_hyper_parameters.a_va + M_first_time_steps.sum() * self.num_vocalic_features / 2
             b = train_hyper_parameters.b_va + np.square(first_latent_vocalics).sum() / 2
-            self.va_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
 
-            self.parameters.set_var_a(self.va_samples_[gibbs_step], freeze=False)
-
-            if gibbs_step < len(self.va_samples_) - 1:
-                self.va_samples_[gibbs_step + 1] = self.va_samples_[gibbs_step]
+            new_var_a = invgamma(a=a, scale=b).mean()
+            self.parameters.set_var_a(new_var_a, freeze=False)
 
         # Variance of the latent vocalics transition
         if not self.parameters.var_aa_frozen:
-            coordination = np.expand_dims(self.coordination_samples_[gibbs_step], axis=1)
-            V = self.latent_vocalics_samples_[gibbs_step]
+            coordination = np.expand_dims(self.last_coordination_samples_, axis=1)
+            V = self.last_latent_vocalics_samples_
             M = np.expand_dims(evidence.vocalics_mask, axis=1)
 
             Ma = np.expand_dims(np.where(evidence.previous_vocalics_from_self == -1, 0, 1), axis=1)
@@ -508,29 +460,23 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
             a = train_hyper_parameters.a_vaa + Ml.sum() * self.num_vocalic_features / 2
             b = train_hyper_parameters.b_vaa + np.square(x).sum() / 2
-            self.vaa_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
 
-            self.parameters.set_var_aa(self.vaa_samples_[gibbs_step], freeze=False)
-
-            if gibbs_step < len(self.vaa_samples_) - 1:
-                self.vaa_samples_[gibbs_step + 1] = self.vaa_samples_[gibbs_step]
+            new_var_aa = invgamma(a=a, scale=b).mean()
+            self.parameters.set_var_aa(new_var_aa, freeze=False)
 
         # Variance of the vocalics emission
         if not self.parameters.var_o_frozen:
-            V = self.latent_vocalics_samples_[gibbs_step]
+            V = self.last_latent_vocalics_samples_
             M = np.expand_dims(evidence.vocalics_mask, axis=1)
 
             x = (V - evidence.observed_vocalics) * M
             a = train_hyper_parameters.a_vo + M.sum() * self.num_vocalic_features / 2
             b = train_hyper_parameters.b_vo + np.square(x).sum() / 2
-            self.vo_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
 
-            self.parameters.set_var_o(self.vo_samples_[gibbs_step], freeze=False)
+            new_var_o = invgamma(a=a, scale=b).mean()
+            self.parameters.set_var_o(new_var_o, freeze=False)
 
-            if gibbs_step < len(self.vo_samples_) - 1:
-                self.vo_samples_[gibbs_step + 1] = self.vo_samples_[gibbs_step]
-
-    def _update_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _update_coordination_parameters(self, evidence: LatentVocalicsDataset,
                                         train_hyper_parameters: LatentVocalicsTrainingHyperParameters):
         raise NotImplementedError
 

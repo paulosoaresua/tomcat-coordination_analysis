@@ -15,7 +15,7 @@ TIME_STEPS = 50
 NUM_SAMPLES = 100
 NUM_FEATURES = 2
 DATA_TIME_SCALE_DENSITY = 0.6
-NUM_JOBS = 4
+NUM_JOBS = 8
 
 model_name = "beta_model"
 
@@ -26,7 +26,7 @@ VAR_AA = 1
 VAR_O = 1
 
 SAMPLE_TO_INFER = 8
-BURN_IN = 500
+BURN_IN = 2000
 
 train_hyper_parameters = BetaCoordinationLatentVocalicsTrainingHyperParameters(
     a_vu=1e-6,

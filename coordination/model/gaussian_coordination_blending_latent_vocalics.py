@@ -164,7 +164,7 @@ class GaussianCoordinationBlendingLatentVocalics(
 
         return log_posterior
 
-    def _update_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+    def _update_coordination_parameters(self, gibbs_step: int, evidence: LatentVocalicsDataset,
                                         logger: BaseLogger):
         if self.var_cc is None:
             a = self.a_vcc + evidence.num_trials * (evidence.num_time_steps - 1) / 2
