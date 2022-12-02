@@ -7,8 +7,8 @@ import numpy as np
 
 from coordination.common.log import BaseLogger, TensorBoardLogger
 from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
-from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
-    BetaCoordinationLatentVocalicsDataSeries
+from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
+    BetaCoordinationLatentVocalicsTrainingHyperParameters, LatentVocalicsModelParameters
 
 # Parameters
 TIME_STEPS = 50
@@ -20,23 +20,45 @@ NUM_JOBS = 4
 model_name = "beta_model"
 
 VAR_UC = 0.25
-VAR_CC = 1e-6
+VAR_CC = 0.01
 VAR_A = 1
-VAR_AA = 0.25
+VAR_AA = 1
 VAR_O = 1
 
 SAMPLE_TO_INFER = 8
 BURN_IN = 500
 
+train_hyper_parameters = BetaCoordinationLatentVocalicsTrainingHyperParameters(
+    a_vu=1e-6,
+    b_vu=1e-6,
+    a_vc=1e-6,
+    b_vc=1e-6,
+    a_va=1e-6,
+    b_va=1e-6,
+    a_vaa=1e-6,
+    b_vaa=1e-6,
+    a_vo=1e-6,
+    b_vo=1e-6,
+    vu0=0.01,
+    vc0=0.01,
+    va0=1,
+    vaa0=1,
+    vo0=1,
+    u_mcmc_iter=50,
+    c_mcmc_iter=50,
+    vu_mcmc_prop=0.001,
+    vc_mcmc_prop=0.001
+)
+
 
 def estimate_parameters(model: BetaCoordinationBlendingLatentVocalics, evidence, burn_in: int, num_jobs: int,
                         logger: Optional[BaseLogger] = BaseLogger()):
-    model.fit(evidence, burn_in=burn_in, seed=0, num_jobs=num_jobs, logger=logger)
-    print(f"Estimated var_uc / True var_uc = {model.var_uc} / {VAR_UC}")
-    print(f"Estimated var_cc / True var_cc = {model.var_cc} / {VAR_CC}")
-    print(f"Estimated var_a / True var_a = {model.var_a} / {VAR_A}")
-    print(f"Estimated var_aa / True var_aa = {model.var_aa} / {VAR_AA}")
-    print(f"Estimated var_o / True var_o = {model.var_o} / {VAR_O}")
+    model.fit(evidence, train_hyper_parameters, burn_in=burn_in, seed=0, num_jobs=num_jobs, logger=logger)
+    print(f"Estimated var_u / True var_uc = {model.parameters.var_u} / {VAR_UC}")
+    print(f"Estimated var_c / True var_cc = {model.parameters.var_c} / {VAR_CC}")
+    print(f"Estimated var_a / True var_a = {model.parameters.var_a} / {VAR_A}")
+    print(f"Estimated var_aa / True var_aa = {model.parameters.var_aa} / {VAR_AA}")
+    print(f"Estimated var_o / True var_o = {model.parameters.var_o} / {VAR_O}")
 
 
 # For parallelism to work, the script has to be called in a __main__ section
@@ -44,27 +66,14 @@ if __name__ == "__main__":
     model = BetaCoordinationBlendingLatentVocalics(
         initial_coordination=0.2,
         num_vocalic_features=NUM_FEATURES,
-        num_speakers=3,
-        a_va=1,
-        b_va=1,
-        a_vaa=1,
-        b_vaa=1,
-        a_vo=1,
-        b_vo=1,
-        a_vuc=1,
-        b_vuc=1,
-        initial_var_unbounded_coordination=1e-4,
-        initial_var_coordination=1e-6,
-        var_unbounded_coordination_proposal=0.001,
-        var_coordination_proposal=1e-6,
-        unbounded_coordination_num_mcmc_iterations=50
+        num_speakers=3
     )
 
-    model.var_uc = VAR_UC
-    model.var_cc = VAR_CC
-    model.var_a = VAR_A
-    model.var_aa = VAR_AA
-    model.var_o = VAR_O
+    model.parameters.set_var_u(VAR_UC)
+    model.parameters.set_var_c(VAR_CC)
+    model.parameters.set_var_a(VAR_A)
+    model.parameters.set_var_aa(VAR_AA)
+    model.parameters.set_var_o(VAR_O)
 
     samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0, time_scale_density=DATA_TIME_SCALE_DENSITY)
 
@@ -125,7 +134,7 @@ if __name__ == "__main__":
     partial_evidence = BetaCoordinationLatentVocalicsDataset.from_samples(tmp)
 
     # Provide complete data to estimate the true model negative-loglikelihood
-    model.fit(full_evidence, burn_in=0, seed=0, num_jobs=1)
+    model.fit(full_evidence, train_hyper_parameters, burn_in=0, seed=0, num_jobs=1)
     true_nll = model.nll_[-1]
 
     print(f"True NLL = {true_nll}")

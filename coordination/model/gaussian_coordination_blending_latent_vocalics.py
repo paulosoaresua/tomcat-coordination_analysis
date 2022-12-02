@@ -52,7 +52,7 @@ class GaussianCoordinationBlendingLatentVocalics(
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
-    def _initialize_coordination_for_gibbs(self, evidence: LatentVocalicsDataset):
+    def _initialize_coordination_for_fit(self, evidence: LatentVocalicsDataset):
         if evidence.coordination is None:
             means = np.zeros((evidence.num_trials, evidence.num_time_steps))
             self.coordination_samples_[0] = norm(means, 0.1).rvs()
@@ -164,8 +164,8 @@ class GaussianCoordinationBlendingLatentVocalics(
 
         return log_posterior
 
-    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
-                                               logger: BaseLogger):
+    def _update_parameters_coordination(self, gibbs_step: int, evidence: LatentVocalicsDataset,
+                                        logger: BaseLogger):
         if self.var_cc is None:
             a = self.a_vcc + evidence.num_trials * (evidence.num_time_steps - 1) / 2
             x = self.coordination_samples_[gibbs_step, :, 1:]
