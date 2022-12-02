@@ -57,9 +57,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         # is faster compared to coordination that is sampled via MCMC.
         self._latent_vocalics_time_step_block = np.array([])
 
-    def reset_parameters(self):
-        self.parameters.reset()
-
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
     # ---------------------------------------------------------

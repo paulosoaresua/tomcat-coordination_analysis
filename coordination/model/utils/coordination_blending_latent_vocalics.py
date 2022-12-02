@@ -7,7 +7,7 @@ import numpy as np
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.component.speech.common import VocalicsSparseSeries
 from coordination.model.particle_filter import Particles
-from coordination.model.pgm import ParticlesSummary, Samples, TrainingHyperParameters
+from coordination.model.pgm import ParticlesSummary, Samples, TrainingHyperParameters, ModelParameters
 
 
 def clip_coordination(coordination: np.ndarray) -> np.ndarray:
@@ -198,7 +198,7 @@ class LatentVocalicsTrainingHyperParameters(TrainingHyperParameters):
         return self.__dict__
 
 
-class LatentVocalicsModelParameters:
+class LatentVocalicsModelParameters(ModelParameters):
 
     def __init__(self):
         self._var_c: Optional[float] = None
@@ -210,6 +210,12 @@ class LatentVocalicsModelParameters:
         self._var_a_frozen = False
         self._var_aa_frozen = False
         self._var_o_frozen = False
+
+    def freeze(self):
+        self._var_c_frozen = True
+        self._var_a_frozen = True
+        self._var_aa_frozen = True
+        self._var_o_frozen = True
 
     def reset(self):
         self._var_c = None

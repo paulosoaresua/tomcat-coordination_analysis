@@ -40,11 +40,22 @@ class TrainingHyperParameters:
         raise NotImplementedError
 
 
+class ModelParameters:
+
+    def freeze(self):
+        raise NotImplementedError
+
+    def reset(self):
+        raise NotImplementedError
+
+
 class PGM(BaseEstimator, Generic[SP, S]):
     def __init__(self):
         super().__init__()
 
         self.train = False
+
+        self.parameters = ModelParameters()
 
         # List of hyper-parameters to be logged by the logger.
         self._hyper_params = {}
@@ -55,6 +66,9 @@ class PGM(BaseEstimator, Generic[SP, S]):
 
         with open(f"{out_dir}/model.pkl", "wb") as f:
             pickle.dump(self, f)
+
+    def reset_parameters(self):
+        self.parameters.reset()
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
         set_seed(seed)
@@ -106,6 +120,8 @@ class PGM(BaseEstimator, Generic[SP, S]):
 
                 if not self.train:
                     break
+
+        self.parameters.freeze()
 
         return self
 

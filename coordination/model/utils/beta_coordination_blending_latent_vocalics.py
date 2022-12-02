@@ -140,6 +140,10 @@ class BetaCoordinationLatentVocalicsModelParameters(LatentVocalicsModelParameter
         self._var_u: Optional[float] = None
         self._var_u_frozen = False
 
+    def freeze(self):
+        super().freeze()
+        self._var_u_frozen = True
+
     def reset(self):
         super().reset()
         self._var_u = None
