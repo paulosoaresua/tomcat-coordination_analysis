@@ -56,13 +56,10 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         self.coordination_samples_ = np.array([])
         self.latent_vocalics_samples_ = np.array([])
 
-        # The lists below are initialized during training to create blocks of time stamps for which coordination can be
-        # updated in parallel. Latent vocalics will be sampled in sequence to avoid a fancier logic to retrieve
-        # dependencies. This is okay for now because latent vocalics posterior has a closed form and sampling is faster
-        # compared to coordination that is sampled via MCMC.
-        self._unbounded_coordination_time_step_blocks1: List[np.ndarray] = []
-        self._unbounded_coordination_time_steps_blocks2: List[np.ndarray] = []
-        self._coordination_time_step_blocks: List[np.ndarray] = []
+        # The variable below is initialized during training to create blocks of time stamps for which variables can be
+        # updated in parallel. Latent vocalics will be sampled in sequence (single process) to avoid a fancier logic to
+        # retrieve dependencies. This is okay for now because latent vocalics posterior has a closed form and sampling
+        # is faster compared to coordination that is sampled via MCMC.
         self._latent_vocalics_time_step_block = np.array([])
 
     def reset_parameters(self):
@@ -199,27 +196,8 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         self._initialize_latent_variables(evidence, train_hyper_parameters, burn_in, seed)
 
     def _create_parallel_time_step_blocks(self, evidence: LatentVocalicsDataset, num_jobs: int):
-        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
-        self._unbounded_coordination_time_step_blocks1 = []
-        self._unbounded_coordination_time_steps_blocks2 = []
-        self._coordination_time_step_blocks = []
-
-        # Latent coordination will be updated in a single process
+        # Latent vocalics will be updated in a single process
         self._latent_vocalics_time_step_block = np.arange(evidence.num_time_steps)
-
-        if num_effective_jobs > 1:
-            self._unbounded_coordination_time_step_blocks1 = np.array_split(np.arange(evidence.num_time_steps),
-                                                                            num_effective_jobs)
-            for i in range(1, len(self._unbounded_coordination_time_step_blocks1)):
-                # Move the last time step in each block from group 1 to a block in group 2.
-                # Blocks in group 2 depends on blocks in group 1. However, within groups, there's no dependency between
-                # coordination, so they can be updated in parallel.
-                self._unbounded_coordination_time_steps_blocks2.append(
-                    np.array([self._unbounded_coordination_time_step_blocks1[i][0]]))
-                self._unbounded_coordination_time_step_blocks1[i] = self._unbounded_coordination_time_step_blocks1[i][
-                                                                    1:]
-
-            self._coordination_time_step_blocks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
 
     def _initialize_parameters(self, evidence: LatentVocalicsDataset,
                                train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int, seed: int):
@@ -292,8 +270,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         raise NotImplementedError
 
     def _get_max_num_jobs(self) -> int:
-        return max(max(len(self._unbounded_coordination_time_step_blocks1),
-                       len(self._unbounded_coordination_time_steps_blocks2)), 1)
+        raise NotImplementedError
 
     def _update_latent_variables(self, gibbs_step: int, evidence: LatentVocalicsDataset,
                                  train_hyper_parameters: LatentVocalicsTrainingHyperParameters,

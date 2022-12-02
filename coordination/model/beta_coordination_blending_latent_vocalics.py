@@ -47,6 +47,12 @@ class BetaCoordinationBlendingLatentVocalics(
         self.unbounded_coordination_acceptance_rates_ = np.array([])
         self.coordination_acceptance_rates_ = np.array([])
 
+        # The lists below are initialized during training to create blocks of time stamps for which coordination can be
+        # updated in parallel.
+        self._unbounded_coordination_time_step_blocks1: List[np.ndarray] = []
+        self._unbounded_coordination_time_steps_block2 = np.array([])
+        self._coordination_time_step_blocks: List[np.ndarray] = []
+
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
     # ---------------------------------------------------------
@@ -78,6 +84,31 @@ class BetaCoordinationBlendingLatentVocalics(
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
+    def _create_parallel_time_step_blocks(self, evidence: BetaCoordinationLatentVocalicsDataset, num_jobs: int):
+        super()._create_parallel_time_step_blocks(evidence, num_jobs)
+
+        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
+        self._unbounded_coordination_time_step_blocks1 = []
+        self._unbounded_coordination_time_steps_block2 = []
+        self._coordination_time_step_blocks = []
+
+        if num_effective_jobs > 1:
+            self._unbounded_coordination_time_step_blocks1 = np.array_split(np.arange(evidence.num_time_steps),
+                                                                            num_effective_jobs)
+            for i in range(1, len(self._unbounded_coordination_time_step_blocks1)):
+                # Move the last time step in each block from group 1 to a block in group 2.
+                # Blocks in group 2 depends on blocks in group 1. However, within groups, there's no dependency between
+                # coordination, so they can be updated in parallel.
+                self._unbounded_coordination_time_steps_block2.append(self._unbounded_coordination_time_step_blocks1[i][0])
+                self._unbounded_coordination_time_step_blocks1[i] = self._unbounded_coordination_time_step_blocks1[i][
+                                                                    1:]
+
+            # Only one block in group 2 as large as the number of jobs. Creating individual blocks with one time step
+            # only increases overhead. One time step is processed fast enough to be parallelized.
+            self._unbounded_coordination_time_steps_blocks2 = np.array(self._unbounded_coordination_time_steps_block2)
+
+            self._coordination_time_step_blocks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
+
     def _initialize_coordination_parameters_for_fit(self, evidence: BetaCoordinationLatentVocalicsDataset,
                                                     train_hyper_parameters: BetaCoordinationLatentVocalicsTrainingHyperParameters,
                                                     burn_in: int, seed: int):
@@ -148,6 +179,9 @@ class BetaCoordinationBlendingLatentVocalics(
                 norm(self.unbounded_coordination_samples_[0, :, t - 1],
                      su).rvs(), a_min=min_value, a_max=max_value)
 
+    def _get_max_num_jobs(self) -> int:
+        return max(len(self._unbounded_coordination_time_step_blocks1), 1)
+
     def _compute_coordination_loglikelihood(self, gibbs_step: int,
                                             evidence: BetaCoordinationLatentVocalicsDataset) -> float:
         unbounded_coordination = self.unbounded_coordination_samples_[gibbs_step]
@@ -186,25 +220,38 @@ class BetaCoordinationBlendingLatentVocalics(
             self._retain_samples_from_coordination(gibbs_step, coordination, acceptance_rates, time_steps_in_job)
 
         else:
-            # Unbounded coordination is split in two groups because of the dependency over time.
-            groups = [self._unbounded_coordination_time_step_blocks1, self._unbounded_coordination_time_steps_blocks2]
-            for g, time_step_blocks in enumerate(groups):
-                job_args = [(gibbs_step, evidence, train_hyper_parameters, time_step_blocks[j], j + 1, g) for j in
-                            range(len(time_step_blocks))]
+            # Unbounded coordination is split in two groups because of their dependency over time.
+            # We sample the first group blocks in parallel and the second group in the main thread. The second
+            # group contains only as many time steps as the number of jobs. We avoid run individual time steps
+            # in parallel to decrease overhead of spawning a process for a fast task.
+            job_args = [(
+                        gibbs_step, evidence, train_hyper_parameters, self._unbounded_coordination_time_step_blocks1[j],
+                        j + 1, 0) for j in
+                        range(len(self._unbounded_coordination_time_step_blocks1))]
 
-                for block_idx, (unbounded_coordination, acceptance_rates) in enumerate(
-                        pool.starmap(self._sample_unbounded_coordination_on_fit, job_args)):
-                    self._retain_samples_from_unbounded_coordination(gibbs_step, unbounded_coordination,
-                                                                     acceptance_rates,
-                                                                     time_step_blocks[block_idx])
+            results = pool.starmap(self._sample_unbounded_coordination_on_fit, job_args)
+            for block_idx, (unbounded_coordination, acceptance_rates) in enumerate(results):
+                self._retain_samples_from_unbounded_coordination(gibbs_step, unbounded_coordination,
+                                                                 acceptance_rates,
+                                                                 self._unbounded_coordination_time_step_blocks1[
+                                                                     block_idx])
+
+            unbounded_coordination, acceptance_rates = self._sample_unbounded_coordination_on_fit(gibbs_step, evidence,
+                                                                                                  train_hyper_parameters,
+                                                                                                  self._unbounded_coordination_time_steps_block2,
+                                                                                                  1,
+                                                                                                  1)
+            self._retain_samples_from_unbounded_coordination(gibbs_step, unbounded_coordination, acceptance_rates,
+                                                             self._unbounded_coordination_time_steps_block2)
 
             # Coordination does not depend on other coordination at different time steps, thus we can parallelize a
             # single group of time steps blocks.
             job_args = [(gibbs_step, evidence, train_hyper_parameters, self._coordination_time_step_blocks[j], j + 1, 0)
                         for j in
                         range(len(self._coordination_time_step_blocks))]
-            for block_idx, (coordination, acceptance_rates) in enumerate(
-                    pool.starmap(self._sample_coordination_on_fit, job_args)):
+
+            results = pool.starmap(self._sample_coordination_on_fit, job_args)
+            for block_idx, (coordination, acceptance_rates) in enumerate(results):
                 self._retain_samples_from_coordination(gibbs_step, coordination, acceptance_rates,
                                                        self._coordination_time_step_blocks[block_idx])
 
