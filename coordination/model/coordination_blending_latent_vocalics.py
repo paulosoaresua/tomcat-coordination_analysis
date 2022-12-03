@@ -659,3 +659,158 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                     summary.latent_vocalics_var[:, t] = summary.latent_vocalics_var[:, t - 1]
 
         return summary
+
+    # TODO: Consider using to parallelize latent vocalics training.
+    # @staticmethod
+    # def _get_time_step_blocks_for_parallel_fitting(evidence: LatentVocalicsDataset, num_jobs: int) -> Tuple[
+    #     List[np.ndarray], List[np.ndarray]]:
+    #     """
+    #     Analyze the dependencies in the model to create 2 groups with lists of time steps that can be processed in
+    #     parallel in each group.
+    #     """
+    #
+    #     num_effective_jobs = int(min(evidence.num_time_steps / 2, num_jobs))
+    #     if num_effective_jobs == 1:
+    #         # No parallel jobs. Variables from all time steps are assigned to the first group.
+    #         return [np.arange(evidence.num_time_steps)], []
+    #
+    #     # Vocalics in a time step depends on two previous vocalics from different time steps: one from the same
+    #     # speaker, and one from a different speaker. Therefore, we cannot simply add the border of the blocks to
+    #     # the list of time steps in the first group.
+    #     # The strategy here will be to first split the time steps in as many blocks as the number of jobs. These,
+    #     # blocks will hold the list of time steps to process in the second group. For each block, we take the last
+    #     # time step in which there was observation across the trials, and from there we take the next timestep from
+    #     # the same speaker and other speaker. We then take the minimum and maximum among all these time
+    #     # steps. That yields the earliest (a) and latest (b) time steps in the future the current block depends on.
+    #     # We than adjust the block to be [start:a] + [b+1:end] and reserve time steps between a and b to the 1st
+    #     # group. In the end, we will split the first group into multiple blocks that are not dependent on each other
+    #     # which can be determined by jumps in time step larger than 1, meaning these blocks depend on blocks in the
+    #     # second group, and can, therefore, run in parallel.
+    #     time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
+    #     masks = np.array_split(evidence.vocalics_mask, num_effective_jobs, axis=-1)
+    #
+    #     # There's always a dependency between the last time step of a block and the first time step of the next
+    #     # block because coordination at time t+1 depends on coordination at time t. So, we start by moving
+    #     # the first element of each block (starting from the second) to the list of time steps in the second group.
+    #     second_group_time_steps = []
+    #     time_steps_reserved_for_1st_group = []
+    #     for i in range(1, num_effective_jobs):
+    #         time_steps_reserved_for_1st_group.append(time_chunks[i][0])
+    #         time_chunks[i] = time_chunks[i][1:]
+    #         masks[i] = masks[i][:, 1:]
+    #
+    #     # For indexes in which the next speaker does not exist, there's no dependency with the future. We keep two
+    #     # matrices, one with minimum value (-1) and one with maximum value (T). We will use this to determine the
+    #     # smallest and largest indices in the future, the current block depends on.
+    #     next_time_steps_from_self_min = evidence.next_vocalics_from_self
+    #     next_time_steps_from_self_max = np.where(evidence.next_vocalics_from_self == -1, evidence.num_time_steps,
+    #                                              evidence.next_vocalics_from_self)
+    #     next_time_steps_from_other_min = evidence.next_vocalics_from_other
+    #     next_time_steps_from_other_max = np.where(evidence.next_vocalics_from_other == -1, evidence.num_time_steps,
+    #                                               evidence.next_vocalics_from_other)
+    #     for i in range(len(time_chunks) - 1):
+    #         block_size = len(time_chunks[i])
+    #
+    #         if block_size > 0:
+    #             second_group_time_steps.append(time_chunks[i])
+    #
+    #             # Last indexes where M[j] = 1 per column. We use this to identify last indices in the block where
+    #             # someone talked
+    #             last_indices_with_speaker = block_size - np.argmax(np.flip(masks[i], axis=1), axis=1) - 1
+    #             last_times_with_speaker = time_chunks[i][last_indices_with_speaker]
+    #
+    #             next_block_time_step_self_min = np.take_along_axis(next_time_steps_from_self_min,
+    #                                                                last_times_with_speaker[:, np.newaxis], axis=-1)
+    #             next_block_time_step_other_min = np.take_along_axis(next_time_steps_from_other_min,
+    #                                                                 last_times_with_speaker[:, np.newaxis], axis=-1)
+    #             next_block_time_step_self_max = np.take_along_axis(next_time_steps_from_self_max,
+    #                                                                last_times_with_speaker[:, np.newaxis], axis=-1)
+    #             next_block_time_step_other_max = np.take_along_axis(next_time_steps_from_other_max,
+    #                                                                 last_times_with_speaker[:, np.newaxis], axis=-1)
+    #
+    #             # Because the _min variables contain -1 when no one is talking, the maximum is always going to
+    #             # return the maximum time step among all trials in the block. Or -1 if no one is talking in that
+    #             # block in all trials. Similar logic is applied for the _max case.
+    #             first_next_dependent_time_step = np.minimum(np.min(next_block_time_step_self_max),
+    #                                                         np.min(next_block_time_step_other_max))
+    #             last_next_dependent_time_step = np.maximum(np.max(next_block_time_step_self_min),
+    #                                                        np.max(next_block_time_step_other_min))
+    #
+    #             # Find next non-zero block
+    #             j = i + 1
+    #             while j < len(time_chunks):
+    #                 if len(time_chunks[j]) > 0:
+    #                     break
+    #                 j += 1
+    #
+    #             if last_next_dependent_time_step < time_chunks[j][0]:
+    #                 # There is no dependency with the future or there's a dependency with time steps already
+    #                 # added to the single thread list. In that case, the current block can just be added to the
+    #                 # parallel processing list.
+    #                 continue
+    #
+    #             # There is a dependency with the future. It might be the case that some elements in the range
+    #             # below are already in the 1st group list if the dependencies are from one time step to another
+    #             # since we already added the first time steps of every block to the list in the beginning of this
+    #             # function. We will remove duplicates and sort the array in the end to address this case.
+    #             independent_range = np.arange(first_next_dependent_time_step, last_next_dependent_time_step + 1)
+    #             time_steps_reserved_for_1st_group.extend(independent_range)
+    #
+    #             # We adjust the next blocks to remove the time steps that we added to the 1st group.
+    #             for j in range(i + 1, len(time_chunks)):
+    #                 if len(time_chunks[j]) == 0 or time_chunks[j][-1] < first_next_dependent_time_step:
+    #                     # The dependency is a block further in the future. So, we do nothing.
+    #                     continue
+    #
+    #                 if first_next_dependent_time_step < time_chunks[j][0]:
+    #                     first_next_dependent_time_step = time_chunks[j][0]
+    #
+    #                 stop = False
+    #                 if last_next_dependent_time_step <= time_chunks[j][-1]:
+    #                     stop = True
+    #
+    #                 # We remove time steps in the 1st group from the 2nd group block.
+    #                 block1 = np.arange(time_chunks[j][0], first_next_dependent_time_step)
+    #                 block2 = np.arange(np.minimum(time_chunks[j][-1], last_next_dependent_time_step) + 1,
+    #                                    time_chunks[j][-1] + 1)
+    #
+    #                 time_chunks[j] = np.concatenate([block1, block2])
+    #                 masks[j] = np.take_along_axis(evidence.vocalics_mask,
+    #                                               indices=time_chunks[j][np.newaxis, :],
+    #                                               axis=-1)
+    #
+    #                 if stop:
+    #                     break
+    #
+    #     if len(time_chunks[-1]) > 0:
+    #         # Include the last block if it is not empty
+    #         second_group_time_steps.append(time_chunks[-1])
+    #
+    #     if len(second_group_time_steps) == 1:
+    #         # If there's only one block in the 2nd group, we just run everything in a single group.
+    #         time_steps_reserved_for_1st_group.extend(second_group_time_steps[0])
+    #         time_steps_reserved_for_1st_group = np.array(time_steps_reserved_for_1st_group)
+    #         second_group_time_steps = []
+    #
+    #     # Remove duplicates and sort time steps by ascending order
+    #     time_steps_reserved_for_1st_group = sorted(list(set(time_steps_reserved_for_1st_group)))
+    #
+    #     # We can split the time steps in the first group into multiple blocks that don't depend on each other.
+    #     # The boundaries are defined by subsequent time-steps with jumps larger than 1. This is because if the
+    #     # difference is larger than one, it means there is another block that was added to the 2nd group already
+    #     # and the dependencies of the blocks to be separated are with this 2nd-group block.
+    #     # Also, notice that we only reserve one block to the 1st group per 2nd-group block processed, meaning that
+    #     # we don't have to worry about the number of independent blocks in the 1st group, as it will never be more than
+    #     # the desired number of jobs.
+    #     first_group_blocks = []
+    #     block = []
+    #     for i, t in enumerate(time_steps_reserved_for_1st_group):
+    #         if i == 0 or t - block[-1] == 1:
+    #             block.append(t)
+    #         else:
+    #             first_group_blocks.append(np.array(block))
+    #             block = [t]
+    #
+    #     first_group_blocks.append(np.array(block))
+    #
+    #     return first_group_blocks, second_group_time_steps
