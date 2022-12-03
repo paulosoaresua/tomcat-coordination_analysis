@@ -1,12 +1,15 @@
 from __future__ import annotations
-from typing import Any, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from multiprocessing import Pool
+import os
+import pickle
 
 import numpy as np
 from sklearn.base import BaseEstimator
 from tqdm import tqdm
 
+from coordination.callback.callback import Callback
 from coordination.common.log import BaseLogger
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.common.utils import set_seed
@@ -28,23 +31,64 @@ SP = TypeVar('SP')
 S = TypeVar('S')
 
 
+class TrainingHyperParameters:
+    """
+    The set of hyper-parameters to be used during training. For instance, how to initialize variables.
+    """
+
+    def to_dict(self) -> Dict[str, Any]:
+        raise NotImplementedError
+
+
+class ModelParameters:
+
+    def freeze(self):
+        raise NotImplementedError
+
+    def reset(self):
+        raise NotImplementedError
+
+
 class PGM(BaseEstimator, Generic[SP, S]):
     def __init__(self):
         super().__init__()
 
-        # List of hyperparameters to be logged by the logger. It must be saved by the child class.
+        self.train = False
+
+        self.parameters = ModelParameters()
+
+        # List of hyper-parameters to be logged by the logger.
         self._hyper_params = {}
-        self.nll_ = np.array([])
+        self.nll_ = []
+
+    def save(self, out_dir: str):
+        os.makedirs(out_dir, exist_ok=True)
+
+        with open(f"{out_dir}/model.pkl", "wb") as f:
+            pickle.dump(self, f)
+
+    def reset_parameters(self):
+        self.parameters.reset()
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
         set_seed(seed)
 
         return None
 
-    def fit(self, evidence: EvidenceDataset, burn_in: int, seed: Optional[int], num_jobs: int = 1,
-            logger: BaseLogger = BaseLogger()):
+    def fit(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters, burn_in: int,
+            seed: Optional[int], num_jobs: int = 1, logger: BaseLogger = BaseLogger(),
+            callbacks: List[Callback] = None):
 
-        hparams = self._hyper_params.copy()
+        if callbacks is None:
+            callbacks = []
+
+        self.train = True
+
+        for callback in callbacks:
+            callback.reset()
+
+        hparams = self._hyper_params
+        hparams.update(train_hyper_parameters.to_dict())
         hparams["burn_in"] = burn_in
         hparams["seed"] = seed
         hparams["num_jobs"] = num_jobs
@@ -53,95 +97,57 @@ class PGM(BaseEstimator, Generic[SP, S]):
         logger.add_hyper_params(hparams)
         set_seed(seed)
 
-        # We split the PGM along the time axis. To make sure variables in one chunk is not dependent on variables in
-        # another chunk, we create a separate chunk with the variables in the border that will be sampled in the
-        # beginning of the Gibbs step.
-        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
-        blocks = self._get_time_step_blocks_for_parallel_fitting(evidence, num_effective_jobs)
-        parallel_time_step_blocks, single_thread_time_steps = blocks
-
         # Gibbs Sampling
 
         # 1. Initialize latent variables
-        self._initialize_gibbs(burn_in, evidence)
+        self._initialize_gibbs(evidence, train_hyper_parameters, burn_in, seed, num_jobs)
 
-        #    1.1 Compute initial NLL
-        self.nll_[0] = -self._compute_joint_loglikelihood_at(0, evidence)
+        # Compute initial NLL.
+        self.nll_.append(-self._compute_joint_loglikelihood_at(evidence, train_hyper_parameters))
+        logger.add_scalar("train/nll", self.nll_[-1], 0)
 
-        logger.add_scalar("train/nll", self.nll_[0], 0)
-
-        # 2. Sample the latent variables from their posterior distributions
-        with Pool(max(len(parallel_time_step_blocks), 1)) as pool:
+        with Pool(self._get_max_num_jobs()) as pool:
             for i in tqdm(range(1, burn_in + 1), desc="Gibbs Step", position=0):
-                latents = self._gibbs_step(i, evidence, single_thread_time_steps, 1)
-                self._retain_samples_from_latent(i, latents, single_thread_time_steps)
+                self._update_latent_variables(evidence, train_hyper_parameters, pool)
+                self._update_parameters(evidence, train_hyper_parameters, pool)
 
-                if len(parallel_time_step_blocks) > 1:
-                    job_args = [(i, evidence, parallel_time_step_blocks[j], j + 1) for j in
-                                range(len(parallel_time_step_blocks))]
-                    for chunk_idx, latents in enumerate(pool.starmap(self._gibbs_step, job_args)):
-                        self._retain_samples_from_latent(i, latents, parallel_time_step_blocks[chunk_idx])
+                self.nll_.append(-self._compute_joint_loglikelihood_at(evidence, train_hyper_parameters))
+                logger.add_scalar("train/nll", self.nll_[-1], i)
+                self._log_parameters(i, logger)
 
-                self._update_latent_parameters(i, evidence, logger)
-                self.nll_[i] = -self._compute_joint_loglikelihood_at(i, evidence)
+                for callback in callbacks:
+                    callback.check(self, i)
 
-                logger.add_scalar("train/nll", self.nll_[i], i)
+                if not self.train:
+                    break
 
-        self._retain_parameters()
+        self.parameters.freeze()
 
         return self
 
-    def _get_time_step_blocks_for_parallel_fitting(self, evidence: EvidenceDataset, num_jobs: int):
-        parallel_time_step_blocks = []
-        independent_time_steps = []
-
-        if num_jobs == 1:
-            # No parallel jobs
-            independent_time_steps = np.arange(evidence.num_time_steps)
-        else:
-            time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_jobs)
-            for i, time_chunk in enumerate(time_chunks):
-                if i == len(time_chunks) - 1:
-                    # No need to add the last time index to the independent list since it does not depend on
-                    # any variable from another chunk
-                    parallel_time_step_blocks.append(time_chunk)
-                else:
-                    independent_time_steps.append(time_chunk[-1])
-                    parallel_time_step_blocks.append(time_chunk[:-1])
-
-        independent_time_steps = np.array(independent_time_steps)
-
-        return parallel_time_step_blocks, independent_time_steps
-
-    # Methods to be implemented by the subclass for parameter estimation
-    def _initialize_gibbs(self, burn_in: int, evidence: EvidenceDataset):
-        self.nll_ = np.zeros(burn_in + 1)
-
-    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: EvidenceDataset) -> float:
+    def _initialize_gibbs(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters,
+                          burn_in: int, seed: int, num_jobs: int):
         raise NotImplementedError
 
-    def _gibbs_step(self, gibbs_step: int, evidence: EvidenceDataset, time_steps: np.ndarray, job_num: int) -> Any:
-        """
-        Return the new samples from the latent variables
-        """
+    def _get_max_num_jobs(self) -> int:
         raise NotImplementedError
 
-    def _retain_samples_from_latent(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
-        """
-        Update list of samples with new samples from the latent variables
-        """
+    def _update_latent_variables(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters,
+                                 pool: Pool):
         raise NotImplementedError
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: EvidenceDataset, logger: BaseLogger):
+    def _update_parameters(self, evidence: EvidenceDataset,
+                           train_hyper_parameters: TrainingHyperParameters, pool: Pool):
         """
         Update parameters with conjugate priors using the sufficient statistics of previously sampled latent variables.
         """
         raise NotImplementedError
 
-    def _retain_parameters(self):
-        """
-        use the last parameter sample as the estimate of the model's parameters
-        """
+    def _compute_joint_loglikelihood_at(self, evidence: EvidenceDataset,
+                                        train_hyper_parameters: TrainingHyperParameters) -> float:
+        raise NotImplementedError
+
+    def _log_parameters(self, gibbs_step: int, logger: BaseLogger):
         raise NotImplementedError
 
     def predict(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1) -> List[S]:

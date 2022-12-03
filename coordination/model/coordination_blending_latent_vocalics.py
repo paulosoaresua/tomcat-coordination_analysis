@@ -1,157 +1,20 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar
+from typing import Dict, List, Optional, TypeVar
 
 from datetime import datetime
+from multiprocessing import Pool
 
 import numpy as np
 from scipy.stats import norm, invgamma
 from tqdm import tqdm
 
 from coordination.common.log import BaseLogger
-from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
 from coordination.model.particle_filter import Particles
-from coordination.model.pgm import PGM, ParticlesSummary, Samples
-
-
-class LatentVocalicsParticles(Particles):
-    coordination: np.ndarray
-    latent_vocalics: Dict[str, np.ndarray]
-
-    def _keep_particles_at(self, indices: np.ndarray):
-        if isinstance(self.coordination, np.ndarray):
-            # otherwise, coordination is given and it will be a single number
-            self.coordination = self.coordination[indices]
-
-        for speaker, latent_vocalics in self.latent_vocalics.items():
-            if latent_vocalics is not None:
-                if np.ndim(latent_vocalics) > 1:
-                    # otherwise, coordination is given and it will be a single number
-                    self.latent_vocalics[speaker] = latent_vocalics[indices, :]
-
-
-class LatentVocalicsParticlesSummary(ParticlesSummary):
-    coordination_mean: np.ndarray
-    coordination_var: np.ndarray
-    latent_vocalics_mean: np.ndarray
-    latent_vocalics_var: np.ndarray
-
-
-class LatentVocalicsSamples(Samples):
-    coordination: np.ndarray
-    latent_vocalics: List[VocalicsSparseSeries]
-    observed_vocalics: List[VocalicsSparseSeries]
-
-    @property
-    def size(self):
-        return len(self.observed_vocalics)
-
-
-class LatentVocalicsDataSeries(EvidenceDataSeries):
-
-    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, coordination: Optional[np.ndarray] = None,
-                 latent_vocalics: VocalicsSparseSeries = None):
-        super().__init__(uuid)
-        self.coordination = coordination
-        self.latent_vocalics = latent_vocalics
-        self.observed_vocalics = observed_vocalics
-
-    @property
-    def is_complete(self) -> bool:
-        return self.coordination is not None and self.latent_vocalics is not None
-
-    @property
-    def num_time_steps(self):
-        return self.observed_vocalics.num_time_steps
-
-    @property
-    def num_vocalic_features(self):
-        return self.observed_vocalics.num_features
-
-
-class LatentVocalicsDataset(EvidenceDataset):
-
-    def __init__(self, series: List[LatentVocalicsDataSeries], team_scores: np.ndarray,
-                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray):
-        super().__init__(series)
-
-        self.team_scores = team_scores
-        self.team_process_surveys = team_process_surveys
-        self.team_satisfaction_surveys = team_satisfaction_surveys
-        self.genders = genders
-        self.ages = ages
-
-        # Keep a matrix representation of the data for fast processing during training
-        self.coordination = None if series[0].coordination is None else np.zeros(
-            (len(series), series[0].num_time_steps))
-
-        # n (num samples) x k (num features) x T (num time steps)
-        self.latent_vocalics = None if series[0].latent_vocalics is None else np.zeros(
-            (len(series), series[0].num_vocalic_features, series[0].num_time_steps))
-
-        self.observed_vocalics = np.zeros((len(series), series[0].num_vocalic_features, series[0].num_time_steps))
-        self.vocalics_mask = np.zeros((len(series), series[0].num_time_steps))
-        self.previous_vocalics_from_self = np.zeros((len(series), series[0].num_time_steps)).astype(np.int)
-        self.previous_vocalics_from_other = np.zeros((len(series), series[0].num_time_steps)).astype(np.int)
-        self.next_vocalics_from_self = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
-        self.next_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
-
-        for i, series in enumerate(series):
-            if series.coordination is not None:
-                self.coordination[i] = series.coordination
-
-            if series.latent_vocalics is not None:
-                self.latent_vocalics[i] = series.latent_vocalics.values
-
-            self.observed_vocalics[i] = series.observed_vocalics.values
-            self.vocalics_mask[i] = series.observed_vocalics.mask
-            self.previous_vocalics_from_self[i] = np.array(
-                [-1 if t is None else t for t in series.observed_vocalics.previous_from_self])
-            self.previous_vocalics_from_other[i] = np.array(
-                [-1 if t is None else t for t in series.observed_vocalics.previous_from_other])
-            self.previous_vocalics_from_self_mask = np.where(self.previous_vocalics_from_self >= 0, 1, 0)
-            self.previous_vocalics_from_other_mask = np.where(self.previous_vocalics_from_other >= 0, 1, 0)
-
-            for t in range(series.num_time_steps):
-                if self.previous_vocalics_from_self[i, t] >= 0:
-                    self.next_vocalics_from_self[i, self.previous_vocalics_from_self[i, t]] = t
-
-                if self.previous_vocalics_from_other[i, t] >= 0:
-                    self.next_vocalics_from_other[i, self.previous_vocalics_from_other[i, t]] = t
-
-    def get_subset(self, indices: List[int]) -> LatentVocalicsDataset:
-        return self.__class__(
-            series=[self.series[i] for i in indices],
-            team_scores=self.team_scores[indices],
-            team_process_surveys=np.take_along_axis(self.team_process_surveys, indices, axis=0),
-            team_satisfaction_surveys=np.take_along_axis(self.team_satisfaction_surveys, indices, axis=0),
-            genders=np.take_along_axis(self.genders, indices, axis=0),
-            ages=np.take_along_axis(self.ages, indices, axis=0)
-        )
-
-    def merge(self, dataset2: LatentVocalicsDataset) -> EvidenceDataset:
-        return self.__class__(
-            series=self.series + dataset2.series,
-            team_scores=np.concatenate([self.team_scores, dataset2.team_scores]),
-            team_process_surveys=np.concatenate([self.team_process_surveys, dataset2.team_process_surveys], axis=0),
-            team_satisfaction_surveys=np.concatenate([self.team_satisfaction_surveys, dataset2.team_satisfaction_surveys], axis=0),
-            genders=np.concatenate([self.genders, dataset2.genders], axis=0),
-            ages=np.concatenate([self.ages, dataset2.ages], axis=0),
-        )
-
-
-def default_f(latent_vocalics: np.ndarray, speaker_mask: int) -> np.ndarray:
-    return latent_vocalics
-
-
-def default_g(latent_vocalics: np.ndarray) -> np.ndarray:
-    return latent_vocalics
-
-
-def clip_coordination(coordination: np.ndarray) -> np.ndarray:
-    return np.clip(coordination, a_min=0, a_max=1)
-
+from coordination.model.pgm import PGM
+from coordination.model.utils.coordination_blending_latent_vocalics import LatentVocalicsParticles, \
+    LatentVocalicsParticlesSummary, LatentVocalicsSamples, LatentVocalicsDataSeries, LatentVocalicsDataset, BaseF, \
+    BaseG, clip_coordination, LatentVocalicsTrainingHyperParameters, LatentVocalicsModelParameters
 
 SP = TypeVar('SP')
 S = TypeVar('S')
@@ -163,16 +26,8 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                  initial_coordination: float,
                  num_vocalic_features: int,
                  num_speakers: int,
-                 a_vcc: float,
-                 b_vcc: float,
-                 a_va: float,
-                 b_va: float,
-                 a_vaa: float,
-                 b_vaa: float,
-                 a_vo: float,
-                 b_vo: float,
-                 f: Callable = default_f,
-                 g: Callable = default_g):
+                 f: BaseF,
+                 g: BaseG):
         super().__init__()
 
         self.initial_coordination = initial_coordination
@@ -181,49 +36,26 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         self.f = f
         self.g = g
 
-        # Parameters of the model
-        self.var_cc: Optional[float] = None
-        self.var_a: Optional[np.ndarray] = None
-        self.var_aa: Optional[np.ndarray] = None
-        self.var_o: Optional[np.ndarray] = None
-
-        # Parameters of the prior distributions (Inverse-Gamma) of the variances
-        self.a_vcc = a_vcc
-        self.b_vcc = b_vcc
-        self.a_va = a_va
-        self.b_va = b_va
-        self.a_vaa = a_vaa
-        self.b_vaa = b_vaa
-        self.a_vo = a_vo
-        self.b_vo = b_vo
-
         self._hyper_params = {
-            "C0": initial_coordination,
+            "c0": initial_coordination,
             "#features": num_vocalic_features,
             "#speakers": num_speakers,
-            "a_vcc": a_vcc,
-            "b_vcc": b_vcc,
-            "a_va": a_va,
-            "b_va": b_va,
-            "a_vaa": a_vaa,
-            "b_vaa": b_vaa,
-            "a_vo": a_vo,
-            "b_vo": b_vo,
+            "f": f.__repr__(),
+            "g": g.__repr__()
         }
 
-        # Samples collected during training
-        self.vcc_samples_ = np.array([])
-        self.va_samples_ = np.array([])
-        self.vaa_samples_ = np.array([])
-        self.vo_samples_ = np.array([])
-        self.coordination_samples_ = np.array([])
-        self.latent_vocalics_samples_ = np.array([])
+        # Trainable parameters of the model
+        self.parameters = LatentVocalicsModelParameters()
 
-    def reset_parameters(self):
-        self.var_cc = None
-        self.var_a = None
-        self.var_aa = None
-        self.var_o = None
+        # Last sampled value of coordination and latent vocalics during training
+        self.last_coordination_samples_ = np.array([])
+        self.last_latent_vocalics_samples_ = np.array([])
+
+        # The variable below is initialized during training to create blocks of time stamps for which variables can be
+        # updated in parallel. Latent vocalics will be sampled in sequence (single process) to avoid a fancier logic to
+        # retrieve dependencies. This is okay for now because latent vocalics posterior has a closed form and sampling
+        # is faster compared to coordination that is sampled via MCMC.
+        self._latent_vocalics_time_step_block = np.array([])
 
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
@@ -326,175 +158,120 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                                 coordination: float) -> np.ndarray:
         if previous_other is None:
             if previous_self is None:
-                distribution = norm(loc=np.zeros(self.num_vocalic_features), scale=np.sqrt(self.var_a))
+                distribution = norm(loc=np.zeros(self.num_vocalic_features), scale=np.sqrt(self.parameters.var_a))
             else:
-                distribution = norm(loc=previous_self, scale=np.sqrt(self.var_aa))
+                distribution = norm(loc=self.f(previous_self, 0), scale=np.sqrt(self.parameters.var_aa))
         else:
             if previous_self is None:
-                D = previous_other
-                distribution = norm(loc=D * clip_coordination(coordination), scale=np.sqrt(self.var_aa))
+                D = self.f(previous_other, 1)
+                distribution = norm(loc=D * clip_coordination(coordination), scale=np.sqrt(self.parameters.var_aa))
             else:
-                D = previous_other - previous_self
-                distribution = norm(loc=D * clip_coordination(coordination) + previous_self, scale=np.sqrt(self.var_aa))
+                D = self.f(previous_other, 1) - self.f(previous_self, 0)
+                distribution = norm(loc=D * clip_coordination(coordination) + previous_self,
+                                    scale=np.sqrt(self.parameters.var_aa))
 
         return distribution.rvs()
 
     def _sample_observed_vocalics(self, latent_vocalics: np.array) -> np.ndarray:
-        return norm(loc=latent_vocalics, scale=np.sqrt(self.var_o)).rvs()
+        return norm(loc=self.g(latent_vocalics), scale=np.sqrt(self.parameters.var_o)).rvs()
 
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
 
-    def _initialize_gibbs(self, burn_in: int, evidence: LatentVocalicsDataset):
-        super()._initialize_gibbs(burn_in, evidence)
+    def _initialize_gibbs(self, evidence: LatentVocalicsDataset,
+                          train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int, seed: int,
+                          num_jobs: int):
 
-        # History of samples in each Gibbs step
-        self.vcc_samples_ = np.zeros(burn_in + 1)
-        self.va_samples_ = np.zeros(burn_in + 1)
-        self.vaa_samples_ = np.zeros(burn_in + 1)
-        self.vo_samples_ = np.zeros(burn_in + 1)
-        self.coordination_samples_ = np.zeros((burn_in + 1, evidence.num_trials, evidence.num_time_steps))
-        self.latent_vocalics_samples_ = np.zeros(
-            (burn_in + 1, evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps))
+        self._create_parallel_time_step_blocks(evidence, num_jobs)
+        self._initialize_parameters(evidence, train_hyper_parameters, burn_in, seed)
+        self._initialize_latent_variables(evidence, train_hyper_parameters, burn_in, seed)
 
-        # 1. Latent variables and parameter initialization
-        self._initialize_coordination_for_gibbs(evidence)
+    def _create_parallel_time_step_blocks(self, evidence: LatentVocalicsDataset, num_jobs: int):
+        # Latent vocalics will be updated in a single process
+        self._latent_vocalics_time_step_block = np.arange(evidence.num_time_steps)
+
+    def _initialize_parameters(self, evidence: LatentVocalicsDataset,
+                               train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int, seed: int):
+
+        # Dependent on the subclass implementation
+        self._initialize_coordination_parameters_for_fit(evidence, train_hyper_parameters, burn_in, seed)
+
+        if not self.parameters.var_a_frozen:
+            self.parameters.set_var_a(train_hyper_parameters.va0, freeze=False)
+
+        if not self.parameters.var_aa_frozen:
+            self.parameters.set_var_aa(train_hyper_parameters.vaa0, freeze=False)
+
+        if not self.parameters.var_o_frozen:
+            self.parameters.set_var_o(train_hyper_parameters.vo0, freeze=False)
+
+    def _initialize_coordination_parameters_for_fit(self, evidence: LatentVocalicsDataset,
+                                                    train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
+                                                    burn_in: int,
+                                                    seed: int):
+        raise NotImplementedError
+
+    def _initialize_latent_variables(self, evidence: LatentVocalicsDataset,
+                                     train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int,
+                                     seed: int):
+
+        # Dependent on the subclass implementation
+        self._initialize_coordination_for_fit(evidence, train_hyper_parameters, burn_in, seed)
 
         if evidence.latent_vocalics is None:
-            self.latent_vocalics_samples_[0] = norm(
-                loc=np.zeros((evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps)),
-                scale=1).rvs()
-
-            if burn_in > 0:
-                self.latent_vocalics_samples_[1] = self.latent_vocalics_samples_[0]
+            # Initialize it from a standard normal
+            self.last_latent_vocalics_samples_ = norm(
+                loc=np.zeros((evidence.num_trials, self.num_vocalic_features, evidence.num_time_steps)), scale=1).rvs()
         else:
-            self.latent_vocalics_samples_[:] = evidence.latent_vocalics[np.newaxis, :]
+            self.last_latent_vocalics_samples_ = evidence.latent_vocalics.copy()
 
-        if self.var_a is None:
-            self.va_samples_[0] = invgamma(a=self.a_va, scale=self.b_va).rvs()
-            if burn_in > 0:
-                self.va_samples_[1] = self.va_samples_[0]
-        else:
-            self.va_samples_[:] = self.var_a
-
-        if self.var_aa is None:
-            self.vaa_samples_[0] = invgamma(a=self.a_vaa, scale=self.b_vaa).rvs()
-            if burn_in > 0:
-                self.vaa_samples_[1] = self.vaa_samples_[0]
-        else:
-            self.vaa_samples_[:] = self.var_aa
-
-        if self.var_o is None:
-            self.vo_samples_[0] = invgamma(a=self.a_vo, scale=self.b_vo).rvs()
-            if burn_in > 0:
-                self.vo_samples_[1] = self.vo_samples_[0]
-        else:
-            self.vo_samples_[:] = self.var_o
-
-    def _initialize_coordination_for_gibbs(self, evidence: LatentVocalicsDataset):
+    def _initialize_coordination_for_fit(self, evidence: LatentVocalicsDataset,
+                                         train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
+                                         burn_in: int, seed: int):
         raise NotImplementedError
 
-    def _compute_joint_loglikelihood_at(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
-        sa = np.sqrt(self.va_samples_[gibbs_step])
-        saa = np.sqrt(self.vaa_samples_[gibbs_step])
-        so = np.sqrt(self.vo_samples_[gibbs_step])
-
-        coordination = self.coordination_samples_[gibbs_step]
-        latent_vocalics = self.latent_vocalics_samples_[gibbs_step]
-
-        ll = self._compute_coordination_loglikelihood(gibbs_step, evidence)
-        for t in range(evidence.num_time_steps):
-            # Latent vocalics
-            C = coordination[:, t][:, np.newaxis]
-
-            # n x k
-            V = latent_vocalics[:, :, t]
-
-            # n x 1
-            M = evidence.vocalics_mask[:, t][:, np.newaxis]
-
-            # Vs (n x k) will have the values of vocalics from the same speaker per trial
-            A = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_self[:, t]]
-
-            # Mask with 1 in the cells in which there are previous vocalics from the same speaker and 0 otherwise
-            Ma = evidence.previous_vocalics_from_self_mask[:, t][:,
-                 np.newaxis]  # np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
-
-            # Vo (n x k) will have the values of vocalics from other speaker per trial
-            B = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_other[:, t]]
-
-            # Mask with 1 in the cells in which there are previous vocalics from another speaker and 0 otherwise
-            Mb = evidence.previous_vocalics_from_other_mask[:, t][:,
-                 np.newaxis]  # np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
-
-            # Use variance from prior if there are no previous vocalics from any speaker
-            v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)
-
-            # Clipping has no effect in models that do not sample coordination outside the range [0, 1].
-            means = (B - A * Ma) * Mb * clip_coordination(C) + A * Ma
-
-            # Do not count LL if no speaker is talking at time t (mask M tells us that)
-            ll += (norm(loc=means, scale=np.sqrt(v)).logpdf(V) * M).sum()
-
-            # LL from latent to observed vocalics
-            ll += (norm(loc=V, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
-
-        return ll
-
-    def _compute_coordination_loglikelihood(self, gibbs_step: int, evidence: LatentVocalicsDataset) -> float:
+    def _get_max_num_jobs(self) -> int:
         raise NotImplementedError
 
-    def _gibbs_step(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray, job_num: int):
-        coordination, *extra_variables = self._sample_coordination_on_fit(gibbs_step, evidence, time_steps, job_num)
+    def _update_latent_variables(self, evidence: LatentVocalicsDataset,
+                                 train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
+                                 pool: Pool):
+        self._update_coordination(evidence, train_hyper_parameters, pool)
+        self._update_vocalics(evidence)
+
+    def _update_coordination(self, evidence: LatentVocalicsDataset,
+                             train_hyper_parameters: LatentVocalicsTrainingHyperParameters, pool: Pool):
+        raise NotImplementedError
+
+    def _update_vocalics(self, evidence: LatentVocalicsDataset):
+        """
+        Sample vocalics in a single thread. A fancier logic may be applied to sample vocalics in different threads
+        by dealing with the jumps in dependencies such that parallel blocks do not have dependent vocalics, but
+        we don't do this by now since sampling from vocalics is fast.
+        """
 
         if evidence.latent_vocalics is None:
-            latent_vocalics = self._sample_latent_vocalics_on_fit(coordination, gibbs_step, evidence, time_steps,
-                                                                  job_num)
-        else:
-            latent_vocalics = self.latent_vocalics_samples_[gibbs_step - 1].copy()
+            self.last_latent_vocalics_samples_ = self._sample_latent_vocalics_on_fit(evidence,
+                                                                                     self._latent_vocalics_time_step_block,
+                                                                                     1, 0)
 
-        return coordination, latent_vocalics, *extra_variables
+    def _sample_latent_vocalics_on_fit(self, evidence: LatentVocalicsDataset,
+                                       time_steps: np.ndarray, job_num: int, group_order: int) -> np.ndarray:
 
-    def _sample_coordination_on_fit(self, gibbs_step: int, evidence: LatentVocalicsDataset, time_steps: np.ndarray,
-                                    job_num: int) -> Tuple[np.ndarray, ...]:
-        raise NotImplementedError
+        va = self.parameters.var_a
+        vaa = self.parameters.var_aa
+        vo = self.parameters.var_o
+        coordination = self.last_coordination_samples_
 
-    @staticmethod
-    def _get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
-            proposed_coordination_sample: np.ndarray,
-            saa: float,
-            evidence: LatentVocalicsDataset,
-            latent_vocalics: np.ndarray,
-            time_step: int) -> np.ndarray:
+        latent_vocalics = self.last_latent_vocalics_samples_.copy()
 
-        V = latent_vocalics[..., time_step]
+        pbar = None
+        if job_num >= 0:
+            pbar = tqdm(time_steps, desc=f"Sampling Latent Vocalics (Group {group_order + 1})", position=job_num,
+                        leave=False)
 
-        previous_self_time_steps = evidence.previous_vocalics_from_self[:, time_step]
-        previous_other_time_steps = evidence.previous_vocalics_from_other[:, time_step]
-        A = np.take_along_axis(latent_vocalics, previous_self_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
-        B = np.take_along_axis(latent_vocalics, previous_other_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
-
-        M = evidence.vocalics_mask[:, time_step][:, np.newaxis]
-        Ma = evidence.previous_vocalics_from_self_mask[:, time_step][:, np.newaxis]
-        Mb = evidence.previous_vocalics_from_other_mask[:, time_step][:, np.newaxis]
-
-        mean = ((B - A * Ma) * clip_coordination(proposed_coordination_sample) * Mb + A * Ma) * M * Mb
-
-        # Coordination only affects vocalics in times in which there's a dependency on a previous other speaker
-        log_posterior = (norm(loc=mean, scale=saa).logpdf(V) * M * Mb).sum(axis=1)
-
-        return log_posterior
-
-    def _sample_latent_vocalics_on_fit(self, coordination: np.ndarray, gibbs_step: int, evidence: LatentVocalicsDataset,
-                                       time_steps: np.ndarray, job_num: int) -> np.ndarray:
-
-        va = self.va_samples_[gibbs_step]
-        vaa = self.vaa_samples_[gibbs_step]
-        vo = self.vo_samples_[gibbs_step]
-
-        latent_vocalics = self.latent_vocalics_samples_[gibbs_step].copy()
-        for t in tqdm(time_steps, desc="Sampling Latent Vocalics", position=job_num, leave=False):
+        for t in time_steps:
             C1 = clip_coordination(coordination[:, t][:, np.newaxis])
             M1 = evidence.vocalics_mask[:, t][:, np.newaxis]
 
@@ -565,50 +342,113 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
             latent_vocalics[:, :, t] = sampled_latent_vocalics
 
+            if pbar is not None:
+                pbar.update()
+
         return latent_vocalics
 
-    def _retain_samples_from_latent(self, gibbs_step: int, latents: Any, time_steps: np.ndarray):
-        """
-        The only latent variable return by _gibbs_step is a state variable
-        """
-        self.coordination_samples_[gibbs_step][:, time_steps] = latents[0][:, time_steps]
-        self.latent_vocalics_samples_[gibbs_step][:, :, time_steps] = latents[1][:, :, time_steps]
+    def _compute_joint_loglikelihood_at(self, evidence: LatentVocalicsDataset,
+                                        train_hyper_parameters: LatentVocalicsTrainingHyperParameters) -> float:
+        sa = np.sqrt(self.parameters.var_a)
+        saa = np.sqrt(self.parameters.var_aa)
+        so = np.sqrt(self.parameters.var_o)
 
-        if gibbs_step < self.latent_vocalics_samples_.shape[0] - 1:
-            # Copy the current estimation to the next step. This is necessary for the parallelization to work properly.
-            # This allows the blocks in the next step to use the values of the previous step (gibbs_step) as a start
-            # point but without indexing the previous step. This is necessary because the execution block that runs in a
-            # single thread, will update the latent values for the current step. If the parallel block execution
-            # indexes the past,they won't have access to the most up-to-date values.
-            self.coordination_samples_[gibbs_step + 1] = self.coordination_samples_[gibbs_step]
-            self.latent_vocalics_samples_[gibbs_step + 1] = self.latent_vocalics_samples_[gibbs_step]
+        coordination = self.last_coordination_samples_
+        latent_vocalics = self.last_latent_vocalics_samples_
 
-    def _update_latent_parameters(self, gibbs_step: int, evidence: LatentVocalicsDataset, logger: BaseLogger):
-        self._update_latent_parameters_coordination(gibbs_step, evidence, logger)
+        ll = self._compute_coordination_loglikelihood(evidence)
+        for t in range(evidence.num_time_steps):
+            # Latent vocalics
+            C = coordination[:, t][:, np.newaxis]
 
-        if gibbs_step < len(self.vcc_samples_) - 1:
-            self.vcc_samples_[gibbs_step + 1] = self.vcc_samples_[gibbs_step]
+            # n x k
+            V = latent_vocalics[:, :, t]
+
+            # n x 1
+            M = evidence.vocalics_mask[:, t][:, np.newaxis]
+
+            # Vs (n x k) will have the values of vocalics from the same speaker per trial
+            A = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_self[:, t]]
+
+            # Mask with 1 in the cells in which there are previous vocalics from the same speaker and 0 otherwise
+            Ma = evidence.previous_vocalics_from_self_mask[:, t][:,
+                 np.newaxis]  # np.where(evidence.previous_vocalics_from_self[:, t] >= 0, 1, 0)[:, np.newaxis]
+
+            # Vo (n x k) will have the values of vocalics from other speaker per trial
+            B = latent_vocalics[range(evidence.num_trials), :, evidence.previous_vocalics_from_other[:, t]]
+
+            # Mask with 1 in the cells in which there are previous vocalics from another speaker and 0 otherwise
+            Mb = evidence.previous_vocalics_from_other_mask[:, t][:,
+                 np.newaxis]  # np.where(evidence.previous_vocalics_from_other[:, t] >= 0, 1, 0)[:, np.newaxis]
+
+            # Use variance from prior if there are no previous vocalics from any speaker
+            v = np.where((1 - Ma) * (1 - Mb) == 1, sa, saa)
+
+            # Clipping has no effect in models that do not sample coordination outside the range [0, 1].
+            means = (B - A * Ma) * Mb * clip_coordination(C) + A * Ma
+
+            # Do not count LL if no speaker is talking at time t (mask M tells us that)
+            ll += (norm(loc=means, scale=np.sqrt(v)).logpdf(V) * M).sum()
+
+            # LL from latent to observed vocalics
+            ll += (norm(loc=V, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
+
+        return ll
+
+    def _compute_coordination_loglikelihood(self, evidence: LatentVocalicsDataset) -> float:
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
+            proposed_coordination_sample: np.ndarray,
+            saa: float,
+            evidence: LatentVocalicsDataset,
+            latent_vocalics: np.ndarray,
+            time_step: int) -> np.ndarray:
+
+        V = latent_vocalics[..., time_step]
+
+        previous_self_time_steps = evidence.previous_vocalics_from_self[:, time_step]
+        previous_other_time_steps = evidence.previous_vocalics_from_other[:, time_step]
+        A = np.take_along_axis(latent_vocalics, previous_self_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
+        B = np.take_along_axis(latent_vocalics, previous_other_time_steps[:, np.newaxis, np.newaxis], axis=-1)[..., 0]
+
+        M = evidence.vocalics_mask[:, time_step][:, np.newaxis]
+        Ma = evidence.previous_vocalics_from_self_mask[:, time_step][:, np.newaxis]
+        Mb = evidence.previous_vocalics_from_other_mask[:, time_step][:, np.newaxis]
+
+        mean = ((B - A * Ma) * clip_coordination(proposed_coordination_sample) * Mb + A * Ma) * M * Mb
+
+        # Coordination only affects vocalics in times in which there's a dependency on a previous other speaker
+        log_posterior = (norm(loc=mean, scale=saa).logpdf(V) * M * Mb).sum(axis=1)
+
+        return log_posterior
+
+    def _update_parameters(self, evidence: LatentVocalicsDataset,
+                           train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
+                           pool: Pool):
+
+        self._update_coordination_parameters(evidence, train_hyper_parameters)
 
         # Variance of the latent vocalics prior
-        if self.var_a is None:
-            V = self.latent_vocalics_samples_[gibbs_step]
+        if not self.parameters.var_a_frozen:
+            V = self.last_latent_vocalics_samples_
             M = evidence.vocalics_mask
 
             first_time_steps = np.argmax(M, axis=1)
             first_latent_vocalics = np.take_along_axis(V, first_time_steps[:, np.newaxis, np.newaxis], axis=-1)
             M_first_time_steps = np.take_along_axis(M, first_time_steps[:, np.newaxis], axis=-1)
 
-            a = self.a_va + M_first_time_steps.sum() * self.num_vocalic_features / 2
-            b = self.b_va + np.square(first_latent_vocalics).sum() / 2
-            self.va_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
+            a = train_hyper_parameters.a_va + M_first_time_steps.sum() * self.num_vocalic_features / 2
+            b = train_hyper_parameters.b_va + np.square(first_latent_vocalics).sum() / 2
 
-            if gibbs_step < len(self.va_samples_) - 1:
-                self.va_samples_[gibbs_step + 1] = self.va_samples_[gibbs_step]
+            new_var_a = invgamma(a=a, scale=b).mean()
+            self.parameters.set_var_a(new_var_a, freeze=False)
 
         # Variance of the latent vocalics transition
-        if self.var_aa is None:
-            coordination = np.expand_dims(self.coordination_samples_[gibbs_step], axis=1)
-            V = self.latent_vocalics_samples_[gibbs_step]
+        if not self.parameters.var_aa_frozen:
+            coordination = np.expand_dims(self.last_coordination_samples_, axis=1)
+            V = self.last_latent_vocalics_samples_
             M = np.expand_dims(evidence.vocalics_mask, axis=1)
 
             Ma = np.expand_dims(np.where(evidence.previous_vocalics_from_self == -1, 0, 1), axis=1)
@@ -623,39 +463,33 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             m = (B - A * Ma) * clip_coordination(coordination) * Mb + A * Ma
             x = (V - m) * Ml
 
-            a = self.a_vaa + Ml.sum() * self.num_vocalic_features / 2
-            b = self.b_vaa + np.square(x).sum() / 2
-            self.vaa_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
+            a = train_hyper_parameters.a_vaa + Ml.sum() * self.num_vocalic_features / 2
+            b = train_hyper_parameters.b_vaa + np.square(x).sum() / 2
 
-            if gibbs_step < len(self.vaa_samples_) - 1:
-                self.vaa_samples_[gibbs_step + 1] = self.vaa_samples_[gibbs_step]
+            new_var_aa = invgamma(a=a, scale=b).mean()
+            self.parameters.set_var_aa(new_var_aa, freeze=False)
 
         # Variance of the vocalics emission
-        if self.var_o is None:
-            V = self.latent_vocalics_samples_[gibbs_step]
+        if not self.parameters.var_o_frozen:
+            V = self.last_latent_vocalics_samples_
             M = np.expand_dims(evidence.vocalics_mask, axis=1)
 
             x = (V - evidence.observed_vocalics) * M
-            a = self.a_vo + M.sum() * self.num_vocalic_features / 2
-            b = self.b_vo + np.square(x).sum() / 2
-            self.vo_samples_[gibbs_step] = invgamma(a=a, scale=b).mean()
+            a = train_hyper_parameters.a_vo + M.sum() * self.num_vocalic_features / 2
+            b = train_hyper_parameters.b_vo + np.square(x).sum() / 2
 
-            if gibbs_step < len(self.vo_samples_) - 1:
-                self.vo_samples_[gibbs_step + 1] = self.vo_samples_[gibbs_step]
+            new_var_o = invgamma(a=a, scale=b).mean()
+            self.parameters.set_var_o(new_var_o, freeze=False)
 
-        logger.add_scalar("train/var_cc", self.vcc_samples_[gibbs_step], gibbs_step)
-        logger.add_scalar("train/var_a", self.va_samples_[gibbs_step], gibbs_step)
-        logger.add_scalar("train/var_aa", self.vaa_samples_[gibbs_step], gibbs_step)
-        logger.add_scalar("train/var_o", self.vo_samples_[gibbs_step], gibbs_step)
-
-    def _update_latent_parameters_coordination(self, gibbs_step: int, evidence: EvidenceDataset, logger: BaseLogger):
+    def _update_coordination_parameters(self, evidence: LatentVocalicsDataset,
+                                        train_hyper_parameters: LatentVocalicsTrainingHyperParameters):
         raise NotImplementedError
 
-    def _retain_parameters(self):
-        self.var_cc = self.vcc_samples_[-1]
-        self.var_a = self.va_samples_[-1]
-        self.var_aa = self.vaa_samples_[-1]
-        self.var_o = self.vo_samples_[-1]
+    def _log_parameters(self, gibbs_step: int, logger: BaseLogger):
+        logger.add_scalar("train/var_c", self.parameters.var_c, gibbs_step)
+        logger.add_scalar("train/var_a", self.parameters.var_a, gibbs_step)
+        logger.add_scalar("train/var_aa", self.parameters.var_aa, gibbs_step)
+        logger.add_scalar("train/var_o", self.parameters.var_o, gibbs_step)
 
     # ---------------------------------------------------------
     # INFERENCE
@@ -686,7 +520,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         if series.observed_vocalics.mask[0] == 1:
             speaker = series.observed_vocalics.utterances[0].subject_id
             mean = np.zeros((num_particles, series.observed_vocalics.num_features))
-            new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.var_a)).rvs()
+            new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.parameters.var_a)).rvs()
 
     def _sample_from_transition_to(self, time_step: int, num_particles: int, states: List[LatentVocalicsParticles],
                                    series: LatentVocalicsDataSeries) -> LatentVocalicsParticles:
@@ -730,17 +564,17 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             if series.observed_vocalics.previous_from_other[time_step] is None:
                 if series.observed_vocalics.previous_from_self[time_step] is None:
                     # Sample from prior
-                    new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.var_a)).rvs()
+                    new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.parameters.var_a)).rvs()
                 else:
                     # Sample from dependency on previous vocalics from the same speaker
-                    new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.var_aa)).rvs()
+                    new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.parameters.var_aa)).rvs()
             else:
                 C = new_particles.coordination[:, np.newaxis]
                 other_speaker = series.observed_vocalics.utterances[
                     series.observed_vocalics.previous_from_other[time_step]].subject_id
                 B = self.f(previous_particles.latent_vocalics[other_speaker], 1)
                 mean = (B - A) * clip_coordination(C) + A
-                new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.var_aa)).rvs()
+                new_particles.latent_vocalics[speaker] = norm(loc=mean, scale=np.sqrt(self.parameters.var_aa)).rvs()
 
     def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[LatentVocalicsParticles],
                                               series: LatentVocalicsDataSeries):
@@ -757,10 +591,10 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
                 if np.ndim(Vt) > 1:
                     # particles x features
-                    log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.var_o)).logpdf(Ot).sum(axis=1)
+                    log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.parameters.var_o)).logpdf(Ot).sum(axis=1)
                 else:
                     # 1 particle only when ground truth for the latent vocalics is provided
-                    log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.var_o)).logpdf(Ot).sum()
+                    log_likelihoods = norm(loc=self.g(Vt), scale=np.sqrt(self.parameters.var_o)).logpdf(Ot).sum()
             else:
                 log_likelihoods = np.zeros(len(states[time_step].coordination))
         else:
@@ -781,7 +615,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 mean = (B - A) * clip_coordination(states[time_step].coordination[:, np.newaxis]) + A
 
                 Vt = series.latent_vocalics.values[:, time_step]
-                log_likelihoods = norm(loc=mean, scale=np.sqrt(self.var_aa)).logpdf(Vt).sum(axis=1)
+                log_likelihoods = norm(loc=mean, scale=np.sqrt(self.parameters.var_aa)).logpdf(Vt).sum(axis=1)
             else:
                 log_likelihoods = np.zeros(len(states[time_step].coordination))
 
@@ -798,82 +632,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             # current vocalics and previous vocalics from a different speaker.
             return series.observed_vocalics.mask[time_step] == 1 and series.observed_vocalics.previous_from_other[
                 time_step] is not None
-
-    def _get_time_step_blocks_for_parallel_fitting(self, evidence: LatentVocalicsDataset, num_jobs: int):
-        parallel_time_step_blocks = []
-        single_thread_time_steps = []
-
-        num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
-        if num_effective_jobs == 1:
-            # No parallel jobs
-            single_thread_time_steps = np.arange(evidence.num_time_steps)
-        else:
-            # A vocalics in a time step depends on two previous vocalics from different time steps: one from the same
-            # speaker, and one from a different speaker. Therefore, we cannot simply add the border of the blocks in the
-            # list of single-threaded time steps.
-            # The strategy here will be to first split the time steps in as many blocks as the number of jobs. For each
-            # block, we take the last time step in which there was observation across the trials, and from there we take
-            # the next timestep from the same speaker and other speaker. We then take the maximum among all these time
-            # steps. That yields the earliest time step in the next block, the current block depends on. We than take
-            # the portion between the beginning of the next block and that computed time step to be part of the list of
-            # single threaded time steps.
-            time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
-            masks = np.array_split(evidence.vocalics_mask, num_effective_jobs, axis=-1)
-
-            # Remaining variables depend on the next time step, so we add 1 to all time steps to show that link with
-            # the next time step in case there are no dependencies with vocalics.
-            all_time_steps = np.arange(evidence.num_time_steps)[np.newaxis, :].repeat(evidence.num_trials, axis=0)
-            all_time_steps[:, :-1] += 1
-
-            # For indexes in which the next speaker does not exist, we replace with the current index. That is, there's
-            # no dependency in the future
-            next_time_steps_from_self = np.where(evidence.next_vocalics_from_self == -1, all_time_steps,
-                                                 evidence.next_vocalics_from_self)
-            next_time_steps_from_other = np.where(evidence.next_vocalics_from_other == -1, all_time_steps,
-                                                  evidence.next_vocalics_from_other)
-            j = 0
-            while j < len(time_chunks) - 1:
-                block_size = len(time_chunks[j])
-
-                if block_size > 0:
-                    # Last indexes where M[j] = 1 per column
-                    last_indices_with_speaker = block_size - np.argmax(np.flip(masks[j], axis=1), axis=1) - 1
-                    last_times_with_speaker = time_chunks[j][last_indices_with_speaker]
-                    next_block_time_step_self = np.take_along_axis(next_time_steps_from_self,
-                                                                   last_times_with_speaker[:, np.newaxis], axis=-1)
-                    next_block_time_step_other = np.take_along_axis(next_time_steps_from_other,
-                                                                    last_times_with_speaker[:, np.newaxis], axis=-1)
-                    last_time_step_independent_block = np.maximum(np.max(next_block_time_step_self),
-                                                                  np.max(next_block_time_step_other))
-
-                    if last_time_step_independent_block > time_chunks[j][-1]:
-                        # There is a dependency with the next block
-                        independent_range = np.arange(time_chunks[j][-1] + 1, last_time_step_independent_block + 1)
-                        single_thread_time_steps.extend(independent_range)
-
-                    parallel_time_step_blocks.append(time_chunks[j])
-
-                    # Sometimes, the dependency might be with time steps in a block that is not the subsequent one.
-                    # The loop below will skip intermediary blocks until we find the one in which the dependent time
-                    # step is.
-                    while last_time_step_independent_block > time_chunks[j + 1][-1]:
-                        j += 1
-
-                    next_parallel_range = np.arange(last_time_step_independent_block + 1, time_chunks[j + 1][-1] + 1)
-
-                    time_chunks[j + 1] = next_parallel_range
-
-                j += 1
-
-            if len(time_chunks[-1]) > 0:
-                parallel_time_step_blocks.append(time_chunks[-1])
-
-            if len(parallel_time_step_blocks) == 1:
-                single_thread_time_steps.extend(parallel_time_step_blocks[0])
-                single_thread_time_steps = np.array(single_thread_time_steps)
-                parallel_time_step_blocks = []
-
-        return parallel_time_step_blocks, single_thread_time_steps
 
     def _create_new_particles(self) -> LatentVocalicsParticles:
         return LatentVocalicsParticles()
@@ -901,3 +659,158 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                     summary.latent_vocalics_var[:, t] = summary.latent_vocalics_var[:, t - 1]
 
         return summary
+
+    # TODO: Consider using to parallelize latent vocalics training.
+    # @staticmethod
+    # def _get_time_step_blocks_for_parallel_fitting(evidence: LatentVocalicsDataset, num_jobs: int) -> Tuple[
+    #     List[np.ndarray], List[np.ndarray]]:
+    #     """
+    #     Analyze the dependencies in the model to create 2 groups with lists of time steps that can be processed in
+    #     parallel in each group.
+    #     """
+    #
+    #     num_effective_jobs = int(min(evidence.num_time_steps / 2, num_jobs))
+    #     if num_effective_jobs == 1:
+    #         # No parallel jobs. Variables from all time steps are assigned to the first group.
+    #         return [np.arange(evidence.num_time_steps)], []
+    #
+    #     # Vocalics in a time step depends on two previous vocalics from different time steps: one from the same
+    #     # speaker, and one from a different speaker. Therefore, we cannot simply add the border of the blocks to
+    #     # the list of time steps in the first group.
+    #     # The strategy here will be to first split the time steps in as many blocks as the number of jobs. These,
+    #     # blocks will hold the list of time steps to process in the second group. For each block, we take the last
+    #     # time step in which there was observation across the trials, and from there we take the next timestep from
+    #     # the same speaker and other speaker. We then take the minimum and maximum among all these time
+    #     # steps. That yields the earliest (a) and latest (b) time steps in the future the current block depends on.
+    #     # We than adjust the block to be [start:a] + [b+1:end] and reserve time steps between a and b to the 1st
+    #     # group. In the end, we will split the first group into multiple blocks that are not dependent on each other
+    #     # which can be determined by jumps in time step larger than 1, meaning these blocks depend on blocks in the
+    #     # second group, and can, therefore, run in parallel.
+    #     time_chunks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
+    #     masks = np.array_split(evidence.vocalics_mask, num_effective_jobs, axis=-1)
+    #
+    #     # There's always a dependency between the last time step of a block and the first time step of the next
+    #     # block because coordination at time t+1 depends on coordination at time t. So, we start by moving
+    #     # the first element of each block (starting from the second) to the list of time steps in the second group.
+    #     second_group_time_steps = []
+    #     time_steps_reserved_for_1st_group = []
+    #     for i in range(1, num_effective_jobs):
+    #         time_steps_reserved_for_1st_group.append(time_chunks[i][0])
+    #         time_chunks[i] = time_chunks[i][1:]
+    #         masks[i] = masks[i][:, 1:]
+    #
+    #     # For indexes in which the next speaker does not exist, there's no dependency with the future. We keep two
+    #     # matrices, one with minimum value (-1) and one with maximum value (T). We will use this to determine the
+    #     # smallest and largest indices in the future, the current block depends on.
+    #     next_time_steps_from_self_min = evidence.next_vocalics_from_self
+    #     next_time_steps_from_self_max = np.where(evidence.next_vocalics_from_self == -1, evidence.num_time_steps,
+    #                                              evidence.next_vocalics_from_self)
+    #     next_time_steps_from_other_min = evidence.next_vocalics_from_other
+    #     next_time_steps_from_other_max = np.where(evidence.next_vocalics_from_other == -1, evidence.num_time_steps,
+    #                                               evidence.next_vocalics_from_other)
+    #     for i in range(len(time_chunks) - 1):
+    #         block_size = len(time_chunks[i])
+    #
+    #         if block_size > 0:
+    #             second_group_time_steps.append(time_chunks[i])
+    #
+    #             # Last indexes where M[j] = 1 per column. We use this to identify last indices in the block where
+    #             # someone talked
+    #             last_indices_with_speaker = block_size - np.argmax(np.flip(masks[i], axis=1), axis=1) - 1
+    #             last_times_with_speaker = time_chunks[i][last_indices_with_speaker]
+    #
+    #             next_block_time_step_self_min = np.take_along_axis(next_time_steps_from_self_min,
+    #                                                                last_times_with_speaker[:, np.newaxis], axis=-1)
+    #             next_block_time_step_other_min = np.take_along_axis(next_time_steps_from_other_min,
+    #                                                                 last_times_with_speaker[:, np.newaxis], axis=-1)
+    #             next_block_time_step_self_max = np.take_along_axis(next_time_steps_from_self_max,
+    #                                                                last_times_with_speaker[:, np.newaxis], axis=-1)
+    #             next_block_time_step_other_max = np.take_along_axis(next_time_steps_from_other_max,
+    #                                                                 last_times_with_speaker[:, np.newaxis], axis=-1)
+    #
+    #             # Because the _min variables contain -1 when no one is talking, the maximum is always going to
+    #             # return the maximum time step among all trials in the block. Or -1 if no one is talking in that
+    #             # block in all trials. Similar logic is applied for the _max case.
+    #             first_next_dependent_time_step = np.minimum(np.min(next_block_time_step_self_max),
+    #                                                         np.min(next_block_time_step_other_max))
+    #             last_next_dependent_time_step = np.maximum(np.max(next_block_time_step_self_min),
+    #                                                        np.max(next_block_time_step_other_min))
+    #
+    #             # Find next non-zero block
+    #             j = i + 1
+    #             while j < len(time_chunks):
+    #                 if len(time_chunks[j]) > 0:
+    #                     break
+    #                 j += 1
+    #
+    #             if last_next_dependent_time_step < time_chunks[j][0]:
+    #                 # There is no dependency with the future or there's a dependency with time steps already
+    #                 # added to the single thread list. In that case, the current block can just be added to the
+    #                 # parallel processing list.
+    #                 continue
+    #
+    #             # There is a dependency with the future. It might be the case that some elements in the range
+    #             # below are already in the 1st group list if the dependencies are from one time step to another
+    #             # since we already added the first time steps of every block to the list in the beginning of this
+    #             # function. We will remove duplicates and sort the array in the end to address this case.
+    #             independent_range = np.arange(first_next_dependent_time_step, last_next_dependent_time_step + 1)
+    #             time_steps_reserved_for_1st_group.extend(independent_range)
+    #
+    #             # We adjust the next blocks to remove the time steps that we added to the 1st group.
+    #             for j in range(i + 1, len(time_chunks)):
+    #                 if len(time_chunks[j]) == 0 or time_chunks[j][-1] < first_next_dependent_time_step:
+    #                     # The dependency is a block further in the future. So, we do nothing.
+    #                     continue
+    #
+    #                 if first_next_dependent_time_step < time_chunks[j][0]:
+    #                     first_next_dependent_time_step = time_chunks[j][0]
+    #
+    #                 stop = False
+    #                 if last_next_dependent_time_step <= time_chunks[j][-1]:
+    #                     stop = True
+    #
+    #                 # We remove time steps in the 1st group from the 2nd group block.
+    #                 block1 = np.arange(time_chunks[j][0], first_next_dependent_time_step)
+    #                 block2 = np.arange(np.minimum(time_chunks[j][-1], last_next_dependent_time_step) + 1,
+    #                                    time_chunks[j][-1] + 1)
+    #
+    #                 time_chunks[j] = np.concatenate([block1, block2])
+    #                 masks[j] = np.take_along_axis(evidence.vocalics_mask,
+    #                                               indices=time_chunks[j][np.newaxis, :],
+    #                                               axis=-1)
+    #
+    #                 if stop:
+    #                     break
+    #
+    #     if len(time_chunks[-1]) > 0:
+    #         # Include the last block if it is not empty
+    #         second_group_time_steps.append(time_chunks[-1])
+    #
+    #     if len(second_group_time_steps) == 1:
+    #         # If there's only one block in the 2nd group, we just run everything in a single group.
+    #         time_steps_reserved_for_1st_group.extend(second_group_time_steps[0])
+    #         time_steps_reserved_for_1st_group = np.array(time_steps_reserved_for_1st_group)
+    #         second_group_time_steps = []
+    #
+    #     # Remove duplicates and sort time steps by ascending order
+    #     time_steps_reserved_for_1st_group = sorted(list(set(time_steps_reserved_for_1st_group)))
+    #
+    #     # We can split the time steps in the first group into multiple blocks that don't depend on each other.
+    #     # The boundaries are defined by subsequent time-steps with jumps larger than 1. This is because if the
+    #     # difference is larger than one, it means there is another block that was added to the 2nd group already
+    #     # and the dependencies of the blocks to be separated are with this 2nd-group block.
+    #     # Also, notice that we only reserve one block to the 1st group per 2nd-group block processed, meaning that
+    #     # we don't have to worry about the number of independent blocks in the 1st group, as it will never be more than
+    #     # the desired number of jobs.
+    #     first_group_blocks = []
+    #     block = []
+    #     for i, t in enumerate(time_steps_reserved_for_1st_group):
+    #         if i == 0 or t - block[-1] == 1:
+    #             block.append(t)
+    #         else:
+    #             first_group_blocks.append(np.array(block))
+    #             block = [t]
+    #
+    #     first_group_blocks.append(np.array(block))
+    #
+    #     return first_group_blocks, second_group_time_steps
