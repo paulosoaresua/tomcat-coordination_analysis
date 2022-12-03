@@ -12,6 +12,7 @@ from tqdm import tqdm
 from coordination.callback.callback import Callback
 from coordination.common.log import BaseLogger
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
+from coordination.common.parallelism import display_inner_progress_bar
 from coordination.common.utils import set_seed
 from coordination.model.particle_filter import Particles, ParticleFilter
 
@@ -182,9 +183,15 @@ class PGM(BaseEstimator, Generic[SP, S]):
             particle_filter.reset_state()
             series = evidence.series[d]
 
-            for _ in tqdm(range(series.num_time_steps), desc="Time Step", position=main_bar_position + 1,
-                          leave=False):
+            pbar = None
+            if display_inner_progress_bar():
+                pbar = tqdm(range(series.num_time_steps), desc="Time Step", position=main_bar_position + 1, leave=False)
+
+            for _ in range(series.num_time_steps):
                 particle_filter.next(series)
+
+                if display_inner_progress_bar():
+                    pbar.update()
 
             results.append(self._summarize_particles(series, particle_filter.states))
 

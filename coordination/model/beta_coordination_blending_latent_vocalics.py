@@ -9,6 +9,7 @@ from scipy.stats import invgamma, norm
 from tqdm import tqdm
 
 from coordination.common.log import BaseLogger
+from coordination.common.parallelism import display_inner_progress_bar
 from coordination.common.distribution import beta
 from coordination.common.utils import logit, sigmoid
 from coordination.model.coordination_blending_latent_vocalics import CoordinationBlendingLatentVocalics
@@ -50,9 +51,8 @@ class BetaCoordinationBlendingLatentVocalics(
 
         # The lists below are initialized during training to create blocks of time stamps for which coordination can be
         # updated in parallel.
-        self._unbounded_coordination_time_step_blocks1: List[np.ndarray] = []
-        self._unbounded_coordination_time_steps_block2 = np.array([])
-        self._coordination_time_step_blocks: List[np.ndarray] = []
+        self._coordination_time_step_blocks1: List[np.ndarray] = []
+        self._coordination_time_step_block2 = np.array([])
 
     @classmethod
     def from_pickled_file(cls, filepath: str) -> BetaCoordinationBlendingLatentVocalics:
@@ -94,25 +94,25 @@ class BetaCoordinationBlendingLatentVocalics(
         super()._create_parallel_time_step_blocks(evidence, num_jobs)
 
         num_effective_jobs = min(evidence.num_time_steps / 2, num_jobs)
-        self._unbounded_coordination_time_step_blocks1 = []
-        self._unbounded_coordination_time_steps_block2 = []
+        self._coordination_time_step_blocks1 = []
+        self._coordination_time_step_block2 = []
         self._coordination_time_step_blocks = []
 
         if num_effective_jobs > 1:
-            self._unbounded_coordination_time_step_blocks1 = np.array_split(np.arange(evidence.num_time_steps),
-                                                                            num_effective_jobs)
-            for i in range(1, len(self._unbounded_coordination_time_step_blocks1)):
+            self._coordination_time_step_blocks1 = np.array_split(np.arange(evidence.num_time_steps),
+                                                                  num_effective_jobs)
+            for i in range(1, len(self._coordination_time_step_blocks1)):
                 # Move the last time step in each block from group 1 to a block in group 2.
                 # Blocks in group 2 depends on blocks in group 1. However, within groups, there's no dependency between
                 # coordination, so they can be updated in parallel.
-                self._unbounded_coordination_time_steps_block2.append(
-                    self._unbounded_coordination_time_step_blocks1[i][0])
-                self._unbounded_coordination_time_step_blocks1[i] = self._unbounded_coordination_time_step_blocks1[i][
-                                                                    1:]
+                self._coordination_time_step_block2.append(
+                    self._coordination_time_step_blocks1[i][0])
+                self._coordination_time_step_blocks1[i] = self._coordination_time_step_blocks1[i][
+                                                          1:]
 
             # Only one block in group 2 as large as the number of jobs. Creating individual blocks with one time step
             # only increases overhead. One time step is processed fast enough to be parallelized.
-            self._unbounded_coordination_time_steps_blocks2 = np.array(self._unbounded_coordination_time_steps_block2)
+            self._unbounded_coordination_time_steps_blocks2 = np.array(self._coordination_time_step_block2)
 
             self._coordination_time_step_blocks = np.array_split(np.arange(evidence.num_time_steps), num_effective_jobs)
 
@@ -168,7 +168,7 @@ class BetaCoordinationBlendingLatentVocalics(
                      su).rvs(), a_min=min_value, a_max=max_value)
 
     def _get_max_num_jobs(self) -> int:
-        return max(len(self._unbounded_coordination_time_step_blocks1), 1)
+        return max(len(self._coordination_time_step_blocks1), 1)
 
     def _compute_coordination_loglikelihood(self, evidence: BetaCoordinationLatentVocalicsDataset) -> float:
         unbounded_coordination = self.last_unbounded_coordination_samples_
@@ -190,56 +190,97 @@ class BetaCoordinationBlendingLatentVocalics(
     def _update_coordination(self, evidence: BetaCoordinationLatentVocalicsDataset,
                              train_hyper_parameters: BetaCoordinationLatentVocalicsTrainingHyperParameters,
                              pool: Pool):
+
         if self._get_max_num_jobs() == 1:
             # Update coordination in the main process
             time_steps_in_job = np.arange(evidence.num_time_steps)
 
-            unbounded_coordination, acceptance_rates = self._sample_unbounded_coordination_on_fit(evidence,
-                                                                                                  train_hyper_parameters,
-                                                                                                  time_steps_in_job, 1,
-                                                                                                  0)
-            self._retain_unbounded_coordination_samples(unbounded_coordination, acceptance_rates,
-                                                        time_steps_in_job)
+            results = self._sample_coordination_on_fit(evidence, train_hyper_parameters, time_steps_in_job, 1, 0)
+            coordination, acceptance_rates, unbounded_coordination, acceptance_rates_uc = results
 
-            coordination, acceptance_rates = self._sample_coordination_on_fit(evidence,
-                                                                              train_hyper_parameters, time_steps_in_job,
-                                                                              1, 0)
+            self._retain_unbounded_coordination_samples(unbounded_coordination, acceptance_rates_uc, time_steps_in_job)
             self._retain_coordination_samples(coordination, acceptance_rates, time_steps_in_job)
 
         else:
-            # Unbounded coordination is split in two groups because of their dependency over time.
-            # We sample the first group blocks in parallel and the second group in the main thread. The second
-            # group contains only as many time steps as the number of jobs. We avoid run individual time steps
-            # in parallel to decrease overhead of spawning a process for a fast task.
-            job_args = [(evidence, train_hyper_parameters, self._unbounded_coordination_time_step_blocks1[j],
-                         -1, 0) for j in
-                        range(len(self._unbounded_coordination_time_step_blocks1))]
-
-            results = pool.starmap(self._sample_unbounded_coordination_on_fit, job_args)
-            for block_idx, (unbounded_coordination, acceptance_rates) in enumerate(results):
-                self._retain_unbounded_coordination_samples(unbounded_coordination,
-                                                            acceptance_rates,
-                                                            self._unbounded_coordination_time_step_blocks1[
-                                                                block_idx])
-
-            unbounded_coordination, acceptance_rates = self._sample_unbounded_coordination_on_fit(evidence,
-                                                                                                  train_hyper_parameters,
-                                                                                                  self._unbounded_coordination_time_steps_block2,
-                                                                                                  -1,
-                                                                                                  1)
-            self._retain_unbounded_coordination_samples(unbounded_coordination, acceptance_rates,
-                                                        self._unbounded_coordination_time_steps_block2)
-
-            # Coordination does not depend on other coordination at different time steps, thus we can parallelize a
-            # single group of time steps blocks.
-            job_args = [(evidence, train_hyper_parameters, self._coordination_time_step_blocks[j], -1, 0)
-                        for j in
-                        range(len(self._coordination_time_step_blocks))]
+            # Coordination is split in two groups because of the dependency between groups of unbounded coordination
+            # over time. We sample the first group blocks in parallel and the second group in the main thread. The
+            # second group contains only as many time steps as the number of jobs. We avoid run individual time steps
+            # in parallel to decrease overhead of spawning processes.
+            blocks1 = self._coordination_time_step_blocks1
+            job_args = [(evidence, train_hyper_parameters, blocks1[j], j + 1, 0) for j in range(len(blocks1))]
 
             results = pool.starmap(self._sample_coordination_on_fit, job_args)
-            for block_idx, (coordination, acceptance_rates) in enumerate(results):
-                self._retain_coordination_samples(coordination, acceptance_rates,
-                                                  self._coordination_time_step_blocks[block_idx])
+            for block_idx, (coordination, acceptance_rates, unbounded_coordination, acceptance_rates_uc) in enumerate(
+                    results):
+                self._retain_unbounded_coordination_samples(unbounded_coordination, acceptance_rates_uc,
+                                                            blocks1[block_idx])
+                self._retain_coordination_samples(coordination, acceptance_rates, blocks1[block_idx])
+
+            block2 = self._coordination_time_step_block2
+            results = self._sample_coordination_on_fit(evidence, train_hyper_parameters, block2, 1, 1)
+            coordination, acceptance_rates, unbounded_coordination, acceptance_rates_uc = results
+            self._retain_unbounded_coordination_samples(unbounded_coordination, acceptance_rates_uc, block2)
+            self._retain_coordination_samples(coordination, acceptance_rates, block2)
+
+    def _sample_coordination_on_fit(self, evidence: BetaCoordinationLatentVocalicsDataset,
+                                    train_hyper_parameters: BetaCoordinationLatentVocalicsTrainingHyperParameters,
+                                    time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[np.ndarray, ...]:
+
+        # Sample unbounded coordination and then coordination in the same process
+        unbounded_coordination, acceptance_rates_uc = self._sample_unbounded_coordination_on_fit(evidence,
+                                                                                                 train_hyper_parameters,
+                                                                                                 time_steps, job_num,
+                                                                                                 0)
+
+        coordination = self.last_coordination_samples_.copy()
+        acceptance_rates = self.coordination_acceptance_rates_.copy()
+
+        if evidence.coordination is not None:
+            return coordination, acceptance_rates
+
+        latent_vocalics = self.last_latent_vocalics_samples_
+
+        vc = self.parameters.var_c
+        saa = np.sqrt(self.parameters.var_aa)
+
+        pbar = None
+        if display_inner_progress_bar():
+            pbar = tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
+                        leave=False)
+
+        for t in time_steps:
+            if t > 0:
+                # Initial coordination is given
+                proposal_fn_params = {
+                    "vc": vc,
+                    "vc_prop": train_hyper_parameters.vc_mcmc_prop
+                }
+
+                log_prob_fn_params = {
+                    "current_unbounded_coordination_sample": unbounded_coordination[:, t][:, np.newaxis],
+                    "vc": vc,
+                    "saa": saa,
+                    "evidence": evidence,
+                    "latent_vocalics": latent_vocalics,
+                    "time_step": t
+                }
+
+                sampler = MCMC(proposal_fn=self._get_coordination_proposal,
+                               proposal_fn_kwargs=proposal_fn_params,
+                               log_prob_fn=self._get_coordination_posterior_unormalized_logprob,
+                               log_prob_fn_kwargs=log_prob_fn_params)
+                initial_sample = coordination[:, t][:, np.newaxis]
+                inferred_coordination = sampler.generate_samples(initial_sample=initial_sample,
+                                                                 num_samples=1,
+                                                                 burn_in=train_hyper_parameters.c_mcmc_iter,
+                                                                 retain_every=1)[0, :, 0]
+                coordination[:, t] = inferred_coordination
+                acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
+
+            if display_inner_progress_bar():
+                pbar.update()
+
+        return coordination, acceptance_rates, unbounded_coordination, acceptance_rates_uc
 
     def _sample_unbounded_coordination_on_fit(self, evidence: BetaCoordinationLatentVocalicsDataset,
                                               train_hyper_parameters: BetaCoordinationLatentVocalicsTrainingHyperParameters,
@@ -260,7 +301,7 @@ class BetaCoordinationBlendingLatentVocalics(
         vc = self.parameters.var_c
 
         pbar = None
-        if job_num >= 0:
+        if display_inner_progress_bar():
             pbar = tqdm(time_steps, desc=f"Sampling Unbounded Coordination (Group {group_order + 1})", position=job_num,
                         leave=False)
 
@@ -295,7 +336,7 @@ class BetaCoordinationBlendingLatentVocalics(
                 unbounded_coordination[:, t] = inferred_unbounded_coordination
                 acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
 
-            if pbar is not None:
+            if display_inner_progress_bar():
                 pbar.update()
 
         return unbounded_coordination, acceptance_rates
@@ -338,62 +379,6 @@ class BetaCoordinationBlendingLatentVocalics(
         log_posterior += beta(m, vc).logpdf(coordination)
 
         return log_posterior.flatten()
-
-    def _sample_coordination_on_fit(self, evidence: BetaCoordinationLatentVocalicsDataset,
-                                    train_hyper_parameters: BetaCoordinationLatentVocalicsTrainingHyperParameters,
-                                    time_steps: np.ndarray, job_num: int, group_order: int) -> Tuple[
-        np.ndarray, np.ndarray]:
-
-        coordination = self.last_coordination_samples_.copy()
-        acceptance_rates = self.coordination_acceptance_rates_.copy()
-
-        if evidence.coordination is not None:
-            return coordination, acceptance_rates
-
-        unbounded_coordination = self.last_unbounded_coordination_samples_
-        latent_vocalics = self.last_latent_vocalics_samples_
-
-        vc = self.parameters.var_c
-        saa = np.sqrt(self.parameters.var_aa)
-
-        pbar = None
-        if job_num >= 0:
-            pbar = tqdm(time_steps, desc=f"Sampling Coordination (Group {group_order + 1})", position=job_num,
-                        leave=False)
-
-        for t in time_steps:
-            if t > 0:
-                # Initial coordination is given
-                proposal_fn_params = {
-                    "vc": vc,
-                    "vc_prop": train_hyper_parameters.vc_mcmc_prop
-                }
-
-                log_prob_fn_params = {
-                    "current_unbounded_coordination_sample": unbounded_coordination[:, t][:, np.newaxis],
-                    "vc": vc,
-                    "saa": saa,
-                    "evidence": evidence,
-                    "latent_vocalics": latent_vocalics,
-                    "time_step": t
-                }
-
-                sampler = MCMC(proposal_fn=self._get_coordination_proposal,
-                               proposal_fn_kwargs=proposal_fn_params,
-                               log_prob_fn=self._get_coordination_posterior_unormalized_logprob,
-                               log_prob_fn_kwargs=log_prob_fn_params)
-                initial_sample = coordination[:, t][:, np.newaxis]
-                inferred_coordination = sampler.generate_samples(initial_sample=initial_sample,
-                                                                 num_samples=1,
-                                                                 burn_in=train_hyper_parameters.c_mcmc_iter,
-                                                                 retain_every=1)[0, :, 0]
-                coordination[:, t] = inferred_coordination
-                acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
-
-            if pbar is not None:
-                pbar.update()
-
-        return coordination, acceptance_rates
 
     @staticmethod
     def _get_coordination_proposal(previous_coordination_sample: np.ndarray, vc: float, vc_prop: float):

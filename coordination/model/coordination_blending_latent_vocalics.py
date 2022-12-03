@@ -9,12 +9,14 @@ from scipy.stats import norm, invgamma
 from tqdm import tqdm
 
 from coordination.common.log import BaseLogger
+from coordination.common.parallelism import display_inner_progress_bar
 from coordination.component.speech.common import SegmentedUtterance, VocalicsSparseSeries
 from coordination.model.particle_filter import Particles
 from coordination.model.pgm import PGM
 from coordination.model.utils.coordination_blending_latent_vocalics import LatentVocalicsParticles, \
     LatentVocalicsParticlesSummary, LatentVocalicsSamples, LatentVocalicsDataSeries, LatentVocalicsDataset, BaseF, \
     BaseG, clip_coordination, LatentVocalicsTrainingHyperParameters, LatentVocalicsModelParameters
+
 
 SP = TypeVar('SP')
 S = TypeVar('S')
@@ -267,7 +269,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         latent_vocalics = self.last_latent_vocalics_samples_.copy()
 
         pbar = None
-        if job_num >= 0:
+        if display_inner_progress_bar():
             pbar = tqdm(time_steps, desc=f"Sampling Latent Vocalics (Group {group_order + 1})", position=job_num,
                         leave=False)
 
@@ -342,7 +344,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
             latent_vocalics[:, :, t] = sampled_latent_vocalics
 
-            if pbar is not None:
+            if display_inner_progress_bar():
                 pbar.update()
 
         return latent_vocalics
