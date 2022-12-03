@@ -167,7 +167,7 @@ class PGM(BaseEstimator, Generic[SP, S]):
         return results
 
     def _run_particle_filter_inference(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int],
-                                       main_bar_position: int) -> List[ParticlesSummary]:
+                                       main_bar_position: int) -> List[S]:
         particle_filter = ParticleFilter(
             num_particles=num_particles,
             resample_at_fn=self._resample_at,

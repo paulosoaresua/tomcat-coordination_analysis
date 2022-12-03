@@ -126,10 +126,10 @@ class LatentVocalicsDataset(EvidenceDataset):
         return self.__class__(
             series=[self.series[i] for i in indices],
             team_scores=self.team_scores[indices],
-            team_process_surveys=np.take_along_axis(self.team_process_surveys, indices, axis=0),
-            team_satisfaction_surveys=np.take_along_axis(self.team_satisfaction_surveys, indices, axis=0),
-            genders=np.take_along_axis(self.genders, indices, axis=0),
-            ages=np.take_along_axis(self.ages, indices, axis=0)
+            team_process_surveys=self.team_process_surveys[indices],
+            team_satisfaction_surveys=self.team_satisfaction_surveys[indices],
+            genders=self.genders[indices],
+            ages=self.ages[indices]
         )
 
     def merge(self, dataset2: LatentVocalicsDataset) -> EvidenceDataset:
