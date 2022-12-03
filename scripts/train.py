@@ -4,6 +4,7 @@ import pickle
 
 from coordination.callback.early_stopping_callback import EarlyStoppingCallback
 from coordination.common.log import TensorBoardLogger
+import coordination.common.parallelism as parallelism
 from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
 from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
     BetaCoordinationLatentVocalicsTrainingHyperParameters
