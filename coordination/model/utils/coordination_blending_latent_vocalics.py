@@ -94,9 +94,13 @@ class LatentVocalicsDataset(EvidenceDataset):
 
         self.observed_vocalics = np.zeros((len(series), series[0].num_vocalic_features, series[0].num_time_steps))
         self.vocalics_mask = np.zeros((len(series), series[0].num_time_steps))
-        self.previous_vocalics_from_self = np.zeros((len(series), series[0].num_time_steps)).astype(np.int)
-        self.previous_vocalics_from_other = np.zeros((len(series), series[0].num_time_steps)).astype(np.int)
+
+        self.previous_vocalics_from_self = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
+        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_self)
         self.next_vocalics_from_self = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
+        self.enable_self_dependency()
+
+        self.previous_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
         self.next_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
 
         for i, series in enumerate(series):
@@ -108,19 +112,31 @@ class LatentVocalicsDataset(EvidenceDataset):
 
             self.observed_vocalics[i] = series.observed_vocalics.values
             self.vocalics_mask[i] = series.observed_vocalics.mask
-            self.previous_vocalics_from_self[i] = np.array(
-                [-1 if t is None else t for t in series.observed_vocalics.previous_from_self])
+
             self.previous_vocalics_from_other[i] = np.array(
                 [-1 if t is None else t for t in series.observed_vocalics.previous_from_other])
-            self.previous_vocalics_from_self_mask = np.where(self.previous_vocalics_from_self >= 0, 1, 0)
-            self.previous_vocalics_from_other_mask = np.where(self.previous_vocalics_from_other >= 0, 1, 0)
+
+            for t in range(series.num_time_steps):
+                if self.previous_vocalics_from_other[i, t] >= 0:
+                    self.next_vocalics_from_other[i, self.previous_vocalics_from_other[i, t]] = t
+
+        self.previous_vocalics_from_other_mask = np.where(self.previous_vocalics_from_other >= 0, 1, 0)
+
+    def disable_self_dependency(self):
+        self.previous_vocalics_from_self = np.ones_like(self.previous_vocalics_from_self) * -1
+        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_self)
+        self.next_vocalics_from_self = np.ones_like(self.previous_vocalics_from_self) * -1
+
+    def enable_self_dependency(self):
+        for i, series in enumerate(self.series):
+            self.previous_vocalics_from_self[i] = np.array(
+                [-1 if t is None else t for t in series.observed_vocalics.previous_from_self])
 
             for t in range(series.num_time_steps):
                 if self.previous_vocalics_from_self[i, t] >= 0:
                     self.next_vocalics_from_self[i, self.previous_vocalics_from_self[i, t]] = t
 
-                if self.previous_vocalics_from_other[i, t] >= 0:
-                    self.next_vocalics_from_other[i, self.previous_vocalics_from_other[i, t]] = t
+        self.previous_vocalics_from_self_mask = np.where(self.previous_vocalics_from_self >= 0, 1, 0)
 
     def get_subset(self, indices: List[int]) -> LatentVocalicsDataset:
         return self.__class__(

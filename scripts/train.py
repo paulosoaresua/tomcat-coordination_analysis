@@ -13,7 +13,7 @@ from coordination.model.utils.beta_coordination_blending_latent_vocalics import 
 def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_jobs: int, c0: float, a_vu: float,
           b_vu: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float, a_vo: float, b_vo: float,
           vu0: float, vc0: float, va0: float, vaa0: float, vo0: float, u_mcmc_iter: int, c_mcmc_iter: int,
-          vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str):
+          vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str, no_self_dependency: bool):
 
     # Loading dataset
     with open(dataset_path, "rb") as f:
@@ -45,7 +45,8 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
     model = BetaCoordinationBlendingLatentVocalics(
         initial_coordination=c0,
         num_vocalic_features=dataset.series[0].num_vocalic_features,
-        num_speakers=3)
+        num_speakers=3,
+        disable_self_dependency=no_self_dependency)
 
     tb_logger = TensorBoardLogger(f"{out_dir}/tensorboard")
 
@@ -113,6 +114,8 @@ if __name__ == "__main__":
     parser.add_argument("--vc_mcmc_prop", type=float, required=False, default=0.001,
                         help="Variance of the proposal distribution for coordination.")
     parser.add_argument("--out_dir", type=str, required=True, help="Directory where to save the model.")
+    parser.add_argument("--no_self_dep", action="store_true", required=False, default=False,
+                        help="Disable latent vocalics dependency on the same speaker.")
 
     args = parser.parse_args()
 
@@ -139,4 +142,5 @@ if __name__ == "__main__":
           c_mcmc_iter=args.c_mcmc_iter,
           vu_mcmc_prop=args.vu_mcmc_prop,
           vc_mcmc_prop=args.vc_mcmc_prop,
-          out_dir=args.out_dir)
+          out_dir=args.out_dir,
+          no_self_dependency=args.no_self_dep)

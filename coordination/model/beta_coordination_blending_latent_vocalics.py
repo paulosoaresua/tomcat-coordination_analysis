@@ -35,8 +35,9 @@ class BetaCoordinationBlendingLatentVocalics(
                  num_vocalic_features: int,
                  num_speakers: int,
                  f: BaseF = BaseF(),
-                 g: BaseG = BaseG()):
-        super().__init__(initial_coordination, num_vocalic_features, num_speakers, f, g)
+                 g: BaseG = BaseG(),
+                 disable_self_dependency: bool = False):
+        super().__init__(initial_coordination, num_vocalic_features, num_speakers, f, g, disable_self_dependency)
 
         # Trainable parameters of the model
         self.parameters = BetaCoordinationLatentVocalicsModelParameters()
