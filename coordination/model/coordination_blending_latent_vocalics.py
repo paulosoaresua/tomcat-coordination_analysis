@@ -17,7 +17,6 @@ from coordination.model.utils.coordination_blending_latent_vocalics import Laten
     LatentVocalicsParticlesSummary, LatentVocalicsSamples, LatentVocalicsDataSeries, LatentVocalicsDataset, BaseF, \
     BaseG, clip_coordination, LatentVocalicsTrainingHyperParameters, LatentVocalicsModelParameters
 
-
 SP = TypeVar('SP')
 S = TypeVar('S')
 
@@ -29,7 +28,17 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                  num_vocalic_features: int,
                  num_speakers: int,
                  f: BaseF,
-                 g: BaseG):
+                 g: BaseG,
+                 disable_self_dependency):
+        """
+
+        @param initial_coordination: Initial value of coordination
+        @param num_vocalic_features: Number of vocalic features
+        @param num_speakers: Number of speakers
+        @param f: Latent vocalics transition transformation
+        @param g: Latent vocalics emission transformation
+        @param disable_self_dependency: Whether coordination mediates dependency on self and other or only other.
+        """
         super().__init__()
 
         self.initial_coordination = initial_coordination
@@ -37,13 +46,15 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         self.num_speakers = num_speakers
         self.f = f
         self.g = g
+        self.disable_self_dependency = disable_self_dependency
 
         self._hyper_params = {
             "c0": initial_coordination,
             "#features": num_vocalic_features,
             "#speakers": num_speakers,
             "f": f.__repr__(),
-            "g": g.__repr__()
+            "g": g.__repr__(),
+            "disable_self_dependency": disable_self_dependency
         }
 
         # Trainable parameters of the model
@@ -159,12 +170,12 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     def _sample_latent_vocalics(self, previous_self: Optional[float], previous_other: Optional[float],
                                 coordination: float) -> np.ndarray:
         if previous_other is None:
-            if previous_self is None:
+            if previous_self is None or self.disable_self_dependency:
                 distribution = norm(loc=np.zeros(self.num_vocalic_features), scale=np.sqrt(self.parameters.var_a))
             else:
                 distribution = norm(loc=self.f(previous_self, 0), scale=np.sqrt(self.parameters.var_aa))
         else:
-            if previous_self is None:
+            if previous_self is None or self.disable_self_dependency:
                 D = self.f(previous_other, 1)
                 distribution = norm(loc=D * clip_coordination(coordination), scale=np.sqrt(self.parameters.var_aa))
             else:
@@ -180,6 +191,20 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
+
+    def _fit_init(self, evidence: LatentVocalicsDataset, train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
+                  burn_in: int,
+                  seed: Optional[int], num_jobs: int = 1, logger: BaseLogger = BaseLogger()):
+        # Self-dependency can be toggled by just modifying some variables in the dataset. We do this here and change the
+        # dataset to its original configuration in the end of the fit method.
+        if self.disable_self_dependency:
+            evidence.disable_self_dependency()
+
+    def _fit_end(self, evidence: LatentVocalicsDataset, train_hyper_parameters: LatentVocalicsTrainingHyperParameters,
+                 burn_in: int,
+                 seed: Optional[int], num_jobs: int = 1, logger: BaseLogger = BaseLogger()):
+        if self.disable_self_dependency:
+            evidence.enable_self_dependency()
 
     def _initialize_gibbs(self, evidence: LatentVocalicsDataset,
                           train_hyper_parameters: LatentVocalicsTrainingHyperParameters, burn_in: int, seed: int,
@@ -496,6 +521,17 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     # ---------------------------------------------------------
     # INFERENCE
     # ---------------------------------------------------------
+    def _predict_init(self, evidence: LatentVocalicsDataset, num_particles: int, seed: Optional[int],
+                      num_jobs: int = 1):
+        # Self-dependency can be toggled by just modifying some variables in the dataset. We do this here and change the
+        # dataset to its original configuration in the end of the fit method.
+        if self.disable_self_dependency:
+            evidence.disable_self_dependency()
+
+    def _predict_end(self, evidence: LatentVocalicsDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1):
+        if self.disable_self_dependency:
+            evidence.enable_self_dependency()
+
     def _sample_from_prior(self, num_particles: int, series: LatentVocalicsDataSeries) -> Particles:
         new_particles = self._create_new_particles()
 
@@ -509,7 +545,6 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 speaker = series.observed_vocalics.utterances[0].subject_id
                 new_particles.latent_vocalics[speaker] = np.ones((num_particles, 1)) * series.latent_vocalics.values[:,
                                                                                        0]
-
         return new_particles
 
     def _sample_coordination_from_prior(self, num_particles: int, new_particles: LatentVocalicsParticles,
@@ -555,7 +590,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         if series.observed_vocalics.mask[time_step] == 1:
             speaker = series.observed_vocalics.utterances[time_step].subject_id
 
-            if series.observed_vocalics.previous_from_self[time_step] is None:
+            if series.observed_vocalics.previous_from_self[time_step] is None or self.disable_self_dependency:
                 # Mean of the prior distribution
                 num_particles = len(new_particles.coordination)
                 A = np.zeros((num_particles, self.num_vocalic_features))
@@ -564,7 +599,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 A = self.f(previous_particles.latent_vocalics[speaker], 0)
 
             if series.observed_vocalics.previous_from_other[time_step] is None:
-                if series.observed_vocalics.previous_from_self[time_step] is None:
+                if series.observed_vocalics.previous_from_self[time_step] is None or self.disable_self_dependency:
                     # Sample from prior
                     new_particles.latent_vocalics[speaker] = norm(loc=A, scale=np.sqrt(self.parameters.var_a)).rvs()
                 else:

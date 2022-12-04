@@ -85,6 +85,8 @@ class PGM(BaseEstimator, Generic[SP, S]):
 
         self.train = True
 
+        self._fit_init(evidence, train_hyper_parameters, burn_in, seed, num_jobs, logger)
+
         for callback in callbacks:
             callback.reset()
 
@@ -124,7 +126,17 @@ class PGM(BaseEstimator, Generic[SP, S]):
 
         self.parameters.freeze()
 
+        self._fit_end(evidence, train_hyper_parameters, burn_in, seed, num_jobs, logger)
+
         return self
+
+    def _fit_init(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters, burn_in: int,
+                  seed: Optional[int], num_jobs: int = 1, logger: BaseLogger = BaseLogger()):
+        raise NotImplementedError
+
+    def _fit_end(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters, burn_in: int,
+                 seed: Optional[int], num_jobs: int = 1, logger: BaseLogger = BaseLogger()):
+        raise NotImplementedError
 
     def _initialize_gibbs(self, evidence: EvidenceDataset, train_hyper_parameters: TrainingHyperParameters,
                           burn_in: int, seed: int, num_jobs: int):
@@ -151,7 +163,14 @@ class PGM(BaseEstimator, Generic[SP, S]):
     def _log_parameters(self, gibbs_step: int, logger: BaseLogger):
         raise NotImplementedError
 
+    def _predict_init(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1):
+        raise NotImplementedError
+
+    def _predict_end(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1):
+        raise NotImplementedError
+
     def predict(self, evidence: EvidenceDataset, num_particles: int, seed: Optional[int], num_jobs: int = 1) -> List[S]:
+        self._predict_init(evidence, num_particles, seed, num_jobs)
 
         num_effective_jobs = min(num_jobs, evidence.num_trials)
         trial_chunks = np.array_split(np.arange(evidence.num_trials), num_effective_jobs)
@@ -164,6 +183,8 @@ class PGM(BaseEstimator, Generic[SP, S]):
                     results.extend(result)
         else:
             results = self._run_particle_filter_inference(evidence, num_particles, seed, 0)
+
+        self._predict_end(evidence, num_particles, seed, num_jobs)
 
         return results
 
