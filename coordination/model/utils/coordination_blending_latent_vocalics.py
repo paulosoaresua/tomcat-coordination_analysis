@@ -101,9 +101,13 @@ class LatentVocalicsDataset(EvidenceDataset):
         self.enable_self_dependency()
 
         self.previous_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
+        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_other)
         self.next_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
 
-        for i, series in enumerate(series):
+        self._fill_tensors()
+
+    def _fill_tensors(self):
+        for i, series in enumerate(self.series):
             if series.coordination is not None:
                 self.coordination[i] = series.coordination
 
@@ -158,6 +162,21 @@ class LatentVocalicsDataset(EvidenceDataset):
             genders=np.concatenate([self.genders, dataset2.genders], axis=0),
             ages=np.concatenate([self.ages, dataset2.ages], axis=0),
         )
+
+    def remove_vocalic_feature(self, feature_idx: int):
+        self.latent_vocalics = None if self.latent_vocalics is None else np.delete(np.zeros_like(self.latent_vocalics),
+                                                                                   [0], axis=1)
+        self.observed_vocalics = np.delete(np.zeros_like(self.observed_vocalics), [0], axis=1)
+
+        for i in range(self.num_trials):
+            if self.series[i].latent_vocalics is not None:
+                self.series[i].latent_vocalics.values = np.delete(self.series[i].latent_vocalics.values, [feature_idx],
+                                                                  axis=0)
+                self.latent_vocalics[i] = self.series[i].latent_vocalics.values
+
+            self.series[i].observed_vocalics.values = np.delete(self.series[i].observed_vocalics.values, [feature_idx],
+                                                                axis=0)
+            self.observed_vocalics[i] = self.series[i].observed_vocalics.values
 
 
 class BaseF:

@@ -5,13 +5,18 @@ from coordination.model.beta_coordination_blending_latent_vocalics import BetaCo
 from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset
 
 
-def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num_jobs: int, out_dir: str):
+def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num_jobs: int, out_dir: str,
+          disable_feature: int):
     # Loading model
     model = BetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
 
     # Loading dataset
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
+
+    if disable_feature == 0 or disable_feature == 1:
+        # Remove feature from the dataset
+        dataset.remove_vocalic_feature(disable_feature)
 
     summaries = model.predict(evidence=dataset, num_particles=num_particles, seed=seed, num_jobs=num_jobs)
 
@@ -34,6 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_jobs", type=int, required=False, default=1,
                         help="Number of jobs to infer trials in parallel.")
     parser.add_argument("--out_dir", type=str, required=True, help="Directory where to save the inferences.")
+    parser.add_argument("--disable_feature", type=int, required=False, default=-1, help="0 - Pitch; 1 - Intensity")
 
     args = parser.parse_args()
 
@@ -42,4 +48,5 @@ if __name__ == "__main__":
           num_particles=args.n_particles,
           seed=args.seed,
           num_jobs=args.n_jobs,
-          out_dir=args.out_dir)
+          out_dir=args.out_dir,
+          disable_feature=args.disable_feature)
