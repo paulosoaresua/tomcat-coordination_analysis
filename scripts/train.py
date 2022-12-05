@@ -13,11 +13,15 @@ from coordination.model.utils.beta_coordination_blending_latent_vocalics import 
 def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_jobs: int, c0: float, a_vu: float,
           b_vu: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float, a_vo: float, b_vo: float,
           vu0: float, vc0: float, va0: float, vaa0: float, vo0: float, u_mcmc_iter: int, c_mcmc_iter: int,
-          vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str, no_self_dependency: bool):
+          vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str, no_self_dependency: bool, disable_feature: int):
 
     # Loading dataset
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
+
+    if disable_feature == 0 or disable_feature == 1:
+        # Remove feature from the dataset
+        dataset.remove_vocalic_feature(disable_feature)
 
     timestamp = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
     out_dir = f"{out_dir}/{timestamp}"
@@ -116,6 +120,7 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir", type=str, required=True, help="Directory where to save the model.")
     parser.add_argument("--no_self_dep", action="store_true", required=False, default=False,
                         help="Disable latent vocalics dependency on the same speaker.")
+    parser.add_argument("--disable_feature", type=int, required=False, default=-1, help="0 - Pitch; 1 - Intensity")
 
     args = parser.parse_args()
 
@@ -143,4 +148,5 @@ if __name__ == "__main__":
           vu_mcmc_prop=args.vu_mcmc_prop,
           vc_mcmc_prop=args.vc_mcmc_prop,
           out_dir=args.out_dir,
-          no_self_dependency=args.no_self_dep)
+          no_self_dependency=args.no_self_dep,
+          disable_feature=args.disable_feature)
