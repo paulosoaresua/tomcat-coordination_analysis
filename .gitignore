@@ -138,3 +138,4 @@ data/
 boards/
 run/
 notebooks/formatting.py
+scripts/formatting.py
