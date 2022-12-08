@@ -1,4 +1,5 @@
 import argparse
+import os
 import pickle
 
 from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
@@ -19,6 +20,8 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
         dataset.remove_vocalic_feature(disable_feature)
 
     summaries = model.predict(evidence=dataset, num_particles=num_particles, seed=seed, num_jobs=num_jobs)
+
+    os.makedirs(out_dir, exist_ok=True)
 
     with open(f"{out_dir}/inference_summaries.pkl", "wb") as f:
         pickle.dump(summaries, f)

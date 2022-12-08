@@ -199,6 +199,11 @@ class BaseG:
 
 class LatentVocalicsTrainingHyperParameters(TrainingHyperParameters):
 
+    # def __init__(self, a_vc: float, b_vc: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float,
+    #              mu_mo_male: np.ndarray, mu_no_male: np.ndarray, a_vo_male: np.ndarray,
+    #              b_vo_male: np.ndarray, mu_mo_female: np.ndarray, mu_no_female: np.ndarray, a_vo_female: np.ndarray,
+    #              b_vo_female: np.ndarray, vc0: float, va0: float, vaa0: float, vo0: float):
+
     def __init__(self, a_vc: float, b_vc: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float, a_vo: float,
                  b_vo: float, vc0: float, va0: float, vaa0: float, vo0: float):
         """
