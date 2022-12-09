@@ -201,7 +201,7 @@ class LatentVocalicsDataset(EvidenceDataset):
     def keep_vocalic_features(self, features: List[str]):
         if self.num_trials > 0:
             FEATURE_MAP = {feature_name: i for i, feature_name in enumerate(self.series[0].features)}
-            features_to_remove = set(range(self.observed_vocalics.num_features))
+            features_to_remove = set(range(self.series[0].observed_vocalics.num_features))
             for f in features:
                 features_to_remove.remove(FEATURE_MAP[f])
 
@@ -212,6 +212,7 @@ class LatentVocalicsDataset(EvidenceDataset):
     def normalize_per_subject(self):
         for s in self.series:
             s.observed_vocalics.normalize_per_subject()
+        self._fill_tensors()
 
 
 class BaseF:
