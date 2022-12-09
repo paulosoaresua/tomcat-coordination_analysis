@@ -21,13 +21,7 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
-    FEATURE_MAP = {
-        "pitch": 0,
-        "intensity": 1,
-        "jitter": 2,
-        "shimmer": 3,
-    }
-    dataset.keep_features([FEATURE_MAP[f] for f in features])
+    dataset.keep_features(features)
 
     if gendered:
         raise NotImplementedError
@@ -138,6 +132,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    def format_feature_name(name: str):
+        return name.strip().lower()
+
     train(dataset_path=args.dataset_path,
           num_train_iter=args.n_train_iter,
           patience=args.patience,
@@ -163,5 +160,5 @@ if __name__ == "__main__":
           vc_mcmc_prop=args.vc_mcmc_prop,
           out_dir=args.out_dir,
           no_self_dependency=args.no_self_dep,
-          features=list(map(str.strip, args.features.split(","))),
+          features=list(map(format_feature_name, args.features.split(","))),
           gendered=args.gendered)

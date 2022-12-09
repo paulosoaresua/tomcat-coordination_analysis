@@ -43,10 +43,10 @@ class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
 
     def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
                  team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray, unbounded_coordination: Optional[np.ndarray] = None,
+                 ages: np.ndarray, features: List[str], unbounded_coordination: Optional[np.ndarray] = None,
                  coordination: Optional[np.ndarray] = None, latent_vocalics: VocalicsSparseSeries = None):
         super().__init__(uuid, observed_vocalics, team_score, team_process_surveys, team_satisfaction_surveys, genders,
-                         ages, coordination, latent_vocalics)
+                         ages, features, coordination, latent_vocalics)
         self.unbounded_coordination = unbounded_coordination
 
     @property

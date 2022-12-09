@@ -58,7 +58,8 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
             team_process_surveys=process_surveys,
             team_satisfaction_surveys=satisfaction_surveys,
             genders=genders,
-            ages=ages
+            ages=ages,
+            features=trial.vocalics.features
         )
 
         if trial.order == 1:

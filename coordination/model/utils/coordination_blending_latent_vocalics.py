@@ -51,7 +51,7 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
 
     def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
                  team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray, coordination: Optional[np.ndarray] = None,
+                 ages: np.ndarray, features: List[str], coordination: Optional[np.ndarray] = None,
                  latent_vocalics: VocalicsSparseSeries = None):
         super().__init__(uuid)
         self.coordination = coordination
@@ -64,6 +64,9 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
         self.team_satisfaction_surveys = team_satisfaction_surveys
         self.genders = genders
         self.ages = ages
+
+        # A list with the name of vocalic features used.
+        self.features = features
 
     @property
     def is_complete(self) -> bool:
@@ -195,15 +198,21 @@ class LatentVocalicsDataset(EvidenceDataset):
                                                                 feature_indices, axis=0)
             self.observed_vocalics[i] = self.series[i].observed_vocalics.values
 
-    def keep_vocalic_features(self, features: List[int]):
+    def keep_vocalic_features(self, features: List[str]):
         if self.num_trials > 0:
+            FEATURE_MAP = {feature_name: i for i, feature_name in enumerate(self.series[0].features)}
             features_to_remove = set(range(self.observed_vocalics.num_features))
             for f in features:
-                features_to_remove.remove(f)
+                features_to_remove.remove(FEATURE_MAP[f])
 
             if len(features_to_remove) > 0:
                 # Remove feature from the dataset
                 self.remove_vocalic_features(list(features_to_remove))
+
+    def normalize_per_subject(self):
+        for s in self.series:
+            s.observed_vocalics.normalize_per_subject()
+
 
 class BaseF:
 

@@ -15,13 +15,7 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
-    FEATURE_MAP = {
-        "pitch": 0,
-        "intensity": 1,
-        "jitter": 2,
-        "shimmer": 3,
-    }
-    dataset.keep_features([FEATURE_MAP[f] for f in features])
+    dataset.keep_features(features)
 
     if gendered:
         raise NotImplementedError
@@ -59,11 +53,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    def format_feature_name(name: str):
+        return name.strip().lower()
+
     infer(model_path=args.model_path,
           dataset_path=args.dataset_path,
           num_particles=args.n_particles,
           seed=args.seed,
           num_jobs=args.n_jobs,
           out_dir=args.out_dir,
-          features=list(map(str.strip, args.features.split(","))),
+          features=list(map(format_feature_name, args.features.split(","))),
           gendered=args.gendered)
