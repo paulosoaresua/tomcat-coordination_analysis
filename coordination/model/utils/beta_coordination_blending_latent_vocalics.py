@@ -41,26 +41,42 @@ class BetaCoordinationLatentVocalicsSamples(LatentVocalicsSamples):
 
 class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
 
-    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries,
-                 unbounded_coordination: Optional[np.ndarray] = None,
+    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
+                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
+                 ages: np.ndarray, unbounded_coordination: Optional[np.ndarray] = None,
                  coordination: Optional[np.ndarray] = None, latent_vocalics: VocalicsSparseSeries = None):
-        super().__init__(uuid, observed_vocalics, coordination, latent_vocalics)
+        super().__init__(uuid, observed_vocalics, team_score, team_process_surveys, team_satisfaction_surveys, genders,
+                         ages, coordination, latent_vocalics)
         self.unbounded_coordination = unbounded_coordination
 
     @property
     def is_complete(self) -> bool:
         return super().is_complete and self.unbounded_coordination is not None
 
+    @classmethod
+    def from_latent_vocalics_data_series(cls,
+                                         series: LatentVocalicsDataSeries) -> BetaCoordinationLatentVocalicsDataSeries:
+        return cls(
+            uuid=series.uuid,
+            coordination=series.coordination,
+            latent_vocalics=series.latent_vocalics,
+            observed_vocalics=series.observed_vocalics,
+            team_score=series.team_score,
+            team_process_surveys=series.team_process_surveys,
+            team_satisfaction_surveys=series.team_satisfaction_surveys,
+            genders=series.genders,
+            ages=series.ages
+        )
+
 
 class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
 
-    def __init__(self, series: List[BetaCoordinationLatentVocalicsDataSeries], team_scores: np.ndarray,
-                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray):
-        super().__init__(series, team_scores, team_process_surveys, team_satisfaction_surveys, genders, ages)
+    def __init__(self, series: List[BetaCoordinationLatentVocalicsDataSeries]):
+        super().__init__(series)
 
         self.series: List[BetaCoordinationLatentVocalicsDataSeries] = series
 
+        # Extra tensor
         self.unbounded_coordination = None if series[0].unbounded_coordination is None else np.array(
             [s.unbounded_coordination for s in series])
 
@@ -72,13 +88,26 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
                 i] if samples.unbounded_coordination is not None else None
             coordination = samples.coordination[i] if samples.coordination is not None else None
             latent_vocalics = samples.latent_vocalics[i] if samples.latent_vocalics is not None else None
-            series.append(
-                BetaCoordinationLatentVocalicsDataSeries(f"{i}", unbounded_coordination=unbounded_coordination,
-                                                         coordination=coordination,
-                                                         latent_vocalics=latent_vocalics,
-                                                         observed_vocalics=samples.observed_vocalics[i]))
 
-        evidence = cls(series, np.array([]), np.array([]), np.array([]), np.array([]), np.array([]))
+            # We fix male gender for even speaker and female for odd ones
+            genders = [-1 if speaker is None else speaker % 2 for speaker in samples.observed_vocalics[i].subjects]
+
+            s = BetaCoordinationLatentVocalicsDataSeries(
+                uuid=f"{i}",
+                unbounded_coordination=unbounded_coordination,
+                coordination=coordination,
+                latent_vocalics=latent_vocalics,
+                observed_vocalics=samples.observed_vocalics[i],
+                team_score=0,
+                team_process_surveys=np.array([]),
+                team_satisfaction_surveys=np.array([]),
+                ages=np.array([]),
+                genders=genders
+            )
+
+            series.append(s)
+
+        evidence = cls(series)
 
         return evidence
 
@@ -86,13 +115,9 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
     def from_latent_vocalics_dataset(cls, dataset: LatentVocalicsDataset):
         series = []
         for i in range(dataset.num_trials):
-            s = dataset.series[i]
-            series.append(BetaCoordinationLatentVocalicsDataSeries(uuid=s.uuid, coordination=s.coordination,
-                                                                   latent_vocalics=s.latent_vocalics,
-                                                                   observed_vocalics=s.observed_vocalics))
-        return cls(series=series, team_scores=dataset.team_scores, team_process_surveys=dataset.team_process_surveys,
-                   team_satisfaction_surveys=dataset.team_satisfaction_surveys, ages=dataset.ages,
-                   genders=dataset.genders)
+            series.append(BetaCoordinationLatentVocalicsDataSeries.from_latent_vocalics_data_series(dataset.series[i]))
+
+        return cls(series=series)
 
 
 class BetaCoordinationLatentVocalicsTrainingHyperParameters(LatentVocalicsTrainingHyperParameters):

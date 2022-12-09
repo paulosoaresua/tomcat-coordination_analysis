@@ -49,12 +49,21 @@ class LatentVocalicsSamples(Samples):
 
 class LatentVocalicsDataSeries(EvidenceDataSeries):
 
-    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, coordination: Optional[np.ndarray] = None,
+    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
+                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
+                 ages: np.ndarray, coordination: Optional[np.ndarray] = None,
                  latent_vocalics: VocalicsSparseSeries = None):
         super().__init__(uuid)
         self.coordination = coordination
         self.latent_vocalics = latent_vocalics
         self.observed_vocalics = observed_vocalics
+        self.team_score = team_score
+
+        # One per player: red, green blue
+        self.team_process_surveys = team_process_surveys
+        self.team_satisfaction_surveys = team_satisfaction_surveys
+        self.genders = genders
+        self.ages = ages
 
     @property
     def is_complete(self) -> bool:
@@ -68,61 +77,84 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
     def num_vocalic_features(self):
         return self.observed_vocalics.num_features
 
+    def get_speaker_gender(self, speaker: str):
+        COLOR_MAP = {"red": 0, "green": 1, "blue": 2}
+
+        return self.genders[COLOR_MAP[speaker]]
+
 
 class LatentVocalicsDataset(EvidenceDataset):
 
-    def __init__(self, series: List[LatentVocalicsDataSeries], team_scores: np.ndarray,
-                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray):
+    def __init__(self, series: List[LatentVocalicsDataSeries]):
         super().__init__(series)
 
         self.series: List[LatentVocalicsDataSeries] = series
 
-        self.team_scores = team_scores
-        self.team_process_surveys = team_process_surveys
-        self.team_satisfaction_surveys = team_satisfaction_surveys
-        self.genders = genders
-        self.ages = ages
+        # Below we store data from the list of series in this dataset in a set of tensors
+        # for fast processing during training.
+        self.coordination = np.array([])
+        self.latent_vocalics = np.array([])
+        self.observed_vocalics = np.array([])
+        self.vocalics_mask = np.array([])
 
-        # Keep a matrix representation of the data for fast processing during training
-        self.coordination = None if series[0].coordination is None else np.zeros(
-            (len(series), series[0].num_time_steps))
+        # Dependency on vocalics from the same speaker
+        self.previous_vocalics_from_self = np.array([])
+        self.previous_vocalics_from_self_mask = np.array([])
+        self.next_vocalics_from_self = np.array([])
 
-        # n (num samples) x k (num features) x T (num time steps)
-        self.latent_vocalics = None if series[0].latent_vocalics is None else np.zeros(
-            (len(series), series[0].num_vocalic_features, series[0].num_time_steps))
+        # Dependency on vocalics from a different speaker
+        self.previous_vocalics_from_other = np.array([])
+        self.previous_vocalics_from_self_mask = np.array([])
+        self.next_vocalics_from_other = np.array([])
 
-        self.observed_vocalics = np.zeros((len(series), series[0].num_vocalic_features, series[0].num_time_steps))
-        self.vocalics_mask = np.zeros((len(series), series[0].num_time_steps))
-
-        self.previous_vocalics_from_self = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
-        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_self)
-        self.next_vocalics_from_self = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
-        self.enable_self_dependency()
-
-        self.previous_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
-        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_other)
-        self.next_vocalics_from_other = np.ones((len(series), series[0].num_time_steps)).astype(np.int) * -1
+        # Table containing speaker's gender per trial and time step
+        self.genders = np.array([])
 
         self._fill_tensors()
 
     def _fill_tensors(self):
-        for i, series in enumerate(self.series):
-            if series.coordination is not None:
-                self.coordination[i] = series.coordination
+        num_trials = len(self.series)
+        num_vocalic_features = self.series[0].num_vocalic_features if num_trials > 0 else 0
+        num_time_steps = self.series[0].num_time_steps if num_trials > 0 else 0
 
-            if series.latent_vocalics is not None:
-                self.latent_vocalics[i] = series.latent_vocalics.values
+        self.coordination = None if self.series[0].coordination is None else np.zeros((num_trials, num_time_steps))
+        self.latent_vocalics = None if self.series[0].latent_vocalics is None else np.zeros(
+            (num_trials, num_vocalic_features, num_time_steps))
+        self.observed_vocalics = np.zeros((num_trials, num_vocalic_features, num_time_steps))
+        self.vocalics_mask = np.zeros((num_trials, num_time_steps))
 
-            self.observed_vocalics[i] = series.observed_vocalics.values
-            self.vocalics_mask[i] = series.observed_vocalics.mask
+        self.previous_vocalics_from_self = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
+        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_self)
+        self.next_vocalics_from_self = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
+        self.enable_self_dependency()
 
+        self.previous_vocalics_from_other = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
+        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_other)
+        self.next_vocalics_from_other = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
+
+        self.genders = np.zeros((num_trials, num_time_steps))
+
+        for i, s in enumerate(self.series):
+            if s.coordination is not None:
+                self.coordination[i] = s.coordination
+
+            if s.latent_vocalics is not None:
+                self.latent_vocalics[i] = s.latent_vocalics.values
+
+            self.observed_vocalics[i] = s.observed_vocalics.values
+            self.vocalics_mask[i] = s.observed_vocalics.mask
+
+            # Vocalics from other speaker
             self.previous_vocalics_from_other[i] = np.array(
-                [-1 if t is None else t for t in series.observed_vocalics.previous_from_other])
+                [-1 if t is None else t for t in s.observed_vocalics.previous_from_other])
 
-            for t in range(series.num_time_steps):
+            for t in range(s.num_time_steps):
                 if self.previous_vocalics_from_other[i, t] >= 0:
                     self.next_vocalics_from_other[i, self.previous_vocalics_from_other[i, t]] = t
+
+                # Gender
+                if s.observed_vocalics.mask[t] == 1:
+                    self.genders[i, t] = s.get_speaker_gender(s.observed_vocalics.utterances[t].subject_id)
 
         self.previous_vocalics_from_other_mask = np.where(self.previous_vocalics_from_other >= 0, 1, 0)
 
@@ -143,41 +175,35 @@ class LatentVocalicsDataset(EvidenceDataset):
         self.previous_vocalics_from_self_mask = np.where(self.previous_vocalics_from_self >= 0, 1, 0)
 
     def get_subset(self, indices: List[int]) -> LatentVocalicsDataset:
-        return self.__class__(
-            series=[self.series[i] for i in indices],
-            team_scores=self.team_scores[indices],
-            team_process_surveys=self.team_process_surveys[indices],
-            team_satisfaction_surveys=self.team_satisfaction_surveys[indices],
-            genders=self.genders[indices],
-            ages=self.ages[indices]
-        )
+        return self.__class__(series=[self.series[i] for i in indices])
 
     def merge(self, dataset2: LatentVocalicsDataset) -> EvidenceDataset:
-        return self.__class__(
-            series=self.series + dataset2.series,
-            team_scores=np.concatenate([self.team_scores, dataset2.team_scores]),
-            team_process_surveys=np.concatenate([self.team_process_surveys, dataset2.team_process_surveys], axis=0),
-            team_satisfaction_surveys=np.concatenate(
-                [self.team_satisfaction_surveys, dataset2.team_satisfaction_surveys], axis=0),
-            genders=np.concatenate([self.genders, dataset2.genders], axis=0),
-            ages=np.concatenate([self.ages, dataset2.ages], axis=0),
-        )
+        return self.__class__(series=self.series + dataset2.series)
 
-    def remove_vocalic_feature(self, feature_idx: int):
+    def remove_vocalic_features(self, feature_indices: List[int]):
         self.latent_vocalics = None if self.latent_vocalics is None else np.delete(np.zeros_like(self.latent_vocalics),
-                                                                                   [0], axis=1)
-        self.observed_vocalics = np.delete(np.zeros_like(self.observed_vocalics), [0], axis=1)
+                                                                                   feature_indices, axis=1)
+        self.observed_vocalics = np.delete(np.zeros_like(self.observed_vocalics), feature_indices, axis=1)
 
         for i in range(self.num_trials):
             if self.series[i].latent_vocalics is not None:
-                self.series[i].latent_vocalics.values = np.delete(self.series[i].latent_vocalics.values, [feature_idx],
-                                                                  axis=0)
+                self.series[i].latent_vocalics.values = np.delete(self.series[i].latent_vocalics.values,
+                                                                  feature_indices, axis=0)
                 self.latent_vocalics[i] = self.series[i].latent_vocalics.values
 
-            self.series[i].observed_vocalics.values = np.delete(self.series[i].observed_vocalics.values, [feature_idx],
-                                                                axis=0)
+            self.series[i].observed_vocalics.values = np.delete(self.series[i].observed_vocalics.values,
+                                                                feature_indices, axis=0)
             self.observed_vocalics[i] = self.series[i].observed_vocalics.values
 
+    def keep_vocalic_features(self, features: List[int]):
+        if self.num_trials > 0:
+            features_to_remove = set(range(self.observed_vocalics.num_features))
+            for f in features:
+                features_to_remove.remove(f)
+
+            if len(features_to_remove) > 0:
+                # Remove feature from the dataset
+                self.remove_vocalic_features(list(features_to_remove))
 
 class BaseF:
 
@@ -198,11 +224,6 @@ class BaseG:
 
 
 class LatentVocalicsTrainingHyperParameters(TrainingHyperParameters):
-
-    # def __init__(self, a_vc: float, b_vc: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float,
-    #              mu_mo_male: np.ndarray, mu_no_male: np.ndarray, a_vo_male: np.ndarray,
-    #              b_vo_male: np.ndarray, mu_mo_female: np.ndarray, mu_no_female: np.ndarray, a_vo_female: np.ndarray,
-    #              b_vo_female: np.ndarray, vc0: float, va0: float, vaa0: float, vo0: float):
 
     def __init__(self, a_vc: float, b_vc: float, a_va: float, b_va: float, a_vaa: float, b_vaa: float, a_vo: float,
                  b_vo: float, vc0: float, va0: float, vaa0: float, vo0: float):

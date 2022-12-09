@@ -90,7 +90,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             # Subjects A and B
             previous_self = [None] * num_time_steps
             previous_other = [None] * num_time_steps
-            previous_time_per_speaker: Dict[str, int] = {}
+            previous_time_per_speaker: Dict[int, int] = {}
             latent_vocalics_values = np.zeros((self.num_vocalic_features, num_time_steps))
             observed_vocalics_values = np.zeros((self.num_vocalic_features, num_time_steps))
             utterances: List[Optional[SegmentedUtterance]] = [None] * num_time_steps
@@ -121,7 +121,8 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                     latent_vocalics_values[:, t] = self._sample_latent_vocalics(previous_value_self,
                                                                                 previous_value_other,
                                                                                 current_coordination)
-                    observed_vocalics_values[:, t] = self._sample_observed_vocalics(latent_vocalics_values[:, t])
+                    observed_vocalics_values[:, t] = self._sample_observed_vocalics(latent_vocalics_values[:, t],
+                                                                                    speakers[t])
 
                     previous_self[t] = previous_time_self
                     previous_other[t] = previous_time_other
@@ -143,7 +144,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     def _generate_coordination_samples(self, num_samples: int, num_time_steps: int, samples: LatentVocalicsSamples):
         raise NotImplementedError
 
-    def _generate_random_speakers(self, num_time_steps: int, time_scale_density: float) -> List[Optional[str]]:
+    def _generate_random_speakers(self, num_time_steps: int, time_scale_density: float) -> List[Optional[int]]:
         # We always change speakers between time steps when generating vocalics
         transition_matrix = 1 - np.eye(self.num_speakers + 1)
 
@@ -185,7 +186,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return distribution.rvs()
 
-    def _sample_observed_vocalics(self, latent_vocalics: np.array) -> np.ndarray:
+    def _sample_observed_vocalics(self, latent_vocalics: np.array, speaker: int) -> np.ndarray:
         return norm(loc=self.g(latent_vocalics), scale=np.sqrt(self.parameters.var_o)).rvs()
 
     # ---------------------------------------------------------
