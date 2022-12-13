@@ -81,10 +81,11 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         """
         super().sample(num_samples, num_time_steps, seed)
 
-        samples = LatentVocalicsSamples()
+        samples = LatentVocalicsSamples(self.num_speakers)
         self._generate_coordination_samples(num_samples, num_time_steps, samples)
         samples.latent_vocalics = []
         samples.observed_vocalics = []
+        samples.genders = np.ones((num_samples, num_time_steps)) * 1
 
         for i in tqdm(range(num_samples), desc="Sampling Trial", position=0, leave=False):
             # Subjects A and B
@@ -102,6 +103,9 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 current_coordination = samples.coordination[i, t]
 
                 if speakers[t] is not None:
+                    # Simple rule for gender. Male is even speakers and female odd ones.
+                    samples.genders[i, t] = speakers[t] % 2
+
                     mask[t] = 1
 
                     previous_time_self = previous_time_per_speaker.get(speakers[t], None)
@@ -122,7 +126,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                                                                                 previous_value_other,
                                                                                 current_coordination)
                     observed_vocalics_values[:, t] = self._sample_observed_vocalics(latent_vocalics_values[:, t],
-                                                                                    speakers[t])
+                                                                                    samples.genders[i, t])
 
                     previous_self[t] = previous_time_self
                     previous_other[t] = previous_time_other
@@ -186,7 +190,7 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
 
         return distribution.rvs()
 
-    def _sample_observed_vocalics(self, latent_vocalics: np.array, speaker: int) -> np.ndarray:
+    def _sample_observed_vocalics(self, latent_vocalics: np.array, gender: int) -> np.ndarray:
         return norm(loc=self.g(latent_vocalics), scale=np.sqrt(self.parameters.var_o)).rvs()
 
     # ---------------------------------------------------------

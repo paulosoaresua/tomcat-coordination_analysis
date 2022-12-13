@@ -237,7 +237,7 @@ class BetaCoordinationBlendingLatentVocalics(
         acceptance_rates = self.coordination_acceptance_rates_.copy()
 
         if evidence.coordination is not None:
-            return coordination, acceptance_rates
+            return coordination, acceptance_rates, unbounded_coordination, acceptance_rates_uc
 
         latent_vocalics = self.last_latent_vocalics_samples_
 

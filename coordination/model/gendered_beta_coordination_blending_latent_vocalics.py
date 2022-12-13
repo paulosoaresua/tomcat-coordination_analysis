@@ -47,9 +47,9 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
     # ---------------------------------------------------------
     # SYNTHETIC DATA GENERATION
     # ---------------------------------------------------------
-    def _sample_observed_vocalics(self, latent_vocalics: np.array, speaker: int) -> np.ndarray:
+    def _sample_observed_vocalics(self, latent_vocalics: np.array, gender: int) -> np.ndarray:
         # Simply treat even speaker as male and odd as female for synthetic data generation.
-        if speaker % 2 == 0:
+        if gender == 0:
             mean = self.parameters.mean_o_male
             var = self.parameters.var_o_male
         else:
@@ -61,6 +61,21 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
     # ---------------------------------------------------------
     # PARAMETER ESTIMATION
     # ---------------------------------------------------------
+    def _initialize_parameters(self, evidence: BetaCoordinationLatentVocalicsDataset,
+                               train_hyper_parameters: GenderedBetaCoordinationLatentVocalicsTrainingHyperParameters,
+                               burn_in: int, seed: int):
+        super()._initialize_parameters(evidence, train_hyper_parameters, burn_in, seed)
+
+        # Unbounded coordination
+        if not self.parameters.mean_var_o_male_frozen:
+            self.parameters.set_mean_var_male(train_hyper_parameters.mo0_male, train_hyper_parameters.vo0_male,
+                                              freeze=False)
+
+        # Coordination
+        if not self.parameters.mean_var_o_female_frozen:
+            self.parameters.set_mean_var_female(train_hyper_parameters.mo0_female, train_hyper_parameters.vo0_female,
+                                                freeze=False)
+
     def _sample_latent_vocalics_on_fit(self, evidence: BetaCoordinationLatentVocalicsDataset,
                                        time_steps: np.ndarray, job_num: int, group_order: int) -> np.ndarray:
 
@@ -212,7 +227,7 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
             ll += (norm(loc=means, scale=np.sqrt(v)).logpdf(V) * M).sum()
 
             # LL from latent to observed vocalics
-            G = evidence.genders[:, t]
+            G = evidence.genders[:, t][:, np.newaxis]
             mo = np.where(G == 0, mo_male, mo_female)
             so = np.where(G == 0, so_male, so_female)
 
@@ -228,19 +243,54 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
 
         # Mean and variance of observed vocalics
         if not self.parameters.mean_var_o_male_frozen:
-            # TODO : Updates
             V = self.last_latent_vocalics_samples_
-            M = evidence.vocalics_mask
+            Obs = evidence.observed_vocalics
 
-            first_time_steps = np.argmax(M, axis=1)
-            first_latent_vocalics = np.take_along_axis(V, first_time_steps[:, np.newaxis, np.newaxis], axis=-1)
-            M_first_time_steps = np.take_along_axis(M, first_time_steps[:, np.newaxis], axis=-1)
+            # Mask will have 1 when there's a speaker and that speaker is a male
+            M = (evidence.vocalics_mask * (1 - evidence.genders))[:, np.newaxis, :]
 
-            a = train_hyper_parameters.a_va + M_first_time_steps.sum() * self.num_vocalic_features / 2
-            b = train_hyper_parameters.b_va + np.square(first_latent_vocalics).sum() / 2
+            n = sum(M.flatten())
+            sum_vv = np.sum(V * V * M, axis=(0, 2))
+            sum_ov = np.sum(Obs * V * M, axis=(0, 2))
+            sum_oo = np.sum(Obs * Obs * M, axis=(0, 2))
+            mu = train_hyper_parameters.mu_mo_male
+            nu = train_hyper_parameters.nu_mo_male
+            a = train_hyper_parameters.a_vo_male
+            b = train_hyper_parameters.b_vo_male
 
-            new_var_a = invgamma(a=a, scale=b).mean()
-            self.parameters.set_var_a(new_var_a, freeze=False)
+            m_star = (nu * mu + sum_ov) / (nu + n)
+            a_star = a + n / 2
+            b_star = b + (1 / 2) * (
+                    (sum_oo - (sum_ov ** 2) / sum_vv) + (nu * sum_vv / (nu + sum_vv)) * (mu - sum_ov / sum_vv) ** 2)
+
+            # In a Gaussian-Inverse-Gamma, the mean of the expected value of the mean is the mean of the posterior
+            # and the expected variance is b*/(a*-1).
+            self.parameters.set_mean_var_male(m_star, b_star / (a_star - 1), False)
+
+        if not self.parameters.mean_var_o_female_frozen:
+            V = self.last_latent_vocalics_samples_
+            Obs = evidence.observed_vocalics
+
+            # Mask will have 1 when there's a speaker and that speaker is a female
+            M = (evidence.vocalics_mask * evidence.genders)[:, np.newaxis, :]
+
+            n = sum(M.flatten())
+            sum_vv = np.sum(V * V * M, axis=(0, 2))
+            sum_ov = np.sum(Obs * V * M, axis=(0, 2))
+            sum_oo = np.sum(Obs * Obs * M, axis=(0, 2))
+            mu = train_hyper_parameters.mu_mo_female
+            nu = train_hyper_parameters.nu_mo_female
+            a = train_hyper_parameters.a_vo_female
+            b = train_hyper_parameters.b_vo_female
+
+            m_star = (nu * mu + sum_ov) / (nu + n)
+            a_star = a + n / 2
+            b_star = b + (1 / 2) * (
+                    (sum_oo - (sum_ov ** 2) / sum_vv) + (nu * sum_vv / (nu + sum_vv)) * (mu - sum_ov / sum_vv) ** 2)
+
+            # In a Gaussian-Inverse-Gamma, the mean of the expected value of the mean is the mean of the posterior
+            # and the expected variance is b*/(a*-1).
+            self.parameters.set_mean_var_female(m_star, b_star / (a_star - 1), False)
 
     def _log_parameters(self, gibbs_step: int, logger: BaseLogger):
         super()._log_parameters(gibbs_step, logger)
@@ -252,7 +302,8 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
     # ---------------------------------------------------------
     # INFERENCE
     # ---------------------------------------------------------
-    def _calculate_evidence_log_likelihood_at(self, time_step: int, states: List[BetaCoordinationLatentVocalicsParticles],
+    def _calculate_evidence_log_likelihood_at(self, time_step: int,
+                                              states: List[BetaCoordinationLatentVocalicsParticles],
                                               series: BetaCoordinationLatentVocalicsDataSeries):
 
         if series.coordination is None:

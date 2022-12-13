@@ -41,6 +41,10 @@ class LatentVocalicsSamples(Samples):
     coordination: np.ndarray
     latent_vocalics: List[VocalicsSparseSeries]
     observed_vocalics: List[VocalicsSparseSeries]
+    genders: np.ndarray
+
+    def __init__(self, num_speakers: int):
+        self.num_speakers = num_speakers
 
     @property
     def size(self):
@@ -59,7 +63,7 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
         self.observed_vocalics = observed_vocalics
         self.team_score = team_score
 
-        # One per player: red, green blue
+        # One per player: red, green and blue
         self.team_process_surveys = team_process_surveys
         self.team_satisfaction_surveys = team_satisfaction_surveys
         self.genders = genders
@@ -81,9 +85,7 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
         return self.observed_vocalics.num_features
 
     def get_speaker_gender(self, speaker: str):
-        COLOR_MAP = {"red": 0, "green": 1, "blue": 2}
-
-        return self.genders[COLOR_MAP[speaker]]
+        return self.genders[speaker]
 
 
 class LatentVocalicsDataset(EvidenceDataset):

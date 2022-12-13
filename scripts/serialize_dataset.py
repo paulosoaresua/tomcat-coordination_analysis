@@ -32,24 +32,21 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
     for i, trial_dir in tqdm(enumerate(trials), desc="Trial:"):
         trial = Trial.from_directory(trial_dir)
 
-        player_per_color = {player.avatar_color: player for player in trial.metadata.subject_id_map.values()}
-
         configure_log(True, f"{logs_dir}/{trial.metadata.number}.txt")
         segmentation = SegmentationMethod.TRUNCATE_CURRENT if no_overlap else SegmentationMethod.KEEP_ALL
         vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics, segmentation_method=segmentation)
 
         observed_vocalics = vocalics_component.sparse_series(time_steps, trial.metadata.mission_start)
 
-        genders = np.zeros(3)
-        ages = np.zeros(3)
-        process_surveys = np.zeros((3, len(SurveyMappings.PROCESS_SCALE)))
-        satisfaction_surveys = np.zeros((3, len(SurveyMappings.TEAM_SATISFACTION)))
-        for j, avatar_color in enumerate(AVATAR_COLOR_MAP):
-            player = player_per_color[avatar_color]
-            genders[j] = GENDER_MAP[player.gender]
-            ages[j] = player.age
-            process_surveys[j] = player.team_process_scale_survey_answers
-            satisfaction_surveys[j] = player.team_satisfaction_survey_answers
+        genders = {}
+        ages = {}
+        process_surveys = {}
+        satisfaction_surveys = {}
+        for player in trial.metadata.subject_id_map.values():
+            genders[player.avatar_color] = GENDER_MAP[player.gender]
+            ages[player.avatar_color] = player.age
+            process_surveys[player.avatar_color] = player.team_process_scale_survey_answers
+            satisfaction_surveys[player.avatar_color] = player.team_satisfaction_survey_answers
 
         series = LatentVocalicsDataSeries(
             uuid=trial.metadata.number,

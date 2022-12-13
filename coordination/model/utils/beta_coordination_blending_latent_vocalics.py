@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -42,9 +42,10 @@ class BetaCoordinationLatentVocalicsSamples(LatentVocalicsSamples):
 class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
 
     def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
-                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray, features: List[str], unbounded_coordination: Optional[np.ndarray] = None,
-                 coordination: Optional[np.ndarray] = None, latent_vocalics: VocalicsSparseSeries = None):
+                 team_process_surveys: Dict[str, np.ndarray], team_satisfaction_surveys: Dict[str, np.ndarray],
+                 genders: Dict[str, int], ages: Dict[str, int], features: List[str],
+                 unbounded_coordination: Optional[np.ndarray] = None, coordination: Optional[np.ndarray] = None,
+                 latent_vocalics: VocalicsSparseSeries = None):
         super().__init__(uuid, observed_vocalics, team_score, team_process_surveys, team_satisfaction_surveys, genders,
                          ages, features, coordination, latent_vocalics)
         self.unbounded_coordination = unbounded_coordination
@@ -90,8 +91,8 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
             coordination = samples.coordination[i] if samples.coordination is not None else None
             latent_vocalics = samples.latent_vocalics[i] if samples.latent_vocalics is not None else None
 
-            # We fix male gender for even speaker and female for odd ones
-            genders = [-1 if speaker is None else speaker % 2 for speaker in samples.observed_vocalics[i].subjects]
+            genders = {u.subject_id: samples.genders[i, t] for t, u in
+                       enumerate(samples.observed_vocalics[i].utterances)}
 
             s = BetaCoordinationLatentVocalicsDataSeries(
                 uuid=f"{i}",
@@ -100,10 +101,11 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
                 latent_vocalics=latent_vocalics,
                 observed_vocalics=samples.observed_vocalics[i],
                 team_score=0,
-                team_process_surveys=np.array([]),
-                team_satisfaction_surveys=np.array([]),
-                ages=np.array([]),
-                genders=genders
+                team_process_surveys={},
+                team_satisfaction_surveys={},
+                ages={},
+                genders=genders,
+                features=[str(i) for i in range(samples.observed_vocalics[i].num_features)]
             )
 
             series.append(s)
