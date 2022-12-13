@@ -15,7 +15,7 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
-    dataset.keep_features(features)
+    dataset.keep_vocalic_features(features)
 
     if gendered:
         raise NotImplementedError

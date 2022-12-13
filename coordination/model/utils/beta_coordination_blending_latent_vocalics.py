@@ -65,7 +65,8 @@ class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
             team_process_surveys=series.team_process_surveys,
             team_satisfaction_surveys=series.team_satisfaction_surveys,
             genders=series.genders,
-            ages=series.ages
+            ages=series.ages,
+            features=series.features
         )
 
 

@@ -23,11 +23,12 @@ __help() {
   echo "r                        Reference date (e.g. 2022.12.02--15)."
   echo "t                        Training type (e.g. single_execution_no_self_dep)."
   echo "j <number of processes>  For parallel execution."
+  echo "f <features>             Vocalic features used during training."
   echo "n <condition>            One of the following values."
   echo "   no     - No Advisor"
   echo "   human  - Human Advisor"
   echo "   tomcat - ToMCAT Advisor"
-  echo "   all    - All Advisors"
+  echo "   all    - All Conditions"
   echo
 }
 
@@ -37,7 +38,8 @@ do_both_missions=0
 num_jobs=1
 condition_value=""
 num_particles=30000
-while getopts ":habcp:r:t:j:n:" option; do
+features="pitch, intensity"
+while getopts ":habcp:r:t:j:f:n:" option; do
   case $option in
     h) # display Help
       __help
@@ -63,6 +65,9 @@ while getopts ":habcp:r:t:j:n:" option; do
     j) # number of processes
       num_jobs=$OPTARG
       ;;
+    f) # features
+      features=$OPTARG
+      ;;
     n) # condition
       condition_value=$OPTARG
       ;;
@@ -79,7 +84,7 @@ elif [[ "$condition_value" == "human" ]]; then
 elif [[ "$condition_value" == "tomcat" ]]; then
   condition="tomcat_advisor"
 elif [[ "$condition_value" == "all" ]]; then
-  condition="all_advisors"
+  condition="all_conditions"
 else
   echo "Condition invalid. Please provide a valid condition (call this script with the option -h to see the list)."
   exit 1
@@ -106,7 +111,8 @@ pushd "$HOME/code/tomcat-coordination/scripts" > /dev/null || exit
                      --n_particles="$num_particles" \
                      --seed=0 \
                      --n_jobs="$num_jobs" \
-                     --out_dir="$results_dir/mission1/$ref_date"
+                     --out_dir="$results_dir/mission1/$ref_date" \
+                     --features="$features"
 
     python3 plot_coordination.py --inference_path="$results_dir/mission1/$ref_date/inference_summaries.pkl" \
                                  --dataset_path="$data_dir/mission1_dataset.pkl" \
@@ -127,7 +133,8 @@ pushd "$HOME/code/tomcat-coordination/scripts" > /dev/null || exit
                      --n_particles="$num_particles" \
                      --seed=0 \
                      --n_jobs="$num_jobs" \
-                     --out_dir="$results_dir/mission2/$ref_date"
+                     --out_dir="$results_dir/mission2/$ref_date" \
+                     --features="$features"
 
     python3 plot_coordination.py --inference_path="$results_dir/mission2/$ref_date/inference_summaries.pkl" \
                                  --dataset_path="$data_dir/mission2_dataset.pkl" \
@@ -148,7 +155,8 @@ pushd "$HOME/code/tomcat-coordination/scripts" > /dev/null || exit
                      --n_particles="$num_particles" \
                      --seed=0 \
                      --n_jobs="$num_jobs" \
-                     --out_dir="$results_dir/all_missions/$ref_date"
+                     --out_dir="$results_dir/all_missions/$ref_date" \
+                     --features="$features"
 
     python3 plot_coordination.py --inference_path="$results_dir/all_missions/$ref_date/inference_summaries.pkl" \
                                  --dataset_path="$data_dir/all_missions_dataset.pkl" \

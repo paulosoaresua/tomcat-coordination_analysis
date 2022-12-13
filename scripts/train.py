@@ -21,7 +21,7 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
-    dataset.keep_features(features)
+    dataset.keep_vocalic_features(features)
 
     if gendered:
         raise NotImplementedError
