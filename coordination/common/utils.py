@@ -11,6 +11,8 @@ def json_serial(obj):
 
     if isinstance(obj, datetime):
         return obj.isoformat()
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
     else:
         to_json = getattr(obj, "to_json", None)
         if callable(to_json):

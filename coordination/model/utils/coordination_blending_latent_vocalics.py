@@ -137,7 +137,7 @@ class LatentVocalicsDataset(EvidenceDataset):
         self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_other)
         self.next_vocalics_from_other = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
 
-        self.genders = np.zeros((num_trials, num_time_steps))
+        self.genders = np.ones((num_trials, num_time_steps)) * -1
 
         for i, s in enumerate(self.series):
             if s.coordination is not None:
@@ -214,6 +214,32 @@ class LatentVocalicsDataset(EvidenceDataset):
     def normalize_per_subject(self):
         for s in self.series:
             s.observed_vocalics.normalize_per_subject()
+        self._fill_tensors()
+
+    # Replaces genders that are different from male (0) and female(1) with a random sample with probabilities
+    # proportional to the quantity of disclosed males and females.
+    def normalize_gender(self):
+        males = 0
+        females = 0
+
+        for s in self.series:
+            for gender in s.genders.values():
+                if gender == 0:
+                    males += 1
+                elif gender == 1:
+                    females += 1
+
+        p_male = males / (males + females)
+
+        for s in self.series:
+            for key, gender in s.genders.items():
+                if gender != 0 and gender != 1:
+                    u = np.random.rand()
+                    if u <= p_male:
+                        s.genders[key] = 0  # male
+                    else:
+                        s.genders[key] = 1  # female
+
         self._fill_tensors()
 
 

@@ -148,13 +148,13 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
             Obs = evidence.observed_vocalics[:, :, t]
 
             # ---------- Snippet modified to add gender info ---
-            G = evidence.genders[:, t]
+            G = evidence.genders[:, t][:, np.newaxis]
 
             mo = np.where(G == 0, mo_male, mo_female)
             vo = np.where(G == 0, vo_male, vo_female)
 
-            m3 = ((m1 / v1) + ((m2a * u2a * M2a) / v2a) + ((m2b * u2b * M2b) / v2b) + (Obs * mo / vo)) * M1
-            v_inv = ((1 / v1) + (((u2a ** 2) * M2a) / v2a) + (((u2b ** 2) * M2b) / v2b) + (mo / vo)) * M1
+            m3 = ((m1 / v1) + ((m2a * u2a * M2a) / v2a) + ((m2b * u2b * M2b) / v2b) + ((Obs * mo) / vo)) * M1
+            v_inv = ((1 / v1) + (((u2a ** 2) * M2a) / v2a) + (((u2b ** 2) * M2b) / v2b) + ((mo ** 2) / vo)) * M1
 
             # ---------- End of gender snippet -----------------
 
@@ -258,7 +258,7 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
             a = train_hyper_parameters.a_vo_male
             b = train_hyper_parameters.b_vo_male
 
-            m_star = (nu * mu + sum_ov) / (nu + n)
+            m_star = (nu * mu + sum_ov) / (nu + sum_vv)
             a_star = a + n / 2
             b_star = b + (1 / 2) * (
                     (sum_oo - (sum_ov ** 2) / sum_vv) + (nu * sum_vv / (nu + sum_vv)) * (mu - sum_ov / sum_vv) ** 2)
@@ -283,7 +283,7 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
             a = train_hyper_parameters.a_vo_female
             b = train_hyper_parameters.b_vo_female
 
-            m_star = (nu * mu + sum_ov) / (nu + n)
+            m_star = (nu * mu + sum_ov) / (nu + sum_vv)
             a_star = a + n / 2
             b_star = b + (1 / 2) * (
                     (sum_oo - (sum_ov ** 2) / sum_vv) + (nu * sum_vv / (nu + sum_vv)) * (mu - sum_ov / sum_vv) ** 2)
@@ -294,10 +294,12 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
 
     def _log_parameters(self, gibbs_step: int, logger: BaseLogger):
         super()._log_parameters(gibbs_step, logger)
-        logger.add_scalar("train/mean_o_male", self.parameters.mean_o_male, gibbs_step)
-        logger.add_scalar("train/var_o_male", self.parameters.var_o_female, gibbs_step)
-        logger.add_scalar("train/mean_o_female", self.parameters.mean_o_male, gibbs_step)
-        logger.add_scalar("train/var_o_female", self.parameters.var_o_female, gibbs_step)
+
+        for i in range(len(self.parameters.mean_o_male)):
+            logger.add_scalar(f"train/mean_o_male_{i + 1}", self.parameters.mean_o_male[i], gibbs_step)
+            logger.add_scalar(f"train/var_o_male_{i + 1}", self.parameters.var_o_male[i], gibbs_step)
+            logger.add_scalar(f"train/mean_o_female_{i + 1}", self.parameters.mean_o_female[i], gibbs_step)
+            logger.add_scalar(f"train/var_o_female_{i + 1}", self.parameters.var_o_female[i], gibbs_step)
 
     # ---------------------------------------------------------
     # INFERENCE

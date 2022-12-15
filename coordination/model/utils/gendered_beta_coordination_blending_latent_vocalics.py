@@ -71,7 +71,7 @@ class GenderedBetaCoordinationLatentVocalicsModelParameters(BetaCoordinationLate
         super().__init__()
 
         # We do not fit var_o. Now we fit a mean and a variance for O, difference for each gender.
-        self._var_o_frozen = True
+        self.set_var_o(0, True)
 
         # Mean and variance are fit jointly thus we control freezing with one parameter only.
         # From a conjugate Gaussian-Inverse-Gamma distribution.
@@ -91,7 +91,7 @@ class GenderedBetaCoordinationLatentVocalicsModelParameters(BetaCoordinationLate
 
     def reset(self):
         super().reset()
-        self._var_o_frozen = True
+        self.set_var_o(0, True)
 
         self._mean_o_male = None
         self._var_o_male = None

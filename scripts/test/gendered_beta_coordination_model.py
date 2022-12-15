@@ -13,11 +13,11 @@ from coordination.model.utils.gendered_beta_coordination_blending_latent_vocalic
     GenderedBetaCoordinationLatentVocalicsTrainingHyperParameters, GenderedBetaCoordinationLatentVocalicsModelParameters
 
 # Parameters
-TIME_STEPS = 10
+TIME_STEPS = 50
 NUM_SAMPLES = 100
 NUM_FEATURES = 2
 DATA_TIME_SCALE_DENSITY = 1
-NUM_JOBS = 1
+NUM_JOBS = 4
 
 model_name = "gendered_beta_model"
 
@@ -31,7 +31,7 @@ MEAN_O_FEMALE = np.array([30, 80])
 VAR_O_FEMALE = np.array([10, 20])
 
 SAMPLE_TO_INFER = 8
-BURN_IN = 2000
+BURN_IN = 100
 
 train_hyper_parameters = GenderedBetaCoordinationLatentVocalicsTrainingHyperParameters(
     a_vu=1e-6,
@@ -52,10 +52,10 @@ train_hyper_parameters = GenderedBetaCoordinationLatentVocalicsTrainingHyperPara
     vc0=0.01,
     va0=1,
     vaa0=1,
-    mo0_male=0,
-    mo0_female=0,
-    vo0_male=1,
-    vo0_female=1,
+    mo0_male=MEAN_O_MALE,#np.zeros(NUM_FEATURES),
+    mo0_female=MEAN_O_FEMALE,#np.zeros(NUM_FEATURES),
+    vo0_male=VAR_O_MALE,#np.ones(NUM_FEATURES),
+    vo0_female=VAR_O_FEMALE,#np.ones(NUM_FEATURES),
     u_mcmc_iter=50,
     c_mcmc_iter=50,
     vu_mcmc_prop=0.001,
@@ -66,10 +66,6 @@ train_hyper_parameters = GenderedBetaCoordinationLatentVocalicsTrainingHyperPara
 def estimate_parameters(model: GenderedBetaCoordinationBlendingLatentVocalics, evidence, burn_in: int, num_jobs: int,
                         logger: Optional[BaseLogger] = BaseLogger()):
     model.fit(evidence, train_hyper_parameters, burn_in=burn_in, seed=0, num_jobs=num_jobs, logger=logger)
-
-    plt.figure()
-    plt.plot(range(len(model.nll_)), model.nll_)
-    plt.show()
 
     print(f"Estimated var_u / True var_uc = {model.parameters.var_u} / {VAR_UC}")
     print(f"Estimated var_c / True var_cc = {model.parameters.var_c} / {VAR_CC}")
@@ -145,9 +141,9 @@ if __name__ == "__main__":
     # tmp.coordination = None
     # evidence_no_coordination = BetaCoordinationLatentVocalicsDataset.from_samples(tmp)
     #
-    # tmp = copy(samples)
-    # tmp.latent_vocalics = None
-    # evidence_no_latent_vocalics = BetaCoordinationLatentVocalicsDataset.from_samples(tmp)
+    tmp = copy(samples)
+    tmp.latent_vocalics = None
+    evidence_no_latent_vocalics = BetaCoordinationLatentVocalicsDataset.from_samples(tmp)
     #
     tmp = copy(samples)
     tmp.unbounded_coordination = None
@@ -187,15 +183,15 @@ if __name__ == "__main__":
     # estimate_parameters(model=model, evidence=evidence_no_coordination, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
     #
-    # # No Latent Vocalics
-    # print()
-    # print("Parameter estimation NO latent vocalics")
-    # tb_logger = TensorBoardLogger(
-    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
-    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    # model.reset_parameters()
-    # estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=BURN_IN, num_jobs=NUM_JOBS,
-    #                     logger=tb_logger)
+    # No Latent Vocalics
+    print()
+    print("Parameter estimation NO latent vocalics")
+    tb_logger = TensorBoardLogger(
+        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
+    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    model.reset_parameters()
+    estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=BURN_IN, num_jobs=NUM_JOBS,
+                        logger=tb_logger)
     #
     # # With Unbounded Coordination only
     # print()
@@ -227,7 +223,7 @@ if __name__ == "__main__":
     # estimate_parameters(model=model, evidence=evidence_latent_vocalics_only, burn_in=BURN_IN, num_jobs=NUM_JOBS,
     #                     logger=tb_logger)
 
-    # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
+    # # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
     # print()
     # print("Parameter estimation with partial evidence")
     # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
