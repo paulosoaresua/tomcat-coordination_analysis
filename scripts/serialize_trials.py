@@ -39,7 +39,7 @@ def serialize_trials(input_path: str, out_dir: str, verbose: bool, log_dir: str,
     if not os.path.exists(input_path):
         raise Exception(f"Directory {input_path} does not exist.")
 
-    vocalic_features = [VocalicFeature.PITCH, VocalicFeature.INTENSITY]
+    vocalic_features = [VocalicFeature.PITCH, VocalicFeature.INTENSITY, VocalicFeature.JITTER, VocalicFeature.SHIMMER]
     if vocalics_source == "csv":
         vocalics_reader = VocalicsReaderCSV(vocalics_dir, vocalic_features)
     elif vocalics_source == "db":

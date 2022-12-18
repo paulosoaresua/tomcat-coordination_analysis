@@ -18,6 +18,8 @@ class VocalicFeature:
     """
     PITCH = "pitch"
     INTENSITY = "intensity"
+    JITTER = "jitter"
+    SHIMMER = "shimmer"
 
 
 class VocalicsReader:
@@ -27,7 +29,9 @@ class VocalicsReader:
 
     _FEATURE_MAP = {
         "pitch": "f0final_sma",
-        "intensity": "wave_rmsenergy_sma"
+        "intensity": "wave_rmsenergy_sma",
+        "jitter": "jitterlocal_sma",
+        "shimmer": "shimmerlocal_sma"
     }
 
     def __init__(self, features: List[str]):

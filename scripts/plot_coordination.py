@@ -1,5 +1,3 @@
-from typing import Union
-
 import argparse
 import os
 import pickle

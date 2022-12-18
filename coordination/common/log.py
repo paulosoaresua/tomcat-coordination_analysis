@@ -11,6 +11,8 @@ import PIL.Image
 from torchvision.transforms import ToTensor
 from torch.utils.tensorboard import SummaryWriter
 
+from coordination.common.utils import json_serial
+
 
 def _setup_logger(handler):
     logger = logging.getLogger()
@@ -92,4 +94,4 @@ class TensorBoardLogger(BaseLogger):
     def add_hyper_params(self, hyper_params: Dict[str, Any]):
         hyper_params.update(self._logger_info)
         with open(f"{self.log_dir}/hyper_params.json", "w") as f:
-            json.dump(hyper_params, f, indent=4)
+            json.dump(hyper_params, f, indent=4, default=json_serial)
