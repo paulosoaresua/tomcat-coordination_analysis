@@ -5,6 +5,8 @@ import os
 import pickle
 
 from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
+from coordination.model.gendered_beta_coordination_blending_latent_vocalics import \
+    GenderedBetaCoordinationBlendingLatentVocalics
 from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset
 
 
@@ -18,10 +20,11 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
     dataset.keep_vocalic_features(features)
 
     if gendered:
-        raise NotImplementedError
+        dataset.normalize_gender()
+        model = GenderedBetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
     else:
-        model = BetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
         dataset.normalize_per_subject()
+        model = BetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
 
     summaries = model.predict(evidence=dataset, num_particles=num_particles, seed=seed, num_jobs=num_jobs)
 

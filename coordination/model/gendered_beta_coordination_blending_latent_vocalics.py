@@ -308,7 +308,7 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
                                               states: List[BetaCoordinationLatentVocalicsParticles],
                                               series: BetaCoordinationLatentVocalicsDataSeries):
 
-        if series.coordination is None:
+        if series.latent_vocalics is None:
             if series.observed_vocalics.mask[time_step] == 1:
                 speaker = series.observed_vocalics.utterances[time_step].subject_id
                 Vt = states[time_step].latent_vocalics[speaker]

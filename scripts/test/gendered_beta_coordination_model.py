@@ -184,14 +184,14 @@ if __name__ == "__main__":
     #                     logger=tb_logger)
     #
     # No Latent Vocalics
-    print()
-    print("Parameter estimation NO latent vocalics")
-    tb_logger = TensorBoardLogger(
-        f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
-    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    model.reset_parameters()
-    estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=BURN_IN, num_jobs=NUM_JOBS,
-                        logger=tb_logger)
+    # print()
+    # print("Parameter estimation NO latent vocalics")
+    # tb_logger = TensorBoardLogger(
+    #     f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/evidence_no_latent_vocalics")
+    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    # model.reset_parameters()
+    # estimate_parameters(model=model, evidence=evidence_no_latent_vocalics, burn_in=BURN_IN, num_jobs=NUM_JOBS,
+    #                     logger=tb_logger)
     #
     # # With Unbounded Coordination only
     # print()
@@ -231,60 +231,46 @@ if __name__ == "__main__":
     # model.reset_parameters()
     # estimate_parameters(model=model, evidence=partial_evidence, burn_in=BURN_IN, num_jobs=NUM_JOBS, logger=tb_logger)
 
-    # # Check if we can predict coordination over time for the 1st sample
-    # model.var_uc = VAR_UC
-    # model.var_cc = VAR_CC
-    # model.var_a = VAR_A
-    # model.var_aa = VAR_AA
-    # model.var_o = VAR_O
-    # summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=10000,
-    #                         seed=0,
-    #                         num_jobs=1)
-    #
-    # # Plot estimated unbounded coordination against the real coordination points
-    # plt.figure(figsize=(15, 8))
-    # means = summary[0].unbounded_coordination_mean
-    # stds = np.sqrt(summary[0].unbounded_coordination_var)
-    # ts = np.arange(TIME_STEPS)
-    # plt.plot(ts, means, color="tab:orange", marker="o")
-    # plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
-    # plt.plot(ts, samples.unbounded_coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
-    # plt.title("Unbounded Coordination")
-    # plt.show()
-    #
-    # # Plot estimated coordination against the real coordination points
-    # plt.figure(figsize=(15, 8))
-    # means = summary[0].coordination_mean
-    # stds = np.sqrt(summary[0].coordination_var)
-    # ts = np.arange(TIME_STEPS)
-    # plt.plot(ts, means, color="tab:orange", marker="o")
-    # plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
-    # plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
-    # plt.title("Coordination")
-    # plt.show()
-    #
-    # plt.figure(figsize=(15, 8))
-    # means = summary[0].coordination_mean
-    # stds = np.sqrt(summary[0].coordination_var)
-    # ts = np.arange(TIME_STEPS)
-    # for i in range(NUM_FEATURES):
-    #     plt.plot(ts, samples.latent_vocalics[SAMPLE_TO_INFER].values[i], marker="o", alpha=0.5,
-    #              label=f"Feature {i + 1}")
-    # plt.title("Latent Vocalics")
-    # plt.legend()
-    # plt.show()
-    #
-    # model.fit(full_evidence.get_subset([SAMPLE_TO_INFER]), burn_in=1, seed=0, num_jobs=1)
-    # true_nll_1st_sample = model.nll_[-1]
-    #
-    # latent_vocalics = copy(samples.latent_vocalics[SAMPLE_TO_INFER])
-    # latent_vocalics.values = summary[0].latent_vocalics_mean
-    # estimated_dataset = BetaCoordinationLatentVocalicsDataset([
-    #     BetaCoordinationLatentVocalicsDataSeries("0", samples.observed_vocalics[SAMPLE_TO_INFER],
-    #                                              summary[0].unbounded_coordination_mean,
-    #                                              summary[0].coordination_mean,
-    #                                              latent_vocalics)])
-    #
-    # model.fit(estimated_dataset, burn_in=0, seed=0, num_jobs=1)
-    # print(f"True NLL 1st Sample = {true_nll_1st_sample}")
-    # print(f"Estimated NLL = {model.nll_[-1]}")
+    # Check if we can predict coordination over time for the 1st sample
+    model.parameters.set_var_u(VAR_UC)
+    model.parameters.set_var_c(VAR_CC)
+    model.parameters.set_var_a(VAR_A)
+    model.parameters.set_var_aa(VAR_AA)
+    model.parameters.set_mean_var_male(MEAN_O_MALE, VAR_O_MALE)
+    model.parameters.set_mean_var_female(MEAN_O_FEMALE, VAR_O_FEMALE)
+    summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=30000,
+                            seed=0,
+                            num_jobs=1)
+
+    # Plot estimated unbounded coordination against the real coordination points
+    plt.figure(figsize=(15, 8))
+    means = summary[0].unbounded_coordination_mean
+    stds = np.sqrt(summary[0].unbounded_coordination_var)
+    ts = np.arange(TIME_STEPS)
+    plt.plot(ts, means, color="tab:orange", marker="o")
+    plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
+    plt.plot(ts, samples.unbounded_coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
+    plt.title("Unbounded Coordination")
+    plt.show()
+
+    # Plot estimated coordination against the real coordination points
+    plt.figure(figsize=(15, 8))
+    means = summary[0].coordination_mean
+    stds = np.sqrt(summary[0].coordination_var)
+    ts = np.arange(TIME_STEPS)
+    plt.plot(ts, means, color="tab:orange", marker="o")
+    plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
+    plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
+    plt.title("Coordination")
+    plt.show()
+
+    plt.figure(figsize=(15, 8))
+    means = summary[0].coordination_mean
+    stds = np.sqrt(summary[0].coordination_var)
+    ts = np.arange(TIME_STEPS)
+    for i in range(NUM_FEATURES):
+        plt.plot(ts, samples.latent_vocalics[SAMPLE_TO_INFER].values[i], marker="o", alpha=0.5,
+                 label=f"Feature {i + 1}")
+    plt.title("Latent Vocalics")
+    plt.legend()
+    plt.show()

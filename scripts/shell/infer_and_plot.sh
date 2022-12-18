@@ -19,6 +19,7 @@ __help() {
   echo "a                        Estimates coordination on mission 1 "
   echo "b                        Estimates coordination on mission 2."
   echo "c                        Estimates coordination on both missions."
+  echo "g                        Whether to use a model that considers the speakers' gender."
   echo "p                        Number of particles (default 30000)."
   echo "r                        Reference date (e.g. 2022.12.02--15)."
   echo "t                        Training type (e.g. single_execution_no_self_dep)."
@@ -39,7 +40,8 @@ num_jobs=1
 condition_value=""
 num_particles=30000
 features="pitch, intensity"
-while getopts ":habcp:r:t:j:f:n:" option; do
+gendered=0
+while getopts ":habcgp:r:t:j:f:n:" option; do
   case $option in
     h) # display Help
       __help
@@ -52,6 +54,9 @@ while getopts ":habcp:r:t:j:f:n:" option; do
       ;;
     c) # Mission 1 and 2
       do_both_missions=1
+      ;;
+    g) # gendered
+      gendered=1
       ;;
     p) # number of particles
       num_particles=$OPTARG
@@ -106,13 +111,25 @@ pushd "$HOME/code/tomcat-coordination/scripts" > /dev/null || exit
     echo " MISSION 1                               "
     echo "-----------------------------------------"
     echo ""
-    python3 infer.py --dataset_path="$data_dir/mission1_dataset.pkl" \
-                     --model_path="$models_dir/mission1/$ref_date/model.pkl" \
-                     --n_particles="$num_particles" \
-                     --seed=0 \
-                     --n_jobs="$num_jobs" \
-                     --out_dir="$results_dir/mission1/$ref_date" \
-                     --features="$features"
+
+    if [[ gendered -ne 0 ]]; then
+      python3 infer.py --dataset_path="$data_dir/mission1_dataset.pkl" \
+                       --model_path="$models_dir/mission1/$ref_date/model.pkl" \
+                       --n_particles="$num_particles" \
+                       --seed=0 \
+                       --n_jobs="$num_jobs" \
+                       --out_dir="$results_dir/mission1/$ref_date" \
+                       --features="$features" \
+                       --gendered
+    else
+      python3 infer.py --dataset_path="$data_dir/mission1_dataset.pkl" \
+                       --model_path="$models_dir/mission1/$ref_date/model.pkl" \
+                       --n_particles="$num_particles" \
+                       --seed=0 \
+                       --n_jobs="$num_jobs" \
+                       --out_dir="$results_dir/mission1/$ref_date" \
+                       --features="$features"
+    fi
 
     python3 plot_coordination.py --inference_path="$results_dir/mission1/$ref_date/inference_summaries.pkl" \
                                  --dataset_path="$data_dir/mission1_dataset.pkl" \
@@ -128,13 +145,25 @@ pushd "$HOME/code/tomcat-coordination/scripts" > /dev/null || exit
     echo " MISSION 2                               "
     echo "-----------------------------------------"
     echo ""
-    python3 infer.py --dataset_path="$data_dir/mission2_dataset.pkl" \
-                     --model_path="$models_dir/mission2/$ref_date/model.pkl" \
-                     --n_particles="$num_particles" \
-                     --seed=0 \
-                     --n_jobs="$num_jobs" \
-                     --out_dir="$results_dir/mission2/$ref_date" \
-                     --features="$features"
+
+    if [[ gendered -ne 0 ]]; then
+      python3 infer.py --dataset_path="$data_dir/mission2_dataset.pkl" \
+                       --model_path="$models_dir/mission2/$ref_date/model.pkl" \
+                       --n_particles="$num_particles" \
+                       --seed=0 \
+                       --n_jobs="$num_jobs" \
+                       --out_dir="$results_dir/mission2/$ref_date" \
+                       --features="$features" \
+                       --gendered
+    else
+      python3 infer.py --dataset_path="$data_dir/mission2_dataset.pkl" \
+                       --model_path="$models_dir/mission2/$ref_date/model.pkl" \
+                       --n_particles="$num_particles" \
+                       --seed=0 \
+                       --n_jobs="$num_jobs" \
+                       --out_dir="$results_dir/mission2/$ref_date" \
+                       --features="$features"
+    fi
 
     python3 plot_coordination.py --inference_path="$results_dir/mission2/$ref_date/inference_summaries.pkl" \
                                  --dataset_path="$data_dir/mission2_dataset.pkl" \
@@ -150,13 +179,25 @@ pushd "$HOME/code/tomcat-coordination/scripts" > /dev/null || exit
     echo " ALL MISSIONS                            "
     echo "-----------------------------------------"
     echo ""
-    python3 infer.py --dataset_path="$data_dir/all_missions_dataset.pkl" \
-                     --model_path="$models_dir/all_missions/$ref_date/model.pkl" \
-                     --n_particles="$num_particles" \
-                     --seed=0 \
-                     --n_jobs="$num_jobs" \
-                     --out_dir="$results_dir/all_missions/$ref_date" \
-                     --features="$features"
+
+    if [[ gendered -ne 0 ]]; then
+      python3 infer.py --dataset_path="$data_dir/all_missions_dataset.pkl" \
+                       --model_path="$models_dir/all_missions/$ref_date/model.pkl" \
+                       --n_particles="$num_particles" \
+                       --seed=0 \
+                       --n_jobs="$num_jobs" \
+                       --out_dir="$results_dir/all_missions/$ref_date" \
+                       --features="$features" \
+                       --gendered
+    else
+      python3 infer.py --dataset_path="$data_dir/all_missions_dataset.pkl" \
+                       --model_path="$models_dir/all_missions/$ref_date/model.pkl" \
+                       --n_particles="$num_particles" \
+                       --seed=0 \
+                       --n_jobs="$num_jobs" \
+                       --out_dir="$results_dir/all_missions/$ref_date" \
+                       --features="$features"
+    fi
 
     python3 plot_coordination.py --inference_path="$results_dir/all_missions/$ref_date/inference_summaries.pkl" \
                                  --dataset_path="$data_dir/all_missions_dataset.pkl" \
@@ -170,7 +211,7 @@ popd > /dev/null || exit
 
 echo ""
 echo "-----------------------------------------"
-echo " DONE TRAINING!!!                        "
+echo " DONE INFERRING!!!                        "
 echo "-----------------------------------------"
 echo ""
 
