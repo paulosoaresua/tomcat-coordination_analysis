@@ -74,8 +74,8 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
     # SYNTHETIC DATA GENERATION
     # ---------------------------------------------------------
 
-    def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], time_scale_density: float = 1, *args,
-               **kwargs) -> SP:
+    def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], time_scale_density: float = 1,
+               p_semantic_links: float = 0, *args, **kwargs) -> SP:
         """
         Regular ancestral sampling procedure.
         """
@@ -85,7 +85,8 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
         self._generate_coordination_samples(num_samples, num_time_steps, samples)
         samples.latent_vocalics = []
         samples.observed_vocalics = []
-        samples.genders = np.ones((num_samples, num_time_steps)) * 1
+        samples.genders = np.ones((num_samples, num_time_steps))
+        samples.speech_semantic_links = np.zeros((num_samples, num_time_steps))
 
         for i in tqdm(range(num_samples), desc="Sampling Trial", position=0, leave=False):
             # Subjects A and B
@@ -134,6 +135,13 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                     # Dummy utterance
                     utterances[t] = SegmentedUtterance(f"Speaker {speakers[t]}", datetime.now(), datetime.now(), "")
                     previous_time_per_speaker[speakers[t]] = t
+
+                    # Semantic link
+                    u = np.random.rand()
+                    if u <= p_semantic_links:
+                        u = np.random.rand()
+                        if u <= current_coordination:
+                            samples.speech_semantic_links[i, t] = 1
 
             samples.latent_vocalics.append(VocalicsSparseSeries(utterances=utterances, previous_from_self=previous_self,
                                                                 previous_from_other=previous_other,
@@ -425,6 +433,9 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
             # LL from latent to observed vocalics
             ll += (norm(loc=V, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
 
+        # Term due to a semantic link if any
+        ll += (evidence.speech_semantic_links * np.log(coordination)).sum()
+
         return ll
 
     def _compute_coordination_loglikelihood(self, evidence: LatentVocalicsDataset) -> float:
@@ -660,6 +671,9 @@ class CoordinationBlendingLatentVocalics(PGM[SP, S]):
                 log_likelihoods = norm(loc=mean, scale=np.sqrt(self.parameters.var_aa)).logpdf(Vt).sum(axis=1)
             else:
                 log_likelihoods = np.zeros(len(states[time_step].coordination))
+
+        # Term due to a semantic link if any
+        log_likelihoods += series.speech_semantic_links[time_step] * np.log(states[time_step].coordination)
 
         return log_likelihoods
 

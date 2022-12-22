@@ -426,6 +426,8 @@ class BetaCoordinationBlendingLatentVocalics(
         log_posterior += super()._get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
             proposed_coordination_sample, saa, evidence, latent_vocalics, time_step)
 
+        log_posterior += evidence.speech_semantic_links[:, time_step] * np.log(proposed_coordination_sample.flatten())
+
         return log_posterior
 
     def _retain_coordination_samples(self, coordination: np.ndarray, acceptance_rates: np.ndarray,

@@ -19,11 +19,12 @@ logger = logging.getLogger()
 
 
 class Utterance:
-    def __init__(self, participant_id: str, text: str, start: datetime, end: datetime):
+    def __init__(self, participant_id: str, text: str, start: datetime, end: datetime, labels: set[str]):
         self.subject_id = participant_id
         self.text = text
         self.start = start
         self.end = end
+        self.labels = labels
 
         # This will contain values for different vocalic features within an utterance.
         # The series is a matrix, with as many rows as the number of features and as many
@@ -41,7 +42,8 @@ class Vocalics:
         self.utterances_per_subject = utterances_per_subject
 
     @classmethod
-    def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata, vocalics_reader: VocalicsReader) -> Vocalics:
+    def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata,
+                          vocalics_reader: VocalicsReader) -> Vocalics:
         """
         Parses a list of ASR messages to extract utterances and their corresponding vocalic features.
         """
@@ -74,10 +76,14 @@ class Vocalics:
             subject_id = trial_metadata.subject_id_map[asr_message["data"]["participant_id"]].avatar_color
             text = asr_message["data"]["text"]
 
+            # All labels associated with the utterance
+            labels = set([label for extraction in asr_message["data"]["extractions"] for label in extraction["labels"]])
+
             utterance = Utterance(subject_id,
                                   text,
                                   start_timestamp,
-                                  end_timestamp)
+                                  end_timestamp,
+                                  labels)
 
             if subject_id in utterances_per_subject:
                 utterances_per_subject[subject_id].append(utterance)

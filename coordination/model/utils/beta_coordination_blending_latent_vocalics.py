@@ -41,12 +41,13 @@ class BetaCoordinationLatentVocalicsSamples(LatentVocalicsSamples):
 
 class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
 
-    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
-                 team_process_surveys: Dict[str, np.ndarray], team_satisfaction_surveys: Dict[str, np.ndarray],
-                 genders: Dict[str, int], ages: Dict[str, int], features: List[str],
-                 unbounded_coordination: Optional[np.ndarray] = None, coordination: Optional[np.ndarray] = None,
-                 latent_vocalics: VocalicsSparseSeries = None):
-        super().__init__(uuid, observed_vocalics, team_score, team_process_surveys, team_satisfaction_surveys, genders,
+    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, speech_semantic_links: np.ndarray,
+                 team_score: float, team_process_surveys: Dict[str, np.ndarray],
+                 team_satisfaction_surveys: Dict[str, np.ndarray], genders: Dict[str, int], ages: Dict[str, int],
+                 features: List[str], unbounded_coordination: Optional[np.ndarray] = None,
+                 coordination: Optional[np.ndarray] = None, latent_vocalics: VocalicsSparseSeries = None):
+        super().__init__(uuid, observed_vocalics, speech_semantic_links, team_score, team_process_surveys,
+                         team_satisfaction_surveys, genders,
                          ages, features, coordination, latent_vocalics)
         self.unbounded_coordination = unbounded_coordination
 
@@ -67,7 +68,8 @@ class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
             team_satisfaction_surveys=series.team_satisfaction_surveys,
             genders=series.genders,
             ages=series.ages,
-            features=series.features
+            features=series.features,
+            speech_semantic_links=series.speech_semantic_links
         )
 
 
@@ -91,8 +93,10 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
             coordination = samples.coordination[i] if samples.coordination is not None else None
             latent_vocalics = samples.latent_vocalics[i] if samples.latent_vocalics is not None else None
 
-            genders = {u.subject_id: samples.genders[i, t] for t, u in
-                       enumerate(samples.observed_vocalics[i].utterances)}
+            genders = {}
+            for t, u in enumerate(samples.observed_vocalics[i].utterances):
+                if u is not None:
+                    genders[u.subject_id] = samples.genders[i, t]
 
             s = BetaCoordinationLatentVocalicsDataSeries(
                 uuid=f"{i}",
@@ -105,7 +109,8 @@ class BetaCoordinationLatentVocalicsDataset(LatentVocalicsDataset):
                 team_satisfaction_surveys={},
                 ages={},
                 genders=genders,
-                features=[str(i) for i in range(samples.observed_vocalics[i].num_features)]
+                features=[str(i) for i in range(samples.observed_vocalics[i].num_features)],
+                speech_semantic_links=samples.speech_semantic_links[i]
             )
 
             series.append(s)

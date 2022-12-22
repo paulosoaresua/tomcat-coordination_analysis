@@ -42,6 +42,7 @@ class LatentVocalicsSamples(Samples):
     latent_vocalics: List[VocalicsSparseSeries]
     observed_vocalics: List[VocalicsSparseSeries]
     genders: np.ndarray
+    speech_semantic_links: np.ndarray
 
     def __init__(self, num_speakers: int):
         self.num_speakers = num_speakers
@@ -53,15 +54,16 @@ class LatentVocalicsSamples(Samples):
 
 class LatentVocalicsDataSeries(EvidenceDataSeries):
 
-    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, team_score: float,
-                 team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray, genders: np.ndarray,
-                 ages: np.ndarray, features: List[str], coordination: Optional[np.ndarray] = None,
+    def __init__(self, uuid: str, observed_vocalics: VocalicsSparseSeries, speech_semantic_links: np.ndarray,
+                 team_score: float, team_process_surveys: np.ndarray, team_satisfaction_surveys: np.ndarray,
+                 genders: np.ndarray, ages: np.ndarray, features: List[str], coordination: Optional[np.ndarray] = None,
                  latent_vocalics: VocalicsSparseSeries = None):
         super().__init__(uuid)
         self.coordination = coordination
         self.latent_vocalics = latent_vocalics
         self.observed_vocalics = observed_vocalics
         self.team_score = team_score
+        self.speech_semantic_links = speech_semantic_links
 
         # One per player: red, green and blue
         self.team_process_surveys = team_process_surveys
@@ -101,6 +103,7 @@ class LatentVocalicsDataset(EvidenceDataset):
         self.latent_vocalics = np.array([])
         self.observed_vocalics = np.array([])
         self.vocalics_mask = np.array([])
+        self.speech_semantic_links = np.array([])
 
         # Dependency on vocalics from the same speaker
         self.previous_vocalics_from_self = np.array([])
@@ -127,6 +130,7 @@ class LatentVocalicsDataset(EvidenceDataset):
             (num_trials, num_vocalic_features, num_time_steps))
         self.observed_vocalics = np.zeros((num_trials, num_vocalic_features, num_time_steps))
         self.vocalics_mask = np.zeros((num_trials, num_time_steps))
+        self.speech_semantic_links = np.zeros((num_trials, num_time_steps))
 
         self.previous_vocalics_from_self = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
         self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_self)
@@ -152,6 +156,8 @@ class LatentVocalicsDataset(EvidenceDataset):
             # Vocalics from other speaker
             self.previous_vocalics_from_other[i] = np.array(
                 [-1 if t is None else t for t in s.observed_vocalics.previous_from_other])
+
+            self.speech_semantic_links[i] = s.speech_semantic_links
 
             for t in range(s.num_time_steps):
                 if self.previous_vocalics_from_other[i, t] >= 0:

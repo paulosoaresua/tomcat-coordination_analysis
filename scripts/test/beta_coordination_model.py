@@ -8,13 +8,14 @@ import numpy as np
 from coordination.common.log import BaseLogger, TensorBoardLogger
 from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
 from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
-    BetaCoordinationLatentVocalicsTrainingHyperParameters, LatentVocalicsModelParameters
+    BetaCoordinationLatentVocalicsTrainingHyperParameters
 
 # Parameters
 TIME_STEPS = 50
 NUM_SAMPLES = 100
 NUM_FEATURES = 2
 DATA_TIME_SCALE_DENSITY = 0.6
+P_SPEECH_SEMANTIC_LINK = 0
 NUM_JOBS = 8
 
 model_name = "beta_model"
@@ -73,7 +74,8 @@ if __name__ == "__main__":
     model.parameters.set_var_aa(VAR_AA)
     model.parameters.set_var_o(VAR_O)
 
-    samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0, time_scale_density=DATA_TIME_SCALE_DENSITY)
+    samples = model.sample(NUM_SAMPLES, TIME_STEPS, seed=0, time_scale_density=DATA_TIME_SCALE_DENSITY,
+                           p_semantic_links=P_SPEECH_SEMANTIC_LINK)
 
     # # Plot the first unbounded coordination and coordination
     # # Plot estimated unbounded coordination against the real coordination points
@@ -204,22 +206,21 @@ if __name__ == "__main__":
     #                     logger=tb_logger)
 
     # Check if we can estimate the parameters if we do not observe latent vocalics and coordination
-    print()
-    print("Parameter estimation with partial evidence")
-    tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
-    tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
-    model.reset_parameters()
-    estimate_parameters(model=model, evidence=partial_evidence, burn_in=BURN_IN, num_jobs=NUM_JOBS, logger=tb_logger)
+    # print()
+    # print("Parameter estimation with partial evidence")
+    # tb_logger = TensorBoardLogger(f"/Users/paulosoares/code/tomcat-coordination/boards/{model_name}/partial_evidence")
+    # tb_logger.add_info("data_time_scale_density", DATA_TIME_SCALE_DENSITY)
+    # model.reset_parameters()
+    # estimate_parameters(model=model, evidence=partial_evidence, burn_in=BURN_IN, num_jobs=NUM_JOBS, logger=tb_logger)
 
-    # # Check if we can predict coordination over time for the 1st sample
-    # model.var_uc = VAR_UC
-    # model.var_cc = VAR_CC
-    # model.var_a = VAR_A
-    # model.var_aa = VAR_AA
-    # model.var_o = VAR_O
-    # summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=10000,
-    #                         seed=0,
-    #                         num_jobs=1)
+    # Check if we can predict coordination over time for the 1st sample
+    model.var_uc = VAR_UC
+    model.var_cc = VAR_CC
+    model.var_a = VAR_A
+    model.var_aa = VAR_AA
+    model.var_o = VAR_O
+    summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=30000, seed=0,
+                            num_jobs=1)
     #
     # # Plot estimated unbounded coordination against the real coordination points
     # plt.figure(figsize=(15, 8))
@@ -232,16 +233,23 @@ if __name__ == "__main__":
     # plt.title("Unbounded Coordination")
     # plt.show()
     #
-    # # Plot estimated coordination against the real coordination points
-    # plt.figure(figsize=(15, 8))
-    # means = summary[0].coordination_mean
-    # stds = np.sqrt(summary[0].coordination_var)
-    # ts = np.arange(TIME_STEPS)
-    # plt.plot(ts, means, color="tab:orange", marker="o")
-    # plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
-    # plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
-    # plt.title("Coordination")
-    # plt.show()
+    # Plot estimated coordination against the real coordination points
+    plt.figure(figsize=(15, 8))
+    means = summary[0].coordination_mean
+    stds = np.sqrt(summary[0].coordination_var)
+    ts = np.arange(TIME_STEPS)
+    plt.plot(ts, means, color="tab:orange", marker="o")
+    plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
+    plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
+
+    # Semantic links
+    semantic_link_times = [t for t, link in enumerate(full_evidence.speech_semantic_links[SAMPLE_TO_INFER]) if
+                           link == 1]
+
+    plt.scatter(semantic_link_times, np.ones(len(semantic_link_times)) * 1.1, marker="s", color="tab:purple")
+
+    plt.title("Coordination")
+    plt.show()
     #
     # plt.figure(figsize=(15, 8))
     # means = summary[0].coordination_mean
