@@ -14,7 +14,7 @@ from coordination.model.utils.beta_coordination_blending_latent_vocalics import 
 TIME_STEPS = 50
 NUM_SAMPLES = 100
 NUM_FEATURES = 2
-DATA_TIME_SCALE_DENSITY = 0.6
+DATA_TIME_SCALE_DENSITY = 1
 P_SPEECH_SEMANTIC_LINK = 0
 NUM_JOBS = 8
 
@@ -219,7 +219,9 @@ if __name__ == "__main__":
     model.var_a = VAR_A
     model.var_aa = VAR_AA
     model.var_o = VAR_O
-    summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=30000, seed=0,
+    # summary = model.predict(evidence=partial_evidence.get_subset([SAMPLE_TO_INFER]), num_particles=30000, seed=0,
+    #                         num_jobs=1)
+    summary = model.predict(evidence=partial_evidence, num_particles=30000, seed=0,
                             num_jobs=1)
     #
     # # Plot estimated unbounded coordination against the real coordination points
@@ -235,12 +237,15 @@ if __name__ == "__main__":
     #
     # Plot estimated coordination against the real coordination points
     plt.figure(figsize=(15, 8))
-    means = summary[0].coordination_mean
-    stds = np.sqrt(summary[0].coordination_var)
+    # means = summary[0].coordination_mean
+    # stds = np.sqrt(summary[0].coordination_var)
+    means = np.array([s.coordination_mean for s in summary]).mean(axis=0)
+    stds = np.sqrt(np.array([s.coordination_var for s in summary]).mean(axis=0))
     ts = np.arange(TIME_STEPS)
     plt.plot(ts, means, color="tab:orange", marker="o")
     plt.fill_between(ts, means - stds, means + stds, color="tab:orange", alpha=0.5)
-    plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
+    # plt.plot(ts, samples.coordination[SAMPLE_TO_INFER], color="tab:blue", marker="o", alpha=0.5)
+    plt.plot(ts, samples.coordination.mean(axis=0), color="tab:blue", marker="o", alpha=0.5)
 
     # Semantic links
     semantic_link_times = [t for t, link in enumerate(full_evidence.speech_semantic_links[SAMPLE_TO_INFER]) if

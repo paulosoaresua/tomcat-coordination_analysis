@@ -248,6 +248,11 @@ class LatentVocalicsDataset(EvidenceDataset):
 
         self._fill_tensors()
 
+    def disable_speech_semantic_links(self):
+        for s in self.series:
+            s.speech_semantic_links = np.zeros_like(s.speech_semantic_links)
+        self._fill_tensors()
+
 
 class BaseF:
 

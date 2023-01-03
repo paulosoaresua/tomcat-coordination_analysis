@@ -25,7 +25,7 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
           nu_mo_female: float, a_vo_female: float, b_vo_female: float, vu0: float, vc0: float, va0: float, vaa0: float,
           mo0_male: np.ndarray, mo0_female: np.ndarray, vo0_male: np.ndarray, vo0_female: np.ndarray, vo0: float,
           u_mcmc_iter: int, c_mcmc_iter: int, vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str,
-          no_self_dependency: bool, features: List[str], gendered: bool, cv: int):
+          no_self_dependency: bool, features: List[str], gendered: bool, cv: int, no_link: bool):
 
     assert len(mo0_male) == len(features)
     assert len(mo0_female) == len(features)
@@ -38,6 +38,9 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
     dataset.keep_vocalic_features(features)
+
+    if no_link:
+        dataset.disable_speech_semantic_links()
 
     if gendered:
         dataset.normalize_gender()
@@ -125,7 +128,7 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
                   callbacks=callbacks)
         model.save(out_dir)
     else:
-        train_test_splitter = KFold(n_splits=cv, shuffle=True)
+        train_test_splitter = KFold(n_splits=cv, shuffle=True, random_state=seed)
         X = np.arange(dataset.num_trials)[:, np.newaxis]
         for split_num, indices in enumerate(train_test_splitter.split(X)):
             print("")
@@ -239,6 +242,8 @@ if __name__ == "__main__":
                         help="Whether to use a model that considers speakers' genders.")
     parser.add_argument("--cv", type=int, required=False, default=1,
                         help="Number of splits if the model is to be trained for cross-validation.")
+    parser.add_argument("--no_link", action="store_true", required=False, default=False,
+                        help="Whether to disable semantic link.")
 
     args = parser.parse_args()
 
@@ -290,4 +295,5 @@ if __name__ == "__main__":
           no_self_dependency=args.no_self_dep,
           features=list(map(format_feature_name, args.features.split(","))),
           gendered=args.gendered,
-          cv=args.cv)
+          cv=args.cv,
+          no_link=args.no_link)

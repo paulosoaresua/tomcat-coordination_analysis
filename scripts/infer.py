@@ -12,7 +12,7 @@ from coordination.model.utils.beta_coordination_blending_latent_vocalics import 
 
 
 def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num_jobs: int, out_dir: str,
-          features: List[str], gendered: bool, cv: int):
+          features: List[str], gendered: bool, cv: int, no_link: bool):
 
     assert cv >= 1
 
@@ -21,6 +21,9 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
     dataset.keep_vocalic_features(features)
+
+    if no_link:
+        dataset.disable_speech_semantic_links()
 
     if gendered:
         dataset.normalize_gender()
@@ -41,6 +44,10 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
             pickle.dump(summaries, f)
     else:
         for split_num in range(cv):
+            print("")
+            print(f"~~~~~~~~~ SPLIT {split_num}/{cv} ~~~~~~~~~")
+            print("")
+
             input_dir = f"{model_path}/split_{split_num}"
             split_out_dir = f"{out_dir}/split_{split_num}"
 
@@ -83,6 +90,8 @@ if __name__ == "__main__":
                         help="Whether to use a model that considers speakers' genders.")
     parser.add_argument("--cv", type=int, required=False, default=1,
                         help="Number of splits if the model is to be trained for cross-validation.")
+    parser.add_argument("--no_link", action="store_true", required=False, default=False,
+                        help="Whether to disable semantic link.")
 
     args = parser.parse_args()
 
@@ -97,4 +106,5 @@ if __name__ == "__main__":
           out_dir=args.out_dir,
           features=list(map(format_feature_name, args.features.split(","))),
           gendered=args.gendered,
-          cv=args.cv)
+          cv=args.cv,
+          no_link=args.no_link)
