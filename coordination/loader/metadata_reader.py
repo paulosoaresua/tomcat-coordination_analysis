@@ -34,6 +34,7 @@ class MetadataReader:
 
     TRIAL_TOPIC = "trial"
     ASR_TOPIC = "agent/asr/final"
+    DIALOG_TOPIC = "agent/dialog"
     SCOREBOARD_TOPIC = "observations/events/scoreboard"
     MISSION_STATE_TOPIC = "observations/events/mission"
     SURVEY_RESPONSE_TOPIC = "status/asistdataingester/surveyresponse"
@@ -45,6 +46,7 @@ class MetadataReader:
     def load(self) -> Tuple[TrialMetadata, Vocalics]:
         trial_metadata = TrialMetadata()
         asr_messages = []
+        dialog_messages = {}
 
         logger.info(f"Parsing {os.path.basename(self._metadata_filepath)}")
         with open(self._metadata_filepath, 'r') as f:
@@ -67,11 +69,14 @@ class MetadataReader:
                         self._parse_survey_response(json_message, trial_metadata)
                     elif topic == MetadataReader.ASR_TOPIC:
                         asr_messages.append(json_message)
+                    elif topic == MetadataReader.DIALOG_TOPIC:
+                        asr_id = json_message["data"]["asr_msg_id"]
+                        dialog_messages[asr_id] = json_message
                 except:
                     logger.error(f"Bad json line of len: {len(line)}, {line}")
 
         trial_metadata.check_validity()
-        vocalics = Vocalics.from_asr_messages(asr_messages, trial_metadata, self._vocalics_reader)
+        vocalics = Vocalics.from_asr_messages(asr_messages, trial_metadata, self._vocalics_reader, dialog_messages)
 
         # Remove player name from the entries in TrialMetadata.subject_id_map. We only add it so we can map both id
         # and name to avatar color because vocalics sometimes are indexed by one or the other.

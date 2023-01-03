@@ -1,6 +1,5 @@
 import argparse
 from glob import glob
-import numpy as np
 import os
 import pickle
 
@@ -37,7 +36,7 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
         speech_semantics_component = SemanticsComponent.from_vocalics(trial.vocalics, semantic_window_size)
 
         observed_vocalics = vocalics_component.sparse_series(time_steps, trial.metadata.mission_start)
-        speech_semantic_links = speech_semantics_component.to_array(time_steps)
+        speech_semantic_links = speech_semantics_component.to_array(time_steps, trial.metadata.mission_start)
 
         genders = {}
         ages = {}
@@ -96,7 +95,7 @@ if __name__ == "__main__":
                         help="Number of time steps (seconds) in each series.")
     parser.add_argument("--no_overlap", action="store_true", required=False, default=False,
                         help="Whether utterances must be trimmed so that they don't overlap.")
-    parser.add_argument("--semantic_window", type=int, required=True,
+    parser.add_argument("--semantic_window", type=int, required=False, default=5,
                         help="Window size for semantic link extraction.")
 
     args = parser.parse_args()

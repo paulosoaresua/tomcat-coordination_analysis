@@ -21,8 +21,12 @@
       "target": "Engineer"
     },
     {
-      "source": "CriticalVictim",
-      "target": "Move"
+      "source": "Question",
+      "target": "Agreement"
+    },
+    {
+      "source": "HelpRequest",
+      "target": "Agreement"
     }
   ]
 }

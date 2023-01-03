@@ -43,7 +43,7 @@ class Vocalics:
 
     @classmethod
     def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata,
-                          vocalics_reader: VocalicsReader) -> Vocalics:
+                          vocalics_reader: VocalicsReader, dialog_messages: Dict[str, Any]) -> Vocalics:
         """
         Parses a list of ASR messages to extract utterances and their corresponding vocalic features.
         """
@@ -77,7 +77,8 @@ class Vocalics:
             text = asr_message["data"]["text"]
 
             # All labels associated with the utterance
-            labels = set([label for extraction in asr_message["data"]["extractions"] for label in extraction["labels"]])
+            dialog_message = dialog_messages[asr_message["data"]["utterance_id"]]
+            labels = set([label for extraction in dialog_message["data"]["extractions"] for label in extraction["labels"]])
 
             utterance = Utterance(subject_id,
                                   text,

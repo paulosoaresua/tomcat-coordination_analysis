@@ -54,15 +54,15 @@ class SemanticsComponent:
         semantic_links = []
         queue = []
         for utterance in utterances:
-            target_labels = utterance.labels.intersection(target_labels)
-            if len(utterance.labels.intersection(target_labels)) > 0:
+            found_target_labels = utterance.labels.intersection(target_labels)
+            if len(found_target_labels) > 0:
                 # Look for any link with utterances in the queue (from the most recent to the oldest)
                 semantic_link = None
                 for source_utterance in reversed(queue):
                     if utterance.subject_id == source_utterance.subject_id:
                         continue
 
-                    for target_label in target_labels:
+                    for target_label in found_target_labels:
                         linked_source_labels = source_utterance.labels.intersection(target_2_source[target_label])
                         if len(linked_source_labels) > 0:
                             semantic_link = SemanticLink(source_utterance, utterance, linked_source_labels.pop(),
@@ -75,7 +75,7 @@ class SemanticsComponent:
 
                 queue.append(utterance)
 
-                if len(queue) > window_size:
+                if len(queue) == window_size:
                     queue.pop(0)
 
         return cls(semantic_links, window_size)
