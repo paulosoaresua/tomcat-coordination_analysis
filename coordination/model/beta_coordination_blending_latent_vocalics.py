@@ -271,10 +271,9 @@ class BetaCoordinationBlendingLatentVocalics(
                                log_prob_fn=self._get_coordination_posterior_unormalized_logprob,
                                log_prob_fn_kwargs=log_prob_fn_params)
                 initial_sample = coordination[:, t][:, np.newaxis]
-                burn_in = int(train_hyper_parameters.c_mcmc_iter / 2)
                 inferred_coordination = sampler.generate_samples(initial_sample=initial_sample,
-                                                                 num_samples=burn_in,
-                                                                 burn_in=burn_in,
+                                                                 num_samples=1,
+                                                                 burn_in=train_hyper_parameters.c_mcmc_iter,
                                                                  retain_every=1).mean(axis=(0, 2))
                 coordination[:, t] = inferred_coordination
                 acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
@@ -330,10 +329,9 @@ class BetaCoordinationBlendingLatentVocalics(
                                log_prob_fn=self._get_unbounded_coordination_posterior_unormalized_logprob,
                                log_prob_fn_kwargs=log_prob_fn_params)
                 initial_sample = unbounded_coordination[:, t][:, np.newaxis]
-                burn_in = int(train_hyper_parameters.u_mcmc_iter / 2)
                 inferred_unbounded_coordination = sampler.generate_samples(initial_sample=initial_sample,
-                                                                           num_samples=burn_in,
-                                                                           burn_in=burn_in,
+                                                                           num_samples=1,
+                                                                           burn_in=train_hyper_parameters.u_mcmc_iter,
                                                                            retain_every=1).mean(axis=(0, 2))
 
                 unbounded_coordination[:, t] = inferred_unbounded_coordination
