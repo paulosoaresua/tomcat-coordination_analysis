@@ -234,7 +234,7 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
             ll += (norm(loc=V * mo, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
 
         # Term due to a semantic link if any
-        ll += evidence.speech_semantic_links * np.log(coordination)
+        ll += (evidence.speech_semantic_links * np.log(coordination)).sum()
 
         return ll
 
