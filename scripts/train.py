@@ -25,13 +25,27 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
           nu_mo_female: float, a_vo_female: float, b_vo_female: float, vu0: float, vc0: float, va0: float, vaa0: float,
           mo0_male: np.ndarray, mo0_female: np.ndarray, vo0_male: np.ndarray, vo0_female: np.ndarray, vo0: float,
           u_mcmc_iter: int, c_mcmc_iter: int, vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str,
-          no_self_dependency: bool, features: List[str], gendered: bool, cv: int, no_link: bool):
+          no_self_dependency: bool, features: List[str], gendered: bool, cv: int, no_link: bool, ref_date: str):
 
-    assert len(mo0_male) == len(features)
-    assert len(mo0_female) == len(features)
-    assert len(vo0_male) == len(features)
-    assert len(vo0_female) == len(features)
+    num_features = len(features)
+
+    assert len(mo0_male) == 1 or len(mo0_male) == num_features
+    assert len(mo0_female) == 1 or len(mo0_male) == num_features
+    assert len(vo0_male) == 1 or len(mo0_male) == num_features
+    assert len(vo0_female) == 1 or len(mo0_male) == num_features
     assert cv >= 1
+
+    if len(mo0_male) == 1:
+        mo0_male = np.ones(num_features) * mo0_male[0]
+
+    if len(mo0_female) == 1:
+        mo0_female = np.ones(num_features) * mo0_female[0]
+
+    if len(vo0_male) == 1:
+        vo0_male = np.ones(num_features) * vo0_male[0]
+
+    if len(vo0_female) == 1:
+        vo0_female = np.ones(num_features) * vo0_female[0]
 
     # Loading dataset
     with open(dataset_path, "rb") as f:
@@ -107,9 +121,9 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
             num_vocalic_features=dataset.series[0].num_vocalic_features,
             num_speakers=3,
             disable_self_dependency=no_self_dependency)
-
-    timestamp = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
-    out_dir = f"{out_dir}/{timestamp}"
+    if ref_date is None or len(ref_date) == 0:
+        ref_date = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
+    out_dir = f"{out_dir}/{ref_date}"
 
     if patience > 0:
         callbacks = [EarlyStoppingCallback(patience=patience)]
@@ -244,6 +258,9 @@ if __name__ == "__main__":
                         help="Number of splits if the model is to be trained for cross-validation.")
     parser.add_argument("--no_link", action="store_true", required=False, default=False,
                         help="Whether to disable semantic link.")
+    parser.add_argument("--ref_date", type=str, required=False, default="",
+                        help="Name of the folder inside out_dir where to save the model and logs. If not informed, the "
+                             "program will create a folder with the timestamp at the execution time.")
 
     args = parser.parse_args()
 
@@ -296,4 +313,5 @@ if __name__ == "__main__":
           features=list(map(format_feature_name, args.features.split(","))),
           gendered=args.gendered,
           cv=args.cv,
-          no_link=args.no_link)
+          no_link=args.no_link,
+          ref_date=args.ref_date)
