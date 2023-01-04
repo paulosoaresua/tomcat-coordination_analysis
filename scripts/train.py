@@ -25,7 +25,7 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
           nu_mo_female: float, a_vo_female: float, b_vo_female: float, vu0: float, vc0: float, va0: float, vaa0: float,
           mo0_male: np.ndarray, mo0_female: np.ndarray, vo0_male: np.ndarray, vo0_female: np.ndarray, vo0: float,
           u_mcmc_iter: int, c_mcmc_iter: int, vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str,
-          no_self_dependency: bool, features: List[str], gendered: bool, cv: int, no_link: bool, ref_date: str):
+          no_self_dependency: bool, features: List[str], gendered: bool, link: bool, cv: int, ref_date: str):
 
     num_features = len(features)
 
@@ -53,7 +53,7 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
 
     dataset.keep_vocalic_features(features)
 
-    if no_link:
+    if not link:
         dataset.disable_speech_semantic_links()
 
     if gendered:
@@ -252,12 +252,12 @@ if __name__ == "__main__":
                         help="Disable latent vocalics dependency on the same speaker.")
     parser.add_argument("--features", type=str, required=False, default="pitch, intensity, jitter, shimmer",
                         help="List of vocalic features to consider. It can be any subset of the default value.")
-    parser.add_argument("--gendered", action="store_true", required=False, default=False,
+    parser.add_argument("--gendered", type=int, required=False, default=0,
                         help="Whether to use a model that considers speakers' genders.")
     parser.add_argument("--cv", type=int, required=False, default=1,
                         help="Number of splits if the model is to be trained for cross-validation.")
-    parser.add_argument("--no_link", action="store_true", required=False, default=False,
-                        help="Whether to disable semantic link.")
+    parser.add_argument("--link", type=int, required=False, default=0,
+                        help="Whether to use a model that considers speech semantic link.")
     parser.add_argument("--ref_date", type=str, required=False, default="",
                         help="Name of the folder inside out_dir where to save the model and logs. If not informed, the "
                              "program will create a folder with the timestamp at the execution time.")
@@ -311,7 +311,7 @@ if __name__ == "__main__":
           out_dir=args.out_dir,
           no_self_dependency=args.no_self_dep,
           features=list(map(format_feature_name, args.features.split(","))),
-          gendered=args.gendered,
+          gendered=args.gendered > 0,
+          link=args.link > 0,
           cv=args.cv,
-          no_link=args.no_link,
           ref_date=args.ref_date)
