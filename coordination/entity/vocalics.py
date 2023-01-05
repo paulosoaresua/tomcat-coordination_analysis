@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 
+from copy import deepcopy
 from datetime import datetime
 from dateutil.parser import parse
 import json
@@ -40,6 +41,25 @@ class Vocalics:
     def __init__(self, features: List[str], utterances_per_subject: Dict[str, List[Utterance]]):
         self.features = features
         self.utterances_per_subject = utterances_per_subject
+
+    def shuffle_utterances_per_subject(self):
+        for subject, utterances in self.utterances_per_subject.items():
+            shuffled_indices = np.arange(len(utterances))
+            np.random.shuffle(shuffled_indices)
+            shuffled_utterances = []
+
+            for original_idx, new_idx in enumerate(shuffled_indices):
+                u_original = utterances[original_idx]
+
+                # The content is replaced with the content of the utterance from another index, but the timestamp is
+                # preserved
+                u_new = deepcopy(utterances[new_idx])
+                u_new.start = u_original.start
+                u_new.end = u_original.end
+
+                shuffled_utterances.append(u_new)
+
+            self.utterances_per_subject[subject] = shuffled_utterances
 
     @classmethod
     def from_asr_messages(cls, asr_messages: List[Any], trial_metadata: TrialMetadata,
