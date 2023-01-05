@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from copy import deepcopy
+
 import numpy as np
 
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
@@ -74,6 +76,15 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
         # A list with the name of vocalic features used.
         self.features = features
 
+        # Store indices of observed vocalics per speaker for fast shuffling
+        self.observed_vocalics_indices_per_speaker = {}
+        for i, u in enumerate(self.observed_vocalics.utterances):
+            if u is not None:
+                if u.subject_id not in self.observed_vocalics_indices_per_speaker:
+                    self.observed_vocalics_indices_per_speaker[u.subject_id] = []
+
+                self.observed_vocalics_indices_per_speaker[u.subject_id].append(i)
+
     @property
     def is_complete(self) -> bool:
         return self.coordination is not None and self.latent_vocalics is not None
@@ -88,6 +99,23 @@ class LatentVocalicsDataSeries(EvidenceDataSeries):
 
     def get_speaker_gender(self, speaker: str):
         return self.genders[speaker]
+
+    def shuffle_observed_vocalics_and_semantic_links_per_speaker(self):
+        # Shuffle vocalic and semantic links per speaker
+        for subject, original_indices in self.observed_vocalics_indices_per_speaker.items():
+            shuffled_indices = original_indices.copy()
+            np.random.shuffle(shuffled_indices)
+
+            shuffled_utterances = deepcopy(self.observed_vocalics.utterances)
+
+            # Shuffling utterances
+            for i in range(len(shuffled_indices)):
+                shuffled_utterances[original_indices[i]] = self.observed_vocalics.utterances[shuffled_indices[i]]
+            self.observed_vocalics.utterances = shuffled_utterances
+            self.observed_vocalics.values[:, original_indices] = self.observed_vocalics.values[:, shuffled_indices]
+
+            # Shuffling semantic links
+            self.speech_semantic_links[original_indices] = self.speech_semantic_links[shuffled_indices]
 
 
 class LatentVocalicsDataset(EvidenceDataset):
@@ -251,6 +279,12 @@ class LatentVocalicsDataset(EvidenceDataset):
     def disable_speech_semantic_links(self):
         for s in self.series:
             s.speech_semantic_links = np.zeros_like(s.speech_semantic_links)
+        self._fill_tensors()
+
+    def shuffle(self):
+        for s in self.series:
+            s.shuffle_observed_vocalics_and_semantic_links_per_speaker()
+
         self._fill_tensors()
 
 

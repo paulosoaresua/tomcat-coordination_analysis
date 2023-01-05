@@ -19,7 +19,7 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
     logs_dir = f"{out_dir}/logs"
     os.makedirs(logs_dir, exist_ok=True)
 
-    trials = glob(f"{trials_dir}/T*")
+    trials = list(glob(f"{trials_dir}/T*"))
 
     mission1_series = []
     mission2_series = []
@@ -27,16 +27,8 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
 
     GENDER_MAP = {"M": 0, "F": 1, "NB": 2, "PNA": 3}
 
-    for i, trial_dir in tqdm(enumerate(trials), desc="Trial:"):
+    for i, trial_dir in tqdm(enumerate(trials), desc="Trial"):
         trial = Trial.from_directory(trial_dir)
-
-        configure_log(True, f"{logs_dir}/{trial.metadata.number}.txt")
-        segmentation = SegmentationMethod.TRUNCATE_CURRENT if no_overlap else SegmentationMethod.KEEP_ALL
-        vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics, segmentation_method=segmentation)
-        speech_semantics_component = SemanticsComponent.from_vocalics(trial.vocalics, semantic_window_size)
-
-        observed_vocalics = vocalics_component.sparse_series(time_steps, trial.metadata.mission_start)
-        speech_semantic_links = speech_semantics_component.to_array(time_steps, trial.metadata.mission_start)
 
         genders = {}
         ages = {}
@@ -47,6 +39,17 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
             ages[player.avatar_color] = player.age
             process_surveys[player.avatar_color] = player.team_process_scale_survey_answers
             satisfaction_surveys[player.avatar_color] = player.team_satisfaction_survey_answers
+
+        configure_log(True, f"{logs_dir}/{trial.metadata.number}.txt")
+        segmentation = SegmentationMethod.TRUNCATE_CURRENT if no_overlap else SegmentationMethod.KEEP_ALL
+
+
+
+        vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics, segmentation_method=segmentation)
+        speech_semantics_component = SemanticsComponent.from_vocalics(trial.vocalics, semantic_window_size)
+
+        observed_vocalics = vocalics_component.sparse_series(time_steps, trial.metadata.mission_start)
+        speech_semantic_links = speech_semantics_component.to_array(time_steps, trial.metadata.mission_start)
 
         series = LatentVocalicsDataSeries(
             uuid=trial.metadata.number,
