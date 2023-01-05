@@ -1,0 +1,32 @@
+{
+  "linked_labels": [
+    {
+      "source": "CriticalVictim",
+      "target": "Move"
+    },
+    {
+      "source": "HelpRequest",
+      "target": "HelpOffer"
+    },
+    {
+      "source": "HelpRequest",
+      "target": "Move"
+    },
+    {
+      "source": "CriticalVictim",
+      "target": "RescueInteractions"
+    },
+    {
+      "source": "Block",
+      "target": "Engineer"
+    },
+    {
+      "source": "Question",
+      "target": "Agreement"
+    },
+    {
+      "source": "HelpRequest",
+      "target": "Agreement"
+    }
+  ]
+}

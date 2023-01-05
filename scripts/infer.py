@@ -12,7 +12,7 @@ from coordination.model.utils.beta_coordination_blending_latent_vocalics import 
 
 
 def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num_jobs: int, out_dir: str,
-          features: List[str], gendered: bool, cv: int, no_link: bool):
+          features: List[str], gendered: bool, link: bool, cv: int):
 
     assert cv >= 1
 
@@ -22,7 +22,7 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
 
     dataset.keep_vocalic_features(features)
 
-    if no_link:
+    if not link:
         dataset.disable_speech_semantic_links()
 
     if gendered:
@@ -86,12 +86,12 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir", type=str, required=True, help="Directory where to save the inferences.")
     parser.add_argument("--features", type=str, required=False, default="pitch, intensity, jitter, shimmer",
                         help="List of vocalic features to consider. It can be any subset of the default value.",)
-    parser.add_argument("--gendered", action="store_true", required=False, default=False,
+    parser.add_argument("--gendered", type=int, required=False, default=0,
                         help="Whether to use a model that considers speakers' genders.")
+    parser.add_argument("--link", type=int, required=False, default=0,
+                        help="Whether to use a model that considers speech semantic link.")
     parser.add_argument("--cv", type=int, required=False, default=1,
                         help="Number of splits if the model is to be trained for cross-validation.")
-    parser.add_argument("--no_link", action="store_true", required=False, default=False,
-                        help="Whether to disable semantic link.")
 
     args = parser.parse_args()
 
@@ -105,6 +105,6 @@ if __name__ == "__main__":
           num_jobs=args.n_jobs,
           out_dir=args.out_dir,
           features=list(map(format_feature_name, args.features.split(","))),
-          gendered=args.gendered,
-          cv=args.cv,
-          no_link=args.no_link)
+          gendered=args.gendered > 0,
+          link=args.link > 0,
+          cv=args.cv)

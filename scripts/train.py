@@ -254,10 +254,10 @@ if __name__ == "__main__":
                         help="List of vocalic features to consider. It can be any subset of the default value.")
     parser.add_argument("--gendered", type=int, required=False, default=0,
                         help="Whether to use a model that considers speakers' genders.")
-    parser.add_argument("--cv", type=int, required=False, default=1,
-                        help="Number of splits if the model is to be trained for cross-validation.")
     parser.add_argument("--link", type=int, required=False, default=0,
                         help="Whether to use a model that considers speech semantic link.")
+    parser.add_argument("--cv", type=int, required=False, default=1,
+                        help="Number of splits if the model is to be trained for cross-validation.")
     parser.add_argument("--ref_date", type=str, required=False, default="",
                         help="Name of the folder inside out_dir where to save the model and logs. If not informed, the "
                              "program will create a folder with the timestamp at the execution time.")

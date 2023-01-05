@@ -29,7 +29,9 @@ def generate_plots(inference_path: str, dataset_path: str, width: str, out_dir: 
         upper_y_values = y_values + np.sqrt(summary.coordination_var)
 
         times_with_obs = [t for t, mask in enumerate(dataset.vocalics_mask[i]) if mask == 1]
+        times_with_links = [t for t, x in enumerate(dataset.speech_semantic_links[i]) if x == 1]
         ax.scatter(times_with_obs, np.ones(len(times_with_obs)) * 1.05, marker="s", s=2, color="tab:purple")
+        ax.scatter(times_with_links, np.ones(len(times_with_links)) * 1.03, marker="s", s=2, color="black")
 
         ax.plot(x_values, y_values, linestyle="--", marker="o", color="tab:red", linewidth=0.5, markersize=2)
         ax.fill_between(x_values, lower_y_values, upper_y_values, color="tab:pink", alpha=0.5)
