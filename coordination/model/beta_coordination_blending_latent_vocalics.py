@@ -274,7 +274,7 @@ class BetaCoordinationBlendingLatentVocalics(
                 inferred_coordination = sampler.generate_samples(initial_sample=initial_sample,
                                                                  num_samples=1,
                                                                  burn_in=train_hyper_parameters.c_mcmc_iter,
-                                                                 retain_every=1)[0, :, 0]
+                                                                 retain_every=1).mean(axis=(0, 2))
                 coordination[:, t] = inferred_coordination
                 acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
 
@@ -332,7 +332,7 @@ class BetaCoordinationBlendingLatentVocalics(
                 inferred_unbounded_coordination = sampler.generate_samples(initial_sample=initial_sample,
                                                                            num_samples=1,
                                                                            burn_in=train_hyper_parameters.u_mcmc_iter,
-                                                                           retain_every=1)[0, :, 0]
+                                                                           retain_every=1).mean(axis=(0, 2))
 
                 unbounded_coordination[:, t] = inferred_unbounded_coordination
                 acceptance_rates[:, t] = sampler.acceptance_rates_[-1]
@@ -425,6 +425,8 @@ class BetaCoordinationBlendingLatentVocalics(
         log_posterior = log_posterior.flatten()
         log_posterior += super()._get_latent_vocalics_term_for_coordination_posterior_unormalized_logprob(
             proposed_coordination_sample, saa, evidence, latent_vocalics, time_step)
+
+        log_posterior += evidence.speech_semantic_links[:, time_step] * np.log(proposed_coordination_sample.flatten())
 
         return log_posterior
 

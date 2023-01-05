@@ -1,6 +1,5 @@
 import argparse
 from glob import glob
-import numpy as np
 import os
 import pickle
 
@@ -8,12 +7,12 @@ from tqdm import tqdm
 
 from coordination.model.coordination_blending_latent_vocalics import LatentVocalicsDataset, LatentVocalicsDataSeries
 from coordination.common.log import configure_log
+from coordination.component.speech.semantics_component import SemanticsComponent
 from coordination.component.speech.vocalics_component import SegmentationMethod, VocalicsComponent
 from coordination.entity.trial import Trial
-from coordination.loader.metadata_reader import SurveyMappings
 
 
-def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap: bool):
+def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap: bool, semantic_window_size: int):
     if not os.path.exists(trials_dir):
         raise Exception(f"Directory {trials_dir} does not exist.")
 
@@ -26,7 +25,6 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
     mission2_series = []
     all_missions_series = []
 
-    AVATAR_COLOR_MAP = ["red", "green", "blue"]
     GENDER_MAP = {"M": 0, "F": 1, "NB": 2, "PNA": 3}
 
     for i, trial_dir in tqdm(enumerate(trials), desc="Trial:"):
@@ -35,8 +33,10 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
         configure_log(True, f"{logs_dir}/{trial.metadata.number}.txt")
         segmentation = SegmentationMethod.TRUNCATE_CURRENT if no_overlap else SegmentationMethod.KEEP_ALL
         vocalics_component = VocalicsComponent.from_vocalics(trial.vocalics, segmentation_method=segmentation)
+        speech_semantics_component = SemanticsComponent.from_vocalics(trial.vocalics, semantic_window_size)
 
         observed_vocalics = vocalics_component.sparse_series(time_steps, trial.metadata.mission_start)
+        speech_semantic_links = speech_semantics_component.to_array(time_steps, trial.metadata.mission_start)
 
         genders = {}
         ages = {}
@@ -56,7 +56,8 @@ def serialize_dataset(trials_dir: str, out_dir: str, time_steps: int, no_overlap
             team_satisfaction_surveys=satisfaction_surveys,
             genders=genders,
             ages=ages,
-            features=trial.vocalics.features
+            features=trial.vocalics.features,
+            speech_semantic_links=speech_semantic_links
         )
 
         if trial.order == 1:
@@ -94,6 +95,8 @@ if __name__ == "__main__":
                         help="Number of time steps (seconds) in each series.")
     parser.add_argument("--no_overlap", action="store_true", required=False, default=False,
                         help="Whether utterances must be trimmed so that they don't overlap.")
+    parser.add_argument("--semantic_window", type=int, required=False, default=5,
+                        help="Window size for semantic link extraction.")
 
     args = parser.parse_args()
-    serialize_dataset(args.trials_dir, args.out_dir, args.time_steps, args.no_overlap)
+    serialize_dataset(args.trials_dir, args.out_dir, args.time_steps, args.no_overlap, args.semantic_window)

@@ -233,6 +233,9 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
 
             ll += (norm(loc=V * mo, scale=so).logpdf(evidence.observed_vocalics[:, :, t]) * M).sum()
 
+        # Term due to a semantic link if any
+        ll += (evidence.speech_semantic_links * np.log(coordination)).sum()
+
         return ll
 
     def _update_parameters(self, evidence: BetaCoordinationLatentVocalicsDataset,
@@ -328,5 +331,8 @@ class GenderedBetaCoordinationBlendingLatentVocalics(BetaCoordinationBlendingLat
                 log_likelihoods = np.zeros(len(states[time_step].coordination))
         else:
             log_likelihoods = super()._calculate_evidence_log_likelihood_at(time_step, states, series)
+
+        # Term due to a semantic link if any
+        log_likelihoods += series.speech_semantic_links[time_step] * np.log(states[time_step].coordination)
 
         return log_likelihoods

@@ -1,6 +1,7 @@
 from typing import List
 
 import argparse
+import json
 import os
 import pickle
 
@@ -11,7 +12,9 @@ from coordination.model.utils.beta_coordination_blending_latent_vocalics import 
 
 
 def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num_jobs: int, out_dir: str,
-          features: List[str], gendered: bool):
+          features: List[str], gendered: bool, link: bool, cv: int):
+
+    assert cv >= 1
 
     # Loading dataset
     with open(dataset_path, "rb") as f:
@@ -19,19 +22,51 @@ def infer(model_path: str, dataset_path: str, num_particles: int, seed: int, num
 
     dataset.keep_vocalic_features(features)
 
+    if not link:
+        dataset.disable_speech_semantic_links()
+
     if gendered:
         dataset.normalize_gender()
-        model = GenderedBetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
     else:
         dataset.normalize_per_subject()
-        model = BetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
 
-    summaries = model.predict(evidence=dataset, num_particles=num_particles, seed=seed, num_jobs=num_jobs)
+    if cv == 1:
+        if gendered:
+            model = GenderedBetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
+        else:
+            model = BetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path)
 
-    os.makedirs(out_dir, exist_ok=True)
+        summaries = model.predict(evidence=dataset, num_particles=num_particles, seed=seed, num_jobs=num_jobs)
 
-    with open(f"{out_dir}/inference_summaries.pkl", "wb") as f:
-        pickle.dump(summaries, f)
+        os.makedirs(out_dir, exist_ok=True)
+
+        with open(f"{out_dir}/inference_summaries.pkl", "wb") as f:
+            pickle.dump(summaries, f)
+    else:
+        for split_num in range(cv):
+            print("")
+            print(f"~~~~~~~~~ SPLIT {split_num}/{cv} ~~~~~~~~~")
+            print("")
+
+            input_dir = f"{model_path}/split_{split_num}"
+            split_out_dir = f"{out_dir}/split_{split_num}"
+
+            with open(f"{input_dir}/split_info.json", "r") as f:
+                json_info = json.load(f)
+
+            test_dataset = dataset.get_subset(json_info["test_indices"])
+            model_path_split = f"{input_dir}/model.pkl"
+            if gendered:
+                model = GenderedBetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path_split)
+            else:
+                model = BetaCoordinationBlendingLatentVocalics.from_pickled_file(model_path_split)
+
+            summaries = model.predict(evidence=test_dataset, num_particles=num_particles, seed=seed, num_jobs=num_jobs)
+
+            os.makedirs(split_out_dir, exist_ok=True)
+
+            with open(f"{split_out_dir}/inference_summaries.pkl", "wb") as f:
+                pickle.dump(summaries, f)
 
 
 if __name__ == "__main__":
@@ -51,8 +86,12 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir", type=str, required=True, help="Directory where to save the inferences.")
     parser.add_argument("--features", type=str, required=False, default="pitch, intensity, jitter, shimmer",
                         help="List of vocalic features to consider. It can be any subset of the default value.",)
-    parser.add_argument("--gendered", action="store_true", required=False, default=False,
+    parser.add_argument("--gendered", type=int, required=False, default=0,
                         help="Whether to use a model that considers speakers' genders.")
+    parser.add_argument("--link", type=int, required=False, default=0,
+                        help="Whether to use a model that considers speech semantic link.")
+    parser.add_argument("--cv", type=int, required=False, default=1,
+                        help="Number of splits if the model is to be trained for cross-validation.")
 
     args = parser.parse_args()
 
@@ -66,4 +105,6 @@ if __name__ == "__main__":
           num_jobs=args.n_jobs,
           out_dir=args.out_dir,
           features=list(map(format_feature_name, args.features.split(","))),
-          gendered=args.gendered)
+          gendered=args.gendered > 0,
+          link=args.link > 0,
+          cv=args.cv)

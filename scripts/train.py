@@ -1,3 +1,4 @@
+import json
 from typing import List
 
 import argparse
@@ -5,6 +6,7 @@ from datetime import datetime
 import pickle
 
 import numpy as np
+from sklearn.model_selection import KFold
 
 from coordination.callback.early_stopping_callback import EarlyStoppingCallback
 from coordination.common.log import TensorBoardLogger
@@ -23,19 +25,36 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
           nu_mo_female: float, a_vo_female: float, b_vo_female: float, vu0: float, vc0: float, va0: float, vaa0: float,
           mo0_male: np.ndarray, mo0_female: np.ndarray, vo0_male: np.ndarray, vo0_female: np.ndarray, vo0: float,
           u_mcmc_iter: int, c_mcmc_iter: int, vu_mcmc_prop: float, vc_mcmc_prop: float, out_dir: str,
-          no_self_dependency: bool, features: List[str],
-          gendered: bool):
+          no_self_dependency: bool, features: List[str], gendered: bool, link: bool, cv: int, ref_date: str):
 
-    assert len(mo0_male) == len(features)
-    assert len(mo0_female) == len(features)
-    assert len(vo0_male) == len(features)
-    assert len(vo0_female) == len(features)
+    num_features = len(features)
+
+    assert len(mo0_male) == 1 or len(mo0_male) == num_features
+    assert len(mo0_female) == 1 or len(mo0_male) == num_features
+    assert len(vo0_male) == 1 or len(mo0_male) == num_features
+    assert len(vo0_female) == 1 or len(mo0_male) == num_features
+    assert cv >= 1
+
+    if len(mo0_male) == 1:
+        mo0_male = np.ones(num_features) * mo0_male[0]
+
+    if len(mo0_female) == 1:
+        mo0_female = np.ones(num_features) * mo0_female[0]
+
+    if len(vo0_male) == 1:
+        vo0_male = np.ones(num_features) * vo0_male[0]
+
+    if len(vo0_female) == 1:
+        vo0_female = np.ones(num_features) * vo0_female[0]
 
     # Loading dataset
     with open(dataset_path, "rb") as f:
         dataset = BetaCoordinationLatentVocalicsDataset.from_latent_vocalics_dataset(pickle.load(f))
 
     dataset.keep_vocalic_features(features)
+
+    if not link:
+        dataset.disable_speech_semantic_links()
 
     if gendered:
         dataset.normalize_gender()
@@ -102,26 +121,59 @@ def train(dataset_path: str, num_train_iter: int, patience: int, seed: int, num_
             num_vocalic_features=dataset.series[0].num_vocalic_features,
             num_speakers=3,
             disable_self_dependency=no_self_dependency)
-
-    timestamp = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
-    out_dir = f"{out_dir}/{timestamp}"
-
-    tb_logger = TensorBoardLogger(f"{out_dir}/tensorboard")
+    if ref_date is None or len(ref_date) == 0:
+        ref_date = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
+    out_dir = f"{out_dir}/{ref_date}"
 
     if patience > 0:
         callbacks = [EarlyStoppingCallback(patience=patience)]
     else:
         callbacks = []
 
-    model.reset_parameters()
-    model.fit(evidence=dataset,
-              train_hyper_parameters=train_hyper_parameters,
-              burn_in=num_train_iter,
-              num_jobs=num_jobs,
-              seed=seed,
-              logger=tb_logger,
-              callbacks=callbacks)
-    model.save(out_dir)
+    if cv == 1:
+        tb_logger = TensorBoardLogger(f"{out_dir}/tensorboard")
+        model.reset_parameters()
+        model.fit(evidence=dataset,
+                  train_hyper_parameters=train_hyper_parameters,
+                  burn_in=num_train_iter,
+                  num_jobs=num_jobs,
+                  seed=seed,
+                  logger=tb_logger,
+                  callbacks=callbacks)
+        model.save(out_dir)
+    else:
+        train_test_splitter = KFold(n_splits=cv, shuffle=True, random_state=seed)
+        X = np.arange(dataset.num_trials)[:, np.newaxis]
+        for split_num, indices in enumerate(train_test_splitter.split(X)):
+            print("")
+            print(f"~~~~~~~~~ SPLIT {split_num}/{cv} ~~~~~~~~~")
+            print("")
+
+            train_indices, test_indices = indices
+
+            split_out_dir = f"{out_dir}/split_{split_num}"
+            tb_logger = TensorBoardLogger(f"{split_out_dir}/tensorboard")
+            tb_logger.add_info("split_num", split_num)
+            tb_logger.add_info("train_indices", train_indices.tolist())
+            tb_logger.add_info("test_indices", test_indices.tolist())
+
+            model.reset_parameters()
+            model.fit(evidence=dataset.get_subset(train_indices),
+                      train_hyper_parameters=train_hyper_parameters,
+                      burn_in=num_train_iter,
+                      num_jobs=num_jobs,
+                      seed=seed,
+                      logger=tb_logger,
+                      callbacks=callbacks)
+            model.save(split_out_dir)
+
+            split_info = {
+                "train_indices": train_indices.tolist(),
+                "test_indices": test_indices.tolist(),
+            }
+
+            with open(f"{split_out_dir}/split_info.json", "w") as f:
+                json.dump(split_info, f)
 
 
 if __name__ == "__main__":
@@ -200,14 +252,22 @@ if __name__ == "__main__":
                         help="Disable latent vocalics dependency on the same speaker.")
     parser.add_argument("--features", type=str, required=False, default="pitch, intensity, jitter, shimmer",
                         help="List of vocalic features to consider. It can be any subset of the default value.")
-    parser.add_argument("--gendered", action="store_true", required=False, default=False,
+    parser.add_argument("--gendered", type=int, required=False, default=0,
                         help="Whether to use a model that considers speakers' genders.")
+    parser.add_argument("--link", type=int, required=False, default=0,
+                        help="Whether to use a model that considers speech semantic link.")
+    parser.add_argument("--cv", type=int, required=False, default=1,
+                        help="Number of splits if the model is to be trained for cross-validation.")
+    parser.add_argument("--ref_date", type=str, required=False, default="",
+                        help="Name of the folder inside out_dir where to save the model and logs. If not informed, the "
+                             "program will create a folder with the timestamp at the execution time.")
 
     args = parser.parse_args()
 
 
     def format_feature_name(name: str):
         return name.strip().lower()
+
 
     def format_vector_param(name: str):
         return float(name.strip().lower())
@@ -251,4 +311,7 @@ if __name__ == "__main__":
           out_dir=args.out_dir,
           no_self_dependency=args.no_self_dep,
           features=list(map(format_feature_name, args.features.split(","))),
-          gendered=args.gendered)
+          gendered=args.gendered > 0,
+          link=args.link > 0,
+          cv=args.cv,
+          ref_date=args.ref_date)
