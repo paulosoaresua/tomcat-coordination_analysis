@@ -45,7 +45,7 @@ class LatentComponentRandomWalk(pm.GaussianRandomWalk):
         p2 = pm.Mixture.dist(w=np.array([0.5, 0.5]), comp_dists=[
             pm.Normal.dist(mu=x_im1[:, 0] * c_i + (1 - c_i) * x_im1[:, 1] + mu, sigma=sigma, shape=(T - 1, C)),
             pm.Normal.dist(mu=x_im1[:, 2] * c_i + (1 - c_i) * x_im1[:, 1] + mu, sigma=sigma, shape=(T - 1, C)),
-        ], shape=(T - 1, N, C)).logp(x_i[:, 1])
+        ], shape=(T - 1, C)).logp(x_i[:, 1])
 
         p3 = pm.Mixture.dist(w=np.array([0.5, 0.5]), comp_dists=[
             pm.Normal.dist(mu=x_im1[:, 0] * c_i + (1 - c_i) * x_im1[:, 2] + mu, sigma=sigma, shape=(T - 1, C)),

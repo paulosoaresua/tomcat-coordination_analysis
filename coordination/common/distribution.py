@@ -1,4 +1,4 @@
-from typing import Union
+from typing import List, Union
 
 import numpy as np
 from scipy.stats import beta as scipy_beta
