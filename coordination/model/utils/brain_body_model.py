@@ -23,34 +23,36 @@ class BrainBodyParticlesSummary(ParticlesSummary):
         summary = cls()
         summary.unbounded_coordination_mean = idata.posterior["unbounded_coordination"].sel(trial=0)[
                                               ::retain_every].mean(
-            dim=["chain", "draw"])
+            dim=["chain", "draw"]).to_numpy()
         summary.coordination_mean = idata.posterior["coordination"].sel(trial=0)[::retain_every].mean(
-            dim=["chain", "draw"])
+            dim=["chain", "draw"]).to_numpy()
         summary.latent_brain_mean = idata.posterior["latent_brain"].sel(trial=0)[::retain_every].mean(
-            dim=["chain", "draw"])
-        summary.latent_body_mean = idata.posterior["latent_body"].sel(trial=0)[::retain_every].mean(
-            dim=["chain", "draw"])
+            dim=["chain", "draw"]).to_numpy()
+        # summary.latent_body_mean = idata.posterior["latent_body"].sel(trial=0)[::retain_every].mean(
+        #     dim=["chain", "draw"])
 
         summary.unbounded_coordination_std = idata.posterior["unbounded_coordination"].sel(trial=0)[
                                              ::retain_every].std(
-            dim=["chain", "draw"])
+            dim=["chain", "draw"]).to_numpy()
         summary.coordination_std = idata.posterior["coordination"].sel(trial=0)[::retain_every].std(
-            dim=["chain", "draw"])
+            dim=["chain", "draw"]).to_numpy()
         summary.latent_brain_std = idata.posterior["latent_brain"].sel(trial=0)[::retain_every].std(
-            dim=["chain", "draw"])
-        summary.latent_body_std = idata.posterior["latent_body"].sel(trial=0)[::retain_every].std(
-            dim=["chain", "draw"])
+            dim=["chain", "draw"]).to_numpy()
+        # summary.latent_body_std = idata.posterior["latent_body"].sel(trial=0)[::retain_every].std(
+        #     dim=["chain", "draw"])
 
         return summary
 
 
 class BrainBodySamples(Samples):
-    unbounded_coordination: np.ndarray
-    coordination: np.ndarray
-    latent_brain: np.ndarray
-    latent_body: np.ndarray
-    observed_brain: np.ndarray
-    observed_body: np.ndarray
+
+    def __init__(self):
+        self.unbounded_coordination: Optional[np.ndarray] = None
+        self.coordination: Optional[np.ndarray] = None
+        self.latent_brain: Optional[np.ndarray] = None
+        self.latent_body: Optional[np.ndarray] = None
+        self.observed_brain: Optional[np.ndarray] = None
+        self.observed_body: Optional[np.ndarray] = None
 
     @property
     def size(self):
@@ -105,12 +107,12 @@ class BrainBodyDataSeries(EvidenceDataSeries):
             self.observed_body_movements[:, i] = self.observed_body_movements[shuffled_indices, i]
 
     def normalize_per_subject(self):
-        mean = self.observed_brain_signals.mean(axis=1)[:, np.newaxis, :]
-        std = self.observed_brain_signals.std(axis=1)[:, np.newaxis, :]
+        mean = self.observed_brain_signals.mean(axis=-1)[:, :, None]
+        std = self.observed_brain_signals.std(axis=-1)[:, :, None]
         self.observed_brain_signals = (self.observed_brain_signals - mean) / std
 
-        mean = self.observed_body_movements.mean(axis=1)[:, np.newaxis, :]
-        std = self.observed_body_movements.std(axis=1)[:, np.newaxis, :]
+        mean = self.observed_body_movements.mean(axis=-1)[:, :, None]
+        std = self.observed_body_movements.std(axis=-1)[:, :, None]
         self.observed_body_movements = (self.observed_body_movements - mean) / std
 
 

@@ -84,6 +84,8 @@ def unbounded_coordination_drift_logp(unbounded_coordination: at.TensorVariable,
 
 class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
 
+    # TODO: I disabled body movement for now
+
     def __init__(self,
                  initial_coordination: float,
                  num_brain_channels: int,
@@ -197,11 +199,11 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
             self.parameters.sd_uc = idata.posterior["sd_uc"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
             self.parameters.sd_brain = idata.posterior["sd_brain"][::retain_every].mean(
                 dim=["chain", "draw"]).to_numpy()
-            self.parameters.sd_body = idata.posterior["sd_body"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
+            # self.parameters.sd_body = idata.posterior["sd_body"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
             self.parameters.sd_obs_brain = idata.posterior["sd_obs_brain"][::retain_every].mean(
                 dim=["chain", "draw"]).to_numpy()
-            self.parameters.sd_obs_body = idata.posterior["sd_obs_body"][::retain_every].mean(
-                dim=["chain", "draw"]).to_numpy()
+            # self.parameters.sd_obs_body = idata.posterior["sd_obs_body"][::retain_every].mean(
+            #     dim=["chain", "draw"]).to_numpy()
 
             return idata
 
@@ -215,9 +217,9 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
             # Parameters to be inferred and shared among time series of brain signal and body movement.
             sd_uc = pm.HalfNormal(name="sd_uc", sigma=1, size=1, observed=self.parameters.sd_uc)
             sd_brain = pm.HalfNormal(name="sd_brain", sigma=1, size=1, observed=self.parameters.sd_brain)
-            sd_body = pm.HalfNormal(name="sd_body", sigma=1, size=1, observed=self.parameters.sd_body)
+            # sd_body = pm.HalfNormal(name="sd_body", sigma=1, size=1, observed=self.parameters.sd_body)
             sd_obs_brain = pm.HalfNormal(name="sd_obs_brain", sigma=1, size=1, observed=self.parameters.sd_obs_brain)
-            sd_obs_body = pm.HalfNormal(name="sd_obs_body", sigma=1, size=1, observed=self.parameters.sd_obs_body)
+            # sd_obs_body = pm.HalfNormal(name="sd_obs_body", sigma=1, size=1, observed=self.parameters.sd_obs_body)
 
             N = evidence.num_trials
             T = evidence.num_time_steps
@@ -248,17 +250,17 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
                                           dims=["trial", "subject", "brain_channel", "time"],
                                           observed=evidence.latent_brain_signals)
 
-            body_params = (at.as_tensor_variable(coordination),
-                           at.as_tensor_variable(sd_body))
-            latent_body = pm.DensityDist("latent_body", *body_params,
-                                         logp=multi_influencers_mixture_logp,
-                                         dims=["trial", "subject", "body_feature", "time"],
-                                         observed=evidence.latent_body_movements)
+            # body_params = (at.as_tensor_variable(coordination),
+            #                at.as_tensor_variable(sd_body))
+            # latent_body = pm.DensityDist("latent_body", *body_params,
+            #                              logp=multi_influencers_mixture_logp,
+            #                              dims=["trial", "subject", "body_feature", "time"],
+            #                              observed=evidence.latent_body_movements)
 
             pm.Normal(name="observed_brain", mu=latent_brain, sigma=sd_obs_brain,
                       dims=("trial", "subject", "brain_channel", "time"), observed=evidence.observed_brain_signals)
-            pm.Normal(name="observed_body", mu=latent_body, sigma=sd_obs_body,
-                      observed=evidence.observed_body_movements)
+            # pm.Normal(name="observed_body", mu=latent_body, sigma=sd_obs_body,
+            #           observed=evidence.observed_body_movements)
 
         return model
 

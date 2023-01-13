@@ -13,33 +13,10 @@ from tqdm import tqdm
 
 logger = logging.getLogger()
 
-COLUMNS = [
-    "S1-D1",
-    "S1-D2",
-    "S2-D1",
-    "S2-D3",
-    "S3-D1",
-    "S3-D3",
-    "S3-D4",
-    "S4-D2",
-    "S4-D4",
-    "S4-D5",
-    "S5-D3",
-    "S5-D4",
-    "S5-D6",
-    "S6-D4",
-    "S6-D6",
-    "S6-D7",
-    "S7-D5",
-    "S7-D7",
-    "S8-D6",
-    "S8-D7"
-]
-
 SUBJECTS = ["lion", "tiger", "leopard"]
 
 
-def parse_brain_data(data_dir: str, task: str, num_time_steps: int, frequency: float, out_dir: str):
+def parse_body_data(data_dir: str, task: str, num_time_steps: int, frequency: float, out_dir: str):
     experiment_dirs = glob(f"{data_dir}/exp_*")
 
     table = []
@@ -51,30 +28,31 @@ def parse_brain_data(data_dir: str, task: str, num_time_steps: int, frequency: f
         initial_timestamp_json = load_json(f"{experiment_dir}/baseline_tasks/metadata.json")
         initial_timestamp = parse(initial_timestamp_json[task]["initial_timestamp_utc"])
         # Remove time zone info after conversion to allow direct usage with a pandas DataFrame.
-        initial_timestamp = change_time_zone(initial_timestamp, "MST").replace(tzinfo=None)
+        # initial_timestamp = change_time_zone(initial_timestamp, "MST").replace(tzinfo=None)
 
         for i, subject in enumerate(SUBJECTS):
-            nirs_df = pd.read_csv(f"{experiment_dir}/{subject}/NIRS_filtered.csv", delimiter="\t",
-                                  parse_dates=["human_readable_time"])
+            if not os.path.exists(f"{experiment_dir}/{subject}/motion_energy.csv"):
+                continue
 
-            nirs_df_task = nirs_df[nirs_df["human_readable_time"] >= initial_timestamp].reset_index(drop=True)
+            body_df = pd.read_csv(f"{experiment_dir}/{subject}/motion_energy.csv", delimiter=",",
+                                  parse_dates=["timestamp"])
 
-            hbO_columns = list(map(lambda x: f"{x}_HbO", COLUMNS))
-            hbR_columns = list(map(lambda x: f"{x}_HbR", COLUMNS))
+            body_df_task = body_df[body_df["timestamp"] >= initial_timestamp].reset_index(drop=True)
+            body_df_task["total_energy"] = body_df_task.sum(axis="columns", numeric_only=True)
 
             # We move a window of size 1/ freq, and collect the average of measurements in that window if any.
             window_start_ts = initial_timestamp
 
-            avg_hb_total = np.zeros((len(COLUMNS), num_time_steps))
+            avg_total_energy = np.zeros((1, num_time_steps))
             measurements_per_window = np.zeros(num_time_steps)
             for t in range(num_time_steps):
                 window_end_ts = window_start_ts + timedelta(seconds=1.0 / frequency)
                 if t < num_time_steps - 1:
-                    tmp = nirs_df_task[(nirs_df_task["human_readable_time"] >= window_start_ts) &
-                                       (nirs_df_task["human_readable_time"] < window_end_ts)]
+                    tmp = body_df_task[(body_df_task["timestamp"] >= window_start_ts) &
+                                       (body_df_task["timestamp"] < window_end_ts)]
                 else:
-                    tmp = nirs_df_task[(nirs_df_task["human_readable_time"] >= window_start_ts) &
-                                       (nirs_df_task["human_readable_time"] <= window_end_ts)]
+                    tmp = body_df_task[(body_df_task["timestamp"] >= window_start_ts) &
+                                       (body_df_task["timestamp"] <= window_end_ts)]
 
                 if len(tmp) == 0:
                     # No measurement in the window
@@ -82,21 +60,21 @@ def parse_brain_data(data_dir: str, task: str, num_time_steps: int, frequency: f
                           f"Between {window_start_ts.isoformat()} and {window_end_ts.isoformat()}"
                     logger.warning(msg)
                 else:
-                    avg_hb_total[:, t] = (tmp[hbO_columns].values + tmp[hbR_columns].values).mean(axis=0)
+                    avg_total_energy[:, t] = tmp["total_energy"].mean()
 
                 measurements_per_window[t] = len(tmp)
 
                 window_start_ts = window_start_ts + timedelta(seconds=1.0 / frequency)
 
             table.append(
-                [experiment_id, subject, frequency, avg_hb_total.tolist(), (measurements_per_window == 0).sum(),
+                [experiment_id, subject, frequency, avg_total_energy.tolist(), (measurements_per_window == 0).sum(),
                  measurements_per_window.tolist(), initial_timestamp.isoformat()])
 
-    df = pd.DataFrame(table, columns=["experiment_id", "subject", "frequency_hz", "avg_hb_total", "no_measurement",
+    df = pd.DataFrame(table, columns=["experiment_id", "subject", "frequency_hz", "total_energy", "no_measurement",
                                       "measurements_per_window", "initial_timestamp"])
     out_dir = f"{out_dir}/{task}"
     os.makedirs(out_dir, exist_ok=True)
-    df.to_csv(f"{out_dir}/brain_signals.csv")
+    df.to_csv(f"{out_dir}/body_movements.csv")
 
 
 def change_time_zone(dt, new_time_zone: str):
@@ -130,4 +108,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    parse_brain_data(args.data_dir, args.task, args.n_time_steps, args.freq, args.out_dir)
+    parse_body_data(args.data_dir, args.task, args.n_time_steps, args.freq, args.out_dir)
