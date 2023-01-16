@@ -166,7 +166,6 @@ class LatentVocalicsDataset(EvidenceDataset):
         self.enable_self_dependency()
 
         self.previous_vocalics_from_other = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
-        self.previous_vocalics_from_self_mask = np.zeros_like(self.previous_vocalics_from_other)
         self.next_vocalics_from_other = np.ones((num_trials, num_time_steps)).astype(np.int) * -1
 
         self.genders = np.ones((num_trials, num_time_steps)) * -1

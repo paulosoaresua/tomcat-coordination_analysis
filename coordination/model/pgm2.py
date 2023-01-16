@@ -1,12 +1,13 @@
 from __future__ import annotations
 from typing import Any, Generic, List, Optional, TypeVar
 
+import arviz as az
 import os
 import pickle
 
 from sklearn.base import BaseEstimator
 
-from coordination.common.dataset import EvidenceDataset
+from coordination.common.dataset import EvidenceDataSeries
 
 
 class Samples:
@@ -34,13 +35,13 @@ class PGM2(BaseEstimator, Generic[SP, S]):
         with open(f"{out_dir}/model.pkl", "wb") as f:
             pickle.dump(self, f)
 
-    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int]) -> SP:
+    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
         raise NotImplementedError
 
-    def fit(self, evidence: EvidenceDataset, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int], retain_every: int, num_jobs: int):
+    def fit(self, evidence: EvidenceDataSeries, burn_in: int, num_samples: int, num_chains: int,
+            seed: Optional[int], retain_every: int, num_jobs: int) -> az.InferenceData:
         raise NotImplementedError
-
-    def predict(self, evidence: EvidenceDataset, num_samples: int, burn_in: int, num_chains: int, seed: Optional[int],
-                retain_every: int, num_jobs: int) -> List[S]:
-        raise NotImplementedError
+    #
+    # def predict(self, evidence: EvidenceDataset, num_samples: int, burn_in: int, num_chains: int, seed: Optional[int],
+    #             retain_every: int, num_jobs: int) -> List[S]:
+    #     raise NotImplementedError

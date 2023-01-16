@@ -44,7 +44,7 @@ def fit(brain_data_path: str, body_data_path: str, num_time_steps: int, initial_
         samples.observed_body = body_movements
 
     evidence = BrainBodyDataset.from_samples(samples)
-    evidence.normalize_per_subject()
+    # evidence.normalize_per_subject()
 
     if ref_date is None or len(ref_date) == 0:
         ref_date = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")

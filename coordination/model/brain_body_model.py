@@ -120,7 +120,7 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
             "disable_self_dependency": disable_self_dependency
         }
 
-    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int]) -> BrainBodySamples:
+    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> BrainBodySamples:
         samples = BrainBodySamples()
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
         samples.coordination = np.zeros((num_series, num_time_steps))
@@ -230,7 +230,7 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
                                                     logp=unbounded_coordination_drift_logp,
                                                     initval=np.ones((N, T)) * logit(self.initial_coordination),
                                                     dims=["trial", "time"],
-                                                    observed=evidence.latent_body_movements)
+                                                    observed=evidence.unbounded_coordination)
 
             mean_coordination = pm.Deterministic("mean_coordination", pm.math.sigmoid(unbounded_coordination),
                                                  dims=["trial", "time"])
