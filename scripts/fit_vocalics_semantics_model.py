@@ -12,7 +12,7 @@ from ast import literal_eval
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scripts.formatting import set_size
+# from scripts.formatting import set_size
 
 from coordination.model.vocalics_semantic_model import VocalicsSemanticModel
 from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
@@ -67,7 +67,7 @@ def fit(dataset_path: str, initial_coordination: float, burn_in: int,
             [evidence.series[i].uuid, isummary.coordination_mean.tolist(), np.sqrt(isummary.coordination_var).tolist(),
              isummary.coordination_mean.mean(), np.sqrt(isummary.coordination_var).mean()])
 
-        plot_coordination(f"{out_dir}/plots", evidence.series[i], isummary)
+        # plot_coordination(f"{out_dir}/plots", evidence.series[i], isummary)
 
     df = pd.DataFrame(result_table,
                       columns=["experiment_id", "coordination_means", "coordination_stds", "avg_coordination_mean",
@@ -102,28 +102,28 @@ def fit_helper(evidence: BetaCoordinationLatentVocalicsDataSeries, initial_coord
     return idata
 
 
-def plot_coordination(out_dir: str, series: BetaCoordinationLatentVocalicsDataSeries, isummary):
-    os.makedirs(out_dir, exist_ok=True)
-    fig, ax = plt.subplots(1, 1, figsize=set_size(800, fraction=1, subplots=(1, 1)))
-
-    x_values = np.arange(len(isummary.coordination_mean))
-    y_values = isummary.coordination_mean
-    lower_y_values = y_values - np.sqrt(isummary.coordination_var)
-    upper_y_values = y_values + np.sqrt(isummary.coordination_var)
-
-    times_with_obs = [t for t, mask in enumerate(series.vocalics_mask) if mask == 1]
-    times_with_links = series.speech_semantic_links_times
-    ax.scatter(times_with_obs, np.ones(len(times_with_obs)) * 1.05, marker="s", s=2, color="tab:purple")
-    ax.scatter(times_with_links, np.ones(len(times_with_links)) * 1.03, marker="s", s=2, color="black")
-
-    ax.plot(x_values, y_values, linestyle="--", marker="o", color="tab:red", linewidth=0.5, markersize=2)
-    ax.fill_between(x_values, lower_y_values, upper_y_values, color="tab:pink", alpha=0.5)
-    ax.set_xlim([-0.1, x_values[-1] + 0.1])
-    ax.set_ylim([-0.05, 1.1])
-    ax.set_xlabel(r"Time Step (seconds)")
-    ax.set_ylabel(r"Coordination")
-    fig.savefig(f"{out_dir}/{series.uuid}.pdf", format='pdf', bbox_inches='tight')
-    plt.close()
+# def plot_coordination(out_dir: str, series: BetaCoordinationLatentVocalicsDataSeries, isummary):
+#     os.makedirs(out_dir, exist_ok=True)
+#     fig, ax = plt.subplots(1, 1, figsize=set_size(800, fraction=1, subplots=(1, 1)))
+#
+#     x_values = np.arange(len(isummary.coordination_mean))
+#     y_values = isummary.coordination_mean
+#     lower_y_values = y_values - np.sqrt(isummary.coordination_var)
+#     upper_y_values = y_values + np.sqrt(isummary.coordination_var)
+#
+#     times_with_obs = [t for t, mask in enumerate(series.vocalics_mask) if mask == 1]
+#     times_with_links = series.speech_semantic_links_times
+#     ax.scatter(times_with_obs, np.ones(len(times_with_obs)) * 1.05, marker="s", s=2, color="tab:purple")
+#     ax.scatter(times_with_links, np.ones(len(times_with_links)) * 1.03, marker="s", s=2, color="black")
+#
+#     ax.plot(x_values, y_values, linestyle="--", marker="o", color="tab:red", linewidth=0.5, markersize=2)
+#     ax.fill_between(x_values, lower_y_values, upper_y_values, color="tab:pink", alpha=0.5)
+#     ax.set_xlim([-0.1, x_values[-1] + 0.1])
+#     ax.set_ylim([-0.05, 1.1])
+#     ax.set_xlabel(r"Time Step (seconds)")
+#     ax.set_ylabel(r"Coordination")
+#     fig.savefig(f"{out_dir}/{series.uuid}.pdf", format='pdf', bbox_inches='tight')
+#     plt.close()
 
 
 if __name__ == "__main__":
