@@ -5,10 +5,10 @@ import numpy as np
 from scipy.stats import lognorm
 
 from coordination.common.distribution import truncnorm
-from coordination.common.utils import set_seed
+from coordination.common.utils import set_random_seed
 from coordination.inference.mcmc import MCMC
 
-set_seed(0)
+set_random_seed(0)
 
 NUM_SAMPLES = 100
 v = np.ones(NUM_SAMPLES) * 0.09

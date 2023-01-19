@@ -6,7 +6,7 @@ import pickle
 
 import numpy as np
 
-from coordination.common.utils import set_seed
+from coordination.common.utils import set_random_seed
 from coordination.model.beta_coordination_blending_latent_vocalics import BetaCoordinationBlendingLatentVocalics
 from coordination.model.gendered_beta_coordination_blending_latent_vocalics import \
     GenderedBetaCoordinationBlendingLatentVocalics
@@ -40,7 +40,7 @@ def compare(model_path: str, dataset_path: str, num_particles: int, seed: int, n
 
     print("")
     print("Sham Dataset")
-    set_seed(seed)
+    set_random_seed(seed)
     for i in range(num_shuffles):
         print("")
         print(f"~~~~~ SHUFFLE {i + 1}/{num_shuffles} ~~~~~")

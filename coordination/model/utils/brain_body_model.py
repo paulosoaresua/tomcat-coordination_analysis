@@ -21,24 +21,24 @@ class BrainBodyParticlesSummary(ParticlesSummary):
     @classmethod
     def from_inference_data(cls, idata: Any, retain_every: int = 1) -> BrainBodyParticlesSummary:
         summary = cls()
-        summary.unbounded_coordination_mean = idata.posterior["unbounded_coordination"].sel(trial=0)[
+        summary.unbounded_coordination_mean = idata.posterior["unbounded_coordination"][
                                               ::retain_every].mean(
             dim=["chain", "draw"]).to_numpy()
-        summary.coordination_mean = idata.posterior["coordination"].sel(trial=0)[::retain_every].mean(
+        summary.coordination_mean = idata.posterior["coordination"][::retain_every].mean(
             dim=["chain", "draw"]).to_numpy()
-        summary.latent_brain_mean = idata.posterior["latent_brain"].sel(trial=0)[::retain_every].mean(
+        summary.latent_brain_mean = idata.posterior["latent_brain"][::retain_every].mean(
             dim=["chain", "draw"]).to_numpy()
-        # summary.latent_body_mean = idata.posterior["latent_body"].sel(trial=0)[::retain_every].mean(
+        # summary.latent_body_mean = idata.posterior["latent_body"][::retain_every].mean(
         #     dim=["chain", "draw"])
 
-        summary.unbounded_coordination_std = idata.posterior["unbounded_coordination"].sel(trial=0)[
+        summary.unbounded_coordination_std = idata.posterior["unbounded_coordination"][
                                              ::retain_every].std(
             dim=["chain", "draw"]).to_numpy()
-        summary.coordination_std = idata.posterior["coordination"].sel(trial=0)[::retain_every].std(
+        summary.coordination_std = idata.posterior["coordination"][::retain_every].std(
             dim=["chain", "draw"]).to_numpy()
-        summary.latent_brain_std = idata.posterior["latent_brain"].sel(trial=0)[::retain_every].std(
+        summary.latent_brain_std = idata.posterior["latent_brain"][::retain_every].std(
             dim=["chain", "draw"]).to_numpy()
-        # summary.latent_body_std = idata.posterior["latent_body"].sel(trial=0)[::retain_every].std(
+        # summary.latent_body_std = idata.posterior["latent_body"][::retain_every].std(
         #     dim=["chain", "draw"])
 
         return summary
@@ -232,6 +232,7 @@ class BrainBodyModelParameters:
 
     def __init__(self):
         self.sd_uc = None
+        self.sd_c = None
         self.sd_brain = None
         self.sd_body = None
         self.sd_obs_brain = None
@@ -239,6 +240,7 @@ class BrainBodyModelParameters:
 
     def reset(self):
         self.sd_uc = None
+        self.sd_c = None
         self.sd_brain = None
         self.sd_body = None
         self.sd_obs_brain = None

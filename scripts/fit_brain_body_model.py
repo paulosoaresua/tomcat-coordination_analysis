@@ -10,7 +10,11 @@ import numpy as np
 import pandas as pd
 
 from coordination.model.brain_body_model import BrainBodyModel
-from coordination.model.utils.brain_body_model import BrainBodyDataset, BrainBodySamples, BrainBodyParticlesSummary
+from coordination.model.utils.brain_body_model import BrainBodyDataset, BrainBodySamples, BrainBodyParticlesSummary, \
+    BrainBodyDataSeries
+
+import matplotlib.pyplot as plt
+from scripts.formatting import set_size
 
 
 def fit(brain_data_path: str, body_data_path: str, num_time_steps: int, initial_coordination: float, burn_in: int,
@@ -54,56 +58,63 @@ def fit(brain_data_path: str, body_data_path: str, num_time_steps: int, initial_
     # Fit and save each one of the trials
     inference_data = []
     result_table = []
-    for i in range(evidence.num_trials):
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    trials = [data_idx] if data_idx >= 0 else evidence.num_trials
+    for i in trials:
         print("")
         print(f"Trial {i + 1}/{evidence.num_trials}: {experiments[i]}")
 
-        idata, isummaries = fit_helper(evidence=evidence.get_subset([i]),
-                                       initial_coordination=initial_coordination,
-                                       burn_in=burn_in,
-                                       num_samples=num_samples,
-                                       num_chains=num_chains,
-                                       num_jobs=num_inference_jobs,
-                                       seed=seed)
+        idata = fit_helper(evidence=evidence.series[i],
+                           initial_coordination=initial_coordination,
+                           burn_in=burn_in,
+                           num_samples=num_samples,
+                           num_chains=num_chains,
+                           num_jobs=num_inference_jobs,
+                           seed=seed)
 
-        inference_data.extend(idata)
+        isummary = BrainBodyParticlesSummary.from_inference_data(idata)
+
+        inference_data.append(idata)
         result_table.append(
-            [experiments[i], isummaries[0].coordination_mean.tolist(), isummaries[0].coordination_std.tolist(),
-             isummaries[0].coordination_mean.mean(), isummaries[0].coordination_std.mean()])
+            [experiments[i], isummary.coordination_mean.tolist(), isummary.coordination_std.tolist(),
+             isummary.coordination_mean.mean(), isummary.coordination_std.mean()])
 
-    os.makedirs(out_dir, exist_ok=True)
-    with open(f"{out_dir}/inference_data.pkl", "wb") as f:
-        pickle.dump(inference_data, f)
+        plot_coordination(f"{out_dir}/plots", evidence.series[i], isummary)
 
     df = pd.DataFrame(result_table,
                       columns=["experiment_id", "coordination_means", "coordination_stds", "avg_coordination_mean",
                                "avg_coordination_std"])
-    df.to_csv(f"{out_dir}/inference_table.csv")
+
+    if data_idx >= 0:
+        df.to_csv(f"{out_dir}/inference_table_{data_idx}.csv")
+        with open(f"{out_dir}/inference_data_{data_idx}.pkl", "wb") as f:
+            pickle.dump(inference_data, f)
+    else:
+        df.to_csv(f"{out_dir}/inference_table.csv")
+        with open(f"{out_dir}/inference_data.pkl", "wb") as f:
+            pickle.dump(inference_data, f)
 
 
-def fit_helper(evidence: BrainBodyDataset, initial_coordination: float, burn_in: int, num_samples: int, num_chains: int,
+def fit_helper(evidence: BrainBodyDataSeries, initial_coordination: float, burn_in: int, num_samples: int,
+               num_chains: int,
                num_jobs: int, seed: int):
     model = BrainBodyModel(
         initial_coordination=initial_coordination,
-        num_brain_channels=evidence.observed_brain_signals.shape[2],
-        num_subjects=evidence.observed_brain_signals.shape[1]
+        num_brain_channels=evidence.observed_brain_signals.shape[1],
+        num_subjects=evidence.observed_brain_signals.shape[0]
     )
 
-    inference_data = []
-    inference_summaries = []
-    for trial in range(evidence.num_trials):
-        model.parameters.reset()
-        idata = model.fit(evidence=evidence.get_subset([trial]),
-                          burn_in=burn_in,
-                          num_samples=num_samples,
-                          num_chains=num_chains,
-                          num_jobs=num_jobs,
-                          seed=seed)
+    model.parameters.reset()
+    idata = model.fit(evidence=evidence,
+                      burn_in=burn_in,
+                      num_samples=num_samples,
+                      num_chains=num_chains,
+                      num_jobs=num_jobs,
+                      seed=seed)
 
-        inference_data.append(idata)
-        inference_summaries.append(BrainBodyParticlesSummary.from_inference_data(idata))
-
-    return inference_data, inference_summaries
+    return idata
 
 
 def vec_linspace(start, stop, N):
@@ -217,6 +228,26 @@ def data_frame_to_ndarrays(data_df: pd.DataFrame, num_time_steps: int):
     body_masks = np.array(all_body_masks)
 
     return brain_signals, brain_masks, body_movements, body_masks, experiments
+
+
+def plot_coordination(out_dir: str, series: BrainBodyDataSeries, isummary):
+    os.makedirs(out_dir, exist_ok=True)
+    fig, ax = plt.subplots(1, 1, figsize=set_size(800, fraction=1, subplots=(1, 1)))
+
+    x_values = np.arange(len(isummary.coordination_mean))
+    y_values = isummary.coordination_mean
+    lower_y_values = y_values - isummary.coordination_std
+    upper_y_values = y_values + isummary.coordination_std
+
+    ax.plot(x_values, y_values, linestyle="--", marker="o", color="tab:red", linewidth=0.5, markersize=2)
+    ax.fill_between(x_values, lower_y_values, upper_y_values, color="tab:pink", alpha=0.5)
+    ax.set_xlim([-0.1, x_values[-1] + 0.1])
+    ax.set_ylim([-0.05, 1.1])
+    ax.set_xlabel(r"Time Step (seconds)")
+    ax.set_ylabel(r"Coordination")
+    # fig.savefig(f"{out_dir}/{series.uuid}.pdf", format='pdf', bbox_inches='tight')
+    # plt.close()
+    plt.show()
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ from typing import Callable, List, Optional
 import numpy as np
 
 from coordination.common.dataset import EvidenceDataSeries
-from coordination.common.utils import set_seed
+from coordination.common.utils import set_random_seed
 
 
 class Particles:
@@ -43,7 +43,7 @@ class ParticleFilter:
 
     def reset_state(self):
         self.states = []
-        set_seed(self.seed)
+        set_random_seed(self.seed)
 
     def next(self, series: EvidenceDataSeries):
         next_time_step = len(self.states)
