@@ -7,11 +7,6 @@ from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
 
-# For numerical stability
-EPSILON = 1e-6
-MIN_COORDINATION = 2 * EPSILON
-MAX_COORDINATION = 1 - MIN_COORDINATION
-
 
 def serialized_logp_with_self_dependency(serialized_component: Any,
                                          initial_mean: Any,
@@ -92,7 +87,8 @@ class SerializedComponent:
                      seed: Optional[int], time_scale_density: float,
                      coordination: np.ndarray) -> SerializedComponentSamples:
 
-        assert self.dim_value == self.parameters.mean_a0.ndim
+        assert self.dim_value == self.parameters.mean_a0.shape[0]
+        assert self.dim_value == self.parameters.sd_aa.shape[0]
 
         set_random_seed(seed)
 
