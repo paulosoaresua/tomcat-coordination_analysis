@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 import arviz as az
 import numpy as np
 import pymc as pm
+import pytensor.tensor as pt
 
 from coordination.model.components.coordination_component import BetaGaussianCoordinationComponent, \
     BetaGaussianCoordinationComponentSamples
@@ -23,9 +24,42 @@ class BrainBodySamples:
         self.obs_body = obs_body
 
 
-class BrainBodyModel2:
+class BrainBodySeries:
 
-    def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int, self_dependent: bool = True):
+    def __init__(self, obs_brain: np.ndarray, brain_mask: np.ndarray, brain_prev_time: np.ndarray,
+                 obs_body: np.ndarray, body_mask: np.ndarray, body_prev_time: np.ndarray):
+        self.obs_brain = obs_brain
+        self.brain_mask = brain_mask
+        self.brain_prev_time = brain_prev_time
+        self.obs_body = obs_body
+        self.body_mask = body_mask
+        self.body_prev_time = body_prev_time
+
+    @property
+    def num_time_steps(self) -> int:
+        return self.obs_brain.shape[-1]
+
+    @property
+    def num_brain_channels(self) -> int:
+        return self.obs_brain.shape[-2]
+
+    @property
+    def num_subjects(self) -> int:
+        return self.obs_brain.shape[-3]
+
+    @property
+    def brain_prev_time_mask(self) -> np.ndarray:
+        return np.where(self.brain_prev_time == -1, 0, 1)
+
+    @property
+    def body_prev_time_mask(self) -> np.ndarray:
+        return np.where(self.body_prev_time == -1, 0, 1)
+
+
+class BrainBodyModel:
+
+    def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int,
+                 self_dependent: bool = True):
         self.num_subjects = num_subjects
         self.num_brain_channels = num_brain_channels
 
@@ -61,8 +95,11 @@ class BrainBodyModel2:
 
         return samples
 
-    def fit(self, evidence: BrainBodyDataSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int], retain_every: int = 1, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
+    def fit(self, evidence: BrainBodySeries, burn_in: int, num_samples: int, num_chains: int,
+            seed: Optional[int], num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
+        assert evidence.num_subjects == self.num_subjects
+        assert evidence.num_brain_channels == self.num_brain_channels
+
         coords = {"subject": np.arange(self.num_subjects),
                   "brain_channel": np.arange(self.num_brain_channels), "body_feature": np.arange(1),
                   "time": np.arange(evidence.num_time_steps)}
@@ -70,10 +107,16 @@ class BrainBodyModel2:
         model = pm.Model(coords=coords)
         with model:
             coordination = self.coordination_cpn.update_pymc_model(time_dimension="time")
-            latent_brain = self.latent_brain_cpn.update_pymc_model(coordination, ...)
-            latent_body = self.latent_body_cpn.update_pymc_model(coordination, ...)
-            self.obs_brain_cpn.update_pymc_model(latent_brain, ["subject", "brain_channel"], ...)
-            self.obs_body_cpn.update_pymc_model(latent_body, ["subject", "brain_channel"], ...)
+            latent_brain = self.latent_brain_cpn.update_pymc_model(coordination, pt.constant(evidence.brain_prev_time),
+                                                                   pt.constant(evidence.brain_prev_time_mask),
+                                                                   pt.constant(evidence.brain_mask),
+                                                                   "subject", "brain_channel", "time")
+            latent_body = self.latent_body_cpn.update_pymc_model(coordination, pt.constant(evidence.body_prev_time),
+                                                                   pt.constant(evidence.body_prev_time_mask),
+                                                                   pt.constant(evidence.body_mask),
+                                                                   "subject", "body_feature", "time")
+            self.obs_brain_cpn.update_pymc_model(latent_brain, ["subject", "brain_channel"], evidence.obs_brain)
+            self.obs_body_cpn.update_pymc_model(latent_body, ["subject", "body_feature"], evidence.obs_body)
 
             idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
