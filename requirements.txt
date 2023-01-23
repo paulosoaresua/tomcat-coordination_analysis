@@ -64,9 +64,9 @@ pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pydub==0.25.1
 Pygments==2.14.0
-pymc==5.0.1
+pymc==5.0.2
 pyparsing==3.0.9
-pytensor==2.8.11
+pytensor==2.9.1
 python-dateutil==2.8.2
 pytz==2022.7
 pyzmq==25.0.0
@@ -98,11 +98,3 @@ xarray==2022.12.0
 xarray-einstats==0.4.0
 yattag==1.15.0
 zipp==3.11.0
-
-zlib~=1.2.13
-pip~=22.3.1
-wheel~=0.37.1
-openssl~=1.1.1s
-setuptools~=65.5.0
-certifi~=2022.12.7
-python~=3.9.15

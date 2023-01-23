@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import arviz as az
 import numpy as np
@@ -56,6 +56,50 @@ class BrainBodySeries:
         return np.where(self.body_prev_time == -1, 0, 1)
 
 
+class BrainBodyInferenceSummary:
+
+    def __init__(self):
+        self.unbounded_coordination_means = np.array([])
+        self.coordination_means = np.array([])
+        self.latent_brain_means = np.array([])
+        self.latent_body_means = np.array([])
+
+        self.unbounded_coordination_sds = np.array([])
+        self.coordination_sds = np.array([])
+        self.latent_brain_sds = np.array([])
+        self.latent_body_sds = np.array([])
+
+    @classmethod
+    def from_inference_data(cls, idata: Any, retain_every: int = 1) -> BrainBodyInferenceSummary:
+        summary = cls()
+
+        if "unbounded_coordination" in idata.posterior:
+            summary.unbounded_coordination_means = idata.posterior["unbounded_coordination"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.unbounded_coordination_sds = idata.posterior["unbounded_coordination"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+        if "coordination" in idata.posterior:
+            summary.coordination_means = idata.posterior["coordination"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.coordination_sds = idata.posterior["coordination"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+        if "latent_brain" in idata.posterior:
+            summary.latent_brain_means = idata.posterior["latent_brain"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.latent_brain_sds = idata.posterior["latent_brain"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+        if "latent_body" in idata.posterior:
+            summary.latent_body_means = idata.posterior["latent_body"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.latent_body_sds = idata.posterior["latent_body"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+        return summary
+
+
 class BrainBodyModel:
 
     def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int,
@@ -106,17 +150,17 @@ class BrainBodyModel:
 
         model = pm.Model(coords=coords)
         with model:
-            coordination = self.coordination_cpn.update_pymc_model(time_dimension="time")
+            _, coordination = self.coordination_cpn.update_pymc_model(time_dimension="time")
             latent_brain = self.latent_brain_cpn.update_pymc_model(coordination, pt.constant(evidence.brain_prev_time),
                                                                    pt.constant(evidence.brain_prev_time_mask),
                                                                    pt.constant(evidence.brain_mask),
                                                                    "subject", "brain_channel", "time")
             latent_body = self.latent_body_cpn.update_pymc_model(coordination, pt.constant(evidence.body_prev_time),
-                                                                   pt.constant(evidence.body_prev_time_mask),
-                                                                   pt.constant(evidence.body_mask),
-                                                                   "subject", "body_feature", "time")
-            self.obs_brain_cpn.update_pymc_model(latent_brain, ["subject", "brain_channel"], evidence.obs_brain)
-            self.obs_body_cpn.update_pymc_model(latent_body, ["subject", "body_feature"], evidence.obs_body)
+                                                                 pt.constant(evidence.body_prev_time_mask),
+                                                                 pt.constant(evidence.body_mask),
+                                                                 "subject", "body_feature", "time")
+            self.obs_brain_cpn.update_pymc_model(latent_brain, [self.num_subjects, self.num_brain_channels], evidence.obs_brain)
+            self.obs_body_cpn.update_pymc_model(latent_body, [self.num_subjects, 1], evidence.obs_body)
 
             idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)

@@ -55,9 +55,9 @@ class BetaGaussianCoordinationComponent:
         # A Beta distribution is only valid if var < (1 - mean) * mean. Since we use the sigmoid(unbounded coord.) as
         # the mean of a beta distribution, we have to make sure to adjust the variance properly to prevent an
         # ill-defined distribution. We also clip the mean, so it's never zero or one.
-        mean_coordination = np.clip(sigmoid(samples.unbounded_coordination[:, t]), MIN_COORDINATION, MAX_COORDINATION)
+        mean_coordination = np.clip(sigmoid(samples.unbounded_coordination), MIN_COORDINATION, MAX_COORDINATION)
         var_coordination = np.minimum(self.parameters.sd_c ** 2, 0.5 * mean_coordination * (1 - mean_coordination))
-        samples.coordination = beta(mean_coordination, var_coordination)
+        samples.coordination = beta(mean_coordination, var_coordination).rvs(size=(num_series, num_time_steps))
 
         return samples
 
