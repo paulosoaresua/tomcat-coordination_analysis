@@ -73,6 +73,8 @@ class BrainBodyInferenceSummary:
     def from_inference_data(cls, idata: Any, retain_every: int = 1) -> BrainBodyInferenceSummary:
         summary = cls()
 
+        from coordination.common.functions import sigmoid
+
         if "unbounded_coordination" in idata.posterior:
             summary.unbounded_coordination_means = idata.posterior["unbounded_coordination"][::retain_every].mean(
                 dim=["chain", "draw"]).to_numpy()
@@ -83,6 +85,11 @@ class BrainBodyInferenceSummary:
             summary.coordination_means = idata.posterior["coordination"][::retain_every].mean(
                 dim=["chain", "draw"]).to_numpy()
             summary.coordination_sds = idata.posterior["coordination"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+        else:
+            summary.coordination_means = sigmoid(idata.posterior["unbounded_coordination"][::retain_every]).mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.coordination_sds = sigmoid(idata.posterior["unbounded_coordination"][::retain_every]).std(
                 dim=["chain", "draw"]).to_numpy()
 
         if "latent_brain" in idata.posterior:
@@ -166,3 +173,10 @@ class BrainBodyModel:
                               cores=num_jobs)
 
         return model, idata
+
+    def reset_parameters(self):
+        self.coordination_cpn.parameters.reset()
+        self.latent_brain_cpn.parameters.reset()
+        self.latent_body_cpn.parameters.reset()
+        self.obs_brain_cpn.parameters.reset()
+        self.obs_body_cpn.parameters.reset()

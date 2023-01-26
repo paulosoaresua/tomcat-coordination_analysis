@@ -41,14 +41,15 @@ class BetaGaussianCoordinationComponent:
 
     def draw_samples(self, num_series: int, num_time_steps: int,
                      seed: Optional[int]) -> BetaGaussianCoordinationComponentSamples:
-
         set_random_seed(seed)
 
         samples = BetaGaussianCoordinationComponentSamples()
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
         samples.coordination = np.zeros((num_series, num_time_steps))
 
-        samples.unbounded_coordination = norm(loc=0, scale=self.parameters.sd_uc).rvs(size=(num_series, num_time_steps))
+        # Gaussian RW via reparametrization trick
+        samples.unbounded_coordination = norm(loc=0, scale=1).rvs(
+            size=(num_series, num_time_steps)) * self.parameters.sd_uc
         samples.unbounded_coordination[:, 0] += self.initial_coordination
         samples.unbounded_coordination = samples.unbounded_coordination.cumsum(axis=1)
 
@@ -56,14 +57,16 @@ class BetaGaussianCoordinationComponent:
         # the mean of a beta distribution, we have to make sure to adjust the variance properly to prevent an
         # ill-defined distribution. We also clip the mean, so it's never zero or one.
         mean_coordination = np.clip(sigmoid(samples.unbounded_coordination), MIN_COORDINATION, MAX_COORDINATION)
-        var_coordination = np.minimum(self.parameters.sd_c ** 2, 0.5 * mean_coordination * (1 - mean_coordination))
-        samples.coordination = beta(mean_coordination, var_coordination).rvs(size=(num_series, num_time_steps))
+        # var_coordination = np.minimum(self.parameters.sd_c ** 2, 0.5 * mean_coordination * (1 - mean_coordination))
+        # samples.coordination = beta(mean_coordination, var_coordination).rvs(size=(num_series, num_time_steps))
+
+        samples.coordination = mean_coordination
 
         return samples
 
     def update_pymc_model(self, time_dimension: str) -> Any:
         sd_uc = pm.HalfNormal(name="sd_uc", sigma=1, size=1, observed=self.parameters.sd_uc)
-        sd_c = pm.HalfNormal(name="sd_c", sigma=1, size=1, observed=self.parameters.sd_c)
+        # sd_c = pm.HalfNormal(name="sd_c", sigma=1, size=1, observed=self.parameters.sd_c)
 
         prior = pm.Normal.dist(mu=logit(self.initial_coordination), sigma=sd_uc)
         unbounded_coordination = pm.GaussianRandomWalk("unbounded_coordination",
@@ -76,10 +79,13 @@ class BetaGaussianCoordinationComponent:
         mean_coordination_clipped = pm.Deterministic(f"mean_coordination_clipped",
                                                      pm.math.clip(mean_coordination, MIN_COORDINATION,
                                                                   MAX_COORDINATION))
-        sd_c_clipped = pm.Deterministic("sd_c_clipped", pm.math.minimum(sd_c, 0.5 * mean_coordination_clipped * (
-                1 - mean_coordination_clipped)))
+        # sd_c_clipped = pm.Deterministic("sd_c_clipped", pm.math.minimum(sd_c, 0.5 * mean_coordination_clipped * (
+        #         1 - mean_coordination_clipped)))
+        #
+        # coordination = pm.Beta(name="coordination", mu=mean_coordination_clipped, sigma=sd_c_clipped,
+        #                        dims=[time_dimension])
 
-        coordination = pm.Beta(name="coordination", mu=mean_coordination_clipped, sigma=sd_c_clipped,
-                               dims=[time_dimension])
+        coordination = mean_coordination_clipped
 
         return unbounded_coordination, coordination
+        # return unbounded_coordination, unbounded_coordination
