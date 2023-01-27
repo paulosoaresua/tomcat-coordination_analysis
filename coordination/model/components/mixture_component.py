@@ -2,7 +2,8 @@ from typing import Any, Optional
 
 import numpy as np
 import pymc as pm
-import pytensor.tensor as pt
+import pytensor as pt
+import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
@@ -12,17 +13,22 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
                                       initial_mean: Any,
                                       sigma: Any,
                                       mixture_weights: Any,
+                                      expanded_mixture_weights: Any,
                                       coordination: Any,
                                       prev_time: Any,
-                                      prev_time_mask: pt.TensorConstant,
-                                      subject_mask: pt.TensorConstant):
+                                      prev_time_mask: ptt.TensorConstant,
+                                      subject_mask: ptt.TensorConstant,
+                                      num_subjects: ptt.TensorConstant,
+                                      dim_value: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     P = mixture_component[..., prev_time]  # s x d x t
     PTM = prev_time_mask[None, :]  # 1 x t
     SM = subject_mask[None, :]  # 1 x t
 
-    num_subjects, dim_value, num_time_steps = mixture_component.shape
-    num_subjects = num_subjects.eval()
+    num_time_steps = coordination.shape[-1]
+
+    # num_subjects, dim_value, num_time_steps = mixture_component.shape
+    # num_subjects = num_subjects.eval()
 
     # Log probability due to the initial step, when there's no previous observation (PTM == 0).
     total_logp = (pm.logp(
@@ -30,11 +36,11 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
         mixture_component) * PTM * SM).sum()
 
     # Log probability due to the influence of distinct subjects according to the mixture weight
-    for s1 in range(num_subjects):
+    for s1 in ptt.arange(num_subjects).eval():
         w = 0
         likelihood_per_subject = 0
 
-        for s2 in range(num_subjects):
+        for s2 in ptt.arange(num_subjects).eval():
             if s1 == s2:
                 continue
 
@@ -59,17 +65,22 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                                          initial_mean: Any,
                                          sigma: Any,
                                          mixture_weights: Any,
+                                         expanded_mixture_weights: Any,
                                          coordination: Any,
                                          prev_time: Any,
-                                         prev_time_mask: pt.TensorConstant,
-                                         subject_mask: pt.TensorConstant):
+                                         prev_time_mask: ptt.TensorConstant,
+                                         subject_mask: ptt.TensorConstant,
+                                         num_subjects: ptt.TensorConstant,
+                                         dim_value: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     P = mixture_component[..., prev_time]  # s x d x t
     PTM = prev_time_mask[None, :]  # 1 x t
     SM = subject_mask[None, :]  # 1 x t
 
-    num_subjects, dim_value, num_time_steps = mixture_component.shape
-    num_subjects = num_subjects.eval()
+    num_time_steps = coordination.shape[-1]
+
+    # num_subjects, dim_value, num_time_steps = mixture_component.shape
+    # num_subjects = num_subjects.eval()
 
     # Log probability due to the initial step, when there's no previous observation (PTM == 0).
     total_logp = (pm.logp(
@@ -77,11 +88,11 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
         mixture_component) * PTM * SM).sum()
 
     # Log probability due to the influence of distinct subjects according to the mixture weight
-    for s1 in range(num_subjects):
+    for s1 in ptt.arange(num_subjects).eval():
         w = 0
         likelihood_per_subject = 0
 
-        for s2 in range(num_subjects):
+        for s2 in ptt.arange(num_subjects).eval():
             if s1 == s2:
                 continue
 
@@ -90,7 +101,7 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                 pm.Normal.dist(mu=means, sigma=sigma, shape=(dim_value, num_time_steps)),
                 mixture_component[s1])
 
-            likelihood_per_subject += mixture_weights[0, w] * pm.math.exp(logp_s1_from_s2)
+            likelihood_per_subject += mixture_weights[s1, w] * pm.math.exp(logp_s1_from_s2)
             w += 1
 
         # Multiply by PTM to ignore entries already accounted for in the initial time step (no previous observation)
@@ -105,19 +116,44 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
 def random(initial_mean: Any,
            sigma: Any,
            mixture_weights: Any,
+           expanded_mixture_weights: Any,
            coordination: Any,
            prev_time: Any,
-           prev_time_mask: pt.TensorConstant,
-           subject_mask: pt.TensorConstant,
-           num_subjects: int,
-           dim_value: int,
+           prev_time_mask: ptt.TensorConstant,
+           subject_mask: ptt.TensorConstant,
+           num_subjects: ptt.TensorConstant,
+           dim_value: ptt.TensorConstant,
            *args,
            **kwargs):
-    mixture_component = MixtureComponent("tmp", num_subjects, dim_value, True)
-    samples = mixture_component.draw_samples(1, coordination.shape[-1].eval(), relative_frequency=relative_frequency,
-                                   coordination=coordination.eval())
+    num_time_steps = coordination.shape[-1]
+    # noise = pm.draw(pm.Normal.dist(mu=0, sigma=1, shape=(num_subjects, dim_value, num_time_steps)), 1) * sigma
+    noise = ptt.random.normal(loc=0, scale=1, size=(num_subjects, dim_value, num_time_steps)) * sigma
 
-    return samples.values
+    # Prior
+    # prior_dist = pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, dim_value))
+    # sample = ptt.ones((num_time_steps, num_subjects, dim_value)) * pm.draw(prior_dist, 1)[None, :] * (
+    #         1 - prev_time_mask[:, None, None]) * subject_mask[:, None, None]
+    prior_sample = ptt.random.normal(loc=initial_mean, scale=sigma, size=(1, num_subjects, dim_value))
+    sample = ptt.ones((num_time_steps, num_subjects, dim_value)) * prior_sample * (
+                1 - prev_time_mask[:, None, None]) * subject_mask[:, None, None]
+
+    # We sample the influencers in each time step using the mixture weights
+    # influencers_dist = pm.Categorical.dist(p=expanded_mixture_weights, shape=num_subjects)
+    influencers = ptt.random.categorical(p=expanded_mixture_weights, size=(num_time_steps, num_subjects))
+    # influencers = ptt.constant(pm.draw(influencers_dist, num_time_steps.eval().astype(np.int32)))  # t x s
+
+    # CumSum adapted for coupled chain
+    def sample_from_mixture(sample, mask, influencers, coordination, prev_val):
+        # For time steps out of the component's scale, we just repeat the previous sampled values from all
+        # individuals
+        return sample + (prev_val[influencers] * coordination + prev_val * (1 - coordination)) * mask + prev_val * (
+                1 - mask)
+
+    results, updates = pt.scan(fn=sample_from_mixture,
+                               outputs_info=ptt.zeros((num_subjects, dim_value)),
+                               sequences=[sample, subject_mask, influencers, coordination])
+
+    return results.dimshuffle(1, 2, 0) + noise
 
 
 class MixtureComponentParameters:
@@ -214,8 +250,8 @@ class MixtureComponent:
 
         return samples
 
-    def update_pymc_model(self, coordination: Any, prev_time: pt.TensorConstant, prev_time_mask: pt.TensorConstant,
-                          subject_mask: pt.TensorConstant, subject_dimension: str, feature_dimension: str,
+    def update_pymc_model(self, coordination: Any, prev_time: ptt.TensorConstant, prev_time_mask: ptt.TensorConstant,
+                          subject_mask: ptt.TensorConstant, subject_dimension: str, feature_dimension: str,
                           time_dimension: str) -> Any:
 
         # mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=1, size=(self.num_subjects, self.dim_value),
@@ -223,37 +259,55 @@ class MixtureComponent:
         # sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=1, size=(self.num_subjects, self.dim_value),
         #                       observed=self.parameters.sd_aa)
         # mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
-        #                                a=pt.ones((self.num_subjects, self.num_subjects - 1)),
+        #                                a=ptt.ones((self.num_subjects, self.num_subjects - 1)),
         #                                observed=self.parameters.mixture_weights)
         mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=1, size=1,
                                 observed=self.parameters.mean_a0)
         sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=1, size=1,
                               observed=self.parameters.sd_aa)
         mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
-                                       a=pt.ones(self.num_subjects - 1),
+                                       a=ptt.ones(self.num_subjects - 1),
                                        size=1,
                                        observed=self.parameters.mixture_weights)
+
+        weight_expander_matrix = []
+        for i in range(self.num_subjects):
+            weight_expander_matrix.append(np.delete(np.eye(self.num_subjects), i, axis=1))
+
+        weight_expander_matrix = np.concatenate(weight_expander_matrix, axis=0)
+        expanded_mixture_weights = pm.Deterministic(f"expanded_mixture_weights_{self.uuid}",
+                                                    (ptt.constant(weight_expander_matrix) @ ptt.transpose(
+                                                        mixture_weights)).reshape(
+                                                        (self.num_subjects,
+                                                         self.num_subjects)))
 
         if self.self_dependent:
             logp_params = (mean_a0,
                            sd_aa,
                            mixture_weights,
+                           expanded_mixture_weights,
                            coordination,
                            prev_time,
                            prev_time_mask,
-                           subject_mask)
-            mixture_component = pm.DensityDist(self.uuid, *logp_params, logp=mixture_logp_with_self_dependency,
+                           subject_mask,
+                           ptt.constant(self.num_subjects),
+                           ptt.constant(self.dim_value))
+            mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_with_self_dependency,
                                                random=random,
                                                dims=[subject_dimension, feature_dimension, time_dimension])
         else:
             logp_params = (mean_a0,
                            sd_aa,
                            mixture_weights,
+                           expanded_mixture_weights,
                            coordination,
                            prev_time,
                            prev_time_mask,
-                           subject_mask)
-            mixture_component = pm.DensityDist(self.uuid, *logp_params, logp=mixture_logp_without_self_dependency,
+                           subject_mask,
+                           ptt.constant(self.num_subjects),
+                           ptt.constant(self.dim_value))
+
+            mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_without_self_dependency,
                                                random=random,
                                                dims=[subject_dimension, feature_dimension, time_dimension])
 

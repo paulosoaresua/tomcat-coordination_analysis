@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 from coordination.model.brain_body_model2 import BrainBodyModel, BrainBodySeries, BrainBodyInferenceSummary
-from coordination.model.components.mixture_component import mixture_logp_with_self_dependency
+from coordination.model.components.mixture_component import mixture_logp_with_self_dependency, random
 
 import numpy as np
 import pymc as pm
 
 # Parameters
-TIME_STEPS = 50
-NUM_BRAIN_CHANNELS = 10
+TIME_STEPS = 4
+NUM_BRAIN_CHANNELS = 2
 SEED = 0
 
 if __name__ == "__main__":
@@ -58,15 +58,41 @@ if __name__ == "__main__":
 
     import pytensor.tensor as pt
 
+    weight_expander_matrix = []
+    for i in range(3):
+        weight_expander_matrix.append(np.delete(np.eye(3), i, axis=1))
+
+    weight_expander_matrix = np.concatenate(weight_expander_matrix, axis=0)
+    expanded_mixture_weights = (pt.constant(weight_expander_matrix) @ pt.transpose(
+        model.latent_brain_cpn.parameters.mixture_weights)).reshape(
+        (3, 3))
+
+    sample = random(
+        initial_mean=pt.constant(model.latent_brain_cpn.parameters.mean_a0),
+        sigma=pt.constant(model.latent_brain_cpn.parameters.sd_aa),
+        mixture_weights=pt.constant(np.array([[0, 0.2, 0.8], [0.2, 0, 0.8], [0.2, 0.8, 0]])),
+        expanded_mixture_weights=expanded_mixture_weights,
+        coordination=pt.constant(full_samples.coordination.coordination[0]),
+        prev_time=pt.constant(full_samples.latent_brain.prev_time[0], dtype=int),
+        prev_time_mask=pt.constant(evidence.brain_prev_time_mask),
+        subject_mask=pt.constant(full_samples.latent_brain.mask[0]),
+        num_subjects=pt.constant(3),
+        dim_value=pt.constant(NUM_BRAIN_CHANNELS)
+    )
+    print(sample.eval())
+
     logp = mixture_logp_with_self_dependency(
         mixture_component=pt.constant(full_samples.latent_brain.values[0]),
         initial_mean=pt.constant(model.latent_brain_cpn.parameters.mean_a0),
         sigma=pt.constant(model.latent_brain_cpn.parameters.sd_aa),
         mixture_weights=pt.constant(model.latent_brain_cpn.parameters.mixture_weights),
+        expanded_mixture_weights=expanded_mixture_weights,
         coordination=pt.constant(full_samples.coordination.coordination[0]),
         prev_time=pt.constant(full_samples.latent_brain.prev_time[0], dtype=int),
         prev_time_mask=pt.constant(evidence.brain_prev_time_mask),
-        subject_mask=pt.constant(full_samples.latent_brain.mask[0])
+        subject_mask=pt.constant(full_samples.latent_brain.mask[0]),
+        num_subjects=pt.constant(3),
+        dim_value=pt.constant(NUM_BRAIN_CHANNELS)
     )
 
     print(logp.eval())
@@ -78,19 +104,17 @@ if __name__ == "__main__":
     model.obs_body_cpn.parameters.sd_o = None
     # model.obs_body_cpn.parameters.sd_o = np.array([0.01])
     pymc_model, idata = model.fit(evidence=evidence,
-                         burn_in=1,
-                         num_samples=1,
-                         num_chains=2,
-                         seed=SEED,
-                         num_jobs=4)
+                                  burn_in=1,
+                                  num_samples=1,
+                                  num_chains=2,
+                                  seed=SEED,
+                                  num_jobs=4)
     # az.plot_trace(idata, var_names=["sd_uc", "sd_aa_latent_brain", "sd_aa_latent_body", "sd_o_obs_brain", "sd_o_obs_body"])
     az.plot_trace(idata, var_names=["sd_o_obs_brain", "sd_o_obs_body"])
     plt.show()
 
-    with pymc_model:
-        samples = pm.sample_posterior_predictive(idata, var_names=["obs_brain"])
-
-
+    # with pymc_model:
+    #     samples = pm.sample_posterior_predictive(idata, var_names=["obs_brain"])
 
     inference_summary = BrainBodyInferenceSummary.from_inference_data(idata)
 
