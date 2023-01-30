@@ -67,19 +67,19 @@ if __name__ == "__main__":
         model.latent_brain_cpn.parameters.mixture_weights)).reshape(
         (3, 3))
 
-    sample = random(
-        initial_mean=pt.constant(model.latent_brain_cpn.parameters.mean_a0),
-        sigma=pt.constant(model.latent_brain_cpn.parameters.sd_aa),
-        mixture_weights=pt.constant(np.array([[0, 0.2, 0.8], [0.2, 0, 0.8], [0.2, 0.8, 0]])),
-        expanded_mixture_weights=expanded_mixture_weights,
-        coordination=pt.constant(full_samples.coordination.coordination[0]),
-        prev_time=pt.constant(full_samples.latent_brain.prev_time[0], dtype=int),
-        prev_time_mask=pt.constant(evidence.brain_prev_time_mask),
-        subject_mask=pt.constant(full_samples.latent_brain.mask[0]),
-        num_subjects=pt.constant(3),
-        dim_value=pt.constant(NUM_BRAIN_CHANNELS)
-    )
-    print(sample.eval())
+    # sample = random(
+    #     initial_mean=pt.constant(model.latent_brain_cpn.parameters.mean_a0),
+    #     sigma=pt.constant(model.latent_brain_cpn.parameters.sd_aa),
+    #     mixture_weights=pt.constant(np.array([[0, 0.2, 0.8], [0.2, 0, 0.8], [0.2, 0.8, 0]])),
+    #     expanded_mixture_weights=expanded_mixture_weights,
+    #     coordination=pt.constant(full_samples.coordination.coordination[0]),
+    #     prev_time=pt.constant(full_samples.latent_brain.prev_time[0], dtype=int),
+    #     prev_time_mask=pt.constant(evidence.brain_prev_time_mask),
+    #     subject_mask=pt.constant(full_samples.latent_brain.mask[0]),
+    #     num_subjects=pt.constant(3),
+    #     dim_value=pt.constant(NUM_BRAIN_CHANNELS)
+    # )
+    # print(sample.eval())
 
     logp = mixture_logp_with_self_dependency(
         mixture_component=pt.constant(full_samples.latent_brain.values[0]),

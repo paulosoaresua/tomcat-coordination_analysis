@@ -162,12 +162,12 @@ class BrainBodyModel:
                                                                    pt.constant(evidence.brain_prev_time_mask),
                                                                    pt.constant(evidence.brain_mask),
                                                                    "subject", "brain_channel", "time")
-            latent_body = self.latent_body_cpn.update_pymc_model(coordination, pt.constant(evidence.body_prev_time),
-                                                                 pt.constant(evidence.body_prev_time_mask),
-                                                                 pt.constant(evidence.body_mask),
-                                                                 "subject", "body_feature", "time")
+            # latent_body = self.latent_body_cpn.update_pymc_model(coordination, pt.constant(evidence.body_prev_time),
+            #                                                      pt.constant(evidence.body_prev_time_mask),
+            #                                                      pt.constant(evidence.body_mask),
+            #                                                      "subject", "body_feature", "time")
             self.obs_brain_cpn.update_pymc_model(latent_brain, [self.num_subjects, self.num_brain_channels], evidence.obs_brain)
-            self.obs_body_cpn.update_pymc_model(latent_body, [self.num_subjects, 1], evidence.obs_body)
+            # self.obs_body_cpn.update_pymc_model(latent_body, [self.num_subjects, 1], evidence.obs_body)
 
             idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
