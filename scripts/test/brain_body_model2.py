@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 from coordination.model.brain_body_model2 import BrainBodyModel, BrainBodySeries, BrainBodyInferenceSummary
-from coordination.model.components.mixture_component import mixture_logp_with_self_dependency, random
+from coordination.model.components.mixture_component import mixture_logp_with_self_dependency
 
 import numpy as np
 import pymc as pm
@@ -81,18 +81,31 @@ if __name__ == "__main__":
     # )
     # print(sample.eval())
 
+    expander_aux_mask_matrix = []
+    aggregator_aux_mask_matrix = []
+    for subject in range(3):
+        expander_aux_mask_matrix.append(np.delete(np.eye(3), subject, axis=0))
+        aux = np.zeros((3, 2))
+        aux[subject] = 1
+        aux = aux * model.latent_brain_cpn.parameters.mixture_weights[0][None, :]
+        aggregator_aux_mask_matrix.append(aux)
+
+    expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
+    aggregator_aux_mask_matrix = pt.concatenate(aggregator_aux_mask_matrix, axis=1)
+
     logp = mixture_logp_with_self_dependency(
         mixture_component=pt.constant(full_samples.latent_brain.values[0]),
         initial_mean=pt.constant(model.latent_brain_cpn.parameters.mean_a0),
         sigma=pt.constant(model.latent_brain_cpn.parameters.sd_aa),
         mixture_weights=pt.constant(model.latent_brain_cpn.parameters.mixture_weights),
-        expanded_mixture_weights=expanded_mixture_weights,
         coordination=pt.constant(full_samples.coordination.coordination[0]),
         prev_time=pt.constant(full_samples.latent_brain.prev_time[0], dtype=int),
         prev_time_mask=pt.constant(evidence.brain_prev_time_mask),
         subject_mask=pt.constant(full_samples.latent_brain.mask[0]),
         num_subjects=pt.constant(3),
-        dim_value=pt.constant(NUM_BRAIN_CHANNELS)
+        dim_value=pt.constant(NUM_BRAIN_CHANNELS),
+        expander_aux_mask_matrix=pt.constant(expander_aux_mask_matrix),
+        aggregation_aux_mask_matrix=aggregator_aux_mask_matrix
     )
 
     print(logp.eval())

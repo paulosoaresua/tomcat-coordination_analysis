@@ -57,10 +57,9 @@ class ObservationComponent:
         # observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
         #                                   observed=observed_values)
 
-        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=0.5, size=1, observed=self.parameters.sd_o)
+        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=5, size=1, observed=self.parameters.sd_o)
         # sd_o = pm.Flat(name=f"sd_o_{self.uuid}", size=1, observed=self.parameters.sd_o, initval=np.array([1]))
 
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o,
-                                          dims=["sub", "fea", "time"], observed=observed_values)
+        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o, observed=observed_values)
 
         return observation_component

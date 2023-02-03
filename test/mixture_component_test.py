@@ -22,23 +22,28 @@ class TestMixtureComponent(unittest.TestCase):
         prev_time_mask = pt.constant(np.array([0, 0, 1]))
         subject_mask = pt.constant(np.array([1, 0, 1]))
 
-        coord_mask = []
-        no_coord_mask = np.repeat(np.eye(3), repeats=2, axis=0)
-        for s1 in range(3):
-            coord_mask.append(np.delete(np.eye(3), s1, 0))
+        expander_aux_mask_matrix = []
+        aggregator_aux_mask_matrix = []
+        for subject in range(3):
+            expander_aux_mask_matrix.append(np.delete(np.eye(3), subject, axis=0))
+            aux = np.zeros((3, 2))
+            aux[subject] = 1
+            aux = aux * mixture_weights[subject][None, :]
+            aggregator_aux_mask_matrix.append(aux)
 
-        coord_mask = np.concatenate(coord_mask, axis=0)
+        expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
+        aggregator_aux_mask_matrix = pt.concatenate(aggregator_aux_mask_matrix, axis=1)
 
         estimated_logp = mixture_logp_with_self_dependency(mixture_component=mixture_component,
                                                            initial_mean=initial_mean,
                                                            sigma=sigma,
-                                                           mixture_weights=mixture_weights,
                                                            coordination=coordination,
                                                            prev_time=prev_time,
                                                            prev_time_mask=prev_time_mask,
                                                            subject_mask=subject_mask,
-                                                           coord_mask=pt.constant(coord_mask),
-                                                           no_coord_mask=pt.constant(no_coord_mask))
+                                                           expander_aux_mask_matrix=pt.constant(
+                                                               expander_aux_mask_matrix),
+                                                           aggregation_aux_mask_matrix=aggregator_aux_mask_matrix)
         real_logp = -5.081544319609303e+02
 
         self.assertAlmostEqual(estimated_logp.eval(), real_logp)
