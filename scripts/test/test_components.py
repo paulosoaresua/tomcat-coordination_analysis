@@ -48,18 +48,18 @@ if __name__ == "__main__":
                                                  feature_dimension="fea", observation=None)#mix_samples.values[0])
         # obs.update_pymc_model(ptt.constant(mix_samples.values[0]), [3, 2], obs_samples.values[0])
         obs.update_pymc_model(latent_component, [3, F], obs_samples.values[0])
-        # pm.sample()
-        # idata = pm.sample_prior_predictive()
-        #
-        # prior_obs = idata.prior_predictive["obs"].sel(chain=0).to_numpy()
-        #
-        # plt.figure()
-        # plt.plot(np.arange(T)[:, None].repeat(500, axis=1), prior_obs[:, 0, 0].T, color="tab:blue", alpha=0.3)
-        # plt.plot(np.arange(T), obs_samples.values[0, 0, 0], marker="o", color="black")
-        # plt.title(f"Prior Predictive Obs")
-        # plt.show()
 
-        idata = pm.sample(draws=1000, tune=1000, chains=2, init="adapt_diag")
+        idata = pm.sample_prior_predictive(random_seed=0)
+
+        prior_obs = idata.prior_predictive["obs"].sel(chain=0).to_numpy()
+
+        plt.figure()
+        plt.plot(np.arange(T)[:, None].repeat(500, axis=1), prior_obs[:, 0, 0].T, color="tab:blue", alpha=0.3)
+        plt.plot(np.arange(T), obs_samples.values[0, 0, 0], marker="o", color="black")
+        plt.title(f"Prior Predictive Obs")
+        plt.show()
+
+        idata = pm.sample(draws=1000, tune=1000, chains=2, init="jitter+adapt_diag", random_seed=0)
 
         az.plot_trace(idata, var_names=["sd_aa_mix", "sd_o_obs"])
         plt.show()
