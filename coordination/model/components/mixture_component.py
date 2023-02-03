@@ -273,12 +273,12 @@ class MixtureComponent:
                                 observed=self.parameters.mean_a0)
         sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=2, size=1,
                               observed=self.parameters.sd_aa)
-        mixture_weights = ptt.constant(self.parameters.mixture_weights)
+        # mixture_weights = ptt.constant(self.parameters.mixture_weights)
 
-        # mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
-        #                                a=ptt.ones(self.num_subjects - 1),
-        #                                size=1,
-        #                                observed=self.parameters.mixture_weights)
+        mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
+                                       a=ptt.ones(self.num_subjects - 1),
+                                       size=1,
+                                       observed=self.parameters.mixture_weights)
 
         # Auxiliary matrices to compute logp in a vectorized manner without having to loop over the individuals.
         expander_aux_mask_matrix = []
