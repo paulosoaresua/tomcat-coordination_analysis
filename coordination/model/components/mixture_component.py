@@ -15,36 +15,27 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
                                       sigma: Any,
                                       mixture_weights: np.ndarray,
                                       coordination: Any,
-                                      prev_time: Any,
-                                      prev_time_mask: ptt.TensorConstant,
-                                      subject_mask: ptt.TensorConstant,
                                       expander_aux_mask_matrix: ptt.TensorConstant,
                                       aggregation_aux_mask_matrix: ptt.TensorVariable):
-    C = coordination[None, None, :]  # 1 x 1 x t
-    P = mixture_component[..., prev_time]  # s x d x t
-    PTM = prev_time_mask[None, None, :]  # 1 x 1 x t
-    SM = subject_mask[None, None, :]  # 1 x 1 x t
+    C = coordination[None, None, 1:]  # 1 x 1 x t
+    P = mixture_component[..., :-1]  # s x d x t
 
-    # Log probability due to the initial step. We compute the logp for all time steps and use the PTM mask to zero
-    # out entries in time steps that are not the initial one.
-    total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean[:, :, None], sigma=sigma[:, :, None], shape=mixture_component.shape),
-        mixture_component)
-    total_logp = (total_logp * (1 - PTM) * SM).sum()
+    # Log probability due to the initial time step in the component's scale.
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
+                         mixture_component[..., 0]).sum()
 
     # D contains the previous values from other individuals for each individual
     D = ptt.tensordot(expander_aux_mask_matrix, P, axes=(1, 0))  # s * (s-1) x d x t
     P_extended = ptt.repeat(P, repeats=(mixture_component.shape[0] - 1), axis=0)
-    point_extended = ptt.repeat(mixture_component, repeats=(mixture_component.shape[0] - 1), axis=0)
+    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
 
     mean = (D - P_extended) * C + P_extended
 
     pdf = pm.math.exp(
-        pm.logp(pm.Normal.dist(mu=mean, sigma=ptt.repeat(sigma, repeats=2, axis=0)[:, :, None], shape=D.shape),
-                point_extended))
-
-    # Zero out entries in time steps with no observation or previous observations.
-    total_logp += (pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))) * PTM * SM).sum()
+        pm.logp(pm.Normal.dist(mu=mean,
+                               sigma=ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None],
+                               shape=D.shape), point_extended))
+    total_logp += (pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0)))).sum()
 
     return total_logp
 
@@ -54,38 +45,29 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                                          sigma: Any,
                                          mixture_weights: np.ndarray,
                                          coordination: Any,
-                                         prev_time: Any,
-                                         prev_time_mask: ptt.TensorConstant,
-                                         subject_mask: ptt.TensorConstant,
                                          expander_aux_mask_matrix: ptt.TensorConstant,
                                          aggregation_aux_mask_matrix: ptt.TensorVariable):
-    C = coordination[None, None, :]  # 1 x 1 x t
-    P = mixture_component[..., prev_time]  # s x d x t
-    PTM = prev_time_mask[None, None, :]  # 1 x 1 x t
-    SM = subject_mask[None, None, :]  # 1 x 1 x t
+    C = coordination[None, None, 1:]  # 1 x 1 x t
+    P = mixture_component[..., :-1]  # s x d x t
 
-    # Log probability due to the initial step. We compute the logp for all time steps and use the PTM mask to zero
-    # out entries in time steps that are not the initial one.
-    total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean[:, :, None], sigma=sigma[:, :, None], shape=mixture_component.shape),
-        mixture_component)
-    total_logp = (total_logp * (1 - PTM) * SM).sum()
+    # Log probability due to the initial time step in the component's scale.
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
+                         mixture_component[..., 0]).sum()
 
     # D contains the previous values from other individuals for each individual
     D = ptt.tensordot(expander_aux_mask_matrix, P, axes=(1, 0))  # s * (s-1) x d x t
 
-    # Uses a fixed mean instead of the previous value from the same individual
-    P_extended = ptt.repeat(initial_mean[:, None], repeats=(mixture_component.shape[0] - 1), axis=0)
-    point_extended = ptt.repeat(mixture_component, repeats=(mixture_component.shape[0] - 1), axis=0)
+    # We use a fixed mean instead of the previous value from the same individual
+    P_extended = ptt.repeat(initial_mean[:, :, None], repeats=(mixture_component.shape[0] - 1), axis=0)
+    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
 
     mean = (D - P_extended) * C + P_extended
 
     pdf = pm.math.exp(
-        pm.logp(pm.Normal.dist(mu=mean, sigma=ptt.repeat(sigma, repeats=2, axis=0)[:, :, None], shape=D.shape),
-                point_extended))
-
-    # Zero out entries in time steps with no observation or previous observations.
-    total_logp += (pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))) * PTM * SM).sum()
+        pm.logp(pm.Normal.dist(mu=mean,
+                               sigma=ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None],
+                               shape=D.shape), point_extended))
+    total_logp += (pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0)))).sum()
 
     return total_logp
 
@@ -94,9 +76,6 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
                                         sigma: np.ndarray,
                                         mixture_weights: np.ndarray,
                                         coordination: np.ndarray,
-                                        prev_time: np.ndarray,
-                                        prev_time_mask: np.ndarray,
-                                        subject_mask: np.ndarray,
                                         expander_aux_mask_matrix: np.ndarray,
                                         aggregation_aux_mask_matrix: np.ndarray,
                                         num_subjects: int,
@@ -104,6 +83,7 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
                                         rng: Optional[np.random.Generator] = None,
                                         size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
+
     noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
 
     # We sample the influencers in each time step using the mixture weights
@@ -115,17 +95,18 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
     prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
+    sample[..., 0] = prior_sample
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
-        D = sample[..., prev_time[t]][influencers[..., t]]
+        D = sample[..., t - 1][influencers[..., t]]
         # Previous sample from the same individual
-        S = sample[..., prev_time[t]]
+        S = sample[..., t - 1]
+
         mean = ((D - S) * coordination[t] + S)
 
         transition_sample = rng.normal(loc=mean, scale=sigma)
 
-        sample[..., t] = (prior_sample * (1 - prev_time_mask[t]) + transition_sample * prev_time_mask[t]) * \
-                         subject_mask[t]
+        sample[..., t] = transition_sample
 
     return sample + noise
 
@@ -134,9 +115,6 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
                                            sigma: np.ndarray,
                                            mixture_weights: np.ndarray,
                                            coordination: np.ndarray,
-                                           prev_time: np.ndarray,
-                                           prev_time_mask: np.ndarray,
-                                           subject_mask: np.ndarray,
                                            expander_aux_mask_matrix: np.ndarray,
                                            aggregation_aux_mask_matrix: np.ndarray,
                                            num_subjects: int,
@@ -144,6 +122,7 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
                                            rng: Optional[np.random.Generator] = None,
                                            size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
+
     noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
 
     # We sample the influencers in each time step using the mixture weights
@@ -155,21 +134,20 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
     prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
+    sample[..., 0] = prior_sample
 
     # No self-dependency. The transition distribution is a blending between the previous value from another individual,
     # and a fixed mean.
-    S = initial_mean[:, None]
+    S = initial_mean
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
-        D = sample[..., prev_time[t]][influencers[..., t]]
-        # Previous sample from the same individual
+        D = sample[..., t - 1][influencers[..., t]]
 
         mean = ((D - S) * coordination[t] + S)
 
         transition_sample = rng.normal(loc=mean, scale=sigma)
 
-        sample[..., t] = (prior_sample * (1 - prev_time_mask[t]) + transition_sample * prev_time_mask[t]) * \
-                         subject_mask[t]
+        sample[..., t] = transition_sample
 
     return sample + noise
 
@@ -192,13 +170,12 @@ class MixtureComponentSamples:
     def __init__(self):
         self.values = np.array([])
 
-        # 1 for time steps in which the component exists, 0 otherwise.
-        self.mask = np.array([])
+        # For each time step in the component's scale, it contains the time step in the coordination scale
+        self.time_steps_in_coordination_scale = np.array([])
 
-        # Time indices indicating the previous occurrence of the component produced by the subjects. Mixture compo-
-        # nents assumes observations are continuous and measurable for all subjects periodically in a specific time-
-        # scale. The variable below, maps from the coordination scale to the component's scale.
-        self.prev_time = np.array([])
+    @property
+    def num_time_steps(self):
+        return self.values.shape[-1]
 
 
 class MixtureComponent:
@@ -217,8 +194,7 @@ class MixtureComponent:
 
         self.parameters = MixtureComponentParameters(sd_mean_a0, sd_sd_aa, a_mixture_weights)
 
-    def draw_samples(self, num_series: int, num_time_steps: int,
-                     seed: Optional[int], relative_frequency: float,
+    def draw_samples(self, num_series: int, seed: Optional[int], relative_frequency: float,
                      coordination: np.ndarray) -> MixtureComponentSamples:
 
         assert self.num_subjects == self.parameters.mixture_weights.value.shape[0]
@@ -232,41 +208,44 @@ class MixtureComponent:
 
         samples = MixtureComponentSamples()
 
-        samples.values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
-        samples.mask = np.zeros(shape=(num_series, num_time_steps))
-        samples.prev_time = np.full(shape=(num_series, num_time_steps), fill_value=-1)
+        # Number of time steps in the component's scale
+        num_time_steps_in_cpn_scale = int(coordination.shape[-1] / relative_frequency)
+        samples.values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps_in_cpn_scale))
+        samples.time_steps_in_coordination_scale = np.full((num_series, num_time_steps_in_cpn_scale), fill_value=-1)
 
         # Sample influencers in each time step
         influencers = []
         for subject in range(self.num_subjects):
             probs = np.insert(self.parameters.mixture_weights.value[subject], subject, 0)
             influencers.append(
-                np.random.choice(a=np.arange(self.num_subjects), p=probs, size=(num_series, num_time_steps)))
+                np.random.choice(a=np.arange(self.num_subjects), p=probs,
+                                 size=(num_series, num_time_steps_in_cpn_scale)))
         influencers = np.array(influencers).swapaxes(0, 1)
 
-        for t in range(num_time_steps):
-            if (t + 1) == relative_frequency:
+        for t in range(num_time_steps_in_cpn_scale):
+            if t == 0:
                 samples.values[..., 0] = norm(loc=self.parameters.mean_a0.value[None, :],
                                               scale=self.parameters.sd_aa.value[None, :]).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
-                samples.mask[..., t] = 1
-            elif (t + 1) % relative_frequency == 0:
-                samples.mask[..., t] = 1
-                samples.prev_time[..., t] = t - relative_frequency
+            else:
+                time_in_coord_scale = relative_frequency * t
 
-                C = coordination[:, t][:, None]
-                P = samples.values[..., samples.prev_time[..., t]][..., 0]
+                C = coordination[:, time_in_coord_scale][:, None]
+                P = samples.values[..., t - 1]
                 D = P[:, influencers[..., t]][0]
 
-                mean = (D - P) * C + P
+                if self.self_dependent:
+                    mean = (D - P) * C + P
+                else:
+                    mean = (D - self.parameters.mean_a0.value[None, :]) * C + self.parameters.mean_a0.value[None, :]
 
                 samples.values[..., t] = norm(loc=mean, scale=self.parameters.sd_aa.value[None, :]).rvs()
+                samples.time_steps_in_coordination_scale[..., t] = time_in_coord_scale
 
         return samples
 
-    def update_pymc_model(self, coordination: Any, prev_time: ptt.TensorConstant, prev_time_mask: ptt.TensorConstant,
-                          subject_mask: ptt.TensorConstant, subject_dimension: str, feature_dimension: str,
-                          time_dimension: str, observation: Optional[Any] = None) -> Any:
+    def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
+                          observation: Optional[Any] = None) -> Any:
 
         mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=self.parameters.mean_a0.prior.sd,
                                 size=(self.num_subjects, self.dim_value),
@@ -296,9 +275,6 @@ class MixtureComponent:
                            sd_aa,
                            mixture_weights,
                            coordination,
-                           prev_time,
-                           prev_time_mask,
-                           subject_mask,
                            ptt.constant(expander_aux_mask_matrix),
                            aggregator_aux_mask_matrix)
             random_fn = partial(mixture_random_with_self_dependency,
@@ -312,11 +288,8 @@ class MixtureComponent:
                            sd_aa,
                            mixture_weights,
                            coordination,
-                           prev_time,
-                           prev_time_mask,
-                           subject_mask,
-                           ptt.constant(self.num_subjects),
-                           ptt.constant(self.dim_value))
+                           ptt.constant(expander_aux_mask_matrix),
+                           aggregator_aux_mask_matrix)
 
             random_fn = partial(mixture_random_without_self_dependency,
                                 num_subjects=self.num_subjects, dim_value=self.dim_value)

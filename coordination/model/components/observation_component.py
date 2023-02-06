@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 import pymc as pm
@@ -22,9 +22,6 @@ class ObservationComponentSamples:
     def __init__(self):
         self.values = np.array([])
 
-        # 1 for time steps in which there are observations, 0 otherwise.
-        self.mask = np.array([])
-
 
 class ObservationComponent:
 
@@ -37,19 +34,15 @@ class ObservationComponent:
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
-    def draw_samples(self, seed: Optional[int], latent_component: np.ndarray,
-                     latent_mask: np.ndarray) -> ObservationComponentSamples:
+    def draw_samples(self, seed: Optional[int], latent_component: np.ndarray) -> ObservationComponentSamples:
         assert latent_component.shape[1:3] == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
 
         samples = ObservationComponentSamples()
 
-        M = latent_mask[:, None, None, :]
-
         samples.values = norm(loc=latent_component, scale=self.parameters.sd_o.value[None, :, :, None]).rvs(
-            size=latent_component.shape) * M
-        samples.mask = latent_mask
+            size=latent_component.shape)
 
         return samples
 
