@@ -211,7 +211,8 @@ class MixtureComponent:
         # Number of time steps in the component's scale
         num_time_steps_in_cpn_scale = int(coordination.shape[-1] / relative_frequency)
         samples.values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps_in_cpn_scale))
-        samples.time_steps_in_coordination_scale = np.full((num_series, num_time_steps_in_cpn_scale), fill_value=-1)
+        samples.time_steps_in_coordination_scale = np.full((num_series, num_time_steps_in_cpn_scale), fill_value=-1,
+                                                           dtype=int)
 
         # Sample influencers in each time step
         influencers = []
