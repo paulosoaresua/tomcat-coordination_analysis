@@ -6,15 +6,15 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
 
-from coordination.model.components.coordination_component import BetaGaussianCoordinationComponent, \
-    BetaGaussianCoordinationComponentSamples
+from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent, \
+    SigmoidGaussianCoordinationComponentSamples
 from coordination.model.components.mixture_component import MixtureComponent, MixtureComponentSamples
 from coordination.model.components.observation_component import ObservationComponent, ObservationComponentSamples
 
 
 class BrainBodySamples:
 
-    def __init__(self, coordination: BetaGaussianCoordinationComponentSamples, latent_brain: MixtureComponentSamples,
+    def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples, latent_brain: MixtureComponentSamples,
                  latent_body: MixtureComponentSamples, obs_brain: ObservationComponentSamples,
                  obs_body: ObservationComponentSamples):
         self.coordination = coordination
@@ -114,7 +114,7 @@ class BrainBodyModel:
         self.num_subjects = num_subjects
         self.num_brain_channels = num_brain_channels
 
-        self.coordination_cpn = BetaGaussianCoordinationComponent(initial_coordination)
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination)
         self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, num_brain_channels, self_dependent)
         self.latent_body_cpn = MixtureComponent("latent_body", num_subjects, 1, self_dependent)
         self.obs_brain_cpn = ObservationComponent("obs_brain")
