@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -8,6 +8,8 @@ from coordination.component.speech.common import VocalicsSparseSeries
 from coordination.model.utils.coordination_blending_latent_vocalics import LatentVocalicsDataset, \
     LatentVocalicsDataSeries, LatentVocalicsParticles, LatentVocalicsSamples, \
     LatentVocalicsParticlesSummary, LatentVocalicsModelParameters, LatentVocalicsTrainingHyperParameters
+
+from coordination.common.utils import sigmoid
 
 
 class BetaCoordinationLatentVocalicsParticles(LatentVocalicsParticles):
@@ -34,6 +36,31 @@ class BetaCoordinationLatentVocalicsParticlesSummary(LatentVocalicsParticlesSumm
 
         return new_summary
 
+    @classmethod
+    def from_inference_data(cls, idata: Any, retain_every: int = 1) -> BetaCoordinationLatentVocalicsParticlesSummary:
+        summary = cls()
+        summary.unbounded_coordination_mean = idata.posterior["unbounded_coordination"][
+                                              ::retain_every].mean(
+            dim=["chain", "draw"]).to_numpy()
+        summary.coordination_mean = idata.posterior["coordination"][::retain_every].mean(
+            dim=["chain", "draw"]).to_numpy()
+        summary.latent_vocalics_mean = idata.posterior["latent_vocalics"][::retain_every].mean(
+            dim=["chain", "draw"]).to_numpy()
+
+        summary.unbounded_coordination_var = idata.posterior["unbounded_coordination"][
+                                             ::retain_every].var(
+            dim=["chain", "draw"]).to_numpy()
+        summary.coordination_var = idata.posterior["coordination"][::retain_every].var(
+            dim=["chain", "draw"]).to_numpy()
+        summary.latent_vocalics_var = idata.posterior["latent_vocalics"][::retain_every].var(
+            dim=["chain", "draw"]).to_numpy()
+
+        return summary
+
+
+def my_sigmoid(x):
+    return sigmoid(x)
+
 
 class BetaCoordinationLatentVocalicsSamples(LatentVocalicsSamples):
     unbounded_coordination: np.ndarray
@@ -47,9 +74,23 @@ class BetaCoordinationLatentVocalicsDataSeries(LatentVocalicsDataSeries):
                  features: List[str], unbounded_coordination: Optional[np.ndarray] = None,
                  coordination: Optional[np.ndarray] = None, latent_vocalics: VocalicsSparseSeries = None):
         super().__init__(uuid, observed_vocalics, speech_semantic_links, team_score, team_process_surveys,
-                         team_satisfaction_surveys, genders,
-                         ages, features, coordination, latent_vocalics)
+                         team_satisfaction_surveys, genders, ages, features, coordination, latent_vocalics)
         self.unbounded_coordination = unbounded_coordination
+
+        self.previous_vocalics_from_self = np.array(
+            [-1 if p is None else p for p in observed_vocalics.previous_from_self])
+        self.previous_vocalics_from_other = np.array(
+            [-1 if p is None else p for p in observed_vocalics.previous_from_other])
+        self.previous_vocalics_from_self_mask = np.where(self.previous_vocalics_from_self >= 0, 1, 0)
+        self.previous_vocalics_from_other_mask = np.where(self.previous_vocalics_from_other >= 0, 1, 0)
+        self.vocalics_mask = observed_vocalics.mask
+
+        self.speech_semantic_links_times = np.array([t for t, v in enumerate(speech_semantic_links) if v == 1])
+        self.speech_semantic_links_vector_of_ones = np.ones_like(self.speech_semantic_links_times)
+
+    def disable_speech_semantic_links(self):
+        self.speech_semantic_links_times = np.array([])
+        self.speech_semantic_links_vector_of_ones = np.array([])
 
     @property
     def is_complete(self) -> bool:

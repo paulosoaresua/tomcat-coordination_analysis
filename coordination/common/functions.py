@@ -21,7 +21,7 @@ def json_serial(obj):
     raise TypeError(f"Type {type(obj)} is not serializable")
 
 
-def set_random_seed(seed: Optional[int]):
+def set_seed(seed: Optional[int]):
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)

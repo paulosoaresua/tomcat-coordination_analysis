@@ -13,7 +13,7 @@ from coordination.callback.callback import Callback
 from coordination.common.log import BaseLogger
 from coordination.common.dataset import EvidenceDataset, EvidenceDataSeries
 from coordination.common.parallelism import display_inner_progress_bar
-from coordination.common.utils import set_seed
+from coordination.common.utils import set_random_seed
 from coordination.model.particle_filter import Particles, ParticleFilter
 
 
@@ -72,7 +72,7 @@ class PGM(BaseEstimator, Generic[SP, S]):
         self.parameters.reset()
 
     def sample(self, num_samples: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> SP:
-        set_seed(seed)
+        set_random_seed(seed)
 
         return None
 
@@ -98,7 +98,7 @@ class PGM(BaseEstimator, Generic[SP, S]):
         hparams["num_trials"] = evidence.num_trials
         hparams["num_time_steps"] = evidence.num_time_steps
         logger.add_hyper_params(hparams)
-        set_seed(seed)
+        set_random_seed(seed)
 
         # Gibbs Sampling
 

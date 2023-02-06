@@ -11,7 +11,7 @@ from coordination.common.distribution import beta
 from coordination.model.utils.coordination_blending_latent_vocalics import BaseF, BaseG
 
 from coordination.model.pgm2 import PGM2
-from coordination.model.utils.brain_body_model import BrainBodyDataset, BrainBodySamples, BrainBodyParticlesSummary, \
+from coordination.model.utils.brain_body_model import BrainBodyDataSeries, BrainBodySamples, BrainBodyParticlesSummary, \
     BrainBodyModelParameters
 
 # For numerical stability
@@ -31,17 +31,12 @@ SD_C = 0.1
 
 def multi_influencers_mixture_logp(latent_variable: at.TensorVariable, coordination: at.TensorVariable,
                                    sigma: at.TensorVariable):
-    latent_prev = latent_variable[:, :, :, :-1]
-    latent_curr = latent_variable[:, :, :, 1:]
-    c_i = coordination[:, 1:][:, None, :]
+    latent_prev = latent_variable[..., :-1]
+    latent_curr = latent_variable[..., 1:]
+    c_i = coordination[1:][None, :]
 
-    # mixture_weights = np.array([0.5, 0.5])
-    # num_subjects = 3
-
-    # num_trials, _, num_channels, num_time_steps = latent_variable.shape
-    # shape = (num_trials, num_channels, num_time_steps - 1)
-    num_trials, num_subjects, num_channels, num_time_steps = latent_variable.shape
-    shape = (num_trials, num_channels, num_time_steps - 1)
+    num_subjects, num_channels, num_time_steps = latent_variable.shape
+    shape = (num_channels, num_time_steps - 1)
 
     num_subjects = num_subjects.eval()
     total_logp = 0
@@ -53,33 +48,17 @@ def multi_influencers_mixture_logp(latent_variable: at.TensorVariable, coordinat
                 continue
 
             logp_s1_from_s2 = pm.logp(
-                pm.Normal.dist(mu=latent_prev[:, s2] * c_i + (1 - c_i) * latent_prev[:, s1], sigma=sigma, shape=shape),
-                latent_curr[:, s1])
+                pm.Normal.dist(mu=latent_prev[s2] * c_i + (1 - c_i) * latent_prev[s1], sigma=sigma, shape=shape),
+                latent_curr[s1])
 
             likelihood_per_subject += W[w] * pm.math.exp(logp_s1_from_s2)
             w += 1
 
         total_logp += pm.math.log(likelihood_per_subject).sum()
 
-    init_dist = pm.Normal.dist(mu=0, sigma=1, shape=(
-        num_trials, num_subjects, num_channels))
+    init_dist = pm.Normal.dist(mu=0, sigma=1, shape=(num_subjects, num_channels))
 
-    return at.sum(pm.logp(init_dist, latent_variable[:, :, :, 0])) + total_logp
-
-
-def unbounded_coordination_drift_logp(unbounded_coordination: at.TensorVariable, sigma: at.TensorVariable,
-                                      initial_value: at.TensorVariable):
-    """
-    The GaussianRandomWalk class is issuing a warning when it's created for a RV. So I am encapsulating on a custom
-    distribution to avoid the warning until the issue is fixed.
-
-    Issue: https://github.com/pymc-devs/pymc/pull/6407
-    """
-    N, T = unbounded_coordination.shape
-
-    prior = pm.Normal.dist(mu=initial_value, sigma=1, shape=N)
-    return pm.logp(pm.GaussianRandomWalk.dist(init_dist=prior,
-                                              sigma=sigma, shape=(N, T)), unbounded_coordination).sum()
+    return at.sum(pm.logp(init_dist, latent_variable[..., 0])) + total_logp
 
 
 class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
@@ -120,7 +99,7 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
             "disable_self_dependency": disable_self_dependency
         }
 
-    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int]) -> BrainBodySamples:
+    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> BrainBodySamples:
         samples = BrainBodySamples()
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
         samples.coordination = np.zeros((num_series, num_time_steps))
@@ -139,7 +118,7 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
             # We clip the mean and variance to make sure we have a proper Beta distribution from which we can sample
             # from.
             clipped_uc = np.clip(sigmoid(samples.unbounded_coordination[:, t]), MIN_COORDINATION, MAX_COORDINATION)
-            clipped_vc = np.minimum(SD_C ** 2, 0.5 * clipped_uc * (1 - clipped_uc))
+            clipped_vc = np.minimum(self.parameters.sd_c ** 2, 0.5 * clipped_uc * (1 - clipped_uc))
             samples.coordination[:, t] = beta(clipped_uc, clipped_vc).rvs()
 
             if t == 0:
@@ -188,7 +167,7 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
 
         return samples
 
-    def fit(self, evidence: BrainBodyDataset, burn_in: int, num_samples: int, num_chains: int,
+    def fit(self, evidence: BrainBodyDataSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int], retain_every: int = 1, num_jobs: int = 1) -> Any:
 
         model = self._define_pymc_model(evidence)
@@ -196,19 +175,19 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
             idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
 
-            self.parameters.sd_uc = idata.posterior["sd_uc"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
-            self.parameters.sd_brain = idata.posterior["sd_brain"][::retain_every].mean(
-                dim=["chain", "draw"]).to_numpy()
-            # self.parameters.sd_body = idata.posterior["sd_body"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
-            self.parameters.sd_obs_brain = idata.posterior["sd_obs_brain"][::retain_every].mean(
-                dim=["chain", "draw"]).to_numpy()
-            # self.parameters.sd_obs_body = idata.posterior["sd_obs_body"][::retain_every].mean(
+            # self.parameters.sd_uc = idata.posterior["sd_uc"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
+            # self.parameters.sd_brain = idata.posterior["sd_brain"][::retain_every].mean(
             #     dim=["chain", "draw"]).to_numpy()
+            # # self.parameters.sd_body = idata.posterior["sd_body"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
+            # self.parameters.sd_obs_brain = idata.posterior["sd_obs_brain"][::retain_every].mean(
+            #     dim=["chain", "draw"]).to_numpy()
+            # # self.parameters.sd_obs_body = idata.posterior["sd_obs_body"][::retain_every].mean(
+            # #     dim=["chain", "draw"]).to_numpy()
 
             return idata
 
-    def _define_pymc_model(self, evidence: BrainBodyDataset):
-        coords = {"trial": np.arange(evidence.num_trials), "subject": np.arange(self.num_subjects),
+    def _define_pymc_model(self, evidence: BrainBodyDataSeries):
+        coords = {"subject": np.arange(self.num_subjects),
                   "brain_channel": np.arange(self.num_brain_channels), "body_feature": np.arange(1),
                   "time": np.arange(evidence.num_time_steps)}
         model = pm.Model(coords=coords)
@@ -216,66 +195,61 @@ class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
         with model:
             # Parameters to be inferred and shared among time series of brain signal and body movement.
             sd_uc = pm.HalfNormal(name="sd_uc", sigma=1, size=1, observed=self.parameters.sd_uc)
+            sd_c = pm.HalfNormal(name="sd_c", sigma=1, size=1, observed=self.parameters.sd_c)
             sd_brain = pm.HalfNormal(name="sd_brain", sigma=1, size=1, observed=self.parameters.sd_brain)
             # sd_body = pm.HalfNormal(name="sd_body", sigma=1, size=1, observed=self.parameters.sd_body)
             sd_obs_brain = pm.HalfNormal(name="sd_obs_brain", sigma=1, size=1, observed=self.parameters.sd_obs_brain)
             # sd_obs_body = pm.HalfNormal(name="sd_obs_body", sigma=1, size=1, observed=self.parameters.sd_obs_body)
 
-            N = evidence.num_trials
-            T = evidence.num_time_steps
-
-            unbounded_coordination_params = (at.as_tensor_variable(sd_uc),
-                                             at.constant(logit(self.initial_coordination)))
-            unbounded_coordination = pm.DensityDist("unbounded_coordination", *unbounded_coordination_params,
-                                                    logp=unbounded_coordination_drift_logp,
-                                                    initval=np.ones((N, T)) * logit(self.initial_coordination),
-                                                    dims=["trial", "time"],
-                                                    observed=evidence.latent_body_movements)
+            prior = pm.Normal.dist(mu=logit(self.initial_coordination), sigma=sd_uc)
+            unbounded_coordination = pm.GaussianRandomWalk("unbounded_coordination",
+                                                           init_dist=prior,
+                                                           sigma=sd_uc,
+                                                           dims=["time"])
 
             mean_coordination = pm.Deterministic("mean_coordination", pm.math.sigmoid(unbounded_coordination),
-                                                 dims=["trial", "time"])
+                                                 dims=["time"])
+
             mean_coordination_clipped = pm.Deterministic(f"mean_coordination_clipped",
                                                          pm.math.clip(mean_coordination, MIN_COORDINATION,
-                                                                      MAX_COORDINATION), dims=["trial", "time"])
-            sd_c_clipped = pm.Deterministic("sd_c_clipped", pm.math.minimum(SD_C, 0.5 * mean_coordination_clipped * (
+                                                                      MAX_COORDINATION), dims=["time"])
+            sd_c_clipped = pm.Deterministic("sd_c_clipped", pm.math.minimum(sd_c, 0.5 * mean_coordination_clipped * (
                     1 - mean_coordination_clipped)))
 
             coordination = pm.Beta(name="coordination", mu=mean_coordination_clipped, sigma=sd_c_clipped,
-                                   dims=["trial", "time"], observed=evidence.coordination)
+                                   dims=["time"])
 
-            brain_params = (at.as_tensor_variable(coordination),
-                            at.as_tensor_variable(sd_brain))
+            brain_params = (coordination,
+                            sd_brain)
             latent_brain = pm.DensityDist("latent_brain", *brain_params,
                                           logp=multi_influencers_mixture_logp,
-                                          dims=["trial", "subject", "brain_channel", "time"],
-                                          observed=evidence.latent_brain_signals)
+                                          dims=["subject", "brain_channel", "time"])
 
             # body_params = (at.as_tensor_variable(coordination),
             #                at.as_tensor_variable(sd_body))
             # latent_body = pm.DensityDist("latent_body", *body_params,
             #                              logp=multi_influencers_mixture_logp,
-            #                              dims=["trial", "subject", "body_feature", "time"],
-            #                              observed=evidence.latent_body_movements)
+            #                              dims=["subject", "body_feature", "time"])
 
             pm.Normal(name="observed_brain", mu=latent_brain, sigma=sd_obs_brain,
-                      dims=("trial", "subject", "brain_channel", "time"), observed=evidence.observed_brain_signals)
+                      dims=("subject", "brain_channel", "time"), observed=evidence.observed_brain_signals)
             # pm.Normal(name="observed_body", mu=latent_body, sigma=sd_obs_body,
             #           observed=evidence.observed_body_movements)
 
         return model
 
-    def predict(self, evidence: BrainBodyDataset, num_samples: int, burn_in: int, num_chains: int, seed: Optional[int],
-                retain_every: int = 1, num_jobs: int = 1) -> List[BrainBodyParticlesSummary]:
-
-        summaries = []
-        for i in range(evidence.num_trials):
-            model = self._define_pymc_model(evidence.get_subset([i]))
-            with model:
-                idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
-                                  cores=num_jobs)
-
-                summary = BrainBodyParticlesSummary.from_inference_data(idata, retain_every)
-
-                summaries.append(summary)
-
-        return summaries
+    # def predict(self, evidence: BrainBodyDataset, num_samples: int, burn_in: int, num_chains: int, seed: Optional[int],
+    #             retain_every: int = 1, num_jobs: int = 1) -> List[BrainBodyParticlesSummary]:
+    #
+    #     summaries = []
+    #     for i in range(evidence.num_trials):
+    #         model = self._define_pymc_model(evidence.get_subset([i]))
+    #         with model:
+    #             idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+    #                               cores=num_jobs)
+    #
+    #             summary = BrainBodyParticlesSummary.from_inference_data(idata, retain_every)
+    #
+    #             summaries.append(summary)
+    #
+    #     return summaries

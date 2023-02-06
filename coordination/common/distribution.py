@@ -12,3 +12,4 @@ def beta(mean: Union[float, np.ndarray], var: Union[float, np.ndarray]) -> Union
     a = mean * c
     b = (1 - mean) * c
     return scipy_beta(a, b)
+
