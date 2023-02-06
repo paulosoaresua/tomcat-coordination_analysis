@@ -27,12 +27,12 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
 
     # Log probability due to the initial step. We compute the logp for all time steps and use the PTM mask to zero
     # out entries in time steps that are not the initial one.
-    # total_logp = pm.logp(
-    #     pm.Normal.dist(mu=initial_mean[:, :, None], sigma=sigma[:, :, None], shape=mixture_component.shape),
-    #     mixture_component)
     total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape),
+        pm.Normal.dist(mu=initial_mean[:, :, None], sigma=sigma[:, :, None], shape=mixture_component.shape),
         mixture_component)
+    # total_logp = pm.logp(
+    #     pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape),
+    #     mixture_component)
 
     # We preserve the logp only in the time step where PTM == 0.
     total_logp = (total_logp * (1 - PTM) * SM).sum()
@@ -44,10 +44,10 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
 
     mean = (D - P_extended) * C + P_extended
 
-    # pdf = pm.math.exp(
-    #     pm.logp(pm.Normal.dist(mu=mean, sigma=ptt.repeat(sigma, repeats=2, axis=0)[:, :, None], shape=D.shape),
-    #             point_extended))
-    pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), point_extended))
+    pdf = pm.math.exp(
+        pm.logp(pm.Normal.dist(mu=mean, sigma=ptt.repeat(sigma, repeats=2, axis=0)[:, :, None], shape=D.shape),
+                point_extended))
+    # pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sigma[None, :], shape=D.shape), point_extended))
 
     total_logp += (pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))) * PTM * SM).sum()
 
@@ -75,7 +75,7 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
     #     pm.Normal.dist(mu=initial_mean[:, :, None], sigma=sigma[:, :, None], shape=mixture_component.shape),
     #     mixture_component)
     total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape),
+        pm.Normal.dist(mu=initial_mean[None, :], sigma=sigma[None, :], shape=mixture_component.shape),
         mixture_component)
 
     # We preserve the logp only in the time step where PTM == 0.
@@ -90,7 +90,7 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
     # pdf = pm.math.exp(
     #     pm.logp(pm.Normal.dist(mu=mean, sigma=ptt.repeat(sigma, repeats=2, axis=0)[:, :, None], shape=D.shape),
     #             point_extended))
-    pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), point_extended))
+    pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sigma[None, :], shape=D.shape), point_extended))
 
     total_logp += (pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))) * PTM * SM).sum()
 
@@ -104,14 +104,15 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
                                         prev_time: np.ndarray,
                                         prev_time_mask: np.ndarray,
                                         subject_mask: np.ndarray,
-                                        expander_aux_mask_matrix: ptt.TensorConstant,
-                                        aggregation_aux_mask_matrix: ptt.TensorVariable,
+                                        expander_aux_mask_matrix: np.ndarray,
+                                        aggregation_aux_mask_matrix: np.ndarray,
                                         num_subjects: int,
                                         dim_value: int,
                                         rng: Optional[np.random.Generator] = None,
                                         size: Optional[Tuple[int]] = None) -> np.ndarray:
+
     num_time_steps = coordination.shape[-1]
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
 
     # We sample the influencers in each time step using the mixture weights
     influencers = []
@@ -129,7 +130,7 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
         S = sample[..., prev_time[t]]
         mean = ((D - S) * coordination[t] + S)
 
-        transition_sample = rng.normal(loc=mean, scale=sigma)
+        transition_sample = rng.normal(loc=initial_mean, scale=sigma)
 
         sample[..., t] = (prior_sample * (1 - prev_time_mask[t]) + transition_sample * prev_time_mask[t]) * \
                          subject_mask[t]
@@ -149,7 +150,7 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
                                            rng: Optional[np.random.Generator] = None,
                                            size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma[None, :]
 
     # We sample the influencers in each time step using the mixture weights
     influencers = []
@@ -166,7 +167,7 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
 
         mean = ((D - initial_mean) * coordination[t] + initial_mean)
 
-        transition_sample = rng.normal(loc=mean, scale=sigma)
+        transition_sample = rng.normal(loc=mean, scale=sigma[None, :])
 
         sample[..., t] = (prior_sample * (1 - prev_time_mask[t]) + transition_sample * prev_time_mask[t]) * \
                          subject_mask[t]
@@ -240,8 +241,8 @@ class MixtureComponent:
 
         for t in range(num_time_steps):
             if (t + 1) == relative_frequency:
-                samples.values[..., 0] = norm(loc=self.parameters.mean_a0,
-                                              scale=self.parameters.sd_aa).rvs(
+                samples.values[..., 0] = norm(loc=self.parameters.mean_a0[None, :],
+                                              scale=self.parameters.sd_aa[None, :]).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
                 samples.mask[..., t] = 1
             elif (t + 1) % relative_frequency == 0:
@@ -254,7 +255,7 @@ class MixtureComponent:
 
                 mean = (D - P) * C + P
 
-                samples.values[..., t] = norm(loc=mean, scale=self.parameters.sd_aa).rvs()
+                samples.values[..., t] = norm(loc=mean, scale=self.parameters.sd_aa[None, :]).rvs()
 
         return samples
 
@@ -262,17 +263,17 @@ class MixtureComponent:
                           subject_mask: ptt.TensorConstant, subject_dimension: str, feature_dimension: str,
                           time_dimension: str, observation: Any) -> Any:
 
-        # mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=1, size=(self.num_subjects, self.dim_value),
-        #                         observed=self.parameters.mean_a0)
-        # sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=1, size=(self.num_subjects, self.dim_value),
-        #                       observed=self.parameters.sd_aa)
+        mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=np.ones((self.num_subjects, self.dim_value)), size=(self.num_subjects, self.dim_value),
+                                observed=self.parameters.mean_a0)
+        sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=np.ones((self.num_subjects, self.dim_value)) * 20, size=(self.num_subjects, self.dim_value),
+                              observed=self.parameters.sd_aa)
         # mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
         #                                a=ptt.ones((self.num_subjects, self.num_subjects - 1)),
         #                                observed=self.parameters.mixture_weights)
-        mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=1, size=1,
-                                observed=self.parameters.mean_a0)
-        sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=2, size=1,
-                              observed=self.parameters.sd_aa)
+        # mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=1, size=self.dim_value,
+        #                         observed=self.parameters.mean_a0)
+        # sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=2, size=self.dim_value,
+        #                       observed=self.parameters.sd_aa)
         # mixture_weights = ptt.constant(self.parameters.mixture_weights)
 
         mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",

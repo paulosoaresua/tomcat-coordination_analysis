@@ -45,21 +45,21 @@ class ObservationComponent:
 
         # samples.values = norm(loc=latent_component, scale=self.parameters.sd_o[None, :, :, None]).rvs(
         #     size=latent_component.shape) * M
-        samples.values = norm(loc=latent_component, scale=self.parameters.sd_o).rvs(
+        samples.values = norm(loc=latent_component, scale=self.parameters.sd_o[None, :, :, None]).rvs(
             size=latent_component.shape) * M
         samples.mask = latent_mask
 
         return samples
 
     def update_pymc_model(self, latent_component: Any, parameter_size: List[int], observed_values: Any) -> Any:
-        # sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=1, size=parameter_size, observed=self.parameters.sd_o)
+        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=np.ones(parameter_size), size=parameter_size, observed=self.parameters.sd_o)
 
         # observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
         #                                   observed=observed_values)
 
-        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=2, size=1, observed=self.parameters.sd_o)
+        # sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=2, size=parameter_size[-1], observed=self.parameters.sd_o)
         # sd_o = pm.Flat(name=f"sd_o_{self.uuid}", size=1, observed=self.parameters.sd_o, initval=np.array([1]))
 
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o, observed=observed_values)
+        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None], observed=observed_values)
 
         return observation_component
