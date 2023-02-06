@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     mix.parameters.mean_a0 = np.zeros((3, F))
     mix.parameters.sd_aa = np.ones((3, F))
-    mix.parameters.mixture_weights = np.array([[0.3, 0.7]])
+    mix.parameters.mixture_weights = np.array([[0.3, 0.7], [0.8, 0.2], [0.1, 0.9]])
     obs.parameters.sd_o = np.ones((3, F))
 
     coordination_values = np.ones(shape=(1, T))
@@ -49,6 +49,8 @@ if __name__ == "__main__":
     plt.title(f"Samples")
     plt.show()
 
+    mix.parameters.mixture_weights = None
+    mix.parameters.mean_a0 = None
     mix.parameters.sd_aa = None
     obs.parameters.sd_o = None
     prev_time_mask = np.where(mix_samples.prev_time >= 0, 1, 0)
@@ -75,7 +77,7 @@ if __name__ == "__main__":
 
         idata = pm.sample(draws=1000, tune=1000, chains=2, init="jitter+adapt_diag", random_seed=0)
 
-        az.plot_trace(idata, var_names=["sd_aa_mix", "sd_o_obs"])
+        az.plot_trace(idata, var_names=["mixture_weights_mix", "mean_a0_mix", "sd_aa_mix", "sd_o_obs"])
         plt.show()
 
         posterior = idata.posterior["mix"].sel(chain=0).to_numpy()

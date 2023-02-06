@@ -117,7 +117,7 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
     # We sample the influencers in each time step using the mixture weights
     influencers = []
     for subject in range(num_subjects):
-        probs = np.insert(mixture_weights[0], subject, 0)
+        probs = np.insert(mixture_weights[subject], subject, 0)
         influencers.append(rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps))
     influencers = np.array(influencers)
 
@@ -234,7 +234,7 @@ class MixtureComponent:
         # Sample influencers in each time step
         influencers = []
         for subject in range(self.num_subjects):
-            probs = np.insert(self.parameters.mixture_weights[0], subject, 0)
+            probs = np.insert(self.parameters.mixture_weights[subject], subject, 0)
             influencers.append(
                 np.random.choice(a=np.arange(self.num_subjects), p=probs, size=(num_series, num_time_steps)))
         influencers = np.array(influencers).swapaxes(0, 1)
@@ -267,19 +267,19 @@ class MixtureComponent:
                                 observed=self.parameters.mean_a0)
         sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=np.ones((self.num_subjects, self.dim_value)) * 20, size=(self.num_subjects, self.dim_value),
                               observed=self.parameters.sd_aa)
-        # mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
-        #                                a=ptt.ones((self.num_subjects, self.num_subjects - 1)),
-        #                                observed=self.parameters.mixture_weights)
+        mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
+                                       a=ptt.ones((self.num_subjects, self.num_subjects - 1)),
+                                       observed=self.parameters.mixture_weights)
         # mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=1, size=self.dim_value,
         #                         observed=self.parameters.mean_a0)
         # sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=2, size=self.dim_value,
         #                       observed=self.parameters.sd_aa)
         # mixture_weights = ptt.constant(self.parameters.mixture_weights)
 
-        mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
-                                       a=ptt.ones(self.num_subjects - 1),
-                                       size=1,
-                                       observed=self.parameters.mixture_weights)
+        # mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
+        #                                a=ptt.ones(self.num_subjects - 1),
+        #                                size=1,
+        #                                observed=self.parameters.mixture_weights)
 
         # Auxiliary matrices to compute logp in a vectorized manner without having to loop over the individuals.
         expander_aux_mask_matrix = []
@@ -288,7 +288,7 @@ class MixtureComponent:
             expander_aux_mask_matrix.append(np.delete(np.eye(self.num_subjects), subject, axis=0))
             aux = np.zeros((self.num_subjects, self.num_subjects - 1))
             aux[subject] = 1
-            aux = aux * mixture_weights[0][None, :]
+            aux = aux * mixture_weights[subject][None, :]
             aggregator_aux_mask_matrix.append(aux)
 
         expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
