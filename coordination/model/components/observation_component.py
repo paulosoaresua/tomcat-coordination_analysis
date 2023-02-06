@@ -5,15 +5,16 @@ import pymc as pm
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior
 
 
 class ObservationComponentParameters:
 
-    def __init__(self):
-        self.sd_o = None
+    def __init__(self, sd_sd_o: np.ndarray):
+        self.sd_o = Parameter(HalfNormalParameterPrior(sd_sd_o))
 
-    def reset(self):
-        self.sd_o = None
+    def clear_values(self):
+        self.sd_o.value = None
 
 
 class ObservationComponentSamples:
@@ -27,15 +28,18 @@ class ObservationComponentSamples:
 
 class ObservationComponent:
 
-    def __init__(self, uuid: str):
-        self.uuid = uuid
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray):
+        assert (num_subjects, dim_value) == sd_sd_o.shape
 
-        self.parameters = ObservationComponentParameters()
+        self.uuid = uuid
+        self.num_subjects = num_subjects
+        self.dim_value = dim_value
+
+        self.parameters = ObservationComponentParameters(sd_sd_o)
 
     def draw_samples(self, seed: Optional[int], latent_component: np.ndarray,
                      latent_mask: np.ndarray) -> ObservationComponentSamples:
-        # assert latent_component.shape[1] == self.parameters.sd_o.shape[0]
-        # assert latent_component.shape[2] == self.parameters.sd_o.shape[1]
+        assert latent_component.shape[1:3] == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
 
@@ -43,23 +47,17 @@ class ObservationComponent:
 
         M = latent_mask[:, None, None, :]
 
-        # samples.values = norm(loc=latent_component, scale=self.parameters.sd_o[None, :, :, None]).rvs(
-        #     size=latent_component.shape) * M
-        samples.values = norm(loc=latent_component, scale=self.parameters.sd_o[None, :, :, None]).rvs(
+        samples.values = norm(loc=latent_component, scale=self.parameters.sd_o.value[None, :, :, None]).rvs(
             size=latent_component.shape) * M
         samples.mask = latent_mask
 
         return samples
 
-    def update_pymc_model(self, latent_component: Any, parameter_size: List[int], observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=np.ones(parameter_size), size=parameter_size, observed=self.parameters.sd_o)
+    def update_pymc_model(self, latent_component: Any, observed_values: Any) -> Any:
+        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=self.parameters.sd_o.prior.sd,
+                             size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
 
-        # observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
-        #                                   observed=observed_values)
-
-        # sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=2, size=parameter_size[-1], observed=self.parameters.sd_o)
-        # sd_o = pm.Flat(name=f"sd_o_{self.uuid}", size=1, observed=self.parameters.sd_o, initval=np.array([1]))
-
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None], observed=observed_values)
+        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
+                                          observed=observed_values)
 
         return observation_component

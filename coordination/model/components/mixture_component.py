@@ -7,8 +7,7 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior, \
-    NormalParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior
 
 
 def mixture_logp_with_self_dependency(mixture_component: Any,

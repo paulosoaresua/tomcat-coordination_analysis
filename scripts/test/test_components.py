@@ -13,12 +13,12 @@ if __name__ == "__main__":
 
     mix = MixtureComponent("mix", 3, F, True, sd_mean_a0=np.ones((3, F)), sd_sd_aa=np.full((3, F), fill_value=2),
                            a_mixture_weights=np.ones((3, 2)))
-    obs = ObservationComponent("obs")
+    obs = ObservationComponent("obs", 3, F, sd_sd_o=np.ones((3, F)))
 
     mix.parameters.mean_a0.value = np.zeros((3, F))
     mix.parameters.sd_aa.value = np.ones((3, F))
     mix.parameters.mixture_weights.value = np.array([[0.3, 0.7], [0.8, 0.2], [0.1, 0.9]])
-    obs.parameters.sd_o = np.ones((3, F))
+    obs.parameters.sd_o.value = np.ones((3, F))
 
     coordination_values = np.ones(shape=(1, T))
     mix_samples = mix.draw_samples(num_series=1, num_time_steps=T, seed=0, relative_frequency=1,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     plt.show()
 
     mix.parameters.clear_values()
-    obs.parameters.sd_o = None
+    obs.parameters.clear_values()
     prev_time_mask = np.where(mix_samples.prev_time >= 0, 1, 0)
     with pm.Model(coords={"sub": np.arange(3), "time": np.arange(T), "fea": np.arange(F)}) as model:
         latent_component = mix.update_pymc_model(ptt.constant(coordination_values[0]),
@@ -61,7 +61,7 @@ if __name__ == "__main__":
                                                  subject_dimension="sub",
                                                  time_dimension="time",
                                                  feature_dimension="fea")
-        obs.update_pymc_model(latent_component, [3, F], obs_samples.values[0])
+        obs.update_pymc_model(latent_component, obs_samples.values[0])
 
         idata = pm.sample_prior_predictive(random_seed=0)
 
