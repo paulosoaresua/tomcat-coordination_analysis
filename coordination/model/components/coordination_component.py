@@ -11,7 +11,7 @@ from coordination.common.utils import set_random_seed
 
 class SigmoidGaussianCoordinationComponentParameters:
 
-    def __init__(self, sd_uc: float, sd_c: float):
+    def __init__(self, sd_uc: float):
         self.sd_uc = Parameter(HalfNormalParameterPrior(np.array([sd_uc])))
 
     def clear_values(self):
@@ -27,10 +27,10 @@ class SigmoidGaussianCoordinationComponentSamples:
 
 class SigmoidGaussianCoordinationComponent:
 
-    def __init__(self, initial_coordination: float, sd_uc: float, sd_c: float):
+    def __init__(self, initial_coordination: float, sd_uc: float):
         self.initial_coordination = initial_coordination
 
-        self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_uc, sd_c)
+        self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_uc)
 
     def draw_samples(self, num_series: int, num_time_steps: int,
                      seed: Optional[int]) -> SigmoidGaussianCoordinationComponentSamples:

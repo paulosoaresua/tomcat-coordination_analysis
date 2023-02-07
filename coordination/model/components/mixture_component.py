@@ -13,12 +13,12 @@ from coordination.model.parametrization import Parameter, HalfNormalParameterPri
 def mixture_logp_with_self_dependency(mixture_component: Any,
                                       initial_mean: Any,
                                       sigma: Any,
-                                      mixture_weights: np.ndarray,
+                                      mixture_weights: Any,
                                       coordination: Any,
                                       expander_aux_mask_matrix: ptt.TensorConstant,
                                       aggregation_aux_mask_matrix: ptt.TensorVariable):
-    C = coordination[None, None, 1:]  # 1 x 1 x t
-    P = mixture_component[..., :-1]  # s x d x t
+    C = coordination[None, None, 1:]  # 1 x 1 x t-1
+    P = mixture_component[..., :-1]  # s x d x t-1
 
     # Log probability due to the initial time step in the component's scale.
     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
@@ -43,7 +43,7 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
 def mixture_logp_without_self_dependency(mixture_component: Any,
                                          initial_mean: Any,
                                          sigma: Any,
-                                         mixture_weights: np.ndarray,
+                                         mixture_weights: Any,
                                          coordination: Any,
                                          expander_aux_mask_matrix: ptt.TensorConstant,
                                          aggregation_aux_mask_matrix: ptt.TensorVariable):
@@ -197,12 +197,9 @@ class MixtureComponent:
     def draw_samples(self, num_series: int, seed: Optional[int], relative_frequency: float,
                      coordination: np.ndarray) -> MixtureComponentSamples:
 
-        assert self.num_subjects == self.parameters.mixture_weights.value.shape[0]
-        assert (self.num_subjects - 1) == self.parameters.mixture_weights.value.shape[1]
-        assert self.num_subjects == self.parameters.mean_a0.value.shape[0]
-        assert self.num_subjects == self.parameters.sd_aa.value.shape[0]
-        assert self.dim_value == self.parameters.mean_a0.value.shape[1]
-        assert self.dim_value == self.parameters.sd_aa.value.shape[1]
+        assert (self.num_subjects, self.num_subjects - 1) == self.parameters.mixture_weights.value.shape
+        assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
+        assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
 
         set_random_seed(seed)
 
@@ -249,11 +246,9 @@ class MixtureComponent:
                           observation: Optional[Any] = None) -> Any:
 
         mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=self.parameters.mean_a0.prior.sd,
-                                size=(self.num_subjects, self.dim_value),
-                                observed=self.parameters.mean_a0.value)
+                                size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
         sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=self.parameters.sd_aa.prior.sd,
-                              size=(self.num_subjects, self.dim_value),
-                              observed=self.parameters.sd_aa.value)
+                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
         mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
                                        a=self.parameters.mixture_weights.prior.a,
                                        observed=self.parameters.mixture_weights.value)
