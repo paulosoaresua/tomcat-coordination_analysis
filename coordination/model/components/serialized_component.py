@@ -180,6 +180,7 @@ class SerializedComponent:
     def draw_samples(self, num_series: int, seed: Optional[int], time_scale_density: float,
                      coordination: np.ndarray, can_repeat_subject: bool) -> SerializedComponentSamples:
 
+        assert 0 <= time_scale_density <= 1
         assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
         assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
 

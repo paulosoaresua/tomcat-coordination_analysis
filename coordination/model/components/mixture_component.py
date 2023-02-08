@@ -197,6 +197,7 @@ class MixtureComponent:
     def draw_samples(self, num_series: int, seed: Optional[int], relative_frequency: float,
                      coordination: np.ndarray) -> MixtureComponentSamples:
 
+        assert relative_frequency >= 1
         assert (self.num_subjects, self.num_subjects - 1) == self.parameters.mixture_weights.value.shape
         assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
         assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape

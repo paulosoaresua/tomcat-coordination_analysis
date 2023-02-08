@@ -34,3 +34,12 @@ class DirichletParameterPrior:
         assert (a > 0).all()
 
         self.a = a
+
+
+class BetaParameterPrior:
+
+    def __init__(self, a: float, b: float):
+        assert a > 0 and b > 0
+
+        self.a = a
+        self.b = b
