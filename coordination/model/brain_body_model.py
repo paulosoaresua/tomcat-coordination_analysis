@@ -1,255 +1,177 @@
 from __future__ import annotations
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional, Tuple
 
+import arviz as az
 import numpy as np
 import pymc as pm
-import pytensor.tensor as at
-from scipy.stats import norm
 
-from coordination.common.utils import logit, sigmoid
-from coordination.common.distribution import beta
-from coordination.model.utils.coordination_blending_latent_vocalics import BaseF, BaseG
+from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent, \
+    SigmoidGaussianCoordinationComponentSamples
+from coordination.model.components.mixture_component import MixtureComponent, MixtureComponentSamples
+from coordination.model.components.observation_component import ObservationComponent, ObservationComponentSamples
 
-from coordination.model.pgm2 import PGM2
-from coordination.model.utils.brain_body_model import BrainBodyDataSeries, BrainBodySamples, BrainBodyParticlesSummary, \
-    BrainBodyModelParameters
-
-# For numerical stability
-EPSILON = 1e-6
-MIN_COORDINATION = 2 * EPSILON
-MAX_COORDINATION = 1 - MIN_COORDINATION
-
-# Subjects influence others equally. This can be adapted to consider a drift in influence power in future models.
-W = np.array([0.5, 0.5])
-
-# We fix standard deviation for coordination. The unbounded coordination standard deviation will be fit to the data.
-# OBS: I declare this variable as global because for some unknown reason, if this variable is declared as a local
-# attribute of the model class, NUTS performs 3 to 4 times slower when I pass this variable to the pm.math.minimum
-# function.
-SD_C = 0.1
+from coordination.common.functions import sigmoid
 
 
-def multi_influencers_mixture_logp(latent_variable: at.TensorVariable, coordination: at.TensorVariable,
-                                   sigma: at.TensorVariable):
-    latent_prev = latent_variable[..., :-1]
-    latent_curr = latent_variable[..., 1:]
-    c_i = coordination[1:][None, :]
+class BrainBodySamples:
 
-    num_subjects, num_channels, num_time_steps = latent_variable.shape
-    shape = (num_channels, num_time_steps - 1)
-
-    num_subjects = num_subjects.eval()
-    total_logp = 0
-    for s1 in range(num_subjects):
-        w = 0
-        likelihood_per_subject = 0
-        for s2 in range(num_subjects):
-            if s1 == s2:
-                continue
-
-            logp_s1_from_s2 = pm.logp(
-                pm.Normal.dist(mu=latent_prev[s2] * c_i + (1 - c_i) * latent_prev[s1], sigma=sigma, shape=shape),
-                latent_curr[s1])
-
-            likelihood_per_subject += W[w] * pm.math.exp(logp_s1_from_s2)
-            w += 1
-
-        total_logp += pm.math.log(likelihood_per_subject).sum()
-
-    init_dist = pm.Normal.dist(mu=0, sigma=1, shape=(num_subjects, num_channels))
-
-    return at.sum(pm.logp(init_dist, latent_variable[..., 0])) + total_logp
+    def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples, latent_brain: MixtureComponentSamples,
+                 latent_body: MixtureComponentSamples, obs_brain: ObservationComponentSamples,
+                 obs_body: ObservationComponentSamples):
+        self.coordination = coordination
+        self.latent_brain = latent_brain
+        self.latent_body = latent_body
+        self.obs_brain = obs_brain
+        self.obs_body = obs_body
 
 
-class BrainBodyModel(PGM2[BrainBodySamples, BrainBodyParticlesSummary]):
+class BrainBodySeries:
 
-    # TODO: I disabled body movement for now
+    def __init__(self, num_time_steps_in_coordination_scale: int, obs_brain: np.ndarray,
+                 brain_time_steps_in_coordination_scale: np.ndarray, obs_body: np.ndarray,
+                 body_time_steps_in_coordination_scale: np.ndarray):
+        self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
+        self.obs_brain = obs_brain
+        self.brain_time_steps_in_coordination_scale = brain_time_steps_in_coordination_scale
+        self.obs_body = obs_body
+        self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
 
-    def __init__(self,
-                 initial_coordination: float,
-                 num_brain_channels: int,
-                 num_subjects: int,
-                 f: BaseF = BaseF(),
-                 g: BaseG = BaseG(),
-                 disable_self_dependency: bool = False):
-        super().__init__()
+    @property
+    def num_time_steps_in_brain_scale(self) -> int:
+        return self.obs_brain.shape[-1]
 
-        # Fix the number of subjects to 3 for now
-        assert num_subjects == 3
+    @property
+    def num_time_steps_in_body_scale(self) -> int:
+        return self.obs_body.shape[-1]
 
-        self.initial_coordination = initial_coordination
-        self.num_brain_channels = num_brain_channels
+    @property
+    def num_brain_channels(self) -> int:
+        return self.obs_brain.shape[-2]
+
+    @property
+    def num_subjects(self) -> int:
+        return self.obs_brain.shape[-3]
+
+
+class BrainBodyInferenceSummary:
+
+    def __init__(self):
+        self.unbounded_coordination_means = np.array([])
+        self.coordination_means = np.array([])
+        self.latent_brain_means = np.array([])
+        self.latent_body_means = np.array([])
+
+        self.unbounded_coordination_sds = np.array([])
+        self.coordination_sds = np.array([])
+        self.latent_brain_sds = np.array([])
+        self.latent_body_sds = np.array([])
+
+    @classmethod
+    def from_inference_data(cls, idata: Any, retain_every: int = 1) -> BrainBodyInferenceSummary:
+        summary = cls()
+
+        if "unbounded_coordination" in idata.posterior:
+            summary.unbounded_coordination_means = idata.posterior["unbounded_coordination"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.unbounded_coordination_sds = idata.posterior["unbounded_coordination"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+            summary.coordination_means = sigmoid(idata.posterior["unbounded_coordination"][::retain_every]).mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.coordination_sds = sigmoid(idata.posterior["unbounded_coordination"][::retain_every]).std(
+                dim=["chain", "draw"]).to_numpy()
+
+        if "latent_brain" in idata.posterior:
+            summary.latent_brain_means = idata.posterior["latent_brain"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.latent_brain_sds = idata.posterior["latent_brain"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+        if "latent_body" in idata.posterior:
+            summary.latent_body_means = idata.posterior["latent_body"][::retain_every].mean(
+                dim=["chain", "draw"]).to_numpy()
+            summary.latent_body_sds = idata.posterior["latent_body"][::retain_every].std(
+                dim=["chain", "draw"]).to_numpy()
+
+        return summary
+
+
+class BrainBodyModel:
+
+    def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int,
+                 self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
+                 sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
+                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
         self.num_subjects = num_subjects
-        self.f = f
-        self.g = g
-        self.disable_self_dependency = disable_self_dependency
+        self.num_brain_channels = num_brain_channels
 
-        # We assume all subjects contribute with the same weight.
-        # This parameter can be a random variable in future work.
-        self.mixture_weigths = np.ones(num_subjects - 1) / (num_subjects - 1)
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
+        self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, num_brain_channels, self_dependent,
+                                                 sd_mean_a0=sd_mean_a0_brain, sd_sd_aa=sd_sd_aa_brain,
+                                                 a_mixture_weights=a_mixture_weights)
+        self.latent_body_cpn = MixtureComponent("latent_body", num_subjects, 1, self_dependent,
+                                                sd_mean_a0=sd_mean_a0_body, sd_sd_aa=sd_sd_aa_body,
+                                                a_mixture_weights=a_mixture_weights)
+        self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, num_brain_channels, sd_sd_o=sd_sd_o_brain)
+        self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, 1, sd_sd_o=sd_sd_o_body)
 
-        self.parameters = BrainBodyModelParameters()
+    def draw_samples(self, num_series: int, num_time_steps: int,
+                     seed: Optional[int], brain_relative_frequency: float,
+                     body_relative_frequency: float) -> BrainBodySamples:
+        coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
+        latent_brain_samples = self.latent_brain_cpn.draw_samples(num_series,
+                                                                  relative_frequency=brain_relative_frequency,
+                                                                  coordination=coordination_samples.coordination)
+        latent_body_samples = self.latent_body_cpn.draw_samples(num_series,
+                                                                relative_frequency=body_relative_frequency,
+                                                                coordination=coordination_samples.coordination)
+        obs_brain_samples = self.obs_brain_cpn.draw_samples(latent_component=latent_brain_samples.values)
+        obs_body_samples = self.obs_body_cpn.draw_samples(latent_component=latent_body_samples.values)
 
-        self._hyper_params = {
-            "c0": initial_coordination,
-            "#features": num_brain_channels,
-            "#speakers": num_subjects,
-            "f": f.__repr__(),
-            "g": g.__repr__(),
-            "disable_self_dependency": disable_self_dependency
-        }
-
-    def sample(self, num_series: int, num_time_steps: int, seed: Optional[int], *args, **kwargs) -> BrainBodySamples:
-        samples = BrainBodySamples()
-        samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
-        samples.coordination = np.zeros((num_series, num_time_steps))
-        samples.latent_brain = np.zeros((num_series, self.num_subjects, self.num_brain_channels, num_time_steps))
-        samples.latent_body = np.zeros((num_series, self.num_subjects, 1, num_time_steps))
-        samples.observed_brain = np.zeros((num_series, self.num_subjects, self.num_brain_channels, num_time_steps))
-        samples.observed_body = np.zeros((num_series, self.num_subjects, 1, num_time_steps))
-
-        for t in range(num_time_steps):
-            if t == 0:
-                samples.unbounded_coordination[:, t] = logit(self.initial_coordination)
-            else:
-                samples.unbounded_coordination[:, t] = norm(loc=samples.unbounded_coordination[:, t - 1],
-                                                            scale=self.parameters.sd_uc).rvs()
-
-            # We clip the mean and variance to make sure we have a proper Beta distribution from which we can sample
-            # from.
-            clipped_uc = np.clip(sigmoid(samples.unbounded_coordination[:, t]), MIN_COORDINATION, MAX_COORDINATION)
-            clipped_vc = np.minimum(self.parameters.sd_c ** 2, 0.5 * clipped_uc * (1 - clipped_uc))
-            samples.coordination[:, t] = beta(clipped_uc, clipped_vc).rvs()
-
-            if t == 0:
-                samples.latent_brain[:, :, :, 0] = norm(loc=0, scale=1).rvs(
-                    size=(num_series, self.num_subjects, self.num_brain_channels))
-                samples.latent_body[:, :, :, 0] = norm(loc=0, scale=1).rvs(
-                    size=(num_series, self.num_subjects, 1))
-            else:
-                # Subject 0
-                for subject1 in range(self.num_subjects):
-                    brain_samples_from_mixture = []
-                    body_samples_from_mixture = []
-                    for subject2 in range(self.num_subjects):
-                        if subject1 == subject2:
-                            continue
-
-                        mu = samples.latent_brain[:, subject2, :, t - 1] * samples.coordination[:, t][:, None] + \
-                             samples.latent_brain[:, subject1, :, t - 1] * (1 - samples.coordination[:, t][:, None])
-                        brain_samples_from_mixture.append(norm(loc=mu, scale=self.parameters.sd_brain).rvs())
-
-                        mu = samples.latent_body[:, subject2, :, t - 1] * samples.coordination[:, t][:, None] + \
-                             samples.latent_body[:, subject1, :, t - 1] * (1 - samples.coordination[:, t][:, None])
-                        body_samples_from_mixture.append(norm(loc=mu, scale=self.parameters.sd_brain).rvs())
-
-                    brain_influencer_indices = np.random.choice(a=np.arange(self.num_subjects - 1), size=num_series,
-                                                                p=self.mixture_weigths)
-                    body_influencer_indices = np.random.choice(a=np.arange(self.num_subjects - 1), size=num_series,
-                                                               p=self.mixture_weigths)
-                    for i in range(num_series):
-                        influencer_idx = int(brain_influencer_indices[i])
-                        if isinstance(brain_samples_from_mixture[influencer_idx], float):
-                            samples.latent_brain[i, subject1, :, t] = brain_samples_from_mixture[influencer_idx]
-                        else:
-                            samples.latent_brain[i, subject1, :, t] = brain_samples_from_mixture[influencer_idx][i]
-
-                        influencer_idx = int(body_influencer_indices[i])
-                        if isinstance(body_samples_from_mixture[influencer_idx], float):
-                            samples.latent_body[i, subject1, :, t] = body_samples_from_mixture[influencer_idx]
-                        else:
-                            samples.latent_body[i, subject1, :, t] = body_samples_from_mixture[influencer_idx][i]
-
-            samples.observed_brain[:, :, :, t] = norm(loc=samples.latent_brain[:, :, :, t],
-                                                      scale=self.parameters.sd_obs_brain).rvs()
-            samples.observed_body[:, :, :, t] = norm(loc=samples.latent_body[:, :, :, t],
-                                                     scale=self.parameters.sd_obs_body).rvs()
+        samples = BrainBodySamples(coordination_samples, latent_brain_samples, latent_body_samples, obs_brain_samples,
+                                   obs_body_samples)
 
         return samples
 
-    def fit(self, evidence: BrainBodyDataSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int], retain_every: int = 1, num_jobs: int = 1) -> Any:
+    def fit(self, evidence: BrainBodySeries, burn_in: int, num_samples: int, num_chains: int,
+            seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
+        assert evidence.num_subjects == self.num_subjects
+        assert evidence.num_brain_channels == self.num_brain_channels
 
-        model = self._define_pymc_model(evidence)
+        coords = {"subject": np.arange(self.num_subjects),
+                  "brain_channel": np.arange(self.num_brain_channels),
+                  "body_feature": np.arange(1),
+                  "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
+                  "brain_time": np.arange(evidence.num_time_steps_in_brain_scale),
+                  "body_time": np.arange(evidence.num_time_steps_in_body_scale)}
+
+        model = pm.Model(coords=coords)
         with model:
-            idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+            _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
+            latent_brain, _, _, mixture_weights = self.latent_brain_cpn.update_pymc_model(
+                coordination=coordination[evidence.brain_time_steps_in_coordination_scale],
+                subject_dimension="subject",
+                time_dimension="brain_time",
+                feature_dimension="brain_channel")
+            # We share the mixture weights between the brain and body components as we assume they should reflect
+            # degrees of influences across components.
+            latent_body, _, _, _ = self.latent_body_cpn.update_pymc_model(
+                coordination=coordination[evidence.body_time_steps_in_coordination_scale],
+                subject_dimension="subject",
+                time_dimension="body_time",
+                feature_dimension="body_feature",
+                mixture_weights=mixture_weights)
+            self.obs_brain_cpn.update_pymc_model(latent_component=latent_brain, observed_values=evidence.obs_brain)
+            self.obs_body_cpn.update_pymc_model(latent_component=latent_body, observed_values=evidence.obs_body)
+
+            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
 
-            # self.parameters.sd_uc = idata.posterior["sd_uc"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
-            # self.parameters.sd_brain = idata.posterior["sd_brain"][::retain_every].mean(
-            #     dim=["chain", "draw"]).to_numpy()
-            # # self.parameters.sd_body = idata.posterior["sd_body"][::retain_every].mean(dim=["chain", "draw"]).to_numpy()
-            # self.parameters.sd_obs_brain = idata.posterior["sd_obs_brain"][::retain_every].mean(
-            #     dim=["chain", "draw"]).to_numpy()
-            # # self.parameters.sd_obs_body = idata.posterior["sd_obs_body"][::retain_every].mean(
-            # #     dim=["chain", "draw"]).to_numpy()
+        return model, idata
 
-            return idata
-
-    def _define_pymc_model(self, evidence: BrainBodyDataSeries):
-        coords = {"subject": np.arange(self.num_subjects),
-                  "brain_channel": np.arange(self.num_brain_channels), "body_feature": np.arange(1),
-                  "time": np.arange(evidence.num_time_steps)}
-        model = pm.Model(coords=coords)
-
-        with model:
-            # Parameters to be inferred and shared among time series of brain signal and body movement.
-            sd_uc = pm.HalfNormal(name="sd_uc", sigma=1, size=1, observed=self.parameters.sd_uc)
-            sd_c = pm.HalfNormal(name="sd_c", sigma=1, size=1, observed=self.parameters.sd_c)
-            sd_brain = pm.HalfNormal(name="sd_brain", sigma=1, size=1, observed=self.parameters.sd_brain)
-            # sd_body = pm.HalfNormal(name="sd_body", sigma=1, size=1, observed=self.parameters.sd_body)
-            sd_obs_brain = pm.HalfNormal(name="sd_obs_brain", sigma=1, size=1, observed=self.parameters.sd_obs_brain)
-            # sd_obs_body = pm.HalfNormal(name="sd_obs_body", sigma=1, size=1, observed=self.parameters.sd_obs_body)
-
-            prior = pm.Normal.dist(mu=logit(self.initial_coordination), sigma=sd_uc)
-            unbounded_coordination = pm.GaussianRandomWalk("unbounded_coordination",
-                                                           init_dist=prior,
-                                                           sigma=sd_uc,
-                                                           dims=["time"])
-
-            mean_coordination = pm.Deterministic("mean_coordination", pm.math.sigmoid(unbounded_coordination),
-                                                 dims=["time"])
-
-            mean_coordination_clipped = pm.Deterministic(f"mean_coordination_clipped",
-                                                         pm.math.clip(mean_coordination, MIN_COORDINATION,
-                                                                      MAX_COORDINATION), dims=["time"])
-            sd_c_clipped = pm.Deterministic("sd_c_clipped", pm.math.minimum(sd_c, 0.5 * mean_coordination_clipped * (
-                    1 - mean_coordination_clipped)))
-
-            coordination = pm.Beta(name="coordination", mu=mean_coordination_clipped, sigma=sd_c_clipped,
-                                   dims=["time"])
-
-            brain_params = (coordination,
-                            sd_brain)
-            latent_brain = pm.DensityDist("latent_brain", *brain_params,
-                                          logp=multi_influencers_mixture_logp,
-                                          dims=["subject", "brain_channel", "time"])
-
-            # body_params = (at.as_tensor_variable(coordination),
-            #                at.as_tensor_variable(sd_body))
-            # latent_body = pm.DensityDist("latent_body", *body_params,
-            #                              logp=multi_influencers_mixture_logp,
-            #                              dims=["subject", "body_feature", "time"])
-
-            pm.Normal(name="observed_brain", mu=latent_brain, sigma=sd_obs_brain,
-                      dims=("subject", "brain_channel", "time"), observed=evidence.observed_brain_signals)
-            # pm.Normal(name="observed_body", mu=latent_body, sigma=sd_obs_body,
-            #           observed=evidence.observed_body_movements)
-
-        return model
-
-    # def predict(self, evidence: BrainBodyDataset, num_samples: int, burn_in: int, num_chains: int, seed: Optional[int],
-    #             retain_every: int = 1, num_jobs: int = 1) -> List[BrainBodyParticlesSummary]:
-    #
-    #     summaries = []
-    #     for i in range(evidence.num_trials):
-    #         model = self._define_pymc_model(evidence.get_subset([i]))
-    #         with model:
-    #             idata = pm.sample(num_samples, init="adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
-    #                               cores=num_jobs)
-    #
-    #             summary = BrainBodyParticlesSummary.from_inference_data(idata, retain_every)
-    #
-    #             summaries.append(summary)
-    #
-    #     return summaries
+    def clear_parameter_values(self):
+        self.coordination_cpn.parameters.clear_values()
+        self.latent_brain_cpn.parameters.clear_values()
+        self.latent_body_cpn.parameters.clear_values()
+        self.obs_brain_cpn.parameters.clear_values()
+        self.obs_body_cpn.parameters.clear_values()

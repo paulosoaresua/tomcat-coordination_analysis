@@ -33,7 +33,7 @@ class SigmoidGaussianCoordinationComponent:
         self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_uc)
 
     def draw_samples(self, num_series: int, num_time_steps: int,
-                     seed: Optional[int]) -> SigmoidGaussianCoordinationComponentSamples:
+                     seed: Optional[int] = None) -> SigmoidGaussianCoordinationComponentSamples:
         set_random_seed(seed)
 
         samples = SigmoidGaussianCoordinationComponentSamples()
@@ -50,7 +50,7 @@ class SigmoidGaussianCoordinationComponent:
 
         return samples
 
-    def update_pymc_model(self, time_dimension: str, unbounded_coordination_observation: Optional[Any] = None) -> Any:
+    def update_pymc_model(self, time_dimension: str, unbounded_coordination_observed_values: Optional[Any] = None) -> Any:
         sd_uc = pm.HalfNormal(name="sd_uc", sigma=self.parameters.sd_uc.prior.sd, size=1,
                               observed=self.parameters.sd_uc.value)
 
@@ -59,8 +59,8 @@ class SigmoidGaussianCoordinationComponent:
                                                        init_dist=prior,
                                                        sigma=sd_uc,
                                                        dims=[time_dimension],
-                                                       observed=unbounded_coordination_observation)
+                                                       observed=unbounded_coordination_observed_values)
 
         coordination = pm.Deterministic("coordination", pm.math.sigmoid(unbounded_coordination))
 
-        return unbounded_coordination, coordination
+        return unbounded_coordination, coordination, sd_uc

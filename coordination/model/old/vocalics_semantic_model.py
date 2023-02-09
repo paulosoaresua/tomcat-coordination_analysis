@@ -25,13 +25,6 @@ EPSILON = 1e-6
 MIN_COORDINATION = 2 * EPSILON
 MAX_COORDINATION = 1 - MIN_COORDINATION
 
-# We fix standard deviation for coordination. The unbounded coordination standard deviation will be fit to the data.
-# OBS: I declare this variable as global because for some unknown reason, if this variable is declared as a local
-# attribute of the model class, NUTS performs 3 to 4 times slower when I pass this variable to the pm.math.minimum
-# function.
-SD_C = 0.1
-
-
 def serialized_logp(latent_variable: at.TensorVariable, coordination: at.TensorVariable,
                     sigma: at.TensorVariable, previous_vocalics_from_self: at.TensorVariable,
                     previous_vocalics_from_other: at.TensorVariable,

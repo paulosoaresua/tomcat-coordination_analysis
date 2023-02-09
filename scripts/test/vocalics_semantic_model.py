@@ -3,9 +3,7 @@ import matplotlib.pyplot as plt
 
 from copy import deepcopy
 
-from coordination.model.vocalics_semantic_model import VocalicsSemanticModel, serialized_logp
-from coordination.model.utils.beta_coordination_blending_latent_vocalics import BetaCoordinationLatentVocalicsDataset, \
-    BetaCoordinationLatentVocalicsParticlesSummary
+from coordination.model.vocalic_semantic_model import VocalicSemanticModel
 
 import numpy as np
 import pymc as pm

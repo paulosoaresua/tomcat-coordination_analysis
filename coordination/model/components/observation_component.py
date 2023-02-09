@@ -35,7 +35,7 @@ class ObservationComponent:
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
-    def draw_samples(self, seed: Optional[int], latent_component: np.ndarray) -> ObservationComponentSamples:
+    def draw_samples(self, latent_component: np.ndarray, seed: Optional[int] = None) -> ObservationComponentSamples:
         assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
@@ -54,7 +54,7 @@ class ObservationComponent:
         observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
                                           observed=observed_values)
 
-        return observation_component
+        return observation_component, sd_o
 
 
 class SerializedObservationComponentSamples:
@@ -74,8 +74,8 @@ class SerializedObservationComponent:
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
-    def draw_samples(self, seed: Optional[int], latent_component: List[np.ndarray],
-                     subjects: List[np.ndarray]) -> SerializedObservationComponentSamples:
+    def draw_samples(self, latent_component: List[np.ndarray],
+                     subjects: List[np.ndarray], seed: Optional[int] = None) -> SerializedObservationComponentSamples:
         assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
@@ -88,11 +88,12 @@ class SerializedObservationComponent:
 
         return samples
 
-    def update_pymc_model(self, latent_component: Any, subjects: ptt.TensorConstant, observed_values: Any) -> Any:
+    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, observed_values: Any) -> Any:
         sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=self.parameters.sd_o.prior.sd,
                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
 
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[subjects].transpose(),
+        observation_component = pm.Normal(name=self.uuid, mu=latent_component,
+                                          sigma=sd_o[ptt.constant(subjects)].transpose(),
                                           observed=observed_values)
 
         return observation_component
