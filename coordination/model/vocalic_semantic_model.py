@@ -136,14 +136,22 @@ class VocalicSemanticModel:
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
         assert evidence.num_vocalic_features == self.num_vocalic_features
 
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+                              cores=num_jobs)
+
+        return pymc_model, idata
+
+    def _define_pymc_model(self, evidence: VocalicSemanticSeries):
         coords = {"subject": np.arange(self.num_subjects),
                   "vocalic_feature": np.arange(self.num_vocalic_features),
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "vocalic_time": np.arange(evidence.num_time_steps_in_vocalic_scale),
                   "link_time": np.arange(evidence.num_time_steps_in_semantic_link_scale)}
 
-        model = pm.Model(coords=coords)
-        with model:
+        pymc_model = pm.Model(coords=coords)
+        with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_vocalic, _, _ = self.latent_vocalic_cpn.update_pymc_model(
                 coordination=coordination[evidence.vocalic_time_steps_in_coordination_scale],
@@ -163,10 +171,14 @@ class VocalicSemanticModel:
                                                    subjects=evidence.vocalic_subjects,
                                                    observed_values=evidence.obs_vocalic)
 
-            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
-                              cores=num_jobs)
+        return pymc_model
 
-        return model, idata
+    def prior_predictive(self, evidence: VocalicSemanticSeries, seed: Optional[int] = None):
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample_prior_predictive(random_seed=seed)
+
+        return pymc_model, idata
 
     def clear_parameter_values(self):
         self.coordination_cpn.parameters.clear_values()

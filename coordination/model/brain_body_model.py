@@ -138,6 +138,14 @@ class BrainBodyModel:
         assert evidence.num_subjects == self.num_subjects
         assert evidence.num_brain_channels == self.num_brain_channels
 
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+                              cores=num_jobs)
+
+        return pymc_model, idata
+
+    def _define_pymc_model(self, evidence: BrainBodySeries):
         coords = {"subject": np.arange(self.num_subjects),
                   "brain_channel": np.arange(self.num_brain_channels),
                   "body_feature": np.arange(1),
@@ -145,8 +153,8 @@ class BrainBodyModel:
                   "brain_time": np.arange(evidence.num_time_steps_in_brain_scale),
                   "body_time": np.arange(evidence.num_time_steps_in_body_scale)}
 
-        model = pm.Model(coords=coords)
-        with model:
+        pymc_model = pm.Model(coords=coords)
+        with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_brain, _, _, mixture_weights = self.latent_brain_cpn.update_pymc_model(
                 coordination=coordination[evidence.brain_time_steps_in_coordination_scale],
@@ -164,10 +172,14 @@ class BrainBodyModel:
             self.obs_brain_cpn.update_pymc_model(latent_component=latent_brain, observed_values=evidence.obs_brain)
             self.obs_body_cpn.update_pymc_model(latent_component=latent_body, observed_values=evidence.obs_body)
 
-            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
-                              cores=num_jobs)
+        return pymc_model
 
-        return model, idata
+    def prior_predictive(self, evidence: BrainBodySeries, seed: Optional[int] = None):
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample_prior_predictive(random_seed=seed)
+
+        return pymc_model, idata
 
     def clear_parameter_values(self):
         self.coordination_cpn.parameters.clear_values()
