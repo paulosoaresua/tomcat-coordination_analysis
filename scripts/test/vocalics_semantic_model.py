@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries, \
-    VocalicSemanticInferenceSummary
-from coordination.common.functions import sigmoid
+    VocalicSemanticPosteriorSamples
 
 # Parameters
 TIME_STEPS = 120
@@ -34,7 +33,7 @@ if __name__ == "__main__":
     full_samples = model.draw_samples(num_series=1,
                                       num_time_steps=TIME_STEPS,
                                       vocalic_time_scale_density=1,
-                                      semantic_link_time_Scale_density=0.5,
+                                      semantic_link_time_scale_density=0.5,
                                       can_repeat_subject=False,
                                       seed=SEED)
 
@@ -63,29 +62,23 @@ if __name__ == "__main__":
                              "p_semantic_link"])
     plt.show()
 
-    # with pymc_model:
-    #     samples = pm.sample_posterior_predictive(idata, var_names=["obs_brain"])
+    posterior_samples = VocalicSemanticPosteriorSamples.from_inference_data(idata)
 
-    inference_summary = VocalicSemanticInferenceSummary.from_inference_data(idata)
-
-    m = inference_summary.coordination_means
-    std = inference_summary.coordination_sds
-
-    coordination_posterior = sigmoid(idata.posterior["unbounded_coordination"].sel(chain=0).to_numpy())
+    coordination_posterior = posterior_samples.coordination.sel(chain=0)
+    avg_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"]).to_numpy()
 
     plt.figure(figsize=(15, 8))
-    # plt.fill_between(range(TIME_STEPS), m - std, m + std, color="tab:pink", alpha=0.4)
-    plt.plot(np.arange(TIME_STEPS)[:, None].repeat(1000, axis=1), coordination_posterior.T, color="tab:blue", alpha=0.3)
+    plt.plot(np.arange(TIME_STEPS)[:, None].repeat(coordination_posterior.shape[0], axis=1), coordination_posterior.T, color="tab:blue", alpha=0.3)
     plt.plot(range(TIME_STEPS), full_samples.coordination.coordination[0], label="Real", color="black", marker="o",
              markersize=5)
     plt.scatter(full_samples.semantic_link.time_steps_in_coordination_scale[0],
                 full_samples.coordination.coordination[
                     0, full_samples.semantic_link.time_steps_in_coordination_scale[0]],
                 c="white", marker="*", s=3, zorder=3)
-    plt.plot(range(TIME_STEPS), m, label="Inferred", color="tab:pink", markersize=5)
+    plt.plot(range(TIME_STEPS), avg_coordination, label="Inferred", color="tab:pink", markersize=5)
     plt.title("Coordination")
     plt.legend()
     plt.show()
 
     print(f"Real Coordination Average: {full_samples.coordination.coordination[0].mean()}")
-    print(f"Estimated Coordination Average: {m.mean()}")
+    print(f"Estimated Coordination Average: {avg_coordination.mean()}")

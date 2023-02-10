@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from datetime import datetime
 import random
@@ -31,9 +31,9 @@ def safe_divide(x: np.ndarray, y: np.ndarray, tol: float = 1e-6) -> np.ndarray:
     return np.where(np.isclose(y, tol), 0, x / y)
 
 
-def logit(x: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
+def logit(x: Union[np.ndarray, float]) -> Union[np.ndarray, float, Any]:
     return np.log(x / (1 - x))
 
 
-def sigmoid(x: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
+def sigmoid(x: Union[np.ndarray, float]) -> Union[np.ndarray, float, Any]:
     return np.exp(x) / (1 + np.exp(x))
