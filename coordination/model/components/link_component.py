@@ -40,27 +40,29 @@ class LinkComponent:
 
         self.parameters = LinkComponentParameters(a_p, b_p)
 
-    def draw_samples(self, num_series: int, seed: Optional[int], coordination: np.ndarray, ) -> LinkComponentSamples:
+    def draw_samples(self, num_series: int, time_scale_density: float, coordination: np.ndarray,
+                     seed: Optional[int] = None) -> LinkComponentSamples:
         set_random_seed(seed)
 
         samples = LinkComponentSamples()
 
-        links = bernoulli(p=coordination * self.parameters.p.value).rvs()
+        density_mask = bernoulli(p=time_scale_density).rvs(
+            coordination.shape)
+        links = bernoulli(p=coordination * self.parameters.p.value).rvs(coordination.shape)
 
-        if links.ndim == 1:
-            links = links[None, :]
+        links *= density_mask
 
         for s in range(num_series):
             samples.time_steps_in_coordination_scale.append(np.array([t for t, l in enumerate(links[s]) if l == 1]))
 
         return samples
 
-    def update_pymc_model(self, coordination: Any, observation: Any) -> Any:
+    def update_pymc_model(self, coordination: Any, observed_values: Any) -> Any:
         p = pm.Beta(name=f"p_{self.uuid}", alpha=self.parameters.p.prior.a, beta=self.parameters.p.prior.b,
                     size=1, observed=self.parameters.p.value)
 
         adjusted_prob = pm.Deterministic(f"adjusted_prob_{self.uuid}", p * coordination)
 
-        pm.Bernoulli(f"link_{self.uuid}", adjusted_prob, observed=observation)
+        pm.Bernoulli(f"link_{self.uuid}", adjusted_prob, observed=observed_values)
 
         return p, adjusted_prob

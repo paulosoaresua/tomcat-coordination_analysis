@@ -194,8 +194,8 @@ class MixtureComponent:
 
         self.parameters = MixtureComponentParameters(sd_mean_a0, sd_sd_aa, a_mixture_weights)
 
-    def draw_samples(self, num_series: int, seed: Optional[int], relative_frequency: float,
-                     coordination: np.ndarray) -> MixtureComponentSamples:
+    def draw_samples(self, num_series: int, relative_frequency: float,
+                     coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
 
         assert relative_frequency >= 1
         assert (self.num_subjects, self.num_subjects - 1) == self.parameters.mixture_weights.value.shape
@@ -244,15 +244,21 @@ class MixtureComponent:
         return samples
 
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
-                          observation: Optional[Any] = None) -> Any:
+                          observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None, sd_aa: Optional[Any] = None,
+                          mixture_weights: Optional[Any] = None) -> Any:
 
-        mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=self.parameters.mean_a0.prior.sd,
-                                size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
-        sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=self.parameters.sd_aa.prior.sd,
-                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
-        mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
-                                       a=self.parameters.mixture_weights.prior.a,
-                                       observed=self.parameters.mixture_weights.value)
+        if mean_a0 is None:
+            mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=self.parameters.mean_a0.prior.sd,
+                                    size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
+
+        if sd_aa is None:
+            sd_aa = pm.HalfNormal(name=f"sd_aa_{self.uuid}", sigma=self.parameters.sd_aa.prior.sd,
+                                  size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
+
+        if mixture_weights is None:
+            mixture_weights = pm.Dirichlet(name=f"mixture_weights_{self.uuid}",
+                                           a=self.parameters.mixture_weights.prior.a,
+                                           observed=self.parameters.mixture_weights.value)
 
         # Auxiliary matrices to compute logp in a vectorized manner without having to loop over the individuals.
         expander_aux_mask_matrix = []
@@ -279,7 +285,7 @@ class MixtureComponent:
             mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_with_self_dependency,
                                               random=random_fn,
                                               dims=[subject_dimension, feature_dimension, time_dimension],
-                                              observed=observation)
+                                              observed=observed_values)
         else:
             logp_params = (mean_a0,
                            sd_aa,
@@ -293,6 +299,6 @@ class MixtureComponent:
             mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_without_self_dependency,
                                               random=random_fn,
                                               dims=[subject_dimension, feature_dimension, time_dimension],
-                                              observed=observation)
+                                              observed=observed_values)
 
-        return mixture_component
+        return mixture_component, mean_a0, sd_aa, mixture_weights

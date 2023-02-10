@@ -2,7 +2,7 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import pymc as pm
-import pytensor.tensor as pt
+import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
@@ -13,10 +13,10 @@ def serialized_logp_with_self_dependency(serialized_component: Any,
                                          initial_mean: Any,
                                          sigma: Any,
                                          coordination: Any,
-                                         prev_time_same_subject: pt.TensorConstant,
-                                         prev_time_diff_subject: pt.TensorConstant,
-                                         prev_same_subject_mask: pt.TensorConstant,
-                                         prev_diff_subject_mask: pt.TensorConstant):
+                                         prev_time_same_subject: ptt.TensorConstant,
+                                         prev_time_diff_subject: ptt.TensorConstant,
+                                         prev_same_subject_mask: ptt.TensorConstant,
+                                         prev_diff_subject_mask: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t-1
     S = serialized_component[..., prev_time_same_subject]  # d x t-1
     D = serialized_component[..., prev_time_diff_subject]  # d x t-1
@@ -36,8 +36,8 @@ def serialized_logp_without_self_dependency(serialized_component: Any,
                                             initial_mean: Any,
                                             sigma: Any,
                                             coordination: Any,
-                                            prev_time_diff_subject: pt.TensorConstant,
-                                            prev_diff_subject_mask: pt.TensorConstant):
+                                            prev_time_diff_subject: ptt.TensorConstant,
+                                            prev_diff_subject_mask: ptt.TensorConstant):
     C = coordination[None, 1:]  # 1 x t-1
     S = initial_mean[..., 1:]  # d x t-1. Sampled around a fixed value if there's no coordination
     D = serialized_component[..., prev_time_diff_subject][..., 1:]  # d x t-1
@@ -52,7 +52,8 @@ def serialized_logp_without_self_dependency(serialized_component: Any,
     # Transition
     mean = (D - S) * C * DM + S
 
-    total_logp += pm.logp(pm.Normal.dist(mu=mean, sigma=sigma[..., 1:], shape=D.shape), serialized_component[..., 1:]).sum()
+    total_logp += pm.logp(pm.Normal.dist(mu=mean, sigma=sigma[..., 1:], shape=D.shape),
+                          serialized_component[..., 1:]).sum()
 
     return total_logp
 
@@ -62,8 +63,8 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
                                            coordination: np.ndarray,
                                            prev_time_same_subject: np.ndarray,
                                            prev_time_diff_subject: np.ndarray,
-                                           prev_same_subject_mask: pt.TensorConstant,
-                                           prev_diff_subject_mask: pt.TensorConstant,
+                                           prev_same_subject_mask: ptt.TensorConstant,
+                                           prev_diff_subject_mask: ptt.TensorConstant,
                                            rng: Optional[np.random.Generator] = None,
                                            size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -92,7 +93,7 @@ def serialized_random_without_self_dependency(initial_mean: np.ndarray,
                                               sigma: np.ndarray,
                                               coordination: np.ndarray,
                                               prev_time_diff_subject: np.ndarray,
-                                              prev_diff_subject_mask: pt.TensorConstant,
+                                              prev_diff_subject_mask: ptt.TensorConstant,
                                               rng: Optional[np.random.Generator] = None,
                                               size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -177,8 +178,9 @@ class SerializedComponent:
 
         self.parameters = SerializedComponentParameters(sd_mean_a0, sd_sd_aa)
 
-    def draw_samples(self, num_series: int, seed: Optional[int], time_scale_density: float,
-                     coordination: np.ndarray, can_repeat_subject: bool) -> SerializedComponentSamples:
+    def draw_samples(self, num_series: int, time_scale_density: float,
+                     coordination: np.ndarray, can_repeat_subject: bool,
+                     seed: Optional[int] = None) -> SerializedComponentSamples:
 
         assert 0 <= time_scale_density <= 1
         assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
@@ -276,10 +278,10 @@ class SerializedComponent:
         subjects -= 1
         return subjects
 
-    def update_pymc_model(self, coordination: Any, prev_time_same_subject: pt.TensorConstant,
-                          prev_time_diff_subject: pt.TensorConstant, prev_same_subject_mask: pt.TensorConstant,
-                          prev_diff_subject_mask: pt.TensorConstant, subjects: pt.TensorConstant,
-                          feature_dimension: str, time_dimension: str, observation: Optional[Any] = None) -> Any:
+    def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
+                          prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
+                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray,
+                          feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
 
         mean_a0 = pm.HalfNormal(name=f"mean_a0_{self.uuid}", sigma=self.parameters.mean_a0.prior.sd,
                                 size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
@@ -290,23 +292,23 @@ class SerializedComponent:
             logp_params = (mean_a0[subjects].transpose(),  # One mean and sd per time step matching their subjects.
                            sd_aa[subjects].transpose(),
                            coordination,
-                           pt.constant(prev_time_same_subject),
-                           pt.constant(prev_time_diff_subject),
-                           pt.constant(prev_same_subject_mask),
-                           pt.constant(prev_diff_subject_mask))
+                           ptt.constant(prev_time_same_subject),
+                           ptt.constant(prev_time_diff_subject),
+                           ptt.constant(prev_same_subject_mask),
+                           ptt.constant(prev_diff_subject_mask))
             random_fn = serialized_random_with_self_dependency
             serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=serialized_logp_with_self_dependency,
                                                   random=random_fn, dims=[feature_dimension, time_dimension],
-                                                  observed=observation)
+                                                  observed=observed_values)
         else:
             logp_params = (mean_a0[subjects].transpose(),
                            sd_aa[subjects].transpose(),
                            coordination,
-                           pt.constant(prev_time_diff_subject),
-                           pt.constant(prev_diff_subject_mask))
+                           ptt.constant(prev_time_diff_subject),
+                           ptt.constant(prev_diff_subject_mask))
             random_fn = serialized_random_without_self_dependency
             serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=serialized_logp_without_self_dependency,
                                                   random=random_fn, dims=[feature_dimension, time_dimension],
-                                                  observed=observation)
+                                                  observed=observed_values)
 
-        return serialized_component
+        return serialized_component, mean_a0, sd_aa
