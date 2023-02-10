@@ -105,7 +105,7 @@ class VocalicSemanticModel:
         self.num_vocalic_features = num_vocalic_features
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_vocalic_cpn = SerializedComponent("latent_brain", num_subjects, num_vocalic_features,
+        self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, num_vocalic_features,
                                                       self_dependent,
                                                       sd_mean_a0=sd_mean_a0_vocalic, sd_sd_aa=sd_sd_aa_vocalic)
         self.semantic_link_cpn = LinkComponent("semantic_link", a_p=a_p_semantic_link, b_p=b_p_semantic_link)
@@ -113,13 +113,15 @@ class VocalicSemanticModel:
                                                               sd_sd_o=sd_sd_o_vocalic)
 
     def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
-                     can_repeat_subject: bool, seed: Optional[int] = None) -> VocalicSemanticSamples:
+                     semantic_link_time_Scale_density: float, can_repeat_subject: bool,
+                     seed: Optional[int] = None) -> VocalicSemanticSamples:
         coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
         latent_vocalic_samples = self.latent_vocalic_cpn.draw_samples(num_series=num_series,
                                                                       time_scale_density=vocalic_time_scale_density,
                                                                       coordination=coordination_samples.coordination,
                                                                       can_repeat_subject=can_repeat_subject)
         semantic_link_samples = self.semantic_link_cpn.draw_samples(num_series=num_series,
+                                                                    time_scale_density=semantic_link_time_Scale_density,
                                                                     coordination=coordination_samples.coordination)
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
                                                                 subjects=latent_vocalic_samples.subjects)

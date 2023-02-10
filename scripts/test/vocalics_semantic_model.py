@@ -1,91 +1,91 @@
 import arviz as az
 import matplotlib.pyplot as plt
 
-from copy import deepcopy
-
-from coordination.model.vocalic_semantic_model import VocalicSemanticModel
-
 import numpy as np
-import pymc as pm
 
-from coordination.common.utils import sigmoid, logit
+from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries, \
+    VocalicSemanticInferenceSummary
+from coordination.common.functions import sigmoid
 
 # Parameters
-TIME_STEPS = 100
-NUM_SERIES = 1
-NUM_FEATURES = 10
+TIME_STEPS = 120
+NUM_SUBJECTS = 3
+NUM_VOCALIC_FEATURES = 2
 SEED = 0
 
 if __name__ == "__main__":
-    model = VocalicsSemanticModel(0.5, NUM_FEATURES, 3)
+    model = VocalicSemanticModel(initial_coordination=0.5,
+                                 num_subjects=NUM_SUBJECTS,
+                                 num_vocalic_features=NUM_VOCALIC_FEATURES,
+                                 self_dependent=True,
+                                 sd_uc=1,
+                                 sd_mean_a0_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
+                                 sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
+                                 sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
+                                 a_p_semantic_link=1,
+                                 b_p_semantic_link=1)
 
-    model.parameters.sd_uc = np.array([0.1])
-    model.parameters.sd_vocalics = np.array([0.1])
-    model.parameters.sd_obs_vocalics = np.array([0.1])
+    model.coordination_cpn.parameters.sd_uc.value = np.array([0.1])
+    model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+    model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+    model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+    model.semantic_link_cpn.parameters.p.value = 0.7
 
-    full_samples = model.sample(NUM_SERIES, TIME_STEPS, SEED, time_scale_density=1, p_semantic_links=0.5)
+    full_samples = model.draw_samples(num_series=1,
+                                      num_time_steps=TIME_STEPS,
+                                      vocalic_time_scale_density=1,
+                                      semantic_link_time_Scale_density=0.5,
+                                      can_repeat_subject=False,
+                                      seed=SEED)
 
-    partial_samples = deepcopy(full_samples)
-    partial_samples.unbounded_coordination = None
-    partial_samples.coordination = None
-    partial_samples.latent_vocalics = None
-    evidence = BetaCoordinationLatentVocalicsDataset.from_samples(partial_samples)
+    evidence = VocalicSemanticSeries(num_time_steps_in_coordination_scale=TIME_STEPS,
+                                     vocalic_subjects=full_samples.latent_vocalic.subjects[0],
+                                     obs_vocalic=full_samples.obs_vocalic.values[0],
+                                     vocalic_prev_time_same_subject=full_samples.latent_vocalic.prev_time_same_subject[
+                                         0],
+                                     vocalic_prev_time_diff_subject=full_samples.latent_vocalic.prev_time_diff_subject[
+                                         0],
+                                     vocalic_time_steps_in_coordination_scale=
+                                     full_samples.latent_vocalic.time_steps_in_coordination_scale[0],
+                                     semantic_link_time_steps_in_coordination_scale=
+                                     full_samples.semantic_link.time_steps_in_coordination_scale[0])
 
-    # import pytensor.tensor as at
-    #
-    # serialized_logp(at.constant(evidence.observed_vocalics),
-    #                 at.constant(full_samples.coordination[0]),
-    #                 at.constant(np.array([1])),
-    #                 at.constant(evidence.previous_vocalics_from_self),
-    #                 at.constant(evidence.previous_vocalics_from_other),
-    #                 at.constant(evidence.previous_vocalics_from_self_mask),
-    #                 at.constant(evidence.previous_vocalics_from_other_mask),
-    #                 at.constant(evidence.vocalics_mask))
+    model.clear_parameter_values()
+    pymc_model, idata = model.fit(evidence=evidence,
+                                  burn_in=1000,
+                                  num_samples=1000,
+                                  num_chains=2,
+                                  seed=SEED,
+                                  num_jobs=4)
 
-    model.parameters.reset()
-    idata = model.fit(evidence.series[0], 1000, 1000, 2, 0, 6)
-    az.plot_trace(idata, var_names=["sd_uc", "sd_c", "sd_vocalics", "sd_obs_vocalics"])
+    az.plot_trace(idata,
+                  var_names=["sd_uc", "mean_a0_latent_vocalic", "sd_aa_latent_vocalic", "sd_o_obs_vocalic",
+                             "p_semantic_link"])
     plt.show()
-    print(model.parameters.__dict__)
 
-    inference_summary = BetaCoordinationLatentVocalicsParticlesSummary.from_inference_data(idata)
+    # with pymc_model:
+    #     samples = pm.sample_posterior_predictive(idata, var_names=["obs_brain"])
 
-    m = inference_summary.unbounded_coordination_mean
-    std = np.sqrt(inference_summary.unbounded_coordination_var)
+    inference_summary = VocalicSemanticInferenceSummary.from_inference_data(idata)
+
+    m = inference_summary.coordination_means
+    std = inference_summary.coordination_sds
+
+    coordination_posterior = sigmoid(idata.posterior["unbounded_coordination"].sel(chain=0).to_numpy())
 
     plt.figure(figsize=(15, 8))
-    plt.scatter(evidence.series[0].speech_semantic_links_times, evidence.series[0].speech_semantic_links_vector_of_ones,
-                color="black", marker="s")
-    plt.plot(range(TIME_STEPS), full_samples.unbounded_coordination[0], label="Real", color="tab:blue", marker="o")
-    plt.plot(range(TIME_STEPS), m, label="Inferred", color="tab:orange", marker="o")
-    plt.fill_between(range(TIME_STEPS), m - std, m + std, color="tab:orange", alpha=0.4)
-    plt.title("Unbounded Coordination")
-    plt.legend()
-    plt.show()
-
-    m = inference_summary.coordination_mean
-    std = np.sqrt(inference_summary.coordination_var)
-
-    plt.figure(figsize=(15, 8))
-    plt.scatter(evidence.series[0].speech_semantic_links_times, evidence.series[0].speech_semantic_links_vector_of_ones,
-                color="black", marker="s")
-    plt.plot(range(TIME_STEPS), full_samples.coordination[0], label="Real", color="tab:blue", marker="o")
-    plt.plot(range(TIME_STEPS), m, label="Inferred", color="tab:orange", marker="o")
-    plt.fill_between(range(TIME_STEPS), m - std, m + std, color="tab:orange", alpha=0.4)
+    # plt.fill_between(range(TIME_STEPS), m - std, m + std, color="tab:pink", alpha=0.4)
+    plt.plot(np.arange(TIME_STEPS)[:, None].repeat(1000, axis=1), coordination_posterior.T, color="tab:blue", alpha=0.3)
+    plt.plot(range(TIME_STEPS), full_samples.coordination.coordination[0], label="Real", color="black", marker="o",
+             markersize=5)
+    plt.scatter(full_samples.semantic_link.time_steps_in_coordination_scale[0],
+                full_samples.coordination.coordination[
+                    0, full_samples.semantic_link.time_steps_in_coordination_scale[0]],
+                c="white", marker="*", s=3, zorder=3)
+    plt.plot(range(TIME_STEPS), m, label="Inferred", color="tab:pink", markersize=5)
     plt.title("Coordination")
     plt.legend()
     plt.show()
 
-    time_steps = [t for t, m in enumerate(evidence.series[0].vocalics_mask) if m == 1]
-
-    m = inference_summary.latent_vocalics_mean[0, time_steps]
-    std = np.sqrt(inference_summary.latent_vocalics_var)[0, time_steps]
-
-    plt.figure(figsize=(15, 8))
-    plt.plot(time_steps, full_samples.latent_vocalics[0].values[0, time_steps], label="Real", color="tab:blue",
-             marker="o")
-    plt.plot(time_steps, m, label="Inferred", color="tab:orange", marker="o")
-    plt.fill_between(time_steps, m - std, m + std, color="tab:orange", alpha=0.4)
-    plt.title("Vocalics")
-    plt.legend()
-    plt.show()
+    print(f"Real Coordination Average: {full_samples.coordination.coordination[0].mean()}")
+    print(f"Estimated Coordination Average: {m.mean()}")

@@ -60,8 +60,8 @@ if __name__ == "__main__":
                                   num_jobs=4)
 
     az.plot_trace(idata,
-                  var_names=["sd_uc", "sd_aa_latent_brain", "sd_aa_latent_body", "sd_o_obs_brain", "sd_o_obs_body",
-                             "mixture_weights_latent_brain"])
+                  var_names=["sd_uc", "mean_a0_latent_brain", "sd_aa_latent_brain", "mean_a0_latent_body",
+                             "sd_aa_latent_body", "sd_o_obs_brain", "sd_o_obs_body", "mixture_weights_latent_brain"])
     plt.show()
 
     # with pymc_model:
