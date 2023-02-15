@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import arviz as az
 import numpy as np
@@ -63,17 +63,17 @@ class BrainPosteriorSamples:
 
 class BrainModel:
 
-    def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int,
+    def __init__(self, initial_coordination: float, num_subjects: int, brain_channels: List[str],
                  self_dependent: bool, sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
                  sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
         self.num_subjects = num_subjects
-        self.num_brain_channels = num_brain_channels
+        self.brain_channels = brain_channels
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, num_brain_channels, self_dependent,
+        self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, len(brain_channels), self_dependent,
                                                  sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
                                                  a_mixture_weights=a_mixture_weights)
-        self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, num_brain_channels, sd_sd_o=sd_sd_o)
+        self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, len(brain_channels), sd_sd_o=sd_sd_o)
 
     def draw_samples(self, num_series: int, num_time_steps: int, seed: Optional[int],
                      brain_relative_frequency: float) -> BrainSamples:
@@ -90,7 +90,7 @@ class BrainModel:
     def fit(self, evidence: BrainSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
         assert evidence.num_subjects == self.num_subjects
-        assert evidence.num_brain_channels == self.num_brain_channels
+        assert evidence.num_brain_channels == len(self.brain_channels)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
@@ -101,7 +101,7 @@ class BrainModel:
 
     def _define_pymc_model(self, evidence: BrainSeries):
         coords = {"subject": np.arange(self.num_subjects),
-                  "brain_channel": np.arange(self.num_brain_channels),
+                  "brain_channel": self.brain_channels,
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "brain_time": np.arange(evidence.num_time_steps_in_brain_scale)}
 
@@ -117,10 +117,10 @@ class BrainModel:
 
         return pymc_model
 
-    def prior_predictive(self, evidence: BrainSeries, seed: Optional[int] = None):
+    def prior_predictive(self, evidence: BrainSeries, num_samples: int, seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample_prior_predictive(random_seed=seed)
+            idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
 
         return pymc_model, idata
 

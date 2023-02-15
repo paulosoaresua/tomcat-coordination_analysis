@@ -102,7 +102,7 @@ class BodyModel:
 
     def _define_pymc_model(self, evidence: BodySeries):
         coords = {"subject": np.arange(self.num_subjects),
-                  "body_channel": np.arange(self.num_body_features),
+                  "body_feature": ["total_energy"],
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "body_time": np.arange(evidence.num_time_steps_in_body_scale)}
 
@@ -118,10 +118,10 @@ class BodyModel:
 
         return pymc_model
 
-    def prior_predictive(self, evidence: BodySeries, seed: Optional[int] = None):
+    def prior_predictive(self, evidence: BodySeries, num_samples: int, seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample_prior_predictive(random_seed=seed)
+            idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
 
         return pymc_model, idata
 

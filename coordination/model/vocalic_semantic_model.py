@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import arviz as az
 import numpy as np
@@ -81,18 +81,18 @@ class VocalicSemanticPosteriorSamples:
 
 class VocalicSemanticModel:
 
-    def __init__(self, initial_coordination: float, num_subjects: int, num_vocalic_features: int,
+    def __init__(self, initial_coordination: float, num_subjects: int, vocalic_features: List[str],
                  self_dependent: bool, sd_uc: float, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
                  sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float):
         self.num_subjects = num_subjects
-        self.num_vocalic_features = num_vocalic_features
+        self.vocalic_features = vocalic_features
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, num_vocalic_features,
+        self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, len(vocalic_features),
                                                       self_dependent,
                                                       sd_mean_a0=sd_mean_a0_vocalic, sd_sd_aa=sd_sd_aa_vocalic)
         self.semantic_link_cpn = LinkComponent("semantic_link", a_p=a_p_semantic_link, b_p=b_p_semantic_link)
-        self.obs_vocalic_cpn = SerializedObservationComponent("obs_vocalic", num_subjects, num_vocalic_features,
+        self.obs_vocalic_cpn = SerializedObservationComponent("obs_vocalic", num_subjects, len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic)
 
     def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
@@ -117,7 +117,7 @@ class VocalicSemanticModel:
 
     def fit(self, evidence: VocalicSemanticSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
-        assert evidence.num_vocalic_features == self.num_vocalic_features
+        assert evidence.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
@@ -128,7 +128,7 @@ class VocalicSemanticModel:
 
     def _define_pymc_model(self, evidence: VocalicSemanticSeries):
         coords = {"subject": np.arange(self.num_subjects),
-                  "vocalic_feature": np.arange(self.num_vocalic_features),
+                  "vocalic_feature": self.vocalic_features,
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "vocalic_time": np.arange(evidence.num_time_steps_in_vocalic_scale),
                   "link_time": np.arange(evidence.num_time_steps_in_semantic_link_scale)}
@@ -156,10 +156,10 @@ class VocalicSemanticModel:
 
         return pymc_model
 
-    def prior_predictive(self, evidence: VocalicSemanticSeries, seed: Optional[int] = None):
+    def prior_predictive(self, evidence: VocalicSemanticSeries, num_samples: int, seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample_prior_predictive(random_seed=seed)
+            idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
 
         return pymc_model, idata
 
