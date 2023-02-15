@@ -1,3 +1,7 @@
+from typing import List
+
+import json
+from datetime import datetime
 import os
 import uuid
 
@@ -12,23 +16,51 @@ def tmux(command: str):
 def tmux_shell(command: str):
     tmux(f'send-keys "{command}" "C-m"')
 
-def parallel_inference(evidence_filepath: str, conda_env_name: str, shell_source: str, num_parallel_processes: int,
-                       model: str, burn_in: int, num_samples: int, num_chains: int, seed: int, num_inference_jobs: int,
-                       initial_coordination: float, num_subjects: int, num_brain_channels: int, self_dependent: bool,
-                       sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
-                       sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
-                       sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
-                       sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
-                       b_p_semantic_link: float):
+
+def parallel_inference(out_dir: str, evidence_filepath: str, conda_env_name: str, shell_source: str,
+                       num_parallel_processes: int, model: str, burn_in: int, num_samples: int, num_chains: int,
+                       seed: int, num_inference_jobs: int, do_posterior: bool, initial_coordination: float, num_subjects: int,
+                       brain_channels: str, vocalic_features: str, self_dependent: bool, sd_uc: float,
+                       sd_mean_a0_brain: str, sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str,
+                       sd_sd_aa_body: str, sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str,
+                       sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float):
+    # Save execution parameters
+    execution_time = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
+    results_folder = f"{out_dir}/{model}/{execution_time}"
+    execution_params = {
+        "burn_in": burn_in,
+        "num_samples": num_samples,
+        "num_chains": num_chains,
+        "seed": seed,
+        "num_inference_jobs": num_inference_jobs,
+        "do_posterior": do_posterior,
+        "initial_coordination": initial_coordination,
+        "num_subjects": num_subjects,
+        "brain_channels": brain_channels,
+        "vocalic_features": vocalic_features,
+        "self_dependent": self_dependent,
+        "sd_uc": sd_uc,
+        "sd_mean_a0_brain": sd_mean_a0_brain,
+        "sd_sd_aa_brain": sd_sd_aa_brain,
+        "sd_sd_o_brain": sd_sd_o_brain,
+        "sd_mean_a0_body": sd_mean_a0_body,
+        "sd_sd_aa_body": sd_sd_aa_body,
+        "sd_sd_o_body": sd_sd_o_body,
+        "a_mixture_weights": a_mixture_weights,
+        "sd_mean_a0_vocalic": sd_mean_a0_vocalic,
+        "sd_sd_aa_vocalic": sd_sd_aa_vocalic,
+        "sd_sd_o_vocalic": sd_sd_o_vocalic,
+        "a_p_semantic_link": a_p_semantic_link,
+        "b_p_semantic_link": b_p_semantic_link
+    }
+
+    with open(f"{results_folder}/execution_params.json", "w") as f:
+        json.dump(execution_params, f, indent=4)
+
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
-
     experiments = sorted(list(evidence_df["experiment_id"].unique()))
-
-    experiments_per_process = np.array_split(experiments, num_parallel_processes)
-
     tmux_session_name = f"{model}_{uuid.uuid1()}"
-
-    for i, experiments_per_process in enumerate(experiments):
+    for i, experiments_per_process in enumerate(np.array_split(experiments, num_parallel_processes)):
         # Start a new process in a tmux window for the experiments to be processed.
         experiment_ids = ",".join(experiments_per_process)
         tmux_window_name = experiment_ids
@@ -49,6 +81,7 @@ def parallel_inference(evidence_filepath: str, conda_env_name: str, shell_source
 
         # Call the actual inference script
         call_python_script_command = f'python3 "{project_dir}/scripts/inference.py" ' \
+                                     f'--out_dir="{results_folder}" ' \
                                      f'--experiment_ids="{experiment_ids}" ' \
                                      f'--evidence_filepath="{evidence_filepath}" ' \
                                      f'--model="{model}" ' \
@@ -59,7 +92,8 @@ def parallel_inference(evidence_filepath: str, conda_env_name: str, shell_source
                                      f'--num_inference_jobs="{num_inference_jobs}" ' \
                                      f'--initial_coordination="{initial_coordination}" ' \
                                      f'--num_subjects="{num_subjects}" ' \
-                                     f'--num_brain_channels="{num_brain_channels}" ' \
+                                     f'--brain_channels="{brain_channels}" ' \
+                                     f'--vocalic_features="{vocalic_features}" ' \
                                      f'--self_dependent="{self_dependent}" ' \
                                      f'--sd_uc="{sd_uc}" ' \
                                      f'--sd_mean_a0_brain="{sd_mean_a0_brain}" ' \

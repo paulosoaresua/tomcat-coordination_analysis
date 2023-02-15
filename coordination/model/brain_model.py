@@ -69,17 +69,6 @@ class BrainModel:
         self.num_subjects = num_subjects
         self.num_brain_channels = num_brain_channels
 
-        self.hyper_parameters = {
-            "num_subjects": num_subjects,
-            "num_brain_channels": num_brain_channels,
-            "self_dependent": self_dependent,
-            "sd_uc": sd_uc,
-            "sd_mean_a0": sd_mean_a0.tolist(),
-            "sd_sd_aa": sd_sd_aa.tolist(),
-            "sd_sd_o": sd_sd_o.tolist(),
-            "a_mixture_weights": a_mixture_weights.tolist()
-        }
-
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
         self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, num_brain_channels, self_dependent,
                                                  sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,

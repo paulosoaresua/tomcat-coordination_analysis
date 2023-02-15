@@ -70,16 +70,6 @@ class BodyModel:
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
 
-        self.hyper_parameters = {
-            "num_subjects": num_subjects,
-            "self_dependent": self_dependent,
-            "sd_uc": sd_uc,
-            "sd_mean_a0": sd_mean_a0.tolist(),
-            "sd_sd_aa": sd_sd_aa.tolist(),
-            "sd_sd_o": sd_sd_o.tolist(),
-            "a_mixture_weights": a_mixture_weights.tolist()
-        }
-
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
         self.latent_body_cpn = MixtureComponent("latent_body", num_subjects, self.num_body_features, self_dependent,
                                                 sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
