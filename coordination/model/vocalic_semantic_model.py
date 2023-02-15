@@ -87,6 +87,18 @@ class VocalicSemanticModel:
         self.num_subjects = num_subjects
         self.num_vocalic_features = num_vocalic_features
 
+        self.hyper_parameters = {
+            "num_subjects": num_subjects,
+            "num_vocalic_features": num_vocalic_features,
+            "self_dependent": self_dependent,
+            "sd_uc": sd_uc,
+            "sd_mean_a0_vocalic": sd_mean_a0_vocalic.tolist(),
+            "sd_sd_aa_vocalic": sd_sd_aa_vocalic.tolist(),
+            "sd_sd_o_vocalic": sd_sd_o_vocalic.tolist(),
+            "a_p_semantic_link": a_p_semantic_link,
+            "b_p_semantic_link": b_p_semantic_link
+        }
+
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
         self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, num_vocalic_features,
                                                       self_dependent,

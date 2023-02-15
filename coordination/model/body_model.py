@@ -61,21 +61,30 @@ class BodyPosteriorSamples:
         return cls(unbounded_coordination, coordination, latent_body)
 
 
-class BodyBodyModel:
+class BodyModel:
 
     def __init__(self, initial_coordination: float, num_subjects: int, self_dependent: bool, sd_uc: float,
-                 sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
-                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
+                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
         self.num_subjects = num_subjects
 
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
 
+        self.hyper_parameters = {
+            "num_subjects": num_subjects,
+            "self_dependent": self_dependent,
+            "sd_uc": sd_uc,
+            "sd_mean_a0": sd_mean_a0.tolist(),
+            "sd_sd_aa": sd_sd_aa.tolist(),
+            "sd_sd_o": sd_sd_o.tolist(),
+            "a_mixture_weights": a_mixture_weights.tolist()
+        }
+
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
         self.latent_body_cpn = MixtureComponent("latent_body", num_subjects, self.num_body_features, self_dependent,
-                                                sd_mean_a0=sd_mean_a0_body, sd_sd_aa=sd_sd_aa_body,
+                                                sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights)
-        self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, self.num_body_features, sd_sd_o=sd_sd_o_body)
+        self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, self.num_body_features, sd_sd_o=sd_sd_o)
 
     def draw_samples(self, num_series: int, num_time_steps: int, seed: Optional[int],
                      body_relative_frequency: float) -> BodySamples:

@@ -61,19 +61,30 @@ class BrainPosteriorSamples:
         return cls(unbounded_coordination, coordination, latent_brain)
 
 
-class BrainBodyModel:
+class BrainModel:
 
     def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int,
-                 self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
-                 sd_sd_o_brain: np.ndarray, a_mixture_weights: np.ndarray):
+                 self_dependent: bool, sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
+                 sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
         self.num_subjects = num_subjects
         self.num_brain_channels = num_brain_channels
 
+        self.hyper_parameters = {
+            "num_subjects": num_subjects,
+            "num_brain_channels": num_brain_channels,
+            "self_dependent": self_dependent,
+            "sd_uc": sd_uc,
+            "sd_mean_a0": sd_mean_a0.tolist(),
+            "sd_sd_aa": sd_sd_aa.tolist(),
+            "sd_sd_o": sd_sd_o.tolist(),
+            "a_mixture_weights": a_mixture_weights.tolist()
+        }
+
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
         self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, num_brain_channels, self_dependent,
-                                                 sd_mean_a0=sd_mean_a0_brain, sd_sd_aa=sd_sd_aa_brain,
+                                                 sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
                                                  a_mixture_weights=a_mixture_weights)
-        self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, num_brain_channels, sd_sd_o=sd_sd_o_brain)
+        self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, num_brain_channels, sd_sd_o=sd_sd_o)
 
     def draw_samples(self, num_series: int, num_time_steps: int, seed: Optional[int],
                      brain_relative_frequency: float) -> BrainSamples:
