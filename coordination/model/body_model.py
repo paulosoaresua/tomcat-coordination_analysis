@@ -1,8 +1,11 @@
 from __future__ import annotations
-from typing import Any, Optional, Tuple
+
+from typing import Any, List, Optional, Tuple
 
 import arviz as az
+from ast import literal_eval
 import numpy as np
+import pandas as pd
 import pymc as pm
 import xarray
 
@@ -30,6 +33,19 @@ class BodySeries:
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
         self.obs_body = obs_body
         self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
+
+    @classmethod
+    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame):
+        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
+
+        # Add a new axis to represent the single feature dimension
+        obs_body = np.array(literal_eval(row_df["body_motion_energy"].values[0]))[:, None, :]
+
+        return cls(
+            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"],
+            obs_body=obs_body,
+            body_time_steps_in_coordination_scale=row_df["body_time_steps_in_coordination_scale"],
+        )
 
     @property
     def num_time_steps_in_body_scale(self) -> int:
@@ -75,6 +91,18 @@ class BodyModel:
                                                 sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights)
         self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, self.num_body_features, sd_sd_o=sd_sd_o)
+
+    @property
+    def parameter_names(self) -> List[str]:
+        names = self.coordination_cpn.parameter_names
+        names.extend(self.latent_body_cpn.parameter_names)
+        names.extend(self.obs_body_cpn.parameter_names)
+
+        return names
+
+    @property
+    def obs_body_variable_name(self) -> str:
+        return self.obs_body_cpn.uuid
 
     def draw_samples(self, num_series: int, num_time_steps: int, seed: Optional[int],
                      body_relative_frequency: float) -> BodySamples:
@@ -129,3 +157,7 @@ class BodyModel:
         self.coordination_cpn.parameters.clear_values()
         self.latent_body_cpn.parameters.clear_values()
         self.obs_body_cpn.parameters.clear_values()
+
+    @staticmethod
+    def inference_data_to_posterior_samples(self, idata: az.InferenceData) -> BodyPosteriorSamples:
+        return BodyPosteriorSamples.from_inference_data(idata)

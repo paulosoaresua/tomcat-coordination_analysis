@@ -9,12 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from coordination.model.brain_model import BrainModel, BrainSeries, BrainPosteriorSamples
-from coordination.model.body_model import BodyModel, BodySeries, BodyPosteriorSamples
-from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries, BrainBodyPosteriorSamples
-from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries, \
-    VocalicSemanticPosteriorSamples
-from coordination.model.vocalic_model import VocalicModel, VocalicSeries, VocalicPosteriorSamples
+from coordination.model.brain_model import BrainModel, BrainSeries
+from coordination.model.body_model import BodyModel, BodySeries
+from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries
+from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
+from coordination.model.vocalic_model import VocalicModel, VocalicSeries
 
 
 def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, model_name: str,
@@ -39,8 +38,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                            sd_sd_aa=sd_sd_aa_brain,
                            sd_sd_o=sd_sd_o_brain,
                            a_mixture_weights=a_mixture_weights)
-
-        evidence = BrainSeries.from_data_frame(evidence_df, brain_channels)
     elif model_name == "body":
         model = BodyModel(initial_coordination=initial_coordination,
                           num_subjects=num_subjects,
@@ -50,8 +47,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                           sd_sd_aa=sd_sd_aa_body,
                           sd_sd_o=sd_sd_o_body,
                           a_mixture_weights=a_mixture_weights)
-
-        evidence = BodySeries.from_data_frame(evidence_df)
     elif model_name == "brain_body":
         model = BrainBodyModel(initial_coordination=initial_coordination,
                                num_subjects=num_subjects,
@@ -65,8 +60,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                sd_sd_aa_body=sd_sd_aa_body,
                                sd_sd_o_body=sd_sd_o_body,
                                a_mixture_weights=a_mixture_weights)
-
-        evidence = BrainBodySeries.from_data_frame(evidence_df, brain_channels)
     elif model_name == "vocalic_semantic":
         model = VocalicSemanticModel(initial_coordination=initial_coordination,
                                      num_subjects=num_subjects,
@@ -78,8 +71,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                      sd_sd_o_vocalic=sd_sd_o_vocalic,
                                      a_p_semantic_link=a_p_semantic_link,
                                      b_p_semantic_link=b_p_semantic_link)
-
-        evidence = VocalicSemanticSeries.from_data_frame(evidence_df, vocalic_features)
     elif model_name == "vocalic":
         model = VocalicModel(initial_coordination=initial_coordination,
                              num_subjects=num_subjects,
@@ -89,19 +80,30 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                              sd_mean_a0_vocalic=sd_mean_a0_vocalic,
                              sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                              sd_sd_o_vocalic=sd_sd_o_vocalic)
-
-        evidence = VocalicSeries.from_data_frame(evidence_df, vocalic_features)
     else:
         raise Exception(f"Invalid model {model_name}.")
 
-    for single_evidence_series in evidence:
-        results_dir = f"{out_dir}/{single_evidence_series.uuid}"
+    for experiment_id in experiment_ids:
+        # Create evidence object from a data frame
+        evidence = None
+        if model_name == "brain":
+            evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+        elif model_name == "body":
+            evidence = BodySeries.from_data_frame(experiment_id, evidence_df)
+        elif model_name == "brain_body":
+            evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+        elif model_name == "vocalic_semantic":
+            evidence = VocalicSemanticSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
+        elif model_name == "vocalic":
+            evidence = VocalicSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
+
+        results_dir = f"{out_dir}/{evidence.uuid}"
 
         _, idata = model.prior_predictive(evidence=evidence, num_samples=num_samples, seed=seed)
-        save_predictive_prior_plots(f"{results_dir}/plots/predictive_prior", idata, single_evidence_series, model)
+        save_predictive_prior_plots(f"{results_dir}/plots/predictive_prior", idata, evidence, model_name)
 
         if do_posterior:
-            pymc_model, idata_posterior = model.fit(evidence=single_evidence_series,
+            pymc_model, idata_posterior = model.fit(evidence=evidence,
                                                     burn_in=burn_in,
                                                     num_samples=num_samples,
                                                     num_chains=num_chains,
@@ -113,16 +115,17 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             with open(f"{results_dir}/pymc_model_posterior.pkl", "wb") as f:
                 pickle.dump(pymc_model, f)
 
-            save_coordination_plots(f"{results_dir}/plots/posterior", idata)
+            save_parameters_plot(f"{results_dir}/plots/posterior", idata, model_name)
+            save_coordination_plots(f"{results_dir}/plots/posterior", idata, model_name)
 
         # Save inference data
         with open(f"{results_dir}/inference_data.pkl", "wb") as f:
             pickle.dump(idata, f)
 
 
-def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model_name: Any):
-    if "brain" in model_name:
-        brain_posterior_samples = idata.prior_predictive["obs_brain"].sel(chain=0)
+def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
+    if isinstance(model, BrainModel) or isinstance(model, BrainBodyModel):
+        brain_posterior_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
 
         for i, subject in enumerate(brain_posterior_samples.coords["subject"]):
             plot_dir = f"{out_dir}/{subject}"
@@ -143,24 +146,11 @@ def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_ev
 
                 fig.savefig(f"{plot_dir}/{brain_channel}.png", format='png', bbox_inches='tight')
 
-    if "body" in model_name:
-        pass
-
-    if "vocalics":
-        pass
+    # TODO - Continue
 
 
-def save_coordination_plots(out_dir: str, idata: az.InferenceData, model_name: str):
-    if model_name == "brain":
-        posterior_samples = BrainBodyPosteriorSamples.from_inference_data(idata)
-    elif model_name == "body":
-        posterior_samples = BodyPosteriorSamples.from_inference_data(idata)
-    elif model_name == "brain_body":
-        posterior_samples = BrainBodyPosteriorSamples.from_inference_data(idata)
-    elif model_name == "vocalic_semantic":
-        posterior_samples = VocalicSemanticPosteriorSamples.from_inference_data(idata)
-    else:
-        posterior_samples = VocalicPosteriorSamples.from_inference_data(idata)
+def save_coordination_plots(out_dir: str, idata: az.InferenceData, model: Any):
+    posterior_samples = model.inference_data_to_posterior_samples(idata)
 
     T = posterior_samples.coordination.sizes["coordination_time"]
     N = posterior_samples.coordination.sizes["draw"]
@@ -175,6 +165,13 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, model_name: s
     plt.ylabel(f"Coordination")
 
     fig.savefig(f"{out_dir}/coordination.png", format='png', bbox_inches='tight')
+
+
+def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
+    fig = az.plot_trace(idata, var_names=[model.parameter_names])
+    plt.tight_layout()
+
+    fig.savefig(f"{out_dir}/parameters.png", format='png', bbox_inches='tight')
 
 
 def str_to_matrix(string: str):
@@ -341,19 +338,23 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    brain_channels = str_to_brain_channels(args.brain_channels, args.evidence_filepath)
-    vocalic_features = str_to_vocalic_features(args.vocalic_features, args.evidence_filepath)
-    sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects, len(brain_channels))
-    sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, len(brain_channels))
-    sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, len(brain_channels))
-    sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
-    sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
-    sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
-    a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects, args.num_subjects - 1)
-    sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects,
-                                        len(vocalic_features))
-    sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, len(vocalic_features))
-    sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, len(vocalic_features))
+    arg_brain_channels = str_to_brain_channels(args.brain_channels, args.evidence_filepath)
+    arg_vocalic_features = str_to_vocalic_features(args.vocalic_features, args.evidence_filepath)
+    arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects,
+                                          len(arg_brain_channels))
+    arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, len(arg_brain_channels))
+    arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, len(arg_brain_channels))
+    arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
+    arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
+    arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
+    arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
+                                           args.num_subjects - 1)
+    arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects,
+                                            len(arg_vocalic_features))
+    arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects,
+                                          len(arg_vocalic_features))
+    arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects,
+                                         len(arg_vocalic_features))
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
@@ -367,19 +368,19 @@ if __name__ == "__main__":
               do_posterior=args.do_posterior,
               initial_coordination=args.initial_coordination,
               num_subjects=args.num_subjects,
-              brain_channels=brain_channels,
-              vocalic_features=vocalic_features,
+              brain_channels=arg_brain_channels,
+              vocalic_features=arg_vocalic_features,
               self_dependent=args.self_dependent,
               sd_uc=args.sd_uc,
-              sd_mean_a0_brain=sd_mean_a0_brain,
-              sd_sd_aa_brain=sd_sd_aa_brain,
-              sd_sd_o_brain=sd_sd_o_brain,
-              sd_mean_a0_body=sd_mean_a0_body,
-              sd_sd_aa_body=sd_sd_aa_body,
-              sd_sd_o_body=sd_sd_o_body,
-              a_mixture_weights=a_mixture_weights,
-              sd_mean_a0_vocalic=sd_mean_a0_vocalic,
-              sd_sd_aa_vocalic=sd_sd_aa_vocalic,
-              sd_sd_o_vocalic=sd_sd_o_vocalic,
+              sd_mean_a0_brain=arg_sd_mean_a0_brain,
+              sd_sd_aa_brain=arg_sd_sd_aa_brain,
+              sd_sd_o_brain=arg_sd_sd_o_brain,
+              sd_mean_a0_body=arg_sd_mean_a0_body,
+              sd_sd_aa_body=arg_sd_sd_aa_body,
+              sd_sd_o_body=arg_sd_sd_o_body,
+              a_mixture_weights=arg_a_mixture_weights,
+              sd_mean_a0_vocalic=arg_sd_mean_a0_vocalic,
+              sd_sd_aa_vocalic=arg_sd_sd_aa_vocalic,
+              sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
               b_p_semantic_link=args.b_p_semantic_link)

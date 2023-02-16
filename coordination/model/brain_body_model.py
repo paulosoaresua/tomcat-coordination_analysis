@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Tuple
 
 import arviz as az
+from ast import literal_eval
 import numpy as np
 import pandas as pd
 import pymc as pm
@@ -40,18 +41,24 @@ class BrainBodySeries:
 
     @classmethod
     def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
-        #TODO - Fix this
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
 
+        obs_brain = []
+        for brain_channel in brain_channels:
+            obs_brain.append(np.array(literal_eval(row_df[f"{brain_channel}_hb_total"].values[0])))
+        # Swap axes such that the first dimension represents the different subjects and the second the brain channels
+        obs_brain = np.array(obs_brain).swapaxes(0, 1)
+
+        # Add a new axis to represent the single feature dimension
+        obs_body = np.array(literal_eval(row_df["body_motion_energy"].values[0]))[:, None, :]
+
         return cls(
-            num_time_steps_in_coordination_scale=row_df["num_total_time_steps"],
-            obs_brain=row_df["num_total_time_steps"],
-            brain_time_steps_in_coordination_scale=row_df["num_total_time_steps"],
-            obs_body=row_df["num_total_time_steps"],
-            body_time_steps_in_coordination_scale=row_df["num_total_time_steps"],
+            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"],
+            obs_brain=obs_brain,
+            brain_time_steps_in_coordination_scale=row_df["brain_time_steps_in_coordination_scale"],
+            obs_body=obs_body,
+            body_time_steps_in_coordination_scale=row_df["body_time_steps_in_coordination_scale"],
         )
-
-
 
     @property
     def num_time_steps_in_brain_scale(self) -> int:
@@ -107,6 +114,24 @@ class BrainBodyModel:
                                                 a_mixture_weights=a_mixture_weights)
         self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, len(brain_channels), sd_sd_o=sd_sd_o_brain)
         self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, 1, sd_sd_o=sd_sd_o_body)
+
+    @property
+    def parameter_names(self) -> List[str]:
+        names = self.coordination_cpn.parameter_names
+        names.extend(self.latent_brain_cpn.parameter_names)
+        names.extend(self.latent_body_cpn.parameter_names)
+        names.extend(self.obs_brain_cpn.parameter_names)
+        names.extend(self.obs_body_cpn.parameter_names)
+
+        return names
+
+    @property
+    def obs_brain_variable_name(self) -> str:
+        return self.obs_brain_cpn.uuid
+
+    @property
+    def obs_body_variable_name(self) -> str:
+        return self.obs_body_cpn.uuid
 
     def draw_samples(self, num_series: int, num_time_steps: int,
                      seed: Optional[int], brain_relative_frequency: float,
@@ -180,3 +205,7 @@ class BrainBodyModel:
         self.latent_body_cpn.parameters.clear_values()
         self.obs_brain_cpn.parameters.clear_values()
         self.obs_body_cpn.parameters.clear_values()
+
+    @staticmethod
+    def inference_data_to_posterior_samples(self, idata: az.InferenceData) -> BrainBodyPosteriorSamples:
+        return BrainBodyPosteriorSamples.from_inference_data(idata)
