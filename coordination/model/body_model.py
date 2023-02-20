@@ -28,8 +28,10 @@ class BodySamples:
 
 class BodySeries:
 
-    def __init__(self, num_time_steps_in_coordination_scale: int, obs_body: np.ndarray,
+    def __init__(self, uuid: str, subjects: List[str], num_time_steps_in_coordination_scale: int, obs_body: np.ndarray,
                  body_time_steps_in_coordination_scale: np.ndarray):
+        self.uuid = uuid
+        self.subjects = subjects
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
         self.obs_body = obs_body
         self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
@@ -42,10 +44,12 @@ class BodySeries:
         obs_body = np.array(literal_eval(row_df["body_motion_energy"].values[0]))[:, None, :]
 
         return cls(
-            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"],
+            uuid=row_df["experiment_id"].values[0],
+            subjects=literal_eval(row_df["subjects"].values[0]),
+            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
             obs_body=obs_body,
-            body_time_steps_in_coordination_scale=row_df["body_time_steps_in_coordination_scale"],
-        )
+            body_time_steps_in_coordination_scale=np.array(
+                literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
 
     @property
     def num_time_steps_in_body_scale(self) -> int:
@@ -79,18 +83,18 @@ class BodyPosteriorSamples:
 
 class BodyModel:
 
-    def __init__(self, initial_coordination: float, num_subjects: int, self_dependent: bool, sd_uc: float,
+    def __init__(self, initial_coordination: float, subjects: List[str], self_dependent: bool, sd_uc: float,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
-        self.num_subjects = num_subjects
+        self.subjects = subjects
 
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_body_cpn = MixtureComponent("latent_body", num_subjects, self.num_body_features, self_dependent,
+        self.latent_body_cpn = MixtureComponent("latent_body", len(subjects), self.num_body_features, self_dependent,
                                                 sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights)
-        self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, self.num_body_features, sd_sd_o=sd_sd_o)
+        self.obs_body_cpn = ObservationComponent("obs_body", len(subjects), self.num_body_features, sd_sd_o=sd_sd_o)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -118,7 +122,7 @@ class BodyModel:
 
     def fit(self, evidence: BodySeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
-        assert evidence.num_subjects == self.num_subjects
+        assert evidence.num_subjects == len(self.subjects)
         assert evidence.num_body_features == self.num_body_features
 
         pymc_model = self._define_pymc_model(evidence)
@@ -129,7 +133,7 @@ class BodyModel:
         return pymc_model, idata
 
     def _define_pymc_model(self, evidence: BodySeries):
-        coords = {"subject": np.arange(self.num_subjects),
+        coords = {"subject": self.subjects,
                   "body_feature": ["total_energy"],
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "body_time": np.arange(evidence.num_time_steps_in_body_scale)}
@@ -142,7 +146,11 @@ class BodyModel:
                 subject_dimension="subject",
                 time_dimension="body_time",
                 feature_dimension="body_channel")
-            self.obs_body_cpn.update_pymc_model(latent_component=latent_body, observed_values=evidence.obs_body)
+            self.obs_body_cpn.update_pymc_model(latent_component=latent_body,
+                                                subject_dimension="subject",
+                                                feature_dimension="body_feature",
+                                                time_dimension="body_time",
+                                                observed_values=evidence.obs_body)
 
         return pymc_model
 
@@ -159,5 +167,5 @@ class BodyModel:
         self.obs_body_cpn.parameters.clear_values()
 
     @staticmethod
-    def inference_data_to_posterior_samples(self, idata: az.InferenceData) -> BodyPosteriorSamples:
+    def inference_data_to_posterior_samples(idata: az.InferenceData) -> BodyPosteriorSamples:
         return BodyPosteriorSamples.from_inference_data(idata)
