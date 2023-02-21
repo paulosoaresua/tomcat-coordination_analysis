@@ -6,17 +6,20 @@ import os
 import numpy as np
 import pandas as pd
 
+from coordination.common.tmux import TMUX
 
-def tmux(command: str):
-    os.system(f"tmux {command}")
+"""
+This scripts uses divide the list of experiments in a data set such that they can be processed in parallel.
+Since the parameters are not shared across experiments, we can perform inference in an experiment data independenly
+of inferences using data from other experiments.
+
+We split the experiments into different processes which are performed in different TMUX windows of the same TMUX 
+session. If the number of experiments is bigger than the number of processes they should be split into, some processes
+will be responsible for performing inference sequentially in the experiments assigned to them.
+"""
 
 
-def tmux_shell(command: str):
-    tmux(f'send-keys "{command}" "C-m"')
-
-
-def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: str, conda_env_name: str,
-                       shell_source: str,
+def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: str,
                        num_parallel_processes: int, model: str, burn_in: int, num_samples: int, num_chains: int,
                        seed: int, num_inference_jobs: int, do_prior: int, do_posterior: int,
                        initial_coordination: float, num_subjects: int, brain_channels: str, vocalic_features: str,
@@ -24,37 +27,17 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str, sd_sd_o_body: str,
                        a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str,
                        a_p_semantic_link: float, b_p_semantic_link: float):
-    execution_params = {
-        "burn_in": burn_in,
-        "num_samples": num_samples,
-        "num_chains": num_chains,
-        "seed": seed,
-        "num_inference_jobs": num_inference_jobs,
-        "do_posterior": do_posterior,
-        "initial_coordination": initial_coordination,
-        "num_subjects": num_subjects,
-        "brain_channels": brain_channels,
-        "vocalic_features": vocalic_features,
-        "self_dependent": self_dependent,
-        "sd_uc": sd_uc,
-        "sd_mean_a0_brain": sd_mean_a0_brain,
-        "sd_sd_aa_brain": sd_sd_aa_brain,
-        "sd_sd_o_brain": sd_sd_o_brain,
-        "sd_mean_a0_body": sd_mean_a0_body,
-        "sd_sd_aa_body": sd_sd_aa_body,
-        "sd_sd_o_body": sd_sd_o_body,
-        "a_mixture_weights": a_mixture_weights,
-        "sd_mean_a0_vocalic": sd_mean_a0_vocalic,
-        "sd_sd_aa_vocalic": sd_sd_aa_vocalic,
-        "sd_sd_o_vocalic": sd_sd_o_vocalic,
-        "a_p_semantic_link": a_p_semantic_link,
-        "b_p_semantic_link": b_p_semantic_link
-    }
 
-    # Save execution parameters
+    # Parameters passed to this function relevant for post-analysis.
+    execution_params = locals().copy()
+    del execution_params["out_dir"]
+
     execution_time = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
     results_folder = f"{out_dir}/{model}/{execution_time}"
     os.makedirs(results_folder, exist_ok=True)
+
+    # Save arguments passed to the function
+
     with open(f"{results_folder}/execution_params.json", "w") as f:
         json.dump(execution_params, f, indent=4)
 
@@ -62,92 +45,51 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
     # script
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-    os.environ["PROJECT_DIR"] = project_dir
-    os.environ["OUT_DIR"] = results_folder
-    os.environ["EVIDENCE_FILEPATH"] = evidence_filepath
-    os.environ["MODEL"] = model
-    os.environ["BURN_IN"] = str(burn_in)
-    os.environ["NUM_SAMPLES"] = str(num_samples)
-    os.environ["NUM_CHAINS"] = str(num_chains)
-    os.environ["SEED"] = str(seed)
-    os.environ["NUM_INFERENCE_JOBS"] = str(num_inference_jobs)
-    os.environ["DO_PRIOR"] = str(do_prior)
-    os.environ["DO_POSTERIOR"] = str(do_posterior)
-    os.environ["INITIAL_COORDINATION"] = str(initial_coordination)
-    os.environ["NUM_SUBJECTS"] = str(num_subjects)
-    os.environ["SELF_DEPENDENT"] = str(self_dependent)
-    os.environ["SD_UC"] = str(sd_uc)
-    os.environ["SD_MEAN_A0_BRAIN"] = sd_mean_a0_brain
-    os.environ["SD_SD_AA_BRAIN"] = sd_sd_aa_brain
-    os.environ["SD_SD_O_BRAIN"] = sd_sd_o_brain
-    os.environ["SD_MEAN_A0_BODY"] = sd_mean_a0_body
-    os.environ["SD_SD_AA_BODY"] = sd_sd_aa_body
-    os.environ["SD_SD_O_BODY"] = sd_sd_o_body
-    os.environ["A_MIXTURE_WEIGHTS"] = a_mixture_weights
-    os.environ["SD_MEAN_A0_VOCALIC"] = sd_mean_a0_vocalic
-    os.environ["SD_SD_AA_VOCALIC"] = sd_sd_aa_vocalic
-    os.environ["SD_SD_O_VOCALIC"] = sd_sd_o_vocalic
-    os.environ["A_P_SEMANTIC_LINK"] = str(a_p_semantic_link)
-    os.environ["B_P_SEMANTIC_LINK"] = str(b_p_semantic_link)
-
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
-    experiments = sorted(list(evidence_df["experiment_id"].unique()))[:1]
+    experiments = sorted(list(evidence_df["experiment_id"].unique()))[:3]
     experiment_blocks = np.array_split(experiments, min(num_parallel_processes, len(experiments)))
+    tmux = TMUX(tmux_session_name)
     for i, experiments_per_process in enumerate(experiment_blocks):
         # Start a new process in a tmux window for the experiments to be processed.
         experiment_ids = ",".join(experiments_per_process)
         tmux_window_name = experiment_ids
 
-        os.environ["EXPERIMENT_IDS"] = experiment_ids
+        # Call the actual inference script
+        call_python_script_command = f'python3 "{project_dir}/scripts/sequential_experiment_inference.py" ' \
+                                     f'--out_dir="{results_folder}" ' \
+                                     f'--experiment_ids="{experiment_ids}" ' \
+                                     f'--evidence_filepath="{evidence_filepath}" ' \
+                                     f'--model="{model}" ' \
+                                     f'--burn_in={burn_in} ' \
+                                     f'--num_samples={num_samples} ' \
+                                     f'--num_chains={num_chains} ' \
+                                     f'--seed={seed} ' \
+                                     f'--num_inference_jobs={num_inference_jobs} ' \
+                                     f'--do_prior={do_prior} ' \
+                                     f'--do_posterior={do_posterior} ' \
+                                     f'--initial_coordination={initial_coordination} ' \
+                                     f'--num_subjects={num_subjects} ' \
+                                     f'--brain_channels="{brain_channels}" ' \
+                                     f'--vocalic_features="{vocalic_features}" ' \
+                                     f'--self_dependent={self_dependent} ' \
+                                     f'--sd_uc={sd_uc} ' \
+                                     f'--sd_mean_a0_brain="{sd_mean_a0_brain}" ' \
+                                     f'--sd_sd_aa_brain="{sd_sd_aa_brain}" ' \
+                                     f'--sd_sd_o_brain="{sd_sd_o_brain}" ' \
+                                     f'--sd_mean_a0_body="{sd_mean_a0_body}" ' \
+                                     f'--sd_sd_aa_body="{sd_sd_aa_body}" ' \
+                                     f'--sd_sd_o_body="{sd_sd_o_body}" ' \
+                                     f'--a_mixture_weights="{a_mixture_weights}" ' \
+                                     f'--sd_mean_a0_vocalic="{sd_mean_a0_vocalic}" ' \
+                                     f'--sd_sd_aa_vocalic="{sd_sd_aa_vocalic}" ' \
+                                     f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
+                                     f'--a_p_semantic_link={a_p_semantic_link} ' \
+                                     f'--b_p_semantic_link={b_p_semantic_link}'
 
-        if i == 0:
-            tmux(
-                f"new-session -d -s {tmux_session_name} -n {tmux_window_name}")
-        else:
-            tmux(f"new-window -n {tmux_window_name}")
-
-        tmux_shell(f"source {project_dir}/scripts/shell/inference.sh")
-
-        # Point PYTHONPATH to the project directory so we can execute the python script from the terminal
-
-        # os.system(f"{project_dir}/scripts/shell/inference.sh")
-
-    #
-    #     # Call the actual inference script
-    #     call_python_script_command = f'python3 "{project_dir}/scripts/inference.py" ' \
-    #                                  f'--out_dir="{results_folder}" ' \
-    #                                  f'--experiment_ids="{experiment_ids}" ' \
-    #                                  f'--evidence_filepath="{evidence_filepath}" ' \
-    #                                  f'--model="{model}" ' \
-    #                                  f'--burn_in="{burn_in}" ' \
-    #                                  f'--num_samples="{num_samples}" ' \
-    #                                  f'--num_chains="{num_chains}" ' \
-    #                                  f'--seed="{seed}" ' \
-    #                                  f'--num_inference_jobs="{num_inference_jobs}" ' \
-    #                                  f'--do_prior="{do_prior}" '\
-    #                                  f'--do_posterior="{do_posterior}" ' \
-    #                                  f'--initial_coordination="{initial_coordination}" ' \
-    #                                  f'--num_subjects="{num_subjects}" ' \
-    #                                  f'--brain_channels="{brain_channels}" ' \
-    #                                  f'--vocalic_features="{vocalic_features}" ' \
-    #                                  f'--self_dependent="{self_dependent}" ' \
-    #                                  f'--sd_uc="{sd_uc}" ' \
-    #                                  f'--sd_mean_a0_brain="{sd_mean_a0_brain}" ' \
-    #                                  f'--sd_sd_aa_brain="{sd_sd_aa_brain}" ' \
-    #                                  f'--sd_sd_o_brain="{sd_sd_o_brain}" ' \
-    #                                  f'--sd_mean_a0_body="{sd_mean_a0_body}" ' \
-    #                                  f'--sd_sd_aa_body="{sd_sd_aa_body}" ' \
-    #                                  f'--sd_sd_o_body="{sd_sd_o_body}" ' \
-    #                                  f'--a_mixture_weights="{a_mixture_weights}" ' \
-    #                                  f'--sd_mean_a0_vocalic="{sd_mean_a0_vocalic}" ' \
-    #                                  f'--sd_sd_aa_vocalic="{sd_sd_aa_vocalic}" ' \
-    #                                  f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
-    #                                  f'--a_p_semantic_link="{a_p_semantic_link}" ' \
-    #                                  f'--b_p_semantic_link="{b_p_semantic_link}"'
-    #
-    #     tmux_shell(call_python_script_command)
-    #
-    # tmux(f"attach-session -t {tmux_session_name}")
+        tmux.create_window(tmux_window_name)
+        tmux.run_command(f"source {project_dir}/.venv/bin/activate")
+        tmux.run_command(f"export PYTHONPATH={project_dir}")
+        tmux.run_command(call_python_script_command)
 
 
 if __name__ == "__main__":
@@ -162,10 +104,6 @@ if __name__ == "__main__":
                         help="Path of the csv file containing the evidence data.")
     parser.add_argument("--tmux_session_name", type=str, required=True,
                         help="Name of the tmux session to be created.")
-    parser.add_argument("--conda_env_name", type=str, required=True,
-                        help="Name of the conda environment containing the required dependencies.")
-    parser.add_argument("--shell_source", type=str, required=False, default="zshrc",
-                        help="Name of the shell script containing conda initializations.")
     parser.add_argument("--num_parallel_processes", type=int, required=False, default=1,
                         help="Number of processes to split the experiments into.")
     parser.add_argument("--model", type=str, required=True,
@@ -258,8 +196,6 @@ if __name__ == "__main__":
                        evidence_filepath=args.evidence_filepath,
                        model=args.model,
                        tmux_session_name=args.tmux_session_name,
-                       conda_env_name=args.conda_env_name,
-                       shell_source=args.shell_source,
                        num_parallel_processes=args.num_parallel_processes,
                        burn_in=args.burn_in,
                        num_samples=args.num_samples,

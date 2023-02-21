@@ -20,6 +20,11 @@ from coordination.common.log import configure_log
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries
 
+"""
+This scripts performs inferences in a subset of experiments from a dataset. Inferences are performed sequentially. That
+is , experiment by experiment until all experiments are covered. 
+"""
+
 if not sys.warnoptions:
     import warnings
 
@@ -75,7 +80,11 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
+    print("")
+    logger.info(f"Experiment IDs: {experiment_ids}")
+
     for experiment_id in experiment_ids:
+        print("")
         logger.info(f"Processing {experiment_id}")
 
         # Create evidence object from a data frame
