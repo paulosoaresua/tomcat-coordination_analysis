@@ -33,7 +33,7 @@ def setup_file_logger(filepath: str):
     _setup_logger(logging.FileHandler(filepath))
 
 
-def configure_log(verbose: bool, log_filepath: str):
+def configure_log(verbose: bool, log_filepath: Optional[str] = None):
     if verbose:
         if log_filepath:
             setup_file_logger(log_filepath)

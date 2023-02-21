@@ -35,6 +35,16 @@ class ObservationComponent:
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
+    @property
+    def parameter_names(self) -> List[str]:
+        return [
+            self._sd_o_name
+        ]
+
+    @property
+    def _sd_o_name(self) -> str:
+        return f"sd_o_{self.uuid}"
+
     def draw_samples(self, latent_component: np.ndarray, seed: Optional[int] = None) -> ObservationComponentSamples:
         assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
 
@@ -47,11 +57,13 @@ class ObservationComponent:
 
         return samples
 
-    def update_pymc_model(self, latent_component: Any, observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=self.parameters.sd_o.prior.sd,
+    def update_pymc_model(self, latent_component: Any, subject_dimension: str, feature_dimension: str,
+                          time_dimension: str, observed_values: Any) -> Any:
+        sd_o = pm.HalfNormal(name=self._sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
 
         observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
+                                          dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
 
         return observation_component, sd_o
@@ -74,6 +86,16 @@ class SerializedObservationComponent:
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
+    @property
+    def parameter_names(self) -> List[str]:
+        return [
+            self._sd_o_name
+        ]
+
+    @property
+    def _sd_o_name(self) -> str:
+        return f"sd_o_{self.uuid}"
+
     def draw_samples(self, latent_component: List[np.ndarray],
                      subjects: List[np.ndarray], seed: Optional[int] = None) -> SerializedObservationComponentSamples:
         assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
@@ -88,12 +110,14 @@ class SerializedObservationComponent:
 
         return samples
 
-    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=f"sd_o_{self.uuid}", sigma=self.parameters.sd_o.prior.sd,
+    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
+                          time_dimension: str, observed_values: Any) -> Any:
+        sd_o = pm.HalfNormal(name=self._sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
 
         observation_component = pm.Normal(name=self.uuid, mu=latent_component,
                                           sigma=sd_o[ptt.constant(subjects)].transpose(),
+                                          dims=[feature_dimension, time_dimension],
                                           observed=observed_values)
 
         return observation_component

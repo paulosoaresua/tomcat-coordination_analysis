@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import pymc as pm
@@ -32,6 +32,16 @@ class SigmoidGaussianCoordinationComponent:
 
         self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_uc)
 
+    @property
+    def parameter_names(self) -> List[str]:
+        return [
+            self._sd_uc
+        ]
+
+    @property
+    def _sd_uc(self) -> str:
+        return f"sd_uc"
+
     def draw_samples(self, num_series: int, num_time_steps: int,
                      seed: Optional[int] = None) -> SigmoidGaussianCoordinationComponentSamples:
         set_random_seed(seed)
@@ -51,7 +61,7 @@ class SigmoidGaussianCoordinationComponent:
         return samples
 
     def update_pymc_model(self, time_dimension: str, unbounded_coordination_observed_values: Optional[Any] = None) -> Any:
-        sd_uc = pm.HalfNormal(name="sd_uc", sigma=self.parameters.sd_uc.prior.sd, size=1,
+        sd_uc = pm.HalfNormal(name=self._sd_uc, sigma=self.parameters.sd_uc.prior.sd, size=1,
                               observed=self.parameters.sd_uc.value)
 
         prior = pm.Normal.dist(mu=logit(self.initial_coordination), sigma=sd_uc)

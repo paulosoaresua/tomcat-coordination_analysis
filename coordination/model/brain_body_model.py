@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import arviz as az
+from ast import literal_eval
 import numpy as np
+import pandas as pd
 import pymc as pm
 import xarray
 
@@ -28,14 +30,44 @@ class BrainBodySamples:
 
 class BrainBodySeries:
 
-    def __init__(self, num_time_steps_in_coordination_scale: int, obs_brain: np.ndarray,
+    def __init__(self, uuid: str, subjects: List[str], brain_channels: List[str],
+                 num_time_steps_in_coordination_scale: int, obs_brain: np.ndarray,
                  brain_time_steps_in_coordination_scale: np.ndarray, obs_body: np.ndarray,
                  body_time_steps_in_coordination_scale: np.ndarray):
+        self.uuid = uuid
+        self.subjects = subjects
+        self.brain_channels = brain_channels
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
         self.obs_brain = obs_brain
         self.brain_time_steps_in_coordination_scale = brain_time_steps_in_coordination_scale
         self.obs_body = obs_body
         self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
+
+    @classmethod
+    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
+        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
+
+        obs_brain = []
+        for brain_channel in brain_channels:
+            obs_brain.append(np.array(literal_eval(row_df[f"{brain_channel}_hb_total"].values[0])))
+        # Swap axes such that the first dimension represents the different subjects and the second the brain channels
+        obs_brain = np.array(obs_brain).swapaxes(0, 1)
+
+        # Add a new axis to represent the single feature dimension
+        obs_body = np.array(literal_eval(row_df["body_motion_energy"].values[0]))[:, None, :]
+
+        return cls(
+            uuid=row_df["experiment_id"].values[0],
+            subjects=literal_eval(row_df["subjects"].values[0]),
+            brain_channels=brain_channels,
+            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
+            obs_brain=obs_brain,
+            brain_time_steps_in_coordination_scale=np.array(
+                literal_eval(row_df["nirs_time_steps_in_coordination_scale"].values[0])),
+            obs_body=obs_body,
+            body_time_steps_in_coordination_scale=np.array(
+                literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0]))
+        )
 
     @property
     def num_time_steps_in_brain_scale(self) -> int:
@@ -75,22 +107,41 @@ class BrainBodyPosteriorSamples:
 
 class BrainBodyModel:
 
-    def __init__(self, initial_coordination: float, num_subjects: int, num_brain_channels: int,
+    def __init__(self, initial_coordination: float, subjects: List[str], brain_channels: List[str],
                  self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
                  sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
                  sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
-        self.num_subjects = num_subjects
-        self.num_brain_channels = num_brain_channels
+        self.subjects = subjects
+        self.brain_channels = brain_channels
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_brain_cpn = MixtureComponent("latent_brain", num_subjects, num_brain_channels, self_dependent,
+        self.latent_brain_cpn = MixtureComponent("latent_brain", len(subjects), len(brain_channels), self_dependent,
                                                  sd_mean_a0=sd_mean_a0_brain, sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights)
-        self.latent_body_cpn = MixtureComponent("latent_body", num_subjects, 1, self_dependent,
+        self.latent_body_cpn = MixtureComponent("latent_body", len(subjects), 1, self_dependent,
                                                 sd_mean_a0=sd_mean_a0_body, sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights)
-        self.obs_brain_cpn = ObservationComponent("obs_brain", num_subjects, num_brain_channels, sd_sd_o=sd_sd_o_brain)
-        self.obs_body_cpn = ObservationComponent("obs_body", num_subjects, 1, sd_sd_o=sd_sd_o_body)
+        self.obs_brain_cpn = ObservationComponent("obs_brain", len(subjects), len(brain_channels),
+                                                  sd_sd_o=sd_sd_o_brain)
+        self.obs_body_cpn = ObservationComponent("obs_body", len(subjects), 1, sd_sd_o=sd_sd_o_body)
+
+    @property
+    def parameter_names(self) -> List[str]:
+        names = self.coordination_cpn.parameter_names
+        names.extend(self.latent_brain_cpn.parameter_names)
+        names.extend(self.latent_body_cpn.parameter_names)
+        names.extend(self.obs_brain_cpn.parameter_names)
+        names.extend(self.obs_body_cpn.parameter_names)
+
+        return names
+
+    @property
+    def obs_brain_variable_name(self) -> str:
+        return self.obs_brain_cpn.uuid
+
+    @property
+    def obs_body_variable_name(self) -> str:
+        return self.obs_body_cpn.uuid
 
     def draw_samples(self, num_series: int, num_time_steps: int,
                      seed: Optional[int], brain_relative_frequency: float,
@@ -112,8 +163,8 @@ class BrainBodyModel:
 
     def fit(self, evidence: BrainBodySeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
-        assert evidence.num_subjects == self.num_subjects
-        assert evidence.num_brain_channels == self.num_brain_channels
+        assert evidence.num_subjects == len(self.subjects)
+        assert evidence.num_brain_channels == len(self.brain_channels)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
@@ -123,9 +174,9 @@ class BrainBodyModel:
         return pymc_model, idata
 
     def _define_pymc_model(self, evidence: BrainBodySeries):
-        coords = {"subject": np.arange(self.num_subjects),
-                  "brain_channel": np.arange(self.num_brain_channels),
-                  "body_feature": np.arange(1),
+        coords = {"subject": self.subjects,
+                  "brain_channel": self.brain_channels,
+                  "body_feature": ["total_energy"],
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "brain_time": np.arange(evidence.num_time_steps_in_brain_scale),
                   "body_time": np.arange(evidence.num_time_steps_in_body_scale)}
@@ -146,15 +197,23 @@ class BrainBodyModel:
                 time_dimension="body_time",
                 feature_dimension="body_feature",
                 mixture_weights=mixture_weights)
-            self.obs_brain_cpn.update_pymc_model(latent_component=latent_brain, observed_values=evidence.obs_brain)
-            self.obs_body_cpn.update_pymc_model(latent_component=latent_body, observed_values=evidence.obs_body)
+            self.obs_brain_cpn.update_pymc_model(latent_component=latent_brain,
+                                                 subject_dimension="subject",
+                                                 feature_dimension="brain_channel",
+                                                 time_dimension="brain_time",
+                                                 observed_values=evidence.obs_brain)
+            self.obs_body_cpn.update_pymc_model(latent_component=latent_body,
+                                                subject_dimension="subject",
+                                                feature_dimension="body_feature",
+                                                time_dimension="body_time",
+                                                observed_values=evidence.obs_body)
 
         return pymc_model
 
-    def prior_predictive(self, evidence: BrainBodySeries, seed: Optional[int] = None):
+    def prior_predictive(self, evidence: BrainBodySeries, num_samples: int, seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample_prior_predictive(random_seed=seed)
+            idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
 
         return pymc_model, idata
 
@@ -164,3 +223,7 @@ class BrainBodyModel:
         self.latent_body_cpn.parameters.clear_values()
         self.obs_brain_cpn.parameters.clear_values()
         self.obs_body_cpn.parameters.clear_values()
+
+    @staticmethod
+    def inference_data_to_posterior_samples(idata: az.InferenceData) -> BrainBodyPosteriorSamples:
+        return BrainBodyPosteriorSamples.from_inference_data(idata)

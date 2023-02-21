@@ -40,6 +40,16 @@ class LinkComponent:
 
         self.parameters = LinkComponentParameters(a_p, b_p)
 
+    @property
+    def parameter_names(self) -> List[str]:
+        return [
+            self._p
+        ]
+
+    @property
+    def _p(self) -> str:
+        return f"p_{self.uuid}"
+
     def draw_samples(self, num_series: int, time_scale_density: float, coordination: np.ndarray,
                      seed: Optional[int] = None) -> LinkComponentSamples:
         set_random_seed(seed)
@@ -58,7 +68,7 @@ class LinkComponent:
         return samples
 
     def update_pymc_model(self, coordination: Any, observed_values: Any) -> Any:
-        p = pm.Beta(name=f"p_{self.uuid}", alpha=self.parameters.p.prior.a, beta=self.parameters.p.prior.b,
+        p = pm.Beta(name=self._p, alpha=self.parameters.p.prior.a, beta=self.parameters.p.prior.b,
                     size=1, observed=self.parameters.p.value)
 
         adjusted_prob = pm.Deterministic(f"adjusted_prob_{self.uuid}", p * coordination)
