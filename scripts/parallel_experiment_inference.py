@@ -46,7 +46,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
-    experiments = sorted(list(evidence_df["experiment_id"].unique()))[:1]
+    experiments = sorted(list(evidence_df["experiment_id"].unique()))
     experiment_blocks = np.array_split(experiments, min(num_parallel_processes, len(experiments)))
     tmux = TMUX(tmux_session_name)
     for i, experiments_per_process in enumerate(experiment_blocks):
