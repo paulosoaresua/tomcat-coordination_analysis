@@ -27,7 +27,8 @@ class BrainSamples:
 
 class BrainSeries:
 
-    def __init__(self, uuid: str, subjects: List[str], brain_channels: List[str], num_time_steps_in_coordination_scale: int,
+    def __init__(self, uuid: str, subjects: List[str], brain_channels: List[str],
+                 num_time_steps_in_coordination_scale: int,
                  obs_brain: np.ndarray, brain_time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
         self.subjects = subjects
@@ -94,9 +95,15 @@ class BrainModel:
         self.subjects = subjects
         self.brain_channels = brain_channels
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_brain_cpn = MixtureComponent("latent_brain", len(subjects), len(brain_channels), self_dependent,
-                                                 sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination=initial_coordination,
+                                                                     sd_uc=sd_uc)
+        self.latent_brain_cpn = MixtureComponent(uuid="latent_brain",
+                                                 num_subjects=len(subjects),
+                                                 dim_value=len(brain_channels),
+                                                 self_dependent=self_dependent,
+                                                 mean_mean_a0=None,  # Brain data is already normalized to 0 and 1
+                                                 sd_mean_a0=sd_mean_a0,
+                                                 sd_sd_aa=sd_sd_aa,
                                                  a_mixture_weights=a_mixture_weights)
         self.obs_brain_cpn = ObservationComponent("obs_brain", len(subjects), len(brain_channels), sd_sd_o=sd_sd_o)
 

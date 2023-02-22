@@ -51,6 +51,12 @@ class BodySeries:
             body_time_steps_in_coordination_scale=np.array(
                 literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
 
+    def normalize_per_subject(self):
+        mean = self.obs_body.mean(axis=(1, 2))
+        sd = self.obs_body.std(axis=(1, 2))
+
+        self.obs_body = (self.obs_body - mean[:, None, None]) / sd[:, None, None]
+
     @property
     def num_time_steps_in_body_scale(self) -> int:
         return self.obs_body.shape[-1]
@@ -84,15 +90,22 @@ class BodyPosteriorSamples:
 class BodyModel:
 
     def __init__(self, initial_coordination: float, subjects: List[str], self_dependent: bool, sd_uc: float,
-                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
+                 mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
+                 a_mixture_weights: np.ndarray):
         self.subjects = subjects
 
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_body_cpn = MixtureComponent("latent_body", len(subjects), self.num_body_features, self_dependent,
-                                                sd_mean_a0=sd_mean_a0, sd_sd_aa=sd_sd_aa,
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination=initial_coordination,
+                                                                     sd_uc=sd_uc)
+        self.latent_body_cpn = MixtureComponent(uuid="latent_body",
+                                                num_subjects=len(subjects),
+                                                dim_value=self.num_body_features,
+                                                self_dependent=self_dependent,
+                                                mean_mean_a0=mean_mean_a0,
+                                                sd_mean_a0=sd_mean_a0,
+                                                sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights)
         self.obs_body_cpn = ObservationComponent("obs_body", len(subjects), self.num_body_features, sd_sd_o=sd_sd_o)
 
@@ -145,7 +158,7 @@ class BodyModel:
                 coordination=coordination[evidence.body_time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="body_time",
-                feature_dimension="body_channel")
+                feature_dimension="body_feature")
             self.obs_body_cpn.update_pymc_model(latent_component=latent_body,
                                                 subject_dimension="subject",
                                                 feature_dimension="body_feature",
