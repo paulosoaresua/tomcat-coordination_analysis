@@ -109,17 +109,28 @@ class BrainBodyModel:
 
     def __init__(self, initial_coordination: float, subjects: List[str], brain_channels: List[str],
                  self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
-                 sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
-                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
+                 sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray, sd_mean_a0_body: np.ndarray,
+                 sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
         self.subjects = subjects
         self.brain_channels = brain_channels
+        self.num_body_features = 1
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
-        self.latent_brain_cpn = MixtureComponent("latent_brain", len(subjects), len(brain_channels), self_dependent,
-                                                 sd_mean_a0=sd_mean_a0_brain, sd_sd_aa=sd_sd_aa_brain,
+        self.latent_brain_cpn = MixtureComponent(uuid="latent_brain",
+                                                 num_subjects=len(subjects),
+                                                 dim_value=len(brain_channels),
+                                                 self_dependent=self_dependent,
+                                                 mean_mean_a0=None,  # Brain data is already normalized to 0 and 1
+                                                 sd_mean_a0=sd_mean_a0_brain,
+                                                 sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights)
-        self.latent_body_cpn = MixtureComponent("latent_body", len(subjects), 1, self_dependent,
-                                                sd_mean_a0=sd_mean_a0_body, sd_sd_aa=sd_sd_aa_body,
+        self.latent_body_cpn = MixtureComponent(uuid="latent_body",
+                                                num_subjects=len(subjects),
+                                                dim_value=self.num_body_features,
+                                                self_dependent=self_dependent,
+                                                mean_mean_a0=mean_mean_a0_body,
+                                                sd_mean_a0=sd_mean_a0_body,
+                                                sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights)
         self.obs_brain_cpn = ObservationComponent("obs_brain", len(subjects), len(brain_channels),
                                                   sd_sd_o=sd_sd_o_brain)

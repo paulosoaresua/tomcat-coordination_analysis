@@ -7,6 +7,7 @@ import pickle
 
 import arviz as az
 import logging
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -65,16 +66,20 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               burn_in: int, num_samples: int, num_chains: int, seed: int, num_inference_jobs: int, do_prior: bool,
               do_posterior: bool, initial_coordination: float, num_subjects: int, brain_channels: List[str],
               vocalic_features: List[str], self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray,
-              sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray,
-              sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray,
-              sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
-              a_p_semantic_link: float, b_p_semantic_link: float):
+              sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray,
+              sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
+              a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
+              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
+              mean_a0_prior_from_obs: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
+
+    # Non-interactive backend to make sure it works in a TMUX session when executed from PyCharm.
+    mpl.use("Agg")
 
     configure_log(True)
     logger = logging.getLogger()
@@ -103,16 +108,27 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         elif model_name == "body":
             evidence = BodySeries.from_data_frame(experiment_id, evidence_df)
 
+            if mean_a0_prior_from_obs:
+                mean = evidence.obs_body.mean(axis=(1, 2))[:, None]
+            else:
+                mean = mean_mean_a0_body
+
             model = BodyModel(initial_coordination=initial_coordination,
                               subjects=evidence.subjects,
                               self_dependent=self_dependent,
                               sd_uc=sd_uc,
+                              mean_mean_a0=mean,
                               sd_mean_a0=sd_mean_a0_body,
                               sd_sd_aa=sd_sd_aa_body,
                               sd_sd_o=sd_sd_o_body,
                               a_mixture_weights=a_mixture_weights)
         elif model_name == "brain_body":
             evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+
+            if mean_a0_prior_from_obs:
+                mean = evidence.obs_body.mean(axis=(1, 2))[:, None]
+            else:
+                mean = mean_mean_a0_body
 
             model = BrainBodyModel(initial_coordination=initial_coordination,
                                    subjects=evidence.subjects,
@@ -122,6 +138,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    sd_mean_a0_brain=sd_mean_a0_brain,
                                    sd_sd_aa_brain=sd_sd_aa_brain,
                                    sd_sd_o_brain=sd_sd_o_brain,
+                                   mean_mean_a0_body=mean,
                                    sd_mean_a0_body=sd_mean_a0_body,
                                    sd_sd_aa_body=sd_sd_aa_body,
                                    sd_sd_o_body=sd_sd_o_body,
@@ -186,35 +203,68 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
 def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
     if isinstance(model, BrainModel) or isinstance(model, BrainBodyModel):
-        brain_posterior_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
+        _plot_brain_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
 
-        logger = logging.getLogger()
-        logger.info("Generating brain plots")
-        subjects = brain_posterior_samples.coords["subject"].data
-        for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
-            plot_dir = f"{out_dir}/{subject}"
-            os.makedirs(plot_dir, exist_ok=True)
+    if isinstance(model, BodyModel) or isinstance(model, BrainBodyModel):
+        _plot_body_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
 
-            brain_channels = brain_posterior_samples.coords["brain_channel"].data
-            for j, brain_channel in tqdm(enumerate(brain_channels),
-                                         total=len(brain_channels),
-                                         desc="Brain Channel", leave=False, position=1):
-                prior_samples = brain_posterior_samples.sel(subject=subject, brain_channel=brain_channel)
 
-                T = prior_samples.sizes["brain_time"]
-                N = prior_samples.sizes["draw"]
+def _plot_brain_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
+    brain_posterior_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
 
-                fig = plt.figure(figsize=(15, 8))
-                plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-                plt.plot(np.arange(T), single_evidence_series.obs_brain[i, j], color="tab:pink", alpha=1, marker="o")
-                plt.title(f"Observed Brain - Subject {subject}, Channel {brain_channel}")
-                plt.xlabel(f"Time Step")
-                plt.ylabel(f"Avg Hb Total")
+    logger = logging.getLogger()
+    logger.info("Generating brain plots")
+    subjects = brain_posterior_samples.coords["subject"].data
+    for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
+        plot_dir = f"{out_dir}/{subject}"
+        os.makedirs(plot_dir, exist_ok=True)
 
-                fig.savefig(f"{plot_dir}/{brain_channel}.png", format='png', bbox_inches='tight')
-                plt.close(fig)
+        brain_channels = brain_posterior_samples.coords["brain_channel"].data
+        for j, brain_channel in tqdm(enumerate(brain_channels),
+                                     total=len(brain_channels),
+                                     desc="Brain Channel", leave=False, position=1):
+            prior_samples = brain_posterior_samples.sel(subject=subject, brain_channel=brain_channel)
 
-    # TODO - Continue
+            T = prior_samples.sizes["brain_time"]
+            N = prior_samples.sizes["draw"]
+
+            fig = plt.figure(figsize=(15, 8))
+            plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
+            plt.plot(np.arange(T), single_evidence_series.obs_brain[i, j], color="tab:pink", alpha=1, marker="o",
+                     markersize=5)
+            plt.title(f"Observed Brain - Subject {subject}, Channel {brain_channel}")
+            plt.xlabel(f"Time Step")
+            plt.ylabel(f"Avg Hb Total")
+
+            fig.savefig(f"{plot_dir}/{brain_channel}.png", format='png', bbox_inches='tight')
+            plt.close(fig)
+
+
+def _plot_body_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
+    body_posterior_samples = idata.prior_predictive[model.obs_body_variable_name].sel(chain=0)
+
+    logger = logging.getLogger()
+    logger.info("Generating body plots")
+    subjects = body_posterior_samples.coords["subject"].data
+    for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
+        plot_dir = f"{out_dir}/{subject}"
+        os.makedirs(plot_dir, exist_ok=True)
+
+        prior_samples = body_posterior_samples.sel(subject=subject, body_feature="total_energy")
+
+        T = prior_samples.sizes["body_time"]
+        N = prior_samples.sizes["draw"]
+
+        fig = plt.figure(figsize=(15, 8))
+        plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
+        plt.plot(np.arange(T), single_evidence_series.obs_body[i, 0], color="tab:pink", alpha=1, marker="o",
+                 markersize=5)
+        plt.title(f"Observed Body - Subject {subject}")
+        plt.xlabel(f"Time Step")
+        plt.ylabel(f"Total Motion Energy")
+
+        fig.savefig(f"{plot_dir}/body_motion.png", format='png', bbox_inches='tight')
+        plt.close(fig)
 
 
 def save_coordination_plots(out_dir: str, idata: az.InferenceData, model: Any):
@@ -230,7 +280,7 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, model: Any):
     fig = plt.figure(figsize=(15, 8))
     plt.plot(np.arange(T)[:, None].repeat(N * C, axis=1), stacked_coordination_samples, color="tab:blue", alpha=0.3)
     plt.plot(np.arange(T), posterior_samples.coordination.mean(dim=["chain", "draw"]), color="tab:pink", alpha=1,
-             marker="o")
+             marker="o", markersize=5)
     plt.title(f"Coordination")
     plt.xlabel(f"Time Step")
     plt.ylabel(f"Coordination")
@@ -345,6 +395,11 @@ if __name__ == "__main__":
                              "different per subject and channels, it is possible to pass a matrix "
                              "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+    parser.add_argument("--mean_mean_a0_body", type=str, required=False, default="0",
+                        help="mean of the prior distribution of mu_body_0. If the parameters are "
+                             "different per subjects, it is possible to pass a matrix "
+                             "(num_subjects x 1) in MATLAB style where rows are split by semi-colons "
+                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
     parser.add_argument("--sd_mean_a0_body", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_body_0. If the parameters are "
                              "different per subjects, it is possible to pass a matrix "
@@ -384,6 +439,10 @@ if __name__ == "__main__":
                         help="Parameter `a` of the prior distribution of p_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
                         help="Parameter `b` of the prior distribution of p_link")
+    parser.add_argument("--mean_a0_prior_from_obs", type=int, required=False, default="0",
+                        help="Whether to use the mean and standard deviation of body observations to set the parameters "
+                             "mean_mean_a0_body and sd_mean_a0_body. If this flag is set to 1, it will override any "
+                             "value passed in the parameters mean_mean_a0_body and sd_mean_a0_body. ")
 
     args = parser.parse_args()
 
@@ -393,6 +452,7 @@ if __name__ == "__main__":
                                           len(arg_brain_channels))
     arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, len(arg_brain_channels))
     arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, len(arg_brain_channels))
+    arg_mean_mean_a0_body = matrix_to_size(str_to_matrix(args.mean_mean_a0_body), args.num_subjects, 1)
     arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
     arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
     arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
@@ -425,6 +485,7 @@ if __name__ == "__main__":
               sd_mean_a0_brain=arg_sd_mean_a0_brain,
               sd_sd_aa_brain=arg_sd_sd_aa_brain,
               sd_sd_o_brain=arg_sd_sd_o_brain,
+              mean_mean_a0_body=arg_mean_mean_a0_body,
               sd_mean_a0_body=arg_sd_mean_a0_body,
               sd_sd_aa_body=arg_sd_sd_aa_body,
               sd_sd_o_body=arg_sd_sd_o_body,
@@ -433,4 +494,5 @@ if __name__ == "__main__":
               sd_sd_aa_vocalic=arg_sd_sd_aa_vocalic,
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
-              b_p_semantic_link=args.b_p_semantic_link)
+              b_p_semantic_link=args.b_p_semantic_link,
+              mean_a0_prior_from_obs=bool(args.mean_a0_prior_from_obs))
