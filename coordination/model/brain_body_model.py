@@ -69,6 +69,20 @@ class BrainBodySeries:
                 literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0]))
         )
 
+    def standardize(self):
+        """
+        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
+        proximity relativity (how close measurements from different subjects are) which is important for the
+        coordination model.
+        """
+        max_value = self.obs_brain.max(axis=(0, 2))[None, :, None]
+        min_value = self.obs_brain.min(axis=(0, 2))[None, :, None]
+        self.obs_brain = (self.obs_brain - min_value) / (max_value - min_value)
+
+        max_value = self.obs_body.max(axis=(0, 2))[None, :, None]
+        min_value = self.obs_body.min(axis=(0, 2))[None, :, None]
+        self.obs_body = (self.obs_body - min_value) / (max_value - min_value)
+
     @property
     def num_time_steps_in_brain_scale(self) -> int:
         return self.obs_brain.shape[-1]
@@ -109,8 +123,8 @@ class BrainBodyModel:
 
     def __init__(self, initial_coordination: float, subjects: List[str], brain_channels: List[str],
                  self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
-                 sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray, sd_mean_a0_body: np.ndarray,
-                 sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
+                 sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
+                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.num_body_features = 1
@@ -120,7 +134,6 @@ class BrainBodyModel:
                                                  num_subjects=len(subjects),
                                                  dim_value=len(brain_channels),
                                                  self_dependent=self_dependent,
-                                                 mean_mean_a0=None,  # Brain data is already normalized to 0 and 1
                                                  sd_mean_a0=sd_mean_a0_brain,
                                                  sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights)
@@ -128,7 +141,6 @@ class BrainBodyModel:
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
                                                 self_dependent=self_dependent,
-                                                mean_mean_a0=mean_mean_a0_body,
                                                 sd_mean_a0=sd_mean_a0_body,
                                                 sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights)

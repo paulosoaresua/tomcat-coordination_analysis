@@ -40,6 +40,16 @@ class VocalicSeries:
         self.vocalic_prev_time_diff_subject = vocalic_prev_time_diff_subject
         self.vocalic_time_steps_in_coordination_scale = vocalic_time_steps_in_coordination_scale
 
+    def standardize(self):
+        """
+        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
+        proximity relativity (how close measurements from different subjects are) which is important for the
+        coordination model.
+        """
+        max_value = self.obs_vocalic.max(axis=-1)[:, None]
+        min_value = self.obs_vocalic.min(axis=-1)[:, None]
+        self.obs_vocalic = (self.obs_vocalic - min_value) / (max_value - min_value)
+
     @classmethod
     def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, vocalic_features: List[str]):
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
