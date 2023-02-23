@@ -37,6 +37,16 @@ class BrainSeries:
         self.obs_brain = obs_brain
         self.brain_time_steps_in_coordination_scale = brain_time_steps_in_coordination_scale
 
+    def standardize(self):
+        """
+        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
+        proximity relativity (how close measurements from different subjects are) which is important for the
+        coordination model.
+        """
+        max_value = self.obs_brain.max(axis=(0, 2))[None, :, None]
+        min_value = self.obs_brain.min(axis=(0, 2))[None, :, None]
+        self.obs_brain = (self.obs_brain - min_value) / (max_value - min_value)
+
     @classmethod
     def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
@@ -101,7 +111,6 @@ class BrainModel:
                                                  num_subjects=len(subjects),
                                                  dim_value=len(brain_channels),
                                                  self_dependent=self_dependent,
-                                                 mean_mean_a0=None,  # Brain data is already normalized to 0 and 1
                                                  sd_mean_a0=sd_mean_a0,
                                                  sd_sd_aa=sd_sd_aa,
                                                  a_mixture_weights=a_mixture_weights)

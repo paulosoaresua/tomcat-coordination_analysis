@@ -51,11 +51,15 @@ class BodySeries:
             body_time_steps_in_coordination_scale=np.array(
                 literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
 
-    def normalize_per_subject(self):
-        mean = self.obs_body.mean(axis=(1, 2))
-        sd = self.obs_body.std(axis=(1, 2))
-
-        self.obs_body = (self.obs_body - mean[:, None, None]) / sd[:, None, None]
+    def standardize(self):
+        """
+        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
+        proximity relativity (how close measurements from different subjects are) which is important for the
+        coordination model.
+        """
+        max_value = self.obs_body.max(axis=(0, 2))[None, :, None]
+        min_value = self.obs_body.min(axis=(0, 2))[None, :, None]
+        self.obs_body = (self.obs_body - min_value) / (max_value - min_value)
 
     @property
     def num_time_steps_in_body_scale(self) -> int:
@@ -90,8 +94,7 @@ class BodyPosteriorSamples:
 class BodyModel:
 
     def __init__(self, initial_coordination: float, subjects: List[str], self_dependent: bool, sd_uc: float,
-                 mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
-                 a_mixture_weights: np.ndarray):
+                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
         self.subjects = subjects
 
         # Single number representing quantity of movement per time step.
@@ -103,7 +106,6 @@ class BodyModel:
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
                                                 self_dependent=self_dependent,
-                                                mean_mean_a0=mean_mean_a0,
                                                 sd_mean_a0=sd_mean_a0,
                                                 sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights)

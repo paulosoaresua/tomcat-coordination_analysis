@@ -24,10 +24,9 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        seed: int, num_inference_jobs: int, do_prior: int, do_posterior: int,
                        initial_coordination: float, num_subjects: int, brain_channels: str, vocalic_features: str,
                        self_dependent: bool, sd_uc: float, sd_mean_a0_brain: str, sd_sd_aa_brain: str,
-                       sd_sd_o_brain: str, mean_mean_a0_body: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
-                       sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
-                       sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
-                       mean_a0_prior_from_obs: int):
+                       sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str, sd_sd_o_body: str,
+                       a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
+                       sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -76,7 +75,6 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_mean_a0_brain="{sd_mean_a0_brain}" ' \
                                      f'--sd_sd_aa_brain="{sd_sd_aa_brain}" ' \
                                      f'--sd_sd_o_brain="{sd_sd_o_brain}" ' \
-                                     f'--mean_mean_a0_body="{mean_mean_a0_body}" ' \
                                      f'--sd_mean_a0_body="{sd_mean_a0_body}" ' \
                                      f'--sd_sd_aa_body="{sd_sd_aa_body}" ' \
                                      f'--sd_sd_o_body="{sd_sd_o_body}" ' \
@@ -85,13 +83,12 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_sd_aa_vocalic="{sd_sd_aa_vocalic}" ' \
                                      f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
                                      f'--a_p_semantic_link={a_p_semantic_link} ' \
-                                     f'--b_p_semantic_link={b_p_semantic_link} ' \
-                                     f'--mean_a0_prior_from_obs={mean_a0_prior_from_obs}'
+                                     f'--b_p_semantic_link={b_p_semantic_link}'
 
         tmux.create_window(tmux_window_name)
-        # # tmux.run_command(f"source {project_dir}/.venv/bin/activate")
-        # # tmux.run_command(f"export PYTHONPATH={project_dir}")
-        # tmux.run_command("source ~/.zshrc")
+        # The user has to make sure tmux initializes conda when a new session or window is created.
+        # This is accomplished by copying the conda initialization script (typically saved in the shell .rc file)
+        # to their shell .profile file.
         tmux.run_command("conda activate coordination")
         tmux.run_command(call_python_script_command)
 
@@ -159,11 +156,6 @@ if __name__ == "__main__":
                              "different per subjects, it is possible to pass a matrix "
                              "(num_subjects x 1) in MATLAB style where rows are split by semi-colons "
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
-    parser.add_argument("--mean_mean_a0_body", type=str, required=False, default="0",
-                        help="mean of the prior distribution of mu_body_0. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x 1) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
     parser.add_argument("--sd_sd_aa_body", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_body. If the parameters are "
                              "different per subjects, it is possible to pass a matrix "
@@ -198,10 +190,6 @@ if __name__ == "__main__":
                         help="Parameter `a` of the prior distribution of p_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
                         help="Parameter `b` of the prior distribution of p_link")
-    parser.add_argument("--mean_a0_prior_from_obs", type=int, required=False, default="0",
-                        help="Whether to use the mean and standard deviation of body observations to set the parameters "
-                             "mean_mean_a0_body and sd_mean_a0_body. If this flag is set to 1, it will override any "
-                             "value passed in the parameters mean_mean_a0_body and sd_mean_a0_body. ")
 
     args = parser.parse_args()
 
@@ -226,7 +214,6 @@ if __name__ == "__main__":
                        sd_mean_a0_brain=args.sd_mean_a0_brain,
                        sd_sd_aa_brain=args.sd_sd_aa_brain,
                        sd_sd_o_brain=args.sd_sd_o_brain,
-                       mean_mean_a0_body=args.mean_mean_a0_body,
                        sd_mean_a0_body=args.sd_mean_a0_body,
                        sd_sd_aa_body=args.sd_sd_aa_body,
                        sd_sd_o_body=args.sd_sd_o_body,
@@ -235,5 +222,4 @@ if __name__ == "__main__":
                        sd_sd_aa_vocalic=args.sd_sd_aa_vocalic,
                        sd_sd_o_vocalic=args.sd_sd_o_vocalic,
                        a_p_semantic_link=args.a_p_semantic_link,
-                       b_p_semantic_link=args.b_p_semantic_link,
-                       mean_a0_prior_from_obs=args.mean_a0_prior_from_obs)
+                       b_p_semantic_link=args.b_p_semantic_link)

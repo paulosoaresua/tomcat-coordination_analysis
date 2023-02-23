@@ -69,6 +69,16 @@ class VocalicSemanticSeries:
                 literal_eval(row_df["semantic_link_time_steps_in_coordination_scale"].values[0]))
         )
 
+    def standardize(self):
+        """
+        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
+        proximity relativity (how close measurements from different subjects are) which is important for the
+        coordination model.
+        """
+        max_value = self.obs_vocalic.max(axis=-1)[:, None]
+        min_value = self.obs_vocalic.min(axis=-1)[:, None]
+        self.obs_vocalic = (self.obs_vocalic - min_value) / (max_value - min_value)
+
     @property
     def num_time_steps_in_vocalic_scale(self) -> int:
         return self.obs_vocalic.shape[-1]

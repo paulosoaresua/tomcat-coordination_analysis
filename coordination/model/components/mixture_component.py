@@ -7,8 +7,7 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior, \
-    NormalParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior
 
 
 def mixture_logp_with_self_dependency(mixture_component: Any,
@@ -155,12 +154,8 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
 
 class MixtureComponentParameters:
 
-    def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
-                 a_mixture_weights: np.ndarray):
-        if mean_mean_a0 is None:
-            self.mean_a0 = Parameter(HalfNormalParameterPrior(sd_mean_a0))
-        else:
-            self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
+    def __init__(self, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray):
+        self.mean_a0 = Parameter(HalfNormalParameterPrior(sd_mean_a0))
         self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
         self.mixture_weights = Parameter(DirichletParameterPrior(a_mixture_weights))
 
@@ -185,9 +180,8 @@ class MixtureComponentSamples:
 
 class MixtureComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool,
-                 mean_mean_a0: Optional[np.ndarray], sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
-                 a_mixture_weights: np.ndarray):
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
+                 sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray):
 
         assert (num_subjects, dim_value) == sd_mean_a0.shape
         assert (num_subjects, dim_value) == sd_sd_aa.shape
@@ -198,8 +192,7 @@ class MixtureComponent:
         self.dim_value = dim_value
         self.self_dependent = self_dependent
 
-        self.parameters = MixtureComponentParameters(mean_mean_a0=mean_mean_a0,
-                                                     sd_mean_a0=sd_mean_a0,
+        self.parameters = MixtureComponentParameters(sd_mean_a0=sd_mean_a0,
                                                      sd_sd_aa=sd_sd_aa,
                                                      a_mixture_weights=a_mixture_weights)
 
@@ -277,14 +270,9 @@ class MixtureComponent:
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None) -> Any:
 
         if mean_a0 is None:
-            if isinstance(self.parameters.mean_a0.prior, HalfNormalParameterPrior):
-                mean_a0 = pm.HalfNormal(name=self._mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                        size=(self.num_subjects, self.dim_value),
-                                        observed=self.parameters.mean_a0.value)
-            else:
-                mean_a0 = pm.Normal(name=self._mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
-                                    sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.HalfNormal(name=self._mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+                                    size=(self.num_subjects, self.dim_value),
+                                    observed=self.parameters.mean_a0.value)
 
         if sd_aa is None:
             sd_aa = pm.HalfNormal(name=self._sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,

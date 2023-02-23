@@ -66,11 +66,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               burn_in: int, num_samples: int, num_chains: int, seed: int, num_inference_jobs: int, do_prior: bool,
               do_posterior: bool, initial_coordination: float, num_subjects: int, brain_channels: List[str],
               vocalic_features: List[str], self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray,
-              sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray,
-              sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
-              a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
-              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              mean_a0_prior_from_obs: bool):
+              sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray,
+              sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray,
+              sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
+              a_p_semantic_link: float, b_p_semantic_link: float):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -108,27 +107,16 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         elif model_name == "body":
             evidence = BodySeries.from_data_frame(experiment_id, evidence_df)
 
-            if mean_a0_prior_from_obs:
-                mean = evidence.obs_body.mean(axis=(1, 2))[:, None]
-            else:
-                mean = mean_mean_a0_body
-
             model = BodyModel(initial_coordination=initial_coordination,
                               subjects=evidence.subjects,
                               self_dependent=self_dependent,
                               sd_uc=sd_uc,
-                              mean_mean_a0=mean,
                               sd_mean_a0=sd_mean_a0_body,
                               sd_sd_aa=sd_sd_aa_body,
                               sd_sd_o=sd_sd_o_body,
                               a_mixture_weights=a_mixture_weights)
         elif model_name == "brain_body":
             evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels)
-
-            if mean_a0_prior_from_obs:
-                mean = evidence.obs_body.mean(axis=(1, 2))[:, None]
-            else:
-                mean = mean_mean_a0_body
 
             model = BrainBodyModel(initial_coordination=initial_coordination,
                                    subjects=evidence.subjects,
@@ -138,11 +126,11 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    sd_mean_a0_brain=sd_mean_a0_brain,
                                    sd_sd_aa_brain=sd_sd_aa_brain,
                                    sd_sd_o_brain=sd_sd_o_brain,
-                                   mean_mean_a0_body=mean,
                                    sd_mean_a0_body=sd_mean_a0_body,
                                    sd_sd_aa_body=sd_sd_aa_body,
                                    sd_sd_o_body=sd_sd_o_body,
                                    a_mixture_weights=a_mixture_weights)
+
         elif model_name == "vocalic_semantic":
             evidence = VocalicSemanticSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
 
@@ -169,6 +157,9 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_sd_o_vocalic=sd_sd_o_vocalic)
         else:
             raise Exception(f"Invalid model {model_name}.")
+
+        # Project observations to the range [0,1]
+        evidence.standardize()
 
         results_dir = f"{out_dir}/{experiment_id}"
         os.makedirs(results_dir, exist_ok=True)
@@ -395,11 +386,6 @@ if __name__ == "__main__":
                              "different per subject and channels, it is possible to pass a matrix "
                              "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
-    parser.add_argument("--mean_mean_a0_body", type=str, required=False, default="0",
-                        help="mean of the prior distribution of mu_body_0. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x 1) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
     parser.add_argument("--sd_mean_a0_body", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_body_0. If the parameters are "
                              "different per subjects, it is possible to pass a matrix "
@@ -439,11 +425,6 @@ if __name__ == "__main__":
                         help="Parameter `a` of the prior distribution of p_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
                         help="Parameter `b` of the prior distribution of p_link")
-    parser.add_argument("--mean_a0_prior_from_obs", type=int, required=False, default="0",
-                        help="Whether to use the mean and standard deviation of body observations to set the parameters "
-                             "mean_mean_a0_body and sd_mean_a0_body. If this flag is set to 1, it will override any "
-                             "value passed in the parameters mean_mean_a0_body and sd_mean_a0_body. ")
-
     args = parser.parse_args()
 
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
@@ -452,7 +433,6 @@ if __name__ == "__main__":
                                           len(arg_brain_channels))
     arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, len(arg_brain_channels))
     arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, len(arg_brain_channels))
-    arg_mean_mean_a0_body = matrix_to_size(str_to_matrix(args.mean_mean_a0_body), args.num_subjects, 1)
     arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
     arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
     arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
@@ -485,7 +465,6 @@ if __name__ == "__main__":
               sd_mean_a0_brain=arg_sd_mean_a0_brain,
               sd_sd_aa_brain=arg_sd_sd_aa_brain,
               sd_sd_o_brain=arg_sd_sd_o_brain,
-              mean_mean_a0_body=arg_mean_mean_a0_body,
               sd_mean_a0_body=arg_sd_mean_a0_body,
               sd_sd_aa_body=arg_sd_sd_aa_body,
               sd_sd_o_body=arg_sd_sd_o_body,
@@ -494,5 +473,4 @@ if __name__ == "__main__":
               sd_sd_aa_vocalic=arg_sd_sd_aa_vocalic,
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
-              b_p_semantic_link=args.b_p_semantic_link,
-              mean_a0_prior_from_obs=bool(args.mean_a0_prior_from_obs))
+              b_p_semantic_link=args.b_p_semantic_link)
