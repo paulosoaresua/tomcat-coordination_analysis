@@ -23,9 +23,9 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        num_parallel_processes: int, model: str, burn_in: int, num_samples: int, num_chains: int,
                        seed: int, num_inference_jobs: int, do_prior: int, do_posterior: int,
                        initial_coordination: float, num_subjects: int, brain_channels: str, vocalic_features: str,
-                       self_dependent: bool, sd_uc: float, sd_mean_a0_brain: str, sd_sd_aa_brain: str,
-                       sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str, sd_sd_o_body: str,
-                       a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
+                       self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_brain: str,
+                       sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
+                       sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
                        sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
@@ -54,6 +54,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
         tmux_window_name = experiment_ids
 
         # Call the actual inference script
+        initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination >= 0 else ''
         call_python_script_command = f'python3 "{project_dir}/scripts/sequential_experiment_inference.py" ' \
                                      f'--out_dir="{results_folder}" ' \
                                      f'--experiment_ids="{experiment_ids}" ' \
@@ -66,12 +67,13 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--num_inference_jobs={num_inference_jobs} ' \
                                      f'--do_prior={do_prior} ' \
                                      f'--do_posterior={do_posterior} ' \
-                                     f'--initial_coordination={initial_coordination} ' \
+                                     f'{initial_coordination_arg} ' \
                                      f'--num_subjects={num_subjects} ' \
                                      f'--brain_channels="{brain_channels}" ' \
                                      f'--vocalic_features="{vocalic_features}" ' \
                                      f'--self_dependent={self_dependent} ' \
-                                     f'--sd_uc={sd_uc} ' \
+                                     f'--sd_mean_uc0={sd_mean_uc0} ' \
+                                     f'--sd_sd_uc={sd_sd_uc} ' \
                                      f'--sd_mean_a0_brain="{sd_mean_a0_brain}" ' \
                                      f'--sd_sd_aa_brain="{sd_sd_aa_brain}" ' \
                                      f'--sd_sd_o_brain="{sd_sd_o_brain}" ' \
@@ -124,7 +126,7 @@ if __name__ == "__main__":
                         help="Whether to perform prior predictive check or not. Use the value 0 to deactivate.")
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
                         help="Whether to perform posterior inference or not. Use the value 0 to deactivate.")
-    parser.add_argument("--initial_coordination", type=float, required=False, default=0.01,
+    parser.add_argument("--initial_coordination", type=float, required=False, default=-1,
                         help="Initial coordination value.")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")
@@ -134,8 +136,10 @@ if __name__ == "__main__":
                         help="Vocalic features to use during inference. The features must be separated by commas.")
     parser.add_argument("--self_dependent", type=int, required=False, default=1,
                         help="Whether subjects influence themselves in the absense of coordination.")
-    parser.add_argument("--sd_uc", type=float, required=False, default=1,
-                        help="Standard deviation of the prior distribution of sigma_c")
+    parser.add_argument("--sd_mean_uc0", type=float, required=False, default=5,
+                        help="Standard deviation of the prior distribution of mean_uc0")
+    parser.add_argument("--sd_sd_uc", type=float, required=False, default=1,
+                        help="Standard deviation of the prior distribution of sd_uc")
     parser.add_argument("--sd_mean_a0_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_brain_0. If the parameters are "
                              "different per subject and channels, it is possible to pass a matrix "
@@ -210,7 +214,8 @@ if __name__ == "__main__":
                        brain_channels=args.brain_channels,
                        vocalic_features=args.vocalic_features,
                        self_dependent=args.self_dependent,
-                       sd_uc=args.sd_uc,
+                       sd_mean_uc0=args.sd_mean_uc0,
+                       sd_sd_uc=args.sd_sd_uc,
                        sd_mean_a0_brain=args.sd_mean_a0_brain,
                        sd_sd_aa_brain=args.sd_sd_aa_brain,
                        sd_sd_o_brain=args.sd_sd_o_brain,
