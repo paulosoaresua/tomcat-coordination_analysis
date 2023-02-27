@@ -17,12 +17,12 @@ def serialized_logp_with_self_dependency(serialized_component: Any,
                                          prev_time_diff_subject: ptt.TensorConstant,
                                          prev_same_subject_mask: ptt.TensorConstant,
                                          prev_diff_subject_mask: ptt.TensorConstant):
-    C = coordination[None, :]  # 1 x t-1
-    S = serialized_component[..., prev_time_same_subject]  # d x t-1
-    D = serialized_component[..., prev_time_diff_subject]  # d x t-1
+    C = coordination[None, :]  # 1 x t
+    S = serialized_component[..., prev_time_same_subject]  # d x t
+    D = serialized_component[..., prev_time_diff_subject]  # d x t
 
-    SM = prev_same_subject_mask[None, :]
-    DM = prev_diff_subject_mask[None, :]
+    SM = prev_same_subject_mask[None, :]  # 1 x t
+    DM = prev_diff_subject_mask[None, :]  # 1 x t
 
     # Already contains the initial time step.
     mean = (D - S * SM) * C * DM + S * SM + initial_mean * (1 - SM) * (1 - DM)
@@ -63,8 +63,8 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
                                            coordination: np.ndarray,
                                            prev_time_same_subject: np.ndarray,
                                            prev_time_diff_subject: np.ndarray,
-                                           prev_same_subject_mask: ptt.TensorConstant,
-                                           prev_diff_subject_mask: ptt.TensorConstant,
+                                           prev_same_subject_mask: np.ndarray,
+                                           prev_diff_subject_mask: np.ndarray,
                                            rng: Optional[np.random.Generator] = None,
                                            size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -93,7 +93,7 @@ def serialized_random_without_self_dependency(initial_mean: np.ndarray,
                                               sigma: np.ndarray,
                                               coordination: np.ndarray,
                                               prev_time_diff_subject: np.ndarray,
-                                              prev_diff_subject_mask: ptt.TensorConstant,
+                                              prev_diff_subject_mask: np.ndarray,
                                               rng: Optional[np.random.Generator] = None,
                                               size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]

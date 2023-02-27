@@ -8,6 +8,7 @@ import pandas as pd
 import pymc as pm
 import xarray
 
+from coordination.common.functions import logit
 from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent, \
     SigmoidGaussianCoordinationComponentSamples
 from coordination.model.components.serialized_component import SerializedComponent, SerializedComponentSamples
@@ -53,20 +54,22 @@ class VocalicSemanticSeries:
         for vocalic_feature in vocalic_features:
             obs_vocalic.append(np.array(literal_eval(row_df[f"{vocalic_feature}"].values[0])))
         # Swap axes such that the first dimension represents the different subjects and the second the vocalic features
-        obs_vocalic = np.array(obs_vocalic).swapaxes(0, 1)
+        obs_vocalic = np.array(obs_vocalic)
 
         return cls(
             uuid=row_df["experiment_id"].values[0],
             vocalic_features=vocalic_features,
-            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"],
-            vocalic_subjects=np.array(literal_eval(row_df["subjects"].values[0])),
+            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
+            vocalic_subjects=np.array(literal_eval(row_df["vocalic_subjects"].values[0])),
             obs_vocalic=obs_vocalic,
-            vocalic_prev_time_same_subject=np.array(literal_eval(row_df["vocalic_prev_time_same_subject"].values[0])),
-            vocalic_prev_time_diff_subject=np.array(literal_eval(row_df["vocalic_prev_time_diff_subject"].values[0])),
+            vocalic_prev_time_same_subject=np.array(
+                literal_eval(row_df["vocalic_previous_time_same_subject"].values[0])),
+            vocalic_prev_time_diff_subject=np.array(
+                literal_eval(row_df["vocalic_previous_time_diff_subject"].values[0])),
             vocalic_time_steps_in_coordination_scale=np.array(
                 literal_eval(row_df["vocalic_time_steps_in_coordination_scale"].values[0])),
             semantic_link_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["semantic_link_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(row_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]))
         )
 
     def standardize(self):
@@ -75,8 +78,8 @@ class VocalicSemanticSeries:
         proximity relativity (how close measurements from different subjects are) which is important for the
         coordination model.
         """
-        max_value = self.obs_vocalic.max(axis=-1)[:, None]
-        min_value = self.obs_vocalic.min(axis=-1)[:, None]
+        max_value = self.obs_vocalic.max(axis=-1, initial=0)[:, None]
+        min_value = self.obs_vocalic.min(axis=-1, initial=0)[:, None]
         self.obs_vocalic = (self.obs_vocalic - min_value) / (max_value - min_value)
 
     @property
@@ -119,17 +122,22 @@ class VocalicSemanticPosteriorSamples:
 
 class VocalicSemanticModel:
 
-    def __init__(self, initial_coordination: float, num_subjects: int, vocalic_features: List[str],
-                 self_dependent: bool, sd_uc: float, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
-                 sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float):
+    def __init__(self, num_subjects: int, vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float,
+                 sd_sd_uc: float, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
+                 sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
+                 initial_coordination: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination, sd_uc=sd_uc)
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
+                                                                     sd_sd_uc=sd_sd_uc)
+        if initial_coordination is not None:
+            self.coordination_cpn.parameters.mean_uc0.value = logit(initial_coordination)
+
         self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, len(vocalic_features),
                                                       self_dependent,
                                                       sd_mean_a0=sd_mean_a0_vocalic, sd_sd_aa=sd_sd_aa_vocalic)
-        self.semantic_link_cpn = LinkComponent("semantic_link", a_p=a_p_semantic_link, b_p=b_p_semantic_link)
+        self.semantic_link_cpn = LinkComponent("obs_semantic_link", a_p=a_p_semantic_link, b_p=b_p_semantic_link)
         self.obs_vocalic_cpn = SerializedObservationComponent("obs_vocalic", num_subjects, len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic)
 
@@ -145,6 +153,10 @@ class VocalicSemanticModel:
     @property
     def obs_vocalic_variable_name(self) -> str:
         return self.obs_vocalic_cpn.uuid
+
+    @property
+    def obs_semantic_link_variable_name(self) -> str:
+        return self.semantic_link_cpn.uuid
 
     def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
                      semantic_link_time_scale_density: float, can_repeat_subject: bool,
@@ -198,6 +210,7 @@ class VocalicSemanticModel:
 
             self.semantic_link_cpn.update_pymc_model(
                 coordination=coordination[evidence.num_time_steps_in_semantic_link_scale],
+                time_dimension="link_time",
                 observed_values=np.ones(evidence.num_time_steps_in_semantic_link_scale))
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,

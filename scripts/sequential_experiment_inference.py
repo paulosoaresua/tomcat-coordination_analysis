@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, List
+from typing import Any, List, Optional, Union
 
 import argparse
 import pickle
@@ -64,12 +64,12 @@ VOCALIC_FEATURES = [
 
 def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, model_name: str,
               burn_in: int, num_samples: int, num_chains: int, seed: int, num_inference_jobs: int, do_prior: bool,
-              do_posterior: bool, initial_coordination: float, num_subjects: int, brain_channels: List[str],
-              vocalic_features: List[str], self_dependent: bool, sd_uc: float, sd_mean_a0_brain: np.ndarray,
-              sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray,
-              sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray,
-              sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
-              a_p_semantic_link: float, b_p_semantic_link: float):
+              do_posterior: bool, initial_coordination: Optional[float], num_subjects: int, brain_channels: List[str],
+              vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float,
+              sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray,
+              sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
+              a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
+              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -95,66 +95,72 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         if model_name == "brain":
             evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels)
 
-            model = BrainModel(initial_coordination=initial_coordination,
-                               subjects=evidence.subjects,
+            model = BrainModel(subjects=evidence.subjects,
                                brain_channels=brain_channels,
                                self_dependent=self_dependent,
-                               sd_uc=sd_uc,
+                               sd_mean_uc0=sd_mean_uc0,
+                               sd_sd_uc=sd_sd_uc,
                                sd_mean_a0=sd_mean_a0_brain,
                                sd_sd_aa=sd_sd_aa_brain,
                                sd_sd_o=sd_sd_o_brain,
-                               a_mixture_weights=a_mixture_weights)
+                               a_mixture_weights=a_mixture_weights,
+                               initial_coordination=initial_coordination)
         elif model_name == "body":
             evidence = BodySeries.from_data_frame(experiment_id, evidence_df)
 
-            model = BodyModel(initial_coordination=initial_coordination,
-                              subjects=evidence.subjects,
+            model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
-                              sd_uc=sd_uc,
+                              sd_mean_uc0=sd_mean_uc0,
+                              sd_sd_uc=sd_sd_uc,
                               sd_mean_a0=sd_mean_a0_body,
                               sd_sd_aa=sd_sd_aa_body,
                               sd_sd_o=sd_sd_o_body,
-                              a_mixture_weights=a_mixture_weights)
+                              a_mixture_weights=a_mixture_weights,
+                              initial_coordination=initial_coordination)
+
         elif model_name == "brain_body":
             evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels)
 
-            model = BrainBodyModel(initial_coordination=initial_coordination,
-                                   subjects=evidence.subjects,
+            model = BrainBodyModel(subjects=evidence.subjects,
                                    brain_channels=brain_channels,
                                    self_dependent=self_dependent,
-                                   sd_uc=sd_uc,
+                                   sd_mean_uc0=sd_mean_uc0,
+                                   sd_sd_uc=sd_sd_uc,
                                    sd_mean_a0_brain=sd_mean_a0_brain,
                                    sd_sd_aa_brain=sd_sd_aa_brain,
                                    sd_sd_o_brain=sd_sd_o_brain,
                                    sd_mean_a0_body=sd_mean_a0_body,
                                    sd_sd_aa_body=sd_sd_aa_body,
                                    sd_sd_o_body=sd_sd_o_body,
-                                   a_mixture_weights=a_mixture_weights)
+                                   a_mixture_weights=a_mixture_weights,
+                                   initial_coordination=initial_coordination)
 
         elif model_name == "vocalic_semantic":
             evidence = VocalicSemanticSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
 
-            model = VocalicSemanticModel(initial_coordination=initial_coordination,
-                                         num_subjects=num_subjects,
+            model = VocalicSemanticModel(num_subjects=num_subjects,
                                          vocalic_features=vocalic_features,
                                          self_dependent=self_dependent,
-                                         sd_uc=sd_uc,
+                                         sd_mean_uc0=sd_mean_uc0,
+                                         sd_sd_uc=sd_sd_uc,
                                          sd_mean_a0_vocalic=sd_mean_a0_vocalic,
                                          sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                          sd_sd_o_vocalic=sd_sd_o_vocalic,
                                          a_p_semantic_link=a_p_semantic_link,
-                                         b_p_semantic_link=b_p_semantic_link)
+                                         b_p_semantic_link=b_p_semantic_link,
+                                         initial_coordination=initial_coordination)
         elif model_name == "vocalic":
             evidence = VocalicSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
 
-            model = VocalicModel(initial_coordination=initial_coordination,
-                                 num_subjects=num_subjects,
+            model = VocalicModel(num_subjects=num_subjects,
                                  vocalic_features=vocalic_features,
                                  self_dependent=self_dependent,
-                                 sd_uc=sd_uc,
+                                 sd_mean_uc0=sd_mean_uc0,
+                                 sd_sd_uc=sd_sd_uc,
                                  sd_mean_a0_vocalic=sd_mean_a0_vocalic,
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
-                                 sd_sd_o_vocalic=sd_sd_o_vocalic)
+                                 sd_sd_o_vocalic=sd_sd_o_vocalic,
+                                 initial_coordination=initial_coordination)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -185,7 +191,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                 idata.extend(idata_posterior)
 
             save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
-            save_coordination_plots(f"{results_dir}/plots/posterior", idata, model)
+            save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
 
         # Save inference data
         with open(f"{results_dir}/inference_data.pkl", "wb") as f:
@@ -199,22 +205,28 @@ def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_ev
     if isinstance(model, BodyModel) or isinstance(model, BrainBodyModel):
         _plot_body_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
 
+    if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
+        _plot_vocalic_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
 
-def _plot_brain_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
-    brain_posterior_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
+
+def _plot_brain_predictive_prior_plots(out_dir: str,
+                                       idata: az.InferenceData,
+                                       single_evidence_series: Union[BrainSeries, BrainBodySeries],
+                                       model: Any):
+    brain_prior_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
 
     logger = logging.getLogger()
     logger.info("Generating brain plots")
-    subjects = brain_posterior_samples.coords["subject"].data
+    subjects = brain_prior_samples.coords["subject"].data
     for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
         plot_dir = f"{out_dir}/{subject}"
         os.makedirs(plot_dir, exist_ok=True)
 
-        brain_channels = brain_posterior_samples.coords["brain_channel"].data
+        brain_channels = brain_prior_samples.coords["brain_channel"].data
         for j, brain_channel in tqdm(enumerate(brain_channels),
                                      total=len(brain_channels),
                                      desc="Brain Channel", leave=False, position=1):
-            prior_samples = brain_posterior_samples.sel(subject=subject, brain_channel=brain_channel)
+            prior_samples = brain_prior_samples.sel(subject=subject, brain_channel=brain_channel)
 
             T = prior_samples.sizes["brain_time"]
             N = prior_samples.sizes["draw"]
@@ -231,17 +243,20 @@ def _plot_brain_predictive_prior_plots(out_dir: str, idata: az.InferenceData, si
             plt.close(fig)
 
 
-def _plot_body_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
-    body_posterior_samples = idata.prior_predictive[model.obs_body_variable_name].sel(chain=0)
+def _plot_body_predictive_prior_plots(out_dir: str,
+                                      idata: az.InferenceData,
+                                      single_evidence_series: Union[BodySeries, BrainBodySeries],
+                                      model: Any):
+    body_prior_samples = idata.prior_predictive[model.obs_body_variable_name].sel(chain=0)
 
     logger = logging.getLogger()
     logger.info("Generating body plots")
-    subjects = body_posterior_samples.coords["subject"].data
+    subjects = body_prior_samples.coords["subject"].data
     for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
         plot_dir = f"{out_dir}/{subject}"
         os.makedirs(plot_dir, exist_ok=True)
 
-        prior_samples = body_posterior_samples.sel(subject=subject, body_feature="total_energy")
+        prior_samples = body_prior_samples.sel(subject=subject, body_feature="total_energy")
 
         T = prior_samples.sizes["body_time"]
         N = prior_samples.sizes["draw"]
@@ -258,7 +273,38 @@ def _plot_body_predictive_prior_plots(out_dir: str, idata: az.InferenceData, sin
         plt.close(fig)
 
 
-def save_coordination_plots(out_dir: str, idata: az.InferenceData, model: Any):
+def _plot_vocalic_predictive_prior_plots(out_dir: str,
+                                         idata: az.InferenceData,
+                                         single_evidence_series: Union[VocalicSeries, VocalicSemanticSeries],
+                                         model: Any):
+    vocalic_prior_samples = idata.prior_predictive[model.obs_vocalic_variable_name].sel(chain=0)
+
+    logger = logging.getLogger()
+    logger.info("Generating vocalic plots")
+
+    vocalic_features = vocalic_prior_samples.coords["vocalic_feature"].data
+    for j, vocalic_feature in tqdm(enumerate(vocalic_features),
+                                   total=len(vocalic_features),
+                                   desc="Vocalic Features", leave=False, position=1):
+        prior_samples = vocalic_prior_samples.sel(vocalic_feature=vocalic_feature)
+
+        T = prior_samples.sizes["vocalic_time"]
+        N = prior_samples.sizes["draw"]
+
+        fig = plt.figure(figsize=(15, 8))
+        plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
+        plt.plot(np.arange(T), single_evidence_series.obs_vocalic[j], color="tab:pink", alpha=1, marker="o",
+                 markersize=5)
+        plt.title(f"Observed {vocalic_feature}")
+        plt.xlabel(f"Time Step")
+        plt.ylabel(vocalic_feature)
+
+        os.makedirs(out_dir, exist_ok=True)
+        fig.savefig(f"{out_dir}/{vocalic_feature}.png", format='png', bbox_inches='tight')
+        plt.close(fig)
+
+
+def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any, model: Any):
     os.makedirs(out_dir, exist_ok=True)
 
     posterior_samples = model.inference_data_to_posterior_samples(idata)
@@ -268,10 +314,29 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, model: Any):
     N = posterior_samples.coordination.sizes["draw"]
     stacked_coordination_samples = posterior_samples.coordination.stack(chain_plus_draw=("chain", "draw"))
 
+    mean_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"])
+    sd_coordination = posterior_samples.coordination.std(dim=["chain", "draw"])
+    lower_band = np.maximum(mean_coordination - sd_coordination, 0)
+    upper_band = np.minimum(mean_coordination + sd_coordination, 1)
+
     fig = plt.figure(figsize=(15, 8))
-    plt.plot(np.arange(T)[:, None].repeat(N * C, axis=1), stacked_coordination_samples, color="tab:blue", alpha=0.3)
-    plt.plot(np.arange(T), posterior_samples.coordination.mean(dim=["chain", "draw"]), color="tab:pink", alpha=1,
-             marker="o", markersize=5)
+    plt.plot(np.arange(T)[:, None].repeat(N * C, axis=1), stacked_coordination_samples, color="tab:blue", alpha=0.3,
+             zorder=1)
+    plt.fill_between(np.arange(T), lower_band, upper_band, color="tab:pink", alpha=0.8, zorder=2)
+    plt.plot(np.arange(T), mean_coordination, color="white", alpha=1, marker="o", markersize=5, linewidth=1,
+             linestyle="--", zorder=3)
+
+    if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
+        # Mark points with semantic link
+        time_points = evidence.vocalic_time_steps_in_coordination_scale
+        plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10, zorder=4)
+
+    if isinstance(model, VocalicSemanticModel):
+        # Mark points with semantic link
+        time_points = evidence.semantic_link_time_steps_in_coordination_scale
+        links = mean_coordination[time_points]
+        plt.scatter(time_points, links, c="black", alpha=1, marker="*", s=10, zorder=4)
+
     plt.title(f"Coordination")
     plt.xlabel(f"Time Step")
     plt.ylabel(f"Coordination")
@@ -359,7 +424,7 @@ if __name__ == "__main__":
                         help="Whether to perform prior predictive check or not. Use the value 0 to deactivate.")
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
                         help="Whether to perform posterior inference or not. Use the value 0 to deactivate.")
-    parser.add_argument("--initial_coordination", type=float, required=False, default=0.01,
+    parser.add_argument("--initial_coordination", type=float, required=False,
                         help="Initial coordination value.")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")
@@ -369,8 +434,10 @@ if __name__ == "__main__":
                         help="Vocalic features to use during inference. The features must be separated by commas.")
     parser.add_argument("--self_dependent", type=int, required=False, default=1,
                         help="Whether subjects influence themselves in the absense of coordination.")
-    parser.add_argument("--sd_uc", type=float, required=False, default=1,
-                        help="Standard deviation of the prior distribution of sigma_c")
+    parser.add_argument("--sd_mean_uc0", type=float, required=False, default=5,
+                        help="Standard deviation of the prior distribution of mean_uc0")
+    parser.add_argument("--sd_sd_uc", type=float, required=False, default=1,
+                        help="Standard deviation of the prior distribution of sd_uc")
     parser.add_argument("--sd_mean_a0_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_brain_0. If the parameters are "
                              "different per subject and channels, it is possible to pass a matrix "
@@ -461,7 +528,8 @@ if __name__ == "__main__":
               brain_channels=arg_brain_channels,
               vocalic_features=arg_vocalic_features,
               self_dependent=args.self_dependent,
-              sd_uc=args.sd_uc,
+              sd_mean_uc0=args.sd_mean_uc0,
+              sd_sd_uc=args.sd_sd_uc,
               sd_mean_a0_brain=arg_sd_mean_a0_brain,
               sd_sd_aa_brain=arg_sd_sd_aa_brain,
               sd_sd_o_brain=arg_sd_sd_o_brain,
