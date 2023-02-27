@@ -5,16 +5,18 @@ import pymc as pm
 from scipy.stats import norm
 
 from coordination.common.functions import logit, sigmoid
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 from coordination.common.utils import set_random_seed
 
 
 class SigmoidGaussianCoordinationComponentParameters:
 
-    def __init__(self, sd_uc: float):
-        self.sd_uc = Parameter(HalfNormalParameterPrior(np.array([sd_uc])))
+    def __init__(self, sd_mean_uc0: float, sd_sd_uc: float):
+        self.mean_uc0 = Parameter(NormalParameterPrior(mean=np.zeros(1), sd=np.array([sd_mean_uc0])))
+        self.sd_uc = Parameter(HalfNormalParameterPrior(np.array([sd_sd_uc])))
 
     def clear_values(self):
+        self.mean_uc0.value = None
         self.sd_uc.value = None
 
 
@@ -27,16 +29,19 @@ class SigmoidGaussianCoordinationComponentSamples:
 
 class SigmoidGaussianCoordinationComponent:
 
-    def __init__(self, initial_coordination: float, sd_uc: float):
-        self.initial_coordination = initial_coordination
-
-        self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_uc)
+    def __init__(self, sd_mean_uc0: float, sd_sd_uc: float):
+        self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_mean_uc0, sd_sd_uc)
 
     @property
     def parameter_names(self) -> List[str]:
         return [
+            self._mean_uc0,
             self._sd_uc
         ]
+
+    @property
+    def _mean_uc0(self) -> str:
+        return f"mean_uc0"
 
     @property
     def _sd_uc(self) -> str:
@@ -53,18 +58,22 @@ class SigmoidGaussianCoordinationComponent:
         # Gaussian random walk via reparametrization trick
         samples.unbounded_coordination = norm(loc=0, scale=1).rvs(
             size=(num_series, num_time_steps)) * self.parameters.sd_uc.value
-        samples.unbounded_coordination[:, 0] += self.initial_coordination
+        samples.unbounded_coordination[:, 0] += self.parameters.mean_uc0.value
         samples.unbounded_coordination = samples.unbounded_coordination.cumsum(axis=1)
 
         samples.coordination = sigmoid(samples.unbounded_coordination)
 
         return samples
 
-    def update_pymc_model(self, time_dimension: str, unbounded_coordination_observed_values: Optional[Any] = None) -> Any:
+    def update_pymc_model(self, time_dimension: str,
+                          unbounded_coordination_observed_values: Optional[Any] = None) -> Any:
+        mean_uc0 = pm.Normal(name=self._mean_uc0, mu=self.parameters.mean_uc0.prior.mean,
+                             sigma=self.parameters.mean_uc0.prior.sd, size=1,
+                             observed=self.parameters.mean_uc0.value)
         sd_uc = pm.HalfNormal(name=self._sd_uc, sigma=self.parameters.sd_uc.prior.sd, size=1,
                               observed=self.parameters.sd_uc.value)
 
-        prior = pm.Normal.dist(mu=logit(self.initial_coordination), sigma=sd_uc)
+        prior = pm.Normal.dist(mu=mean_uc0, sigma=sd_uc)
         unbounded_coordination = pm.GaussianRandomWalk("unbounded_coordination",
                                                        init_dist=prior,
                                                        sigma=sd_uc,

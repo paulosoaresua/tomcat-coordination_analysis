@@ -9,6 +9,7 @@ import pandas as pd
 import pymc as pm
 import xarray
 
+from coordination.common.functions import logit
 from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent, \
     SigmoidGaussianCoordinationComponentSamples
 from coordination.model.components.mixture_component import MixtureComponent, MixtureComponentSamples
@@ -57,8 +58,8 @@ class BodySeries:
         proximity relativity (how close measurements from different subjects are) which is important for the
         coordination model.
         """
-        max_value = self.obs_body.max(axis=(0, 2))[None, :, None]
-        min_value = self.obs_body.min(axis=(0, 2))[None, :, None]
+        max_value = self.obs_body.max(axis=(0, 2), initial=0)[None, :, None]
+        min_value = self.obs_body.min(axis=(0, 2), initial=0)[None, :, None]
         self.obs_body = (self.obs_body - min_value) / (max_value - min_value)
 
     @property
@@ -93,15 +94,19 @@ class BodyPosteriorSamples:
 
 class BodyModel:
 
-    def __init__(self, initial_coordination: float, subjects: List[str], self_dependent: bool, sd_uc: float,
-                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray):
+    def __init__(self, subjects: List[str], self_dependent: bool, sd_mean_uc0: float,
+                 sd_sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
+                 a_mixture_weights: np.ndarray, initial_coordination: Optional[float] = None):
         self.subjects = subjects
 
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(initial_coordination=initial_coordination,
-                                                                     sd_uc=sd_uc)
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
+                                                                     sd_sd_uc=sd_sd_uc)
+        if initial_coordination is not  None:
+            self.coordination_cpn.parameters.mean_uc0.value = logit(initial_coordination)
+
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,

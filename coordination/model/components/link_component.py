@@ -67,12 +67,12 @@ class LinkComponent:
 
         return samples
 
-    def update_pymc_model(self, coordination: Any, observed_values: Any) -> Any:
+    def update_pymc_model(self, coordination: Any, time_dimension: str, observed_values: Any) -> Any:
         p = pm.Beta(name=self._p, alpha=self.parameters.p.prior.a, beta=self.parameters.p.prior.b,
                     size=1, observed=self.parameters.p.value)
 
         adjusted_prob = pm.Deterministic(f"adjusted_prob_{self.uuid}", p * coordination)
 
-        pm.Bernoulli(f"link_{self.uuid}", adjusted_prob, observed=observed_values)
+        pm.Bernoulli(self.uuid, adjusted_prob, dims=time_dimension, observed=observed_values)
 
         return p, adjusted_prob
