@@ -1,4 +1,5 @@
 import os
+import time
 
 
 class TMUX:
@@ -17,6 +18,7 @@ class TMUX:
 
     def run_command(self, command: str):
         os.system(f'tmux send-keys -t {self.session_name} "{command}" "C-m"')
+        time.sleep(1)
 
     @staticmethod
     def has_session(session_name: str):

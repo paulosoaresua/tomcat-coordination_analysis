@@ -69,7 +69,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray,
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
               a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
-              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float):
+              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
+              normalize_observations: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -164,7 +165,11 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         else:
             raise Exception(f"Invalid model {model_name}.")
 
-        # Project observations to the range [0,1]
+        if normalize_observations:
+            evidence.normalize_per_subject()
+
+        # Project observations to the range [0,1]. This does not affect the estimated coordination but reduces
+        # divergences with parameter mean_a0 that has prior with mass close to 0 (per choice).
         evidence.standardize()
 
         results_dir = f"{out_dir}/{experiment_id}"
@@ -329,7 +334,8 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
     if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
         # Mark points with semantic link
         time_points = evidence.vocalic_time_steps_in_coordination_scale
-        plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10, zorder=4)
+        plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10,
+                    zorder=4)
 
     if isinstance(model, VocalicSemanticModel):
         # Mark points with semantic link
@@ -492,6 +498,9 @@ if __name__ == "__main__":
                         help="Parameter `a` of the prior distribution of p_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
                         help="Parameter `b` of the prior distribution of p_link")
+    parser.add_argument("--normalize_observations", type=int, required=False, default=0,
+                        help="Whether we normalize observations per subject to ensure they have 0 mean and 1 "
+                             "standard deviation.")
     args = parser.parse_args()
 
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
@@ -541,4 +550,5 @@ if __name__ == "__main__":
               sd_sd_aa_vocalic=arg_sd_sd_aa_vocalic,
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
-              b_p_semantic_link=args.b_p_semantic_link)
+              b_p_semantic_link=args.b_p_semantic_link,
+              normalize_observations=bool(args.normalize_observations))

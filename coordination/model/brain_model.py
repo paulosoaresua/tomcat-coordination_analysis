@@ -48,6 +48,14 @@ class BrainSeries:
         min_value = self.obs_brain.min(axis=(0, 2), initial=0)[None, :, None]
         self.obs_brain = (self.obs_brain - min_value) / (max_value - min_value)
 
+    def normalize_per_subject(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
+        """
+        mean = self.obs_brain.mean(axis=-1)[..., None]
+        std = self.obs_brain.std(axis=-1)[..., None]
+        self.obs_brain = (self.obs_brain - mean) / std
+
     @classmethod
     def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]

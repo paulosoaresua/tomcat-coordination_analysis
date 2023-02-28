@@ -48,17 +48,21 @@ class VocalicSeries:
         coordination model.
         """
 
-        # all_subjects = set(self.vocalic_subjects.tolist())
-        #
-        # for subject in all_subjects:
-        #     obs_per_subject = self.obs_vocalic[:, self.vocalic_subjects == subject]
-        #     mean = obs_per_subject.mean()
-        #     std = obs_per_subject.std()
-        #     self.obs_vocalic[:, self.vocalic_subjects == subject] = (obs_per_subject - mean) / std
-
         max_value = self.obs_vocalic.max(axis=-1, initial=0)[:, None]
         min_value = self.obs_vocalic.min(axis=-1, initial=0)[:, None]
         self.obs_vocalic = (self.obs_vocalic - min_value) / (max_value - min_value)
+
+    def normalize_per_subject(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
+        """
+        all_subjects = set(self.vocalic_subjects)
+
+        for subject in all_subjects:
+            obs_per_subject = self.obs_vocalic[:, self.vocalic_subjects == subject]
+            mean = obs_per_subject.mean()
+            std = obs_per_subject.std()
+            self.obs_vocalic[:, self.vocalic_subjects == subject] = (obs_per_subject - mean) / std
 
     @classmethod
     def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, vocalic_features: List[str]):
