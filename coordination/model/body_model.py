@@ -62,6 +62,14 @@ class BodySeries:
         min_value = self.obs_body.min(axis=(0, 2), initial=0)[None, :, None]
         self.obs_body = (self.obs_body - min_value) / (max_value - min_value)
 
+    def normalize_per_subject(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
+        """
+        mean = self.obs_body.mean(axis=-1)[..., None]
+        std = self.obs_body.std(axis=-1)[..., None]
+        self.obs_body = (self.obs_body - mean) / std
+
     @property
     def num_time_steps_in_body_scale(self) -> int:
         return self.obs_body.shape[-1]
