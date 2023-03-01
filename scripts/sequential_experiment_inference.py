@@ -97,7 +97,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels, ignore_bad_channels)
 
             model = BrainModel(subjects=evidence.subjects,
-                               brain_channels=brain_channels,
+                               brain_channels=evidence.brain_channels,
                                self_dependent=self_dependent,
                                sd_mean_uc0=sd_mean_uc0,
                                sd_sd_uc=sd_sd_uc,
@@ -123,7 +123,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels, ignore_bad_channels)
 
             model = BrainBodyModel(subjects=evidence.subjects,
-                                   brain_channels=brain_channels,
+                                   brain_channels=evidence.brain_channels,
                                    self_dependent=self_dependent,
                                    sd_mean_uc0=sd_mean_uc0,
                                    sd_sd_uc=sd_sd_uc,
@@ -140,7 +140,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = VocalicSemanticSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
 
             model = VocalicSemanticModel(num_subjects=num_subjects,
-                                         vocalic_features=vocalic_features,
+                                         vocalic_features=evidence.vocalic_features,
                                          self_dependent=self_dependent,
                                          sd_mean_uc0=sd_mean_uc0,
                                          sd_sd_uc=sd_sd_uc,
@@ -154,7 +154,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = VocalicSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
 
             model = VocalicModel(num_subjects=num_subjects,
-                                 vocalic_features=vocalic_features,
+                                 vocalic_features=evidence.vocalic_features,
                                  self_dependent=self_dependent,
                                  sd_mean_uc0=sd_mean_uc0,
                                  sd_sd_uc=sd_sd_uc,
