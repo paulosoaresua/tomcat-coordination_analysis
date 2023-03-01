@@ -3,6 +3,7 @@ import sys
 from typing import Any, List, Optional, Union
 
 import argparse
+from ast import literal_eval
 import pickle
 
 import arviz as az
@@ -70,7 +71,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
               a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              normalize_observations: bool):
+              normalize_observations: bool, ignore_bad_channels: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -92,9 +93,22 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         print("")
         logger.info(f"Processing {experiment_id}")
 
-        # Create evidence object from a data frame
+        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
+
+        if ignore_bad_channels and "brain" in model_name:
+            # Remove bad channels from the list and respective column in the parameter priors.
+            bad_channels = set(literal_eval(row_df["bad_channels"].values[0]))
+
+            for i in range(len(brain_channels) - 1, -1, -1):
+                if brain_channels[i] in bad_channels:
+                    del brain_channels[i]
+                    sd_mean_a0_brain = np.delete(sd_mean_a0_brain, i, axis=1)
+                    sd_sd_aa_brain = np.delete(sd_sd_aa_brain, i, axis=1)
+                    sd_sd_o_brain = np.delete(sd_sd_o_brain, i, axis=1)
+
+        # Create evidence object from a data frame and associated model
         if model_name == "brain":
-            evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+            evidence = BrainSeries.from_data_frame(row_df, brain_channels)
 
             model = BrainModel(subjects=evidence.subjects,
                                brain_channels=brain_channels,
@@ -107,7 +121,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                a_mixture_weights=a_mixture_weights,
                                initial_coordination=initial_coordination)
         elif model_name == "body":
-            evidence = BodySeries.from_data_frame(experiment_id, evidence_df)
+            evidence = BodySeries.from_data_frame(row_df)
 
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
@@ -120,7 +134,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               initial_coordination=initial_coordination)
 
         elif model_name == "brain_body":
-            evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+            evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
 
             model = BrainBodyModel(subjects=evidence.subjects,
                                    brain_channels=brain_channels,
@@ -137,10 +151,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    initial_coordination=initial_coordination)
 
         elif model_name == "vocalic_semantic":
-            evidence = VocalicSemanticSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
+            evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
 
             model = VocalicSemanticModel(num_subjects=num_subjects,
-                                         vocalic_features=vocalic_features,
+                                         vocalic_features=evidence.vocalic_features,
                                          self_dependent=self_dependent,
                                          sd_mean_uc0=sd_mean_uc0,
                                          sd_sd_uc=sd_sd_uc,
@@ -151,10 +165,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          b_p_semantic_link=b_p_semantic_link,
                                          initial_coordination=initial_coordination)
         elif model_name == "vocalic":
-            evidence = VocalicSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
+            evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
 
             model = VocalicModel(num_subjects=num_subjects,
-                                 vocalic_features=vocalic_features,
+                                 vocalic_features=evidence.vocalic_features,
                                  self_dependent=self_dependent,
                                  sd_mean_uc0=sd_mean_uc0,
                                  sd_sd_uc=sd_sd_uc,
@@ -162,6 +176,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
                                  initial_coordination=initial_coordination)
+
+            # model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((3, 4))
+            # model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((3, 4))
+            # model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((3, 4))
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -354,6 +372,7 @@ def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
     os.makedirs(out_dir, exist_ok=True)
 
     axes = az.plot_trace(idata, var_names=model.parameter_names)
+    # axes = az.plot_trace(idata, var_names=["mean_uc0", "sd_uc"])
     fig = axes.ravel()[0].figure
     plt.tight_layout()
 
@@ -501,6 +520,9 @@ if __name__ == "__main__":
     parser.add_argument("--normalize_observations", type=int, required=False, default=0,
                         help="Whether we normalize observations per subject to ensure they have 0 mean and 1 "
                              "standard deviation.")
+    parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
+                        help="Whether to remove bad brain channels from the observations.")
+
     args = parser.parse_args()
 
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
@@ -551,4 +573,5 @@ if __name__ == "__main__":
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
               b_p_semantic_link=args.b_p_semantic_link,
-              normalize_observations=bool(args.normalize_observations))
+              normalize_observations=bool(args.normalize_observations),
+              ignore_bad_channels=bool(args.ignore_bad_channels))

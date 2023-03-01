@@ -47,29 +47,27 @@ class VocalicSemanticSeries:
         self.semantic_link_time_steps_in_coordination_scale = semantic_link_time_steps_in_coordination_scale
 
     @classmethod
-    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, vocalic_features: List[str]):
-        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
-
+    def from_data_frame(cls, evidence_df: pd.DataFrame, vocalic_features: List[str]):
         obs_vocalic = []
         for vocalic_feature in vocalic_features:
-            obs_vocalic.append(np.array(literal_eval(row_df[f"{vocalic_feature}"].values[0])))
+            obs_vocalic.append(np.array(literal_eval(evidence_df[f"{vocalic_feature}"].values[0])))
         # Swap axes such that the first dimension represents the different subjects and the second the vocalic features
         obs_vocalic = np.array(obs_vocalic)
 
         return cls(
-            uuid=row_df["experiment_id"].values[0],
+            uuid=evidence_df["experiment_id"].values[0],
             vocalic_features=vocalic_features,
-            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
-            vocalic_subjects=np.array(literal_eval(row_df["vocalic_subjects"].values[0])),
+            num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
+            vocalic_subjects=np.array(literal_eval(evidence_df["vocalic_subjects"].values[0])),
             obs_vocalic=obs_vocalic,
             vocalic_prev_time_same_subject=np.array(
-                literal_eval(row_df["vocalic_previous_time_same_subject"].values[0])),
+                literal_eval(evidence_df["vocalic_previous_time_same_subject"].values[0])),
             vocalic_prev_time_diff_subject=np.array(
-                literal_eval(row_df["vocalic_previous_time_diff_subject"].values[0])),
+                literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0])),
             vocalic_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["vocalic_time_steps_in_coordination_scale"].values[0])),
+                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0])),
             semantic_link_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(evidence_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]))
         )
 
     def standardize(self):

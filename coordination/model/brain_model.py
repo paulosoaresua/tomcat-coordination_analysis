@@ -57,23 +57,21 @@ class BrainSeries:
         self.obs_brain = (self.obs_brain - mean) / std
 
     @classmethod
-    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
-        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
-
+    def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str]):
         obs_brain = []
         for brain_channel in brain_channels:
-            obs_brain.append(np.array(literal_eval(row_df[f"{brain_channel}_hb_total"].values[0])))
+            obs_brain.append(np.array(literal_eval(evidence_df[f"{brain_channel}_hb_total"].values[0])))
         # Swap axes such that the first dimension represents the different subjects and the second the brain channels
         obs_brain = np.array(obs_brain).swapaxes(0, 1)
 
         return cls(
-            uuid=row_df["experiment_id"].values[0],
-            subjects=literal_eval(row_df["subjects"].values[0]),
+            uuid=evidence_df["experiment_id"].values[0],
+            subjects=literal_eval(evidence_df["subjects"].values[0]),
             brain_channels=brain_channels,
-            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
+            num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
             obs_brain=obs_brain,
             brain_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["nirs_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(evidence_df["nirs_time_steps_in_coordination_scale"].values[0]))
         )
 
     @property
