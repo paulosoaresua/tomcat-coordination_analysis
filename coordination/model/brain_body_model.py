@@ -45,34 +45,27 @@ class BrainBodySeries:
         self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
 
     @classmethod
-    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str],
-                        ignore_bad_channels: bool):
-        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
-
-        if ignore_bad_channels:
-            bad_channels = literal_eval(row_df["bad_channels"].values[0])
-            brain_channels = list(set(brain_channels).difference(set(bad_channels)))
-
+    def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str]):
         obs_brain = []
         for brain_channel in brain_channels:
-            obs_brain.append(np.array(literal_eval(row_df[f"{brain_channel}_hb_total"].values[0])))
+            obs_brain.append(np.array(literal_eval(evidence_df[f"{brain_channel}_hb_total"].values[0])))
         # Swap axes such that the first dimension represents the different subjects and the second the brain channels
         obs_brain = np.array(obs_brain).swapaxes(0, 1)
 
         # Add a new axis to represent the single feature dimension
-        obs_body = np.array(literal_eval(row_df["body_motion_energy"].values[0]))[:, None, :]
+        obs_body = np.array(literal_eval(evidence_df["body_motion_energy"].values[0]))[:, None, :]
 
         return cls(
-            uuid=row_df["experiment_id"].values[0],
-            subjects=literal_eval(row_df["subjects"].values[0]),
+            uuid=evidence_df["experiment_id"].values[0],
+            subjects=literal_eval(evidence_df["subjects"].values[0]),
             brain_channels=brain_channels,
-            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
+            num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
             obs_brain=obs_brain,
             brain_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["nirs_time_steps_in_coordination_scale"].values[0])),
+                literal_eval(evidence_df["nirs_time_steps_in_coordination_scale"].values[0])),
             obs_body=obs_body,
             body_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(evidence_df["body_motion_energy_time_steps_in_coordination_scale"].values[0]))
         )
 
     def standardize(self):
@@ -100,6 +93,7 @@ class BrainBodySeries:
         mean = self.obs_body.mean(axis=-1)[..., None]
         std = self.obs_body.std(axis=-1)[..., None]
         self.obs_body = (self.obs_body - mean) / std
+
 
     @property
     def num_time_steps_in_brain_scale(self) -> int:

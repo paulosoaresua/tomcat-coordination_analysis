@@ -38,19 +38,17 @@ class BodySeries:
         self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
 
     @classmethod
-    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame):
-        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
-
+    def from_data_frame(cls, evidence_df: pd.DataFrame):
         # Add a new axis to represent the single feature dimension
-        obs_body = np.array(literal_eval(row_df["body_motion_energy"].values[0]))[:, None, :]
+        obs_body = np.array(literal_eval(evidence_df["body_motion_energy"].values[0]))[:, None, :]
 
         return cls(
-            uuid=row_df["experiment_id"].values[0],
-            subjects=literal_eval(row_df["subjects"].values[0]),
-            num_time_steps_in_coordination_scale=row_df["num_time_steps_in_coordination_scale"].values[0],
+            uuid=evidence_df["experiment_id"].values[0],
+            subjects=literal_eval(evidence_df["subjects"].values[0]),
+            num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
             obs_body=obs_body,
             body_time_steps_in_coordination_scale=np.array(
-                literal_eval(row_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
+                literal_eval(evidence_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
 
     def standardize(self):
         """

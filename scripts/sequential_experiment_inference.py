@@ -3,6 +3,7 @@ import sys
 from typing import Any, List, Optional, Union
 
 import argparse
+from ast import literal_eval
 import pickle
 
 import arviz as az
@@ -92,12 +93,25 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         print("")
         logger.info(f"Processing {experiment_id}")
 
-        # Create evidence object from a data frame
+        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
+
+        if ignore_bad_channels and "brain" in model_name:
+            # Remove bad channels from the list and respective column in the parameter priors.
+            bad_channels = set(literal_eval(row_df["bad_channels"].values[0]))
+
+            for i in range(len(brain_channels) - 1, -1, -1):
+                if brain_channels[i] in bad_channels:
+                    del brain_channels[i]
+                    sd_mean_a0_brain = np.delete(sd_mean_a0_brain, i, axis=1)
+                    sd_sd_aa_brain = np.delete(sd_sd_aa_brain, i, axis=1)
+                    sd_sd_o_brain = np.delete(sd_sd_o_brain, i, axis=1)
+
+        # Create evidence object from a data frame and associated model
         if model_name == "brain":
-            evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels, ignore_bad_channels)
+            evidence = BrainSeries.from_data_frame(row_df, brain_channels)
 
             model = BrainModel(subjects=evidence.subjects,
-                               brain_channels=evidence.brain_channels,
+                               brain_channels=brain_channels,
                                self_dependent=self_dependent,
                                sd_mean_uc0=sd_mean_uc0,
                                sd_sd_uc=sd_sd_uc,
@@ -107,7 +121,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                a_mixture_weights=a_mixture_weights,
                                initial_coordination=initial_coordination)
         elif model_name == "body":
-            evidence = BodySeries.from_data_frame(experiment_id, evidence_df)
+            evidence = BodySeries.from_data_frame(row_df)
 
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
@@ -120,10 +134,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               initial_coordination=initial_coordination)
 
         elif model_name == "brain_body":
-            evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels, ignore_bad_channels)
+            evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
 
             model = BrainBodyModel(subjects=evidence.subjects,
-                                   brain_channels=evidence.brain_channels,
+                                   brain_channels=brain_channels,
                                    self_dependent=self_dependent,
                                    sd_mean_uc0=sd_mean_uc0,
                                    sd_sd_uc=sd_sd_uc,
@@ -137,7 +151,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    initial_coordination=initial_coordination)
 
         elif model_name == "vocalic_semantic":
-            evidence = VocalicSemanticSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
+            evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
 
             model = VocalicSemanticModel(num_subjects=num_subjects,
                                          vocalic_features=evidence.vocalic_features,
@@ -151,7 +165,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          b_p_semantic_link=b_p_semantic_link,
                                          initial_coordination=initial_coordination)
         elif model_name == "vocalic":
-            evidence = VocalicSeries.from_data_frame(experiment_id, evidence_df, vocalic_features)
+            evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
 
             model = VocalicModel(num_subjects=num_subjects,
                                  vocalic_features=evidence.vocalic_features,
