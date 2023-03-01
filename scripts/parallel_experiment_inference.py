@@ -87,7 +87,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
                                      f'--a_p_semantic_link={a_p_semantic_link} ' \
                                      f'--b_p_semantic_link={b_p_semantic_link} ' \
-                                     f'--normalize_observations={normalize_observations}' \
+                                     f'--normalize_observations={normalize_observations} ' \
                                      f'--ignore_bad_channels={ignore_bad_channels}'
 
         tmux.create_window(tmux_window_name)
