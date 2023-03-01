@@ -70,7 +70,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
               a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              normalize_observations: bool):
+              normalize_observations: bool, ignore_bad_channels: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -94,7 +94,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
         # Create evidence object from a data frame
         if model_name == "brain":
-            evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+            evidence = BrainSeries.from_data_frame(experiment_id, evidence_df, brain_channels, ignore_bad_channels)
 
             model = BrainModel(subjects=evidence.subjects,
                                brain_channels=brain_channels,
@@ -120,7 +120,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               initial_coordination=initial_coordination)
 
         elif model_name == "brain_body":
-            evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels)
+            evidence = BrainBodySeries.from_data_frame(experiment_id, evidence_df, brain_channels, ignore_bad_channels)
 
             model = BrainBodyModel(subjects=evidence.subjects,
                                    brain_channels=brain_channels,
@@ -501,6 +501,9 @@ if __name__ == "__main__":
     parser.add_argument("--normalize_observations", type=int, required=False, default=0,
                         help="Whether we normalize observations per subject to ensure they have 0 mean and 1 "
                              "standard deviation.")
+    parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
+                        help="Whether to remove bad brain channels from the observations.")
+
     args = parser.parse_args()
 
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
@@ -551,4 +554,5 @@ if __name__ == "__main__":
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
               b_p_semantic_link=args.b_p_semantic_link,
-              normalize_observations=bool(args.normalize_observations))
+              normalize_observations=bool(args.normalize_observations),
+              ignore_bad_channels=bool(args.ignore_bad_channels))

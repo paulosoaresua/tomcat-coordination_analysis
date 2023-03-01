@@ -27,7 +27,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
                        sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
                        sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
-                       normalize_observations: int):
+                       normalize_observations: int, ignore_bad_channels: int):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -87,7 +87,8 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
                                      f'--a_p_semantic_link={a_p_semantic_link} ' \
                                      f'--b_p_semantic_link={b_p_semantic_link} ' \
-                                     f'--normalize_observations={normalize_observations}'
+                                     f'--normalize_observations={normalize_observations}' \
+                                     f'--ignore_bad_channels={ignore_bad_channels}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
@@ -199,6 +200,8 @@ if __name__ == "__main__":
     parser.add_argument("--normalize_observations", type=int, required=False, default=0,
                         help="Whether we normalize observations per subject to ensure they have 0 mean and 1 "
                              "standard deviation.")
+    parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
+                        help="Whether to remove bad brain channels from the observations.")
 
     args = parser.parse_args()
 
@@ -233,4 +236,5 @@ if __name__ == "__main__":
                        sd_sd_o_vocalic=args.sd_sd_o_vocalic,
                        a_p_semantic_link=args.a_p_semantic_link,
                        b_p_semantic_link=args.b_p_semantic_link,
-                       normalize_observations=args.normalize_observations)
+                       normalize_observations=args.normalize_observations,
+                       ignore_bad_channels=args.ignore_bad_channels)

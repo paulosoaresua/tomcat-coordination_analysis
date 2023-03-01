@@ -45,8 +45,13 @@ class BrainBodySeries:
         self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
 
     @classmethod
-    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
+    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str],
+                        ignore_bad_channels: bool):
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
+
+        if ignore_bad_channels:
+            bad_channels = literal_eval(row_df["bad_channels"].values[0])
+            brain_channels = list(set(brain_channels).difference(set(bad_channels)))
 
         obs_brain = []
         for brain_channel in brain_channels:
@@ -95,7 +100,6 @@ class BrainBodySeries:
         mean = self.obs_body.mean(axis=-1)[..., None]
         std = self.obs_body.std(axis=-1)[..., None]
         self.obs_body = (self.obs_body - mean) / std
-
 
     @property
     def num_time_steps_in_brain_scale(self) -> int:

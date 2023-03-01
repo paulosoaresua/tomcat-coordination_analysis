@@ -57,8 +57,13 @@ class BrainSeries:
         self.obs_brain = (self.obs_brain - mean) / std
 
     @classmethod
-    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str]):
+    def from_data_frame(cls, experiment_id: str, evidence_df: pd.DataFrame, brain_channels: List[str],
+                        ignore_bad_channels: bool):
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
+
+        if ignore_bad_channels:
+            bad_channels = set(literal_eval(row_df["bad_channels"].values[0]))
+            brain_channels = list(set(brain_channels).difference(bad_channels))
 
         obs_brain = []
         for brain_channel in brain_channels:
