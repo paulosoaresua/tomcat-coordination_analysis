@@ -176,6 +176,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
                                  initial_coordination=initial_coordination)
+
+            # model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((3, 4))
+            # model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((3, 4))
+            # model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((3, 4))
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -368,6 +372,7 @@ def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
     os.makedirs(out_dir, exist_ok=True)
 
     axes = az.plot_trace(idata, var_names=model.parameter_names)
+    # axes = az.plot_trace(idata, var_names=["mean_uc0", "sd_uc"])
     fig = axes.ravel()[0].figure
     plt.tight_layout()
 
