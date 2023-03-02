@@ -82,14 +82,17 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
     # Non-interactive backend to make sure it works in a TMUX session when executed from PyCharm.
     mpl.use("Agg")
 
-    configure_log(True)
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-
     print("")
-    logger.info(f"Experiment IDs: {experiment_ids}")
+    print(f"Experiment IDs: {experiment_ids}")
 
     for experiment_id in experiment_ids:
+        results_dir = f"{out_dir}/{experiment_id}"
+        os.makedirs(results_dir, exist_ok=True)
+
+        configure_log(verbose=True, log_filepath=f"{results_dir}/log.txt")
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+
         print("")
         logger.info(f"Processing {experiment_id}")
 
@@ -98,13 +101,17 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         if ignore_bad_channels and "brain" in model_name:
             # Remove bad channels from the list and respective column in the parameter priors.
             bad_channels = set(literal_eval(row_df["bad_channels"].values[0]))
+            removed_channels = []
 
             for i in range(len(brain_channels) - 1, -1, -1):
                 if brain_channels[i] in bad_channels:
+                    removed_channels.append(brain_channels[i])
                     del brain_channels[i]
                     sd_mean_a0_brain = np.delete(sd_mean_a0_brain, i, axis=1)
                     sd_sd_aa_brain = np.delete(sd_sd_aa_brain, i, axis=1)
                     sd_sd_o_brain = np.delete(sd_sd_o_brain, i, axis=1)
+
+            logger.info(f"{len(removed_channels)} brain channels removed from the list. They are {removed_channels}")
 
         # Create evidence object from a data frame and associated model
         if model_name == "brain":
@@ -176,10 +183,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
                                  initial_coordination=initial_coordination)
-
-            # model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((3, 4))
-            # model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((3, 4))
-            # model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((3, 4))
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -189,9 +192,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         # Project observations to the range [0,1]. This does not affect the estimated coordination but reduces
         # divergences with parameter mean_a0 that has prior with mass close to 0 (per choice).
         evidence.standardize()
-
-        results_dir = f"{out_dir}/{experiment_id}"
-        os.makedirs(results_dir, exist_ok=True)
 
         idata = None
         if do_prior:
@@ -212,6 +212,11 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                 idata = idata_posterior
             else:
                 idata.extend(idata_posterior)
+
+            num_divergences = float(idata.sample_stats.diverging.sum(dim=["chain", "draw"]))
+            num_total_samples = num_samples * num_chains
+            logger.info(
+                f"{num_divergences} divergences in {num_total_samples} samples --> {100.0 * num_divergences / num_total_samples}%.")
 
             save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
             save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
