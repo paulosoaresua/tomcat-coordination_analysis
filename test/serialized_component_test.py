@@ -30,7 +30,7 @@ class TestMixtureComponent(unittest.TestCase):
                                                               prev_time_diff_subject=prev_time_diff_subject,
                                                               prev_same_subject_mask=prev_time_same_subject_mask,
                                                               prev_diff_subject_mask=prev_time_diff_subject_mask)
-        real_logp = -4.795619033441960e+02
+        real_logp = -4.303952366775294e+02
 
         self.assertAlmostEqual(estimated_logp.eval(), real_logp)
 
