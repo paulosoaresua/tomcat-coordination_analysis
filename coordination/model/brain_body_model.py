@@ -52,8 +52,7 @@ class BrainBodySeries:
         # Swap axes such that the first dimension represents the different subjects and the second the brain channels
         obs_brain = np.array(obs_brain).swapaxes(0, 1)
 
-        # Add a new axis to represent the single feature dimension
-        obs_body = np.array(literal_eval(evidence_df["body_motion_energy"].values[0]))[:, None, :]
+        obs_body = np.array(literal_eval(evidence_df["body_motion_energy"].values[0]))
 
         return cls(
             uuid=evidence_df["experiment_id"].values[0],
@@ -171,6 +170,9 @@ class BrainBodyModel:
         names.extend(self.latent_body_cpn.parameter_names)
         names.extend(self.obs_brain_cpn.parameter_names)
         names.extend(self.obs_body_cpn.parameter_names)
+
+        # The mixture weight component is shared between brain and body data.
+        names.remove(self.latent_body_cpn.mixture_weights_name)
 
         return names
 

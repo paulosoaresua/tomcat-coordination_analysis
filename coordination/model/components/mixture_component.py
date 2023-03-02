@@ -199,21 +199,21 @@ class MixtureComponent:
     @property
     def parameter_names(self) -> List[str]:
         return [
-            self._mean_a0_name,
-            self._sd_aa_name,
-            self._mixture_weights_name
+            self.mean_a0_name,
+            self.sd_aa_name,
+            self.mixture_weights_name
         ]
 
     @property
-    def _mean_a0_name(self) -> str:
+    def mean_a0_name(self) -> str:
         return f"mean_a0_{self.uuid}"
 
     @property
-    def _sd_aa_name(self) -> str:
+    def sd_aa_name(self) -> str:
         return f"sd_aa_{self.uuid}"
 
     @property
-    def _mixture_weights_name(self) -> str:
+    def mixture_weights_name(self) -> str:
         return f"mixture_weights_{self.uuid}"
 
     def draw_samples(self, num_series: int, relative_frequency: float,
@@ -270,16 +270,16 @@ class MixtureComponent:
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None) -> Any:
 
         if mean_a0 is None:
-            mean_a0 = pm.HalfNormal(name=self._mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
                                     size=(self.num_subjects, self.dim_value),
                                     observed=self.parameters.mean_a0.value)
 
         if sd_aa is None:
-            sd_aa = pm.HalfNormal(name=self._sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                                   size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
 
         if mixture_weights is None:
-            mixture_weights = pm.Dirichlet(name=self._mixture_weights_name,
+            mixture_weights = pm.Dirichlet(name=self.mixture_weights_name,
                                            a=self.parameters.mixture_weights.prior.a,
                                            observed=self.parameters.mixture_weights.value)
 

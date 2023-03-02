@@ -197,16 +197,16 @@ class SerializedComponent:
     @property
     def parameter_names(self) -> List[str]:
         return [
-            self._mean_a0_name,
-            self._sd_aa_name
+            self.mean_a0_name,
+            self.sd_aa_name
         ]
 
     @property
-    def _mean_a0_name(self) -> str:
+    def mean_a0_name(self) -> str:
         return f"mean_a0_{self.uuid}"
 
     @property
-    def _sd_aa_name(self) -> str:
+    def sd_aa_name(self) -> str:
         return f"sd_aa_{self.uuid}"
 
     def draw_samples(self, num_series: int, time_scale_density: float,
@@ -314,9 +314,9 @@ class SerializedComponent:
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray,
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
 
-        mean_a0 = pm.HalfNormal(name=self._mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+        mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
                                 size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
-        sd_aa = pm.HalfNormal(name=self._sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+        sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                               size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
 
         if self.self_dependent:
