@@ -39,8 +39,7 @@ class BodySeries:
 
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame):
-        # Add a new axis to represent the single feature dimension
-        obs_body = np.array(literal_eval(evidence_df["body_motion_energy"].values[0]))[:, None, :]
+        obs_body = np.array(literal_eval(evidence_df["body_motion_energy"].values[0]))
 
         return cls(
             uuid=evidence_df["experiment_id"].values[0],

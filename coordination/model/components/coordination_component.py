@@ -35,16 +35,16 @@ class SigmoidGaussianCoordinationComponent:
     @property
     def parameter_names(self) -> List[str]:
         return [
-            self._mean_uc0,
-            self._sd_uc
+            self.mean_uc0_name,
+            self.sd_uc_name
         ]
 
     @property
-    def _mean_uc0(self) -> str:
+    def mean_uc0_name(self) -> str:
         return f"mean_uc0"
 
     @property
-    def _sd_uc(self) -> str:
+    def sd_uc_name(self) -> str:
         return f"sd_uc"
 
     def draw_samples(self, num_series: int, num_time_steps: int,
@@ -67,10 +67,10 @@ class SigmoidGaussianCoordinationComponent:
 
     def update_pymc_model(self, time_dimension: str,
                           unbounded_coordination_observed_values: Optional[Any] = None) -> Any:
-        mean_uc0 = pm.Normal(name=self._mean_uc0, mu=self.parameters.mean_uc0.prior.mean,
+        mean_uc0 = pm.Normal(name=self.mean_uc0_name, mu=self.parameters.mean_uc0.prior.mean,
                              sigma=self.parameters.mean_uc0.prior.sd, size=1,
                              observed=self.parameters.mean_uc0.value)
-        sd_uc = pm.HalfNormal(name=self._sd_uc, sigma=self.parameters.sd_uc.prior.sd, size=1,
+        sd_uc = pm.HalfNormal(name=self.sd_uc_name, sigma=self.parameters.sd_uc.prior.sd, size=1,
                               observed=self.parameters.sd_uc.value)
 
         prior = pm.Normal.dist(mu=mean_uc0, sigma=sd_uc)

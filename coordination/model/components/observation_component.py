@@ -89,11 +89,11 @@ class SerializedObservationComponent:
     @property
     def parameter_names(self) -> List[str]:
         return [
-            self._sd_o_name
+            self.sd_o_name
         ]
 
     @property
-    def _sd_o_name(self) -> str:
+    def sd_o_name(self) -> str:
         return f"sd_o_{self.uuid}"
 
     def draw_samples(self, latent_component: List[np.ndarray],
@@ -112,7 +112,7 @@ class SerializedObservationComponent:
 
     def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
                           time_dimension: str, observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=self._sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+        sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
 
         observation_component = pm.Normal(name=self.uuid, mu=latent_component,
