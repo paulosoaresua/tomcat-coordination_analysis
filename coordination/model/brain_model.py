@@ -13,8 +13,7 @@ from coordination.component.coordination_component import SigmoidGaussianCoordin
     SigmoidGaussianCoordinationComponentSamples
 from coordination.component.mixture_component import MixtureComponent, MixtureComponentSamples
 from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
-
-from coordination.common.functions import sigmoid
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 class BrainSamples:
@@ -79,7 +78,7 @@ class BrainSeries:
         return self.obs_brain.shape[-1]
 
     @property
-    def num_brain_channels(self) -> int:
+    def num_channels(self) -> int:
         return self.obs_brain.shape[-2]
 
     @property
@@ -97,8 +96,9 @@ class BrainPosteriorSamples:
 
     @classmethod
     def from_inference_data(cls, idata: Any) -> BrainPosteriorSamples:
-        unbounded_coordination = idata.posterior["unbounded_coordination"]
-        coordination = sigmoid(unbounded_coordination)
+        coordination_posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
+        unbounded_coordination = coordination_posterior_samples.unbounded_coordination
+        coordination = coordination_posterior_samples.coordination
         latent_brain = idata.posterior["latent_brain"]
 
         return cls(unbounded_coordination, coordination, latent_brain)
@@ -153,7 +153,7 @@ class BrainModel:
     def fit(self, evidence: BrainSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
         assert evidence.num_subjects == len(self.subjects)
-        assert evidence.num_brain_channels == len(self.brain_channels)
+        assert evidence.num_channels == len(self.brain_channels)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:

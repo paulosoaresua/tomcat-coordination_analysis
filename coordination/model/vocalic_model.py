@@ -14,8 +14,7 @@ from coordination.component.coordination_component import SigmoidGaussianCoordin
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
-
-from coordination.common.functions import sigmoid
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 class VocalicSamples:
@@ -113,8 +112,9 @@ class VocalicPosteriorSamples:
 
     @classmethod
     def from_inference_data(cls, idata: Any) -> VocalicPosteriorSamples:
-        unbounded_coordination = idata.posterior["unbounded_coordination"]
-        coordination = sigmoid(unbounded_coordination)
+        coordination_posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
+        unbounded_coordination = coordination_posterior_samples.unbounded_coordination
+        coordination = coordination_posterior_samples.coordination
         latent_vocalic = idata.posterior["latent_vocalic"]
 
         return cls(unbounded_coordination, coordination, latent_vocalic)
