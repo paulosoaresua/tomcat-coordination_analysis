@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pytensor.tensor as ptt
 
-from coordination.model.components.serialized_component import serialized_logp_with_self_dependency, \
+from coordination.component.serialized_component import serialized_logp_with_self_dependency, \
     serialized_logp_without_self_dependency
 
 
@@ -30,7 +30,7 @@ class TestMixtureComponent(unittest.TestCase):
                                                               prev_time_diff_subject=prev_time_diff_subject,
                                                               prev_same_subject_mask=prev_time_same_subject_mask,
                                                               prev_diff_subject_mask=prev_time_diff_subject_mask)
-        real_logp = -4.795619033441960e+02
+        real_logp = -4.303952366775294e+02
 
         self.assertAlmostEqual(estimated_logp.eval(), real_logp)
 

@@ -24,9 +24,9 @@ def serialized_logp_with_self_dependency(serialized_component: Any,
     SM = prev_same_subject_mask[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
-    # Already contains the initial time step.
-    # The last term is only activated when we do not have a previous observation of the same subject.
-    mean = (D - S * SM) * C * DM + S * SM + (1 - SM) * initial_mean
+    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+    # If there's no previous observation from the same subject, we use the initial mean.
+    mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
 
     total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
 
@@ -40,38 +40,16 @@ def serialized_logp_without_self_dependency(serialized_component: Any,
                                             prev_time_diff_subject: ptt.TensorConstant,
                                             prev_diff_subject_mask: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
-    S = initial_mean  # d x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
 
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
-    # Already contains the initial time step.
-    # The last term is only activated when we do not have a previous observation of the same subject.
-    mean = (D - S) * C * DM + S
+    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+    mean = D * C * DM + (1 - C * DM) * initial_mean
 
     total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
 
     return total_logp
-
-
-    # C = coordination[None, 1:]  # 1 x t-1
-    # S = initial_mean[..., 1:]  # d x t-1. Sampled around a fixed value if there's no coordination
-    # D = serialized_component[..., prev_time_diff_subject][..., 1:]  # d x t-1
-    #
-    # DM = prev_diff_subject_mask[None, 1:]
-    #
-    # # Initial time step
-    # total_logp = pm.logp(
-    #     pm.Normal.dist(mu=initial_mean[..., 0], sigma=sigma[..., 0], shape=serialized_component.shape[:-1]),
-    #     serialized_component[..., 0]).sum()
-    #
-    # # Transition
-    # mean = (D - S) * C * DM + S
-    #
-    # total_logp += pm.logp(pm.Normal.dist(mu=mean, sigma=sigma[..., 1:], shape=D.shape),
-    #                       serialized_component[..., 1:]).sum()
-    #
-    # return total_logp
 
 
 def serialized_random_with_self_dependency(initial_mean: np.ndarray,
