@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pytensor.tensor as ptt
 
-from coordination.model.components.serialized_component import serialized_logp_with_self_dependency, \
+from coordination.component.serialized_component import serialized_logp_with_self_dependency, \
     serialized_logp_without_self_dependency
 
 

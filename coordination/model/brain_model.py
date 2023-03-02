@@ -9,10 +9,10 @@ import pymc as pm
 import xarray
 
 from coordination.common.functions import logit
-from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent, \
+from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     SigmoidGaussianCoordinationComponentSamples
-from coordination.model.components.mixture_component import MixtureComponent, MixtureComponentSamples
-from coordination.model.components.observation_component import ObservationComponent, ObservationComponentSamples
+from coordination.component.mixture_component import MixtureComponent, MixtureComponentSamples
+from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
 
 from coordination.common.functions import sigmoid
 

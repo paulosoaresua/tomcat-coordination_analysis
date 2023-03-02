@@ -2,7 +2,6 @@ from typing import Any, List, Optional
 
 import numpy as np
 import pymc as pm
-import pytensor.tensor as ptt
 from scipy.stats import bernoulli
 
 from coordination.common.utils import set_random_seed

@@ -8,15 +8,13 @@ import pandas as pd
 import pymc as pm
 import xarray
 
-from coordination.common.functions import logit
-from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent, \
+from coordination.common.functions import logit, sigmoid
+from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     SigmoidGaussianCoordinationComponentSamples
-from coordination.model.components.serialized_component import SerializedComponent, SerializedComponentSamples
-from coordination.model.components.link_component import LinkComponent, LinkComponentSamples
-from coordination.model.components.observation_component import SerializedObservationComponent, \
+from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
+from coordination.component.link_component import LinkComponent, LinkComponentSamples
+from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
-
-from coordination.common.functions import sigmoid
 
 
 class VocalicSemanticSamples:

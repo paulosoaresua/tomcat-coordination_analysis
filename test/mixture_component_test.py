@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pytensor.tensor as pt
 
-from coordination.model.components.mixture_component import mixture_logp_with_self_dependency, \
+from coordination.component.mixture_component import mixture_logp_with_self_dependency, \
     mixture_logp_without_self_dependency
 
 
