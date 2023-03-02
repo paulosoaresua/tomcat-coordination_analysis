@@ -56,10 +56,10 @@ if __name__ == "__main__":
 
     brain_series = BrainSeries(uuid="",
                                subjects=model.subjects,
-                               brain_channels=model.brain_channels,
+                               channels=model.brain_channels,
                                num_time_steps_in_coordination_scale=TIME_STEPS,
-                               obs_brain=full_samples.obs_brain.values[0],
-                               brain_time_steps_in_coordination_scale=
+                               observation=full_samples.obs_brain.values[0],
+                               time_steps_in_coordination_scale=
                                full_samples.latent_brain.time_steps_in_coordination_scale[0])
 
     body_series = BodySeries(uuid="",

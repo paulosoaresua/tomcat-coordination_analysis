@@ -181,7 +181,7 @@ class BrainBodyModel:
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_brain, _, _, mixture_weights = self.latent_brain_cpn.update_pymc_model(
-                coordination=coordination[evidence.brain.brain_time_steps_in_coordination_scale],
+                coordination=coordination[evidence.brain.time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="brain_time",
                 feature_dimension="brain_channel")
@@ -197,7 +197,7 @@ class BrainBodyModel:
                                                  subject_dimension="subject",
                                                  feature_dimension="brain_channel",
                                                  time_dimension="brain_time",
-                                                 observed_values=evidence.brain.obs_brain)
+                                                 observed_values=evidence.brain.observation)
             self.obs_body_cpn.update_pymc_model(latent_component=latent_body,
                                                 subject_dimension="subject",
                                                 feature_dimension="body_feature",

@@ -27,15 +27,15 @@ class BrainSamples:
 
 class BrainSeries:
 
-    def __init__(self, uuid: str, subjects: List[str], brain_channels: List[str],
+    def __init__(self, uuid: str, subjects: List[str], channels: List[str],
                  num_time_steps_in_coordination_scale: int,
-                 obs_brain: np.ndarray, brain_time_steps_in_coordination_scale: np.ndarray):
+                 observation: np.ndarray, time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
         self.subjects = subjects
-        self.brain_channels = brain_channels
+        self.channels = channels
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
-        self.obs_brain = obs_brain
-        self.brain_time_steps_in_coordination_scale = brain_time_steps_in_coordination_scale
+        self.observation = observation
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
     def standardize(self):
         """
@@ -43,17 +43,29 @@ class BrainSeries:
         proximity relativity (how close measurements from different subjects are) which is important for the
         coordination model.
         """
-        max_value = self.obs_brain.max(axis=(0, 2), initial=0)[None, :, None]
-        min_value = self.obs_brain.min(axis=(0, 2), initial=0)[None, :, None]
-        self.obs_brain = (self.obs_brain - min_value) / (max_value - min_value)
+        max_value = self.observation.max(axis=(0, 2), initial=0)[None, :, None]
+        min_value = self.observation.min(axis=(0, 2), initial=0)[None, :, None]
+        self.observation = (self.observation - min_value) / (max_value - min_value)
 
     def normalize_per_subject(self):
         """
         Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
         """
-        mean = self.obs_brain.mean(axis=-1)[..., None]
-        std = self.obs_brain.std(axis=-1)[..., None]
-        self.obs_brain = (self.obs_brain - mean) / std
+        mean = self.observation.mean(axis=-1)[..., None]
+        std = self.observation.std(axis=-1)[..., None]
+        self.observation = (self.observation - mean) / std
+
+    def plot_observations(self, axs: List[Any]):
+        # One plot per channel
+        for channel_idx in range(min(self.num_channels, len(axs))):
+            ax = axs[channel_idx]
+            xs = np.arange(self.num_time_steps_in_brain_scale)[:, None].repeat(self.num_subjects, axis=1)
+            ys = self.observation[:, channel_idx, :].T
+            ax.plot(xs, ys, label=self.subjects)
+            ax.set_title(self.channels[channel_idx])
+            ax.set_xlabel("Time Step")
+            ax.set_xlabel("Observed Value")
+            ax.legend()
 
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str]):
@@ -66,24 +78,24 @@ class BrainSeries:
         return cls(
             uuid=evidence_df["experiment_id"].values[0],
             subjects=literal_eval(evidence_df["subjects"].values[0]),
-            brain_channels=brain_channels,
+            channels=brain_channels,
             num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
-            obs_brain=obs_brain,
-            brain_time_steps_in_coordination_scale=np.array(
+            observation=obs_brain,
+            time_steps_in_coordination_scale=np.array(
                 literal_eval(evidence_df["nirs_time_steps_in_coordination_scale"].values[0]))
         )
 
     @property
     def num_time_steps_in_brain_scale(self) -> int:
-        return self.obs_brain.shape[-1]
+        return self.observation.shape[-1]
 
     @property
     def num_channels(self) -> int:
-        return self.obs_brain.shape[-2]
+        return self.observation.shape[-2]
 
     @property
     def num_subjects(self) -> int:
-        return self.obs_brain.shape[-3]
+        return self.observation.shape[-3]
 
 
 class BrainPosteriorSamples:
@@ -172,7 +184,7 @@ class BrainModel:
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_brain, _, _, _ = self.latent_brain_cpn.update_pymc_model(
-                coordination=coordination[evidence.brain_time_steps_in_coordination_scale],
+                coordination=coordination[evidence.time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="brain_time",
                 feature_dimension="brain_channel")
@@ -180,7 +192,7 @@ class BrainModel:
                                                  subject_dimension="subject",
                                                  feature_dimension="brain_channel",
                                                  time_dimension="brain_time",
-                                                 observed_values=evidence.obs_brain)
+                                                 observed_values=evidence.observation)
 
         return pymc_model
 

@@ -261,7 +261,7 @@ def _plot_brain_predictive_prior_plots(out_dir: str,
 
             fig = plt.figure(figsize=(15, 8))
             plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-            plt.plot(np.arange(T), single_evidence_series.obs_brain[i, j], color="tab:pink", alpha=1, marker="o",
+            plt.plot(np.arange(T), single_evidence_series.observation[i, j], color="tab:pink", alpha=1, marker="o",
                      markersize=5)
             plt.title(f"Observed Brain - Subject {subject}, Channel {brain_channel}")
             plt.xlabel(f"Time Step")
