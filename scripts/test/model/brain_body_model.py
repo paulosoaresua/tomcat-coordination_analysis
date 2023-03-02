@@ -1,24 +1,35 @@
+import sys
+
 import arviz as az
 import matplotlib.pyplot as plt
-
-from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries, BrainBodyPosteriorSamples
-
-from coordination.common.functions import sigmoid
-
 import numpy as np
 
+from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries
+from coordination.model.brain_model import BrainSeries
+from coordination.model.body_model import BodySeries
+
 # Parameters
-TIME_STEPS = 1200
+TIME_STEPS = 200
 NUM_SUBJECTS = 3
-NUM_BRAIN_CHANNELS = 20
+NUM_BRAIN_CHANNELS = 10
 SEED = 0
+SELF_DEPENDENT = True
+N = 1000
+C = 2
 
 if __name__ == "__main__":
+    if not sys.warnoptions:
+        # Prevent unimportant warnings from PyMC
+        import warnings
+
+        warnings.simplefilter("ignore")
+
     model = BrainBodyModel(initial_coordination=0.5,
-                           num_subjects=NUM_SUBJECTS,
-                           num_brain_channels=NUM_BRAIN_CHANNELS,
+                           subjects=list(map(str, np.arange(NUM_SUBJECTS))),
+                           brain_channels=list(map(str, np.arange(NUM_BRAIN_CHANNELS))),
                            self_dependent=True,
-                           sd_uc=1,
+                           sd_mean_uc0=1,
+                           sd_sd_uc=1,
                            sd_mean_a0_brain=np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS)),
                            sd_sd_aa_brain=np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS)),
                            sd_sd_o_brain=np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS)),
@@ -43,46 +54,54 @@ if __name__ == "__main__":
                                       body_relative_frequency=4,
                                       seed=SEED)
 
-    evidence = BrainBodySeries(num_time_steps_in_coordination_scale=TIME_STEPS,
+    brain_series = BrainSeries(uuid="",
+                               subjects=model.subjects,
+                               brain_channels=model.brain_channels,
+                               num_time_steps_in_coordination_scale=TIME_STEPS,
                                obs_brain=full_samples.obs_brain.values[0],
                                brain_time_steps_in_coordination_scale=
-                               full_samples.latent_brain.time_steps_in_coordination_scale[0],
-                               obs_body=full_samples.obs_body.values[0],
-                               body_time_steps_in_coordination_scale=
-                               full_samples.latent_body.time_steps_in_coordination_scale[0])
+                               full_samples.latent_brain.time_steps_in_coordination_scale[0])
+
+    body_series = BodySeries(uuid="",
+                             subjects=model.subjects,
+                             num_time_steps_in_coordination_scale=TIME_STEPS,
+                             obs_body=full_samples.obs_body.values[0],
+                             body_time_steps_in_coordination_scale=
+                             full_samples.latent_body.time_steps_in_coordination_scale[0])
+
+    evidence = BrainBodySeries(uuid="",
+                               brain_series=brain_series,
+                               body_series=body_series)
 
     model.clear_parameter_values()
     pymc_model, idata = model.fit(evidence=evidence,
-                                  burn_in=1000,
-                                  num_samples=1000,
-                                  num_chains=2,
+                                  burn_in=N,
+                                  num_samples=N,
+                                  num_chains=C,
                                   seed=SEED,
-                                  num_jobs=4)
+                                  num_jobs=C)
 
     az.plot_trace(idata,
                   var_names=["sd_uc", "mean_a0_latent_brain", "sd_aa_latent_brain", "mean_a0_latent_body",
                              "sd_aa_latent_body", "sd_o_obs_brain", "sd_o_obs_body", "mixture_weights_latent_brain"])
     plt.show()
 
-    # with pymc_model:
-    #     samples = pm.sample_posterior_predictive(idata, var_names=["obs_brain"])
+    posterior_samples = model.inference_data_to_posterior_samples(idata)
 
-    posterior_samples = BrainBodyPosteriorSamples.from_inference_data(idata)
-
-    m = posterior_samples.coordination.mean(dim=["draw", "chain"])
-    std = posterior_samples.coordination.std(dim=["draw", "chain"])
-
-    coordination_posterior = sigmoid(idata.posterior["unbounded_coordination"].sel(chain=0).to_numpy())
+    stacked_coordination_samples = posterior_samples.coordination.stack(chain_plus_draw=("chain", "draw"))
+    avg_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"]).to_numpy()
 
     plt.figure(figsize=(15, 8))
-    # plt.fill_between(range(TIME_STEPS), m - std, m + std, color="tab:pink", alpha=0.4)
-    plt.plot(np.arange(TIME_STEPS)[:, None].repeat(1000, axis=1), coordination_posterior.T, color="tab:blue", alpha=0.3)
+    plt.plot(np.arange(TIME_STEPS)[:, None].repeat(N * C, axis=1), stacked_coordination_samples, color="tab:blue",
+             alpha=0.3,
+             zorder=1)
     plt.plot(range(TIME_STEPS), full_samples.coordination.coordination[0], label="Real", color="black", marker="o",
-             markersize=5)
-    plt.plot(range(TIME_STEPS), m, label="Inferred", color="tab:pink", markersize=5)
+             markersize=5, zorder=2)
+    plt.plot(range(TIME_STEPS), avg_coordination, label="Inferred", color="tab:pink", markersize=5, zorder=3)
+
     plt.title("Coordination")
     plt.legend()
     plt.show()
 
     print(f"Real Coordination Average: {full_samples.coordination.coordination[0].mean()}")
-    print(f"Estimated Coordination Average: {m.mean()}")
+    print(f"Estimated Coordination Average: {avg_coordination.mean()}")
