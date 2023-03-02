@@ -93,7 +93,6 @@ class BrainBodySeries:
         std = self.obs_body.std(axis=-1)[..., None]
         self.obs_body = (self.obs_body - mean) / std
 
-
     @property
     def num_time_steps_in_brain_scale(self) -> int:
         return self.obs_brain.shape[-1]

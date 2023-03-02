@@ -3,8 +3,8 @@ import pymc as pm
 import numpy as np
 import matplotlib.pyplot as plt
 
-from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent
-from coordination.model.components.link_component import LinkComponent
+from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent
+from coordination.component.link_component import LinkComponent
 
 from coordination.common.functions import sigmoid
 

@@ -109,7 +109,7 @@ class BodyModel:
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
-        if initial_coordination is not  None:
+        if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = logit(initial_coordination)
 
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",

@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import arviz as az
 
-from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent
-from coordination.model.components.mixture_component import MixtureComponent
-from coordination.model.components.observation_component import ObservationComponent
+from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent
+from coordination.component.mixture_component import MixtureComponent
+from coordination.component.observation_component import ObservationComponent
 
 from coordination.common.functions import sigmoid
 

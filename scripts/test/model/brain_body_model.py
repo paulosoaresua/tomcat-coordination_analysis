@@ -1,7 +1,7 @@
 import arviz as az
 import matplotlib.pyplot as plt
 
-from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries, BrainBodyInferenceSummary
+from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries, BrainBodyPosteriorSamples
 
 from coordination.common.functions import sigmoid
 
@@ -67,10 +67,10 @@ if __name__ == "__main__":
     # with pymc_model:
     #     samples = pm.sample_posterior_predictive(idata, var_names=["obs_brain"])
 
-    inference_summary = BrainBodyInferenceSummary.from_inference_data(idata)
+    posterior_samples = BrainBodyPosteriorSamples.from_inference_data(idata)
 
-    m = inference_summary.coordination_means
-    std = inference_summary.coordination_sds
+    m = posterior_samples.coordination.mean(dim=["draw", "chain"])
+    std = posterior_samples.coordination.std(dim=["draw", "chain"])
 
     coordination_posterior = sigmoid(idata.posterior["unbounded_coordination"].sel(chain=0).to_numpy())
 
