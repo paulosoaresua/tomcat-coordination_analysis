@@ -28,17 +28,17 @@ class VocalicSamples:
 
 class VocalicSeries:
 
-    def __init__(self, uuid: str, vocalic_features: List[str], num_time_steps_in_coordination_scale: int,
-                 vocalic_subjects: np.ndarray, obs_vocalic: np.ndarray, vocalic_prev_time_same_subject: np.ndarray,
-                 vocalic_prev_time_diff_subject: np.ndarray, vocalic_time_steps_in_coordination_scale: np.ndarray):
+    def __init__(self, uuid: str, features: List[str], num_time_steps_in_coordination_scale: int,
+                 subjects_in_time: np.ndarray, observation: np.ndarray, previous_time_same_subject: np.ndarray,
+                 previous_time_diff_subject: np.ndarray, time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
-        self.vocalic_features = vocalic_features
+        self.features = features
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
-        self.vocalic_subjects = vocalic_subjects
-        self.obs_vocalic = obs_vocalic
-        self.vocalic_prev_time_same_subject = vocalic_prev_time_same_subject
-        self.vocalic_prev_time_diff_subject = vocalic_prev_time_diff_subject
-        self.vocalic_time_steps_in_coordination_scale = vocalic_time_steps_in_coordination_scale
+        self.subjects_in_time = subjects_in_time
+        self.observation = observation
+        self.previous_time_same_subject = previous_time_same_subject
+        self.previous_time_diff_subject = previous_time_diff_subject
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
     def standardize(self):
         """
@@ -47,21 +47,41 @@ class VocalicSeries:
         coordination model.
         """
 
-        max_value = self.obs_vocalic.max(axis=-1, initial=0)[:, None]
-        min_value = self.obs_vocalic.min(axis=-1, initial=0)[:, None]
-        self.obs_vocalic = (self.obs_vocalic - min_value) / (max_value - min_value)
+        max_value = self.observation.max(axis=-1, initial=0)[:, None]
+        min_value = self.observation.min(axis=-1, initial=0)[:, None]
+        self.observation = (self.observation - min_value) / (max_value - min_value)
 
     def normalize_per_subject(self):
         """
         Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
         """
-        all_subjects = set(self.vocalic_subjects)
+        all_subjects = set(self.subjects_in_time)
 
         for subject in all_subjects:
-            obs_per_subject = self.obs_vocalic[:, self.vocalic_subjects == subject]
+            obs_per_subject = self.observation[:, self.subjects_in_time == subject]
             mean = obs_per_subject.mean()
             std = obs_per_subject.std()
-            self.obs_vocalic[:, self.vocalic_subjects == subject] = (obs_per_subject - mean) / std
+            self.observation[:, self.subjects_in_time == subject] = (obs_per_subject - mean) / std
+
+    def plot_observations(self, axs: List[Any]):
+        # One plot per channel
+        all_subjects = set(self.subjects_in_time)
+
+        for vocalic_feature_idx in range(min(self.num_vocalic_features, len(axs))):
+            ax = axs[vocalic_feature_idx]
+            for subject in all_subjects:
+                subject_mask = self.subjects_in_time == subject
+                xs = np.arange(self.num_time_steps_in_vocalic_scale)[subject_mask]
+                ys = self.observation[vocalic_feature_idx, subject_mask]
+                if len(xs) == 1:
+                    ax.scatter(xs, ys, label=subject)
+                else:
+                    ax.plot(xs, ys, label=subject, marker="o")
+
+            ax.set_title(self.features[vocalic_feature_idx])
+            ax.set_xlabel("Time Step")
+            ax.set_ylabel("Observed Value")
+            ax.legend()
 
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame, vocalic_features: List[str]):
@@ -73,33 +93,33 @@ class VocalicSeries:
 
         return cls(
             uuid=evidence_df["experiment_id"].values[0],
-            vocalic_features=vocalic_features,
+            features=vocalic_features,
             num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
-            vocalic_subjects=np.array(literal_eval(evidence_df["vocalic_subjects"].values[0])),
-            obs_vocalic=obs_vocalic,
-            vocalic_prev_time_same_subject=np.array(
+            subjects_in_time=np.array(literal_eval(evidence_df["vocalic_subjects"].values[0])),
+            observation=obs_vocalic,
+            previous_time_same_subject=np.array(
                 literal_eval(evidence_df["vocalic_previous_time_same_subject"].values[0])),
-            vocalic_prev_time_diff_subject=np.array(
+            previous_time_diff_subject=np.array(
                 literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0])),
-            vocalic_time_steps_in_coordination_scale=np.array(
+            time_steps_in_coordination_scale=np.array(
                 literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0]))
         )
 
     @property
     def num_time_steps_in_vocalic_scale(self) -> int:
-        return self.obs_vocalic.shape[-1]
+        return self.observation.shape[-1]
 
     @property
     def num_vocalic_features(self) -> int:
-        return self.obs_vocalic.shape[-2]
+        return self.observation.shape[-2]
 
     @property
     def vocalic_prev_same_subject_mask(self) -> np.ndarray:
-        return np.where(self.vocalic_prev_time_same_subject >= 0, 1, 0)
+        return np.where(self.previous_time_same_subject >= 0, 1, 0)
 
     @property
     def vocalic_prev_diff_subject_mask(self) -> np.ndarray:
-        return np.where(self.vocalic_prev_time_diff_subject >= 0, 1, 0)
+        return np.where(self.previous_time_diff_subject >= 0, 1, 0)
 
 
 class VocalicPosteriorSamples:
@@ -187,20 +207,20 @@ class VocalicModel:
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_vocalic, _, _ = self.latent_vocalic_cpn.update_pymc_model(
-                coordination=coordination[evidence.vocalic_time_steps_in_coordination_scale],
-                prev_time_same_subject=evidence.vocalic_prev_time_same_subject,
-                prev_time_diff_subject=evidence.vocalic_prev_time_diff_subject,
+                coordination=coordination[evidence.time_steps_in_coordination_scale],
+                prev_time_same_subject=evidence.previous_time_same_subject,
+                prev_time_diff_subject=evidence.previous_time_diff_subject,
                 prev_same_subject_mask=evidence.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic_prev_diff_subject_mask,
-                subjects=evidence.vocalic_subjects,
+                subjects=evidence.subjects_in_time,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature")
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
-                                                   subjects=evidence.vocalic_subjects,
-                                                   observed_values=evidence.obs_vocalic)
+                                                   subjects=evidence.subjects_in_time,
+                                                   observed_values=evidence.observation)
 
         return pymc_model
 

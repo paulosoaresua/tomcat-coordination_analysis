@@ -12,7 +12,7 @@ from coordination.common.functions import logit
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
 NUM_VOCALIC_FEATURES = 4
-TIME_SCALE_DENSITY = 1
+TIME_SCALE_DENSITY = 0.2
 SEED = 0
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
@@ -70,13 +70,13 @@ if __name__ == "__main__":
                                           seed=SEED)
 
     evidence = VocalicSeries(uuid="",
-                             vocalic_features=list(map(str, np.arange(NUM_VOCALIC_FEATURES))),
+                             features=list(map(str, np.arange(NUM_VOCALIC_FEATURES))),
                              num_time_steps_in_coordination_scale=TIME_STEPS,
-                             vocalic_subjects=full_samples.latent_vocalic.subjects[0],
-                             obs_vocalic=full_samples.obs_vocalic.values[0],
-                             vocalic_prev_time_same_subject=full_samples.latent_vocalic.prev_time_same_subject[0],
-                             vocalic_prev_time_diff_subject=full_samples.latent_vocalic.prev_time_diff_subject[0],
-                             vocalic_time_steps_in_coordination_scale=
+                             subjects_in_time=full_samples.latent_vocalic.subjects[0],
+                             observation=full_samples.obs_vocalic.values[0],
+                             previous_time_same_subject=full_samples.latent_vocalic.prev_time_same_subject[0],
+                             previous_time_diff_subject=full_samples.latent_vocalic.prev_time_diff_subject[0],
+                             time_steps_in_coordination_scale=
                              full_samples.latent_vocalic.time_steps_in_coordination_scale[0])
 
     if ADD_SEMANTIC_LINK:

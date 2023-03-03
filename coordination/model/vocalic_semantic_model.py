@@ -162,12 +162,12 @@ class VocalicSemanticModel:
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_vocalic, _, _ = self.latent_vocalic_cpn.update_pymc_model(
-                coordination=coordination[evidence.vocalic.vocalic_time_steps_in_coordination_scale],
-                prev_time_same_subject=evidence.vocalic.vocalic_prev_time_same_subject,
-                prev_time_diff_subject=evidence.vocalic.vocalic_prev_time_diff_subject,
+                coordination=coordination[evidence.vocalic.time_steps_in_coordination_scale],
+                prev_time_same_subject=evidence.vocalic.previous_time_same_subject,
+                prev_time_diff_subject=evidence.vocalic.previous_time_diff_subject,
                 prev_same_subject_mask=evidence.vocalic.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic.vocalic_prev_diff_subject_mask,
-                subjects=evidence.vocalic.vocalic_subjects,
+                subjects=evidence.vocalic.subjects_in_time,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature")
 
@@ -177,10 +177,10 @@ class VocalicSemanticModel:
                 observed_values=np.ones(evidence.num_time_steps_in_semantic_link_scale))
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
-                                                   subjects=evidence.vocalic.vocalic_subjects,
+                                                   subjects=evidence.vocalic.subjects_in_time,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
-                                                   observed_values=evidence.vocalic.obs_vocalic)
+                                                   observed_values=evidence.vocalic.observation)
 
         return pymc_model
 
