@@ -65,8 +65,8 @@ if __name__ == "__main__":
     body_series = BodySeries(uuid="",
                              subjects=model.subjects,
                              num_time_steps_in_coordination_scale=TIME_STEPS,
-                             obs_body=full_samples.obs_body.values[0],
-                             body_time_steps_in_coordination_scale=
+                             observation=full_samples.obs_body.values[0],
+                             time_steps_in_coordination_scale=
                              full_samples.latent_body.time_steps_in_coordination_scale[0])
 
     evidence = BrainBodySeries(uuid="",

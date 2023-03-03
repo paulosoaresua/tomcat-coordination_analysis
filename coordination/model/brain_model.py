@@ -64,11 +64,15 @@ class BrainSeries:
             ax.plot(xs, ys, label=self.subjects)
             ax.set_title(self.channels[channel_idx])
             ax.set_xlabel("Time Step")
-            ax.set_xlabel("Observed Value")
+            ax.set_ylabel("Observed Value")
             ax.legend()
 
     @classmethod
-    def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str]):
+    def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str], ignore_bad_channels: bool):
+        if ignore_bad_channels:
+            bad_channels = set(literal_eval(evidence_df["bad_channels"].values[0]))
+            brain_channels = list(set(brain_channels).difference(bad_channels))
+
         obs_brain = []
         for brain_channel in brain_channels:
             obs_brain.append(np.array(literal_eval(evidence_df[f"{brain_channel}_hb_total"].values[0])))

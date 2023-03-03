@@ -188,7 +188,7 @@ class BrainBodyModel:
             # We share the mixture weights between the brain and body components as we assume they should reflect
             # degrees of influences across components.
             latent_body, _, _, _ = self.latent_body_cpn.update_pymc_model(
-                coordination=coordination[evidence.body.body_time_steps_in_coordination_scale],
+                coordination=coordination[evidence.body.time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="body_time",
                 feature_dimension="body_feature",
@@ -202,7 +202,7 @@ class BrainBodyModel:
                                                 subject_dimension="subject",
                                                 feature_dimension="body_feature",
                                                 time_dimension="body_time",
-                                                observed_values=evidence.body.obs_body)
+                                                observed_values=evidence.body.observation)
 
         return pymc_model
 

@@ -115,7 +115,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
         # Create evidence object from a data frame and associated model
         if model_name == "brain":
-            evidence = BrainSeries.from_data_frame(row_df, brain_channels)
+            # We ignore channels globally instead of in the evidence object so we can adjust the prior
+            # parameters and log that information.
+            evidence = BrainSeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
+                                                   ignore_bad_channels=False)
 
             model = BrainModel(subjects=evidence.subjects,
                                brain_channels=brain_channels,
@@ -291,7 +294,7 @@ def _plot_body_predictive_prior_plots(out_dir: str,
 
         fig = plt.figure(figsize=(15, 8))
         plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-        plt.plot(np.arange(T), single_evidence_series.obs_body[i, 0], color="tab:pink", alpha=1, marker="o",
+        plt.plot(np.arange(T), single_evidence_series.observation[i, 0], color="tab:pink", alpha=1, marker="o",
                  markersize=5)
         plt.title(f"Observed Body - Subject {subject}")
         plt.xlabel(f"Time Step")
