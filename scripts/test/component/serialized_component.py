@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import arviz as az
 import pytensor.tensor as ptt
 
-from coordination.model.components.coordination_component import SigmoidGaussianCoordinationComponent
-from coordination.model.components.serialized_component import SerializedComponent
-from coordination.model.components.observation_component import SerializedObservationComponent
+from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent
+from coordination.component.serialized_component import SerializedComponent
+from coordination.component.observation_component import SerializedObservationComponent
 
 from coordination.common.functions import sigmoid
 

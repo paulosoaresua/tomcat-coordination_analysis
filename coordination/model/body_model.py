@@ -14,8 +14,7 @@ from coordination.component.coordination_component import SigmoidGaussianCoordin
     SigmoidGaussianCoordinationComponentSamples
 from coordination.component.mixture_component import MixtureComponent, MixtureComponentSamples
 from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
-
-from coordination.common.functions import sigmoid
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 class BodySamples:
@@ -29,13 +28,23 @@ class BodySamples:
 
 class BodySeries:
 
-    def __init__(self, uuid: str, subjects: List[str], num_time_steps_in_coordination_scale: int, obs_body: np.ndarray,
-                 body_time_steps_in_coordination_scale: np.ndarray):
+    def __init__(self, uuid: str, subjects: List[str], num_time_steps_in_coordination_scale: int, observation: np.ndarray,
+                 time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
         self.subjects = subjects
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
-        self.obs_body = obs_body
-        self.body_time_steps_in_coordination_scale = body_time_steps_in_coordination_scale
+        self.observation = observation
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+
+    def plot_observations(self, ax: Any):
+        # One plot per channel
+        xs = np.arange(self.num_time_steps_in_body_scale)[:, None].repeat(self.num_subjects, axis=1)
+        ys = self.observation[:, 0, :].T
+        ax.plot(xs, ys, label=self.subjects)
+        ax.set_title("Body Motion Energy")
+        ax.set_xlabel("Time Step")
+        ax.set_ylabel("Observed Value")
+        ax.legend()
 
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame):
@@ -45,8 +54,8 @@ class BodySeries:
             uuid=evidence_df["experiment_id"].values[0],
             subjects=literal_eval(evidence_df["subjects"].values[0]),
             num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
-            obs_body=obs_body,
-            body_time_steps_in_coordination_scale=np.array(
+            observation=obs_body,
+            time_steps_in_coordination_scale=np.array(
                 literal_eval(evidence_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
 
     def standardize(self):
@@ -55,29 +64,29 @@ class BodySeries:
         proximity relativity (how close measurements from different subjects are) which is important for the
         coordination model.
         """
-        max_value = self.obs_body.max(axis=(0, 2), initial=0)[None, :, None]
-        min_value = self.obs_body.min(axis=(0, 2), initial=0)[None, :, None]
-        self.obs_body = (self.obs_body - min_value) / (max_value - min_value)
+        max_value = self.observation.max(axis=(0, 2), initial=0)[None, :, None]
+        min_value = self.observation.min(axis=(0, 2), initial=0)[None, :, None]
+        self.observation = (self.observation - min_value) / (max_value - min_value)
 
     def normalize_per_subject(self):
         """
         Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
         """
-        mean = self.obs_body.mean(axis=-1)[..., None]
-        std = self.obs_body.std(axis=-1)[..., None]
-        self.obs_body = (self.obs_body - mean) / std
+        mean = self.observation.mean(axis=-1)[..., None]
+        std = self.observation.std(axis=-1)[..., None]
+        self.observation = (self.observation - mean) / std
 
     @property
     def num_time_steps_in_body_scale(self) -> int:
-        return self.obs_body.shape[-1]
+        return self.observation.shape[-1]
 
     @property
     def num_body_features(self) -> int:
-        return self.obs_body.shape[-2]
+        return self.observation.shape[-2]
 
     @property
     def num_subjects(self) -> int:
-        return self.obs_body.shape[-3]
+        return self.observation.shape[-3]
 
 
 class BodyPosteriorSamples:
@@ -90,8 +99,9 @@ class BodyPosteriorSamples:
 
     @classmethod
     def from_inference_data(cls, idata: Any) -> BodyPosteriorSamples:
-        unbounded_coordination = idata.posterior["unbounded_coordination"]
-        coordination = sigmoid(unbounded_coordination)
+        coordination_posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
+        unbounded_coordination = coordination_posterior_samples.unbounded_coordination
+        coordination = coordination_posterior_samples.coordination
         latent_body = idata.posterior["latent_body"]
 
         return cls(unbounded_coordination, coordination, latent_body)
@@ -109,7 +119,7 @@ class BodyModel:
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
-        if initial_coordination is not  None:
+        if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = logit(initial_coordination)
 
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",
@@ -167,7 +177,7 @@ class BodyModel:
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_body, _, _, _ = self.latent_body_cpn.update_pymc_model(
-                coordination=coordination[evidence.body_time_steps_in_coordination_scale],
+                coordination=coordination[evidence.time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="body_time",
                 feature_dimension="body_feature")
@@ -175,7 +185,7 @@ class BodyModel:
                                                 subject_dimension="subject",
                                                 feature_dimension="body_feature",
                                                 time_dimension="body_time",
-                                                observed_values=evidence.obs_body)
+                                                observed_values=evidence.observation)
 
         return pymc_model
 

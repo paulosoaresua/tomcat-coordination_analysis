@@ -115,7 +115,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
         # Create evidence object from a data frame and associated model
         if model_name == "brain":
-            evidence = BrainSeries.from_data_frame(row_df, brain_channels)
+            # We ignore channels globally instead of in the evidence object so we can adjust the prior
+            # parameters and log that information.
+            evidence = BrainSeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
+                                                   ignore_bad_channels=False)
 
             model = BrainModel(subjects=evidence.subjects,
                                brain_channels=brain_channels,
@@ -161,7 +164,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
 
             model = VocalicSemanticModel(num_subjects=num_subjects,
-                                         vocalic_features=evidence.vocalic_features,
+                                         vocalic_features=evidence.features,
                                          self_dependent=self_dependent,
                                          sd_mean_uc0=sd_mean_uc0,
                                          sd_sd_uc=sd_sd_uc,
@@ -175,7 +178,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
 
             model = VocalicModel(num_subjects=num_subjects,
-                                 vocalic_features=evidence.vocalic_features,
+                                 vocalic_features=evidence.features,
                                  self_dependent=self_dependent,
                                  sd_mean_uc0=sd_mean_uc0,
                                  sd_sd_uc=sd_sd_uc,
@@ -261,7 +264,7 @@ def _plot_brain_predictive_prior_plots(out_dir: str,
 
             fig = plt.figure(figsize=(15, 8))
             plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-            plt.plot(np.arange(T), single_evidence_series.obs_brain[i, j], color="tab:pink", alpha=1, marker="o",
+            plt.plot(np.arange(T), single_evidence_series.observation[i, j], color="tab:pink", alpha=1, marker="o",
                      markersize=5)
             plt.title(f"Observed Brain - Subject {subject}, Channel {brain_channel}")
             plt.xlabel(f"Time Step")
@@ -291,7 +294,7 @@ def _plot_body_predictive_prior_plots(out_dir: str,
 
         fig = plt.figure(figsize=(15, 8))
         plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-        plt.plot(np.arange(T), single_evidence_series.obs_body[i, 0], color="tab:pink", alpha=1, marker="o",
+        plt.plot(np.arange(T), single_evidence_series.observation[i, 0], color="tab:pink", alpha=1, marker="o",
                  markersize=5)
         plt.title(f"Observed Body - Subject {subject}")
         plt.xlabel(f"Time Step")
@@ -321,7 +324,7 @@ def _plot_vocalic_predictive_prior_plots(out_dir: str,
 
         fig = plt.figure(figsize=(15, 8))
         plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-        plt.plot(np.arange(T), single_evidence_series.obs_vocalic[j], color="tab:pink", alpha=1, marker="o",
+        plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
                  markersize=5)
         plt.title(f"Observed {vocalic_feature}")
         plt.xlabel(f"Time Step")
@@ -356,7 +359,7 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
 
     if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
         # Mark points with semantic link
-        time_points = evidence.vocalic_time_steps_in_coordination_scale
+        time_points = evidence.time_steps_in_coordination_scale
         plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10,
                     zorder=4)
 

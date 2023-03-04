@@ -8,13 +8,14 @@ import pandas as pd
 import pymc as pm
 import xarray
 
-from coordination.common.functions import logit, sigmoid
+from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     SigmoidGaussianCoordinationComponentSamples
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
 from coordination.component.link_component import LinkComponent, LinkComponentSamples
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
+from coordination.model.vocalic_model import VocalicSeries, VocalicPosteriorSamples
 
 
 class VocalicSemanticSamples:
@@ -30,40 +31,19 @@ class VocalicSemanticSamples:
 
 class VocalicSemanticSeries:
 
-    def __init__(self, uuid: str, vocalic_features: List[str], num_time_steps_in_coordination_scale: int,
-                 vocalic_subjects: np.ndarray, obs_vocalic: np.ndarray, vocalic_prev_time_same_subject: np.ndarray,
-                 vocalic_prev_time_diff_subject: np.ndarray, vocalic_time_steps_in_coordination_scale: np.ndarray,
+    def __init__(self, uuid: str, vocalic_series: VocalicSeries,
                  semantic_link_time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
-        self.vocalic_features = vocalic_features
-        self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
-        self.vocalic_subjects = vocalic_subjects
-        self.obs_vocalic = obs_vocalic
-        self.vocalic_prev_time_same_subject = vocalic_prev_time_same_subject
-        self.vocalic_prev_time_diff_subject = vocalic_prev_time_diff_subject
-        self.vocalic_time_steps_in_coordination_scale = vocalic_time_steps_in_coordination_scale
+        self.vocalic = vocalic_series
         self.semantic_link_time_steps_in_coordination_scale = semantic_link_time_steps_in_coordination_scale
 
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame, vocalic_features: List[str]):
-        obs_vocalic = []
-        for vocalic_feature in vocalic_features:
-            obs_vocalic.append(np.array(literal_eval(evidence_df[f"{vocalic_feature}"].values[0])))
-        # Swap axes such that the first dimension represents the different subjects and the second the vocalic features
-        obs_vocalic = np.array(obs_vocalic)
+        vocalic_series = VocalicSeries.from_data_frame(evidence_df=evidence_df, vocalic_features=vocalic_features)
 
         return cls(
-            uuid=evidence_df["experiment_id"].values[0],
-            vocalic_features=vocalic_features,
-            num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
-            vocalic_subjects=np.array(literal_eval(evidence_df["vocalic_subjects"].values[0])),
-            obs_vocalic=obs_vocalic,
-            vocalic_prev_time_same_subject=np.array(
-                literal_eval(evidence_df["vocalic_previous_time_same_subject"].values[0])),
-            vocalic_prev_time_diff_subject=np.array(
-                literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0])),
-            vocalic_time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0])),
+            uuid=vocalic_series.uuid,
+            vocalic_series=vocalic_series,
             semantic_link_time_steps_in_coordination_scale=np.array(
                 literal_eval(evidence_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]))
         )
@@ -74,41 +54,17 @@ class VocalicSemanticSeries:
         proximity relativity (how close measurements from different subjects are) which is important for the
         coordination model.
         """
-        max_value = self.obs_vocalic.max(axis=-1, initial=0)[:, None]
-        min_value = self.obs_vocalic.min(axis=-1, initial=0)[:, None]
-        self.obs_vocalic = (self.obs_vocalic - min_value) / (max_value - min_value)
+        self.vocalic.standardize()
 
     def normalize_per_subject(self):
         """
         Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
         """
-        all_subjects = set(self.vocalic_subjects)
-
-        for subject in all_subjects:
-            obs_per_subject = self.obs_vocalic[:, self.vocalic_subjects == subject]
-            mean = obs_per_subject.mean()
-            std = obs_per_subject.std()
-            self.obs_vocalic[:, self.vocalic_subjects == subject] = (obs_per_subject - mean) / std
-
-    @property
-    def num_time_steps_in_vocalic_scale(self) -> int:
-        return self.obs_vocalic.shape[-1]
+        self.vocalic.normalize_per_subject()
 
     @property
     def num_time_steps_in_semantic_link_scale(self) -> int:
         return self.semantic_link_time_steps_in_coordination_scale.shape[-1]
-
-    @property
-    def num_vocalic_features(self) -> int:
-        return self.obs_vocalic.shape[-2]
-
-    @property
-    def vocalic_prev_same_subject_mask(self) -> np.ndarray:
-        return np.where(self.vocalic_prev_time_same_subject >= 0, 1, 0)
-
-    @property
-    def vocalic_prev_diff_subject_mask(self) -> np.ndarray:
-        return np.where(self.vocalic_prev_time_diff_subject >= 0, 1, 0)
 
 
 class VocalicSemanticPosteriorSamples:
@@ -121,11 +77,10 @@ class VocalicSemanticPosteriorSamples:
 
     @classmethod
     def from_inference_data(cls, idata: Any) -> VocalicSemanticPosteriorSamples:
-        unbounded_coordination = idata.posterior["unbounded_coordination"]
-        coordination = sigmoid(unbounded_coordination)
-        latent_vocalic = idata.posterior["latent_vocalic"]
+        vocalic_posterior_samples = VocalicPosteriorSamples.from_inference_data(idata)
 
-        return cls(unbounded_coordination, coordination, latent_vocalic)
+        return cls(vocalic_posterior_samples.unbounded_coordination, vocalic_posterior_samples.coordination,
+                   vocalic_posterior_samples.latent_vocalic)
 
 
 class VocalicSemanticModel:
@@ -188,7 +143,7 @@ class VocalicSemanticModel:
 
     def fit(self, evidence: VocalicSemanticSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
-        assert evidence.num_vocalic_features == len(self.vocalic_features)
+        assert evidence.vocalic.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
@@ -199,20 +154,20 @@ class VocalicSemanticModel:
 
     def _define_pymc_model(self, evidence: VocalicSemanticSeries):
         coords = {"vocalic_feature": self.vocalic_features,
-                  "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
-                  "vocalic_time": np.arange(evidence.num_time_steps_in_vocalic_scale),
+                  "coordination_time": np.arange(evidence.vocalic.num_time_steps_in_coordination_scale),
+                  "vocalic_time": np.arange(evidence.vocalic.num_time_steps_in_vocalic_scale),
                   "link_time": np.arange(evidence.num_time_steps_in_semantic_link_scale)}
 
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
             latent_vocalic, _, _ = self.latent_vocalic_cpn.update_pymc_model(
-                coordination=coordination[evidence.vocalic_time_steps_in_coordination_scale],
-                prev_time_same_subject=evidence.vocalic_prev_time_same_subject,
-                prev_time_diff_subject=evidence.vocalic_prev_time_diff_subject,
-                prev_same_subject_mask=evidence.vocalic_prev_same_subject_mask,
-                prev_diff_subject_mask=evidence.vocalic_prev_diff_subject_mask,
-                subjects=evidence.vocalic_subjects,
+                coordination=coordination[evidence.vocalic.time_steps_in_coordination_scale],
+                prev_time_same_subject=evidence.vocalic.previous_time_same_subject,
+                prev_time_diff_subject=evidence.vocalic.previous_time_diff_subject,
+                prev_same_subject_mask=evidence.vocalic.vocalic_prev_same_subject_mask,
+                prev_diff_subject_mask=evidence.vocalic.vocalic_prev_diff_subject_mask,
+                subjects=evidence.vocalic.subjects_in_time,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature")
 
@@ -222,10 +177,10 @@ class VocalicSemanticModel:
                 observed_values=np.ones(evidence.num_time_steps_in_semantic_link_scale))
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
-                                                   subjects=evidence.vocalic_subjects,
+                                                   subjects=evidence.vocalic.subjects_in_time,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
-                                                   observed_values=evidence.obs_vocalic)
+                                                   observed_values=evidence.vocalic.observation)
 
         return pymc_model
 
