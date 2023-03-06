@@ -71,7 +71,7 @@ class VocalicSeries:
             ax = axs[vocalic_feature_idx]
             for subject in all_subjects:
                 subject_mask = self.subjects_in_time == subject
-                xs = np.arange(self.num_time_steps_in_vocalic_scale)[subject_mask]
+                xs = self.time_steps_in_coordination_scale[subject_mask]
                 ys = self.observation[vocalic_feature_idx, subject_mask]
                 if len(xs) == 1:
                     ax.scatter(xs, ys, label=subject)
@@ -81,6 +81,62 @@ class VocalicSeries:
             ax.set_title(self.features[vocalic_feature_idx])
             ax.set_xlabel("Time Step")
             ax.set_ylabel("Observed Value")
+            ax.set_xlim([-0.5, self.num_time_steps_in_coordination_scale + 0.5])
+            ax.legend()
+
+    def plot_observation_differences(self, axs: List[Any], self_dependent: bool):
+        # Plot the difference between the current subject's vocalic and their previous vocalic and a different
+        # subject's previous vocalic
+
+        for vocalic_feature_idx in range(min(self.num_vocalic_features, len(axs))):
+            ax = axs[vocalic_feature_idx]
+
+            xs_same = []
+            ys_same = []
+            xs_diff = []
+            ys_diff = []
+
+            fixed_means = {}
+            if not self_dependent:
+                # Approximated fixed mean is the first observation of a subject
+                all_subjects = set(self.subjects_in_time)
+                for subject in all_subjects:
+                    t0 = np.where(self.subjects_in_time == subject)[0][0]
+                    fixed_means[subject] = self.observation[vocalic_feature_idx, t0]
+
+            for t in range(self.num_time_steps_in_vocalic_scale):
+                if self_dependent:
+                    if self.previous_time_same_subject[t] >= 0:
+                        t_p = self.previous_time_same_subject[t]
+                        xs_same.append(self.time_steps_in_coordination_scale[t])
+                        ys_same.append(
+                            np.abs(
+                                self.observation[vocalic_feature_idx, t] - self.observation[vocalic_feature_idx, t_p]))
+                else:
+                    subject = self.subjects_in_time[t]
+                    xs_same.append(self.time_steps_in_coordination_scale[t])
+                    ys_same.append(np.abs(self.observation[vocalic_feature_idx, t] - fixed_means[subject]))
+
+                if self.previous_time_diff_subject[t] >= 0:
+                    t_p = self.previous_time_diff_subject[t]
+                    xs_diff.append(self.time_steps_in_coordination_scale[t])
+                    ys_diff.append(
+                        np.abs(self.observation[vocalic_feature_idx, t] - self.observation[vocalic_feature_idx, t_p]))
+
+            if len(xs_same) == 1:
+                ax.scatter(xs_same, ys_same, label="Same Subject")
+            else:
+                ax.plot(xs_same, ys_same, label="Same Subject", marker="o")
+
+            if len(xs_same) == 1:
+                ax.scatter(xs_diff, ys_diff, label="Different Subject")
+            else:
+                ax.plot(xs_diff, ys_diff, label="Different Subject", marker="o")
+
+            ax.set_title(self.features[vocalic_feature_idx])
+            ax.set_xlabel("Time Step")
+            ax.set_ylabel("Difference btw Observed Values")
+            ax.set_xlim([-0.5, self.num_time_steps_in_coordination_scale + 0.5])
             ax.legend()
 
     @classmethod
