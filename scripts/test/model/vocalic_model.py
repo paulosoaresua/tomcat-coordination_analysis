@@ -9,10 +9,11 @@ from coordination.model.vocalic_semantic_model import VocalicSemanticModel, Voca
 from coordination.common.functions import logit
 
 # Parameters
+INITIAL_COORDINATION = 0.5
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
 NUM_VOCALIC_FEATURES = 4
-TIME_SCALE_DENSITY = 0.2
+TIME_SCALE_DENSITY = 1
 SEED = 0
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
@@ -49,11 +50,11 @@ if __name__ == "__main__":
                              sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
                              sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)))
 
-    model.coordination_cpn.parameters.mean_uc0.value = logit(0.5)
-    model.coordination_cpn.parameters.sd_uc.value = np.array([1])
+    model.coordination_cpn.parameters.mean_uc0.value = logit(INITIAL_COORDINATION)
+    model.coordination_cpn.parameters.sd_uc.value = np.array([1]) * 0.000001
     model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
     model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
-    model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+    model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)) * 0.000000000001
 
     if ADD_SEMANTIC_LINK:
         full_samples = model.draw_samples(num_series=1,
