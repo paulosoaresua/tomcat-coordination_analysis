@@ -208,7 +208,7 @@ class VocalicModel:
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
         if initial_coordination is not None:
-            self.coordination_cpn.parameters.mean_uc0.value = logit(initial_coordination)
+            self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
         self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, len(vocalic_features),
                                                       self_dependent,
@@ -284,6 +284,13 @@ class VocalicModel:
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
             idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
+
+        return pymc_model, idata
+
+    def posterior_predictive(self, evidence: VocalicSeries, trace: az.InferenceData, seed: Optional[int] = None):
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample_posterior_predictive(trace=trace, random_seed=seed)
 
         return pymc_model, idata
 
