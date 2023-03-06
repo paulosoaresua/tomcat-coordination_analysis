@@ -38,12 +38,40 @@ class BodySeries:
 
     def plot_observations(self, ax: Any):
         # One plot per channel
-        xs = np.arange(self.num_time_steps_in_body_scale)[:, None].repeat(self.num_subjects, axis=1)
+        xs = self.time_steps_in_coordination_scale[:, None].repeat(self.num_subjects, axis=1)
         ys = self.observation[:, 0, :].T
         ax.plot(xs, ys, label=self.subjects)
         ax.set_title("Body Motion Energy")
         ax.set_xlabel("Time Step")
         ax.set_ylabel("Observed Value")
+        ax.set_xlim([-0.5, self.num_time_steps_in_coordination_scale + 0.5])
+        ax.legend()
+
+    def plot_observation_differences(self, ax: Any, self_dependent: bool):
+        # Plot the difference between the current subject's energy and their previous signal and a different
+        # subject's previous energy
+
+        labels = []
+        for subject_target in self.subjects:
+            for subject_source in self.subjects:
+                labels.append(f"{subject_target} - {subject_source}")
+
+        xs = self.time_steps_in_coordination_scale[1:, None].repeat(self.num_subjects ** 2, axis=1)
+        Obs = self.observation[:, 0, :]
+        A = np.concatenate([Obs] * self.num_subjects, axis=0).T
+
+        if not self_dependent:
+            # We approximate the fixed mean as the first observation
+            for i in range(self.num_subjects):
+                A[:, i * self.num_subjects] = Obs[i, 0]
+
+        B = np.repeat(Obs, self.num_subjects, axis=0).T
+        ys = np.abs(B[1:] - A[:-1])
+        ax.plot(xs, ys, label=labels)
+        ax.set_title("Body Motion Energy")
+        ax.set_xlabel("Time Step")
+        ax.set_ylabel("Observed Value")
+        ax.set_xlim([-0.5, self.num_time_steps_in_coordination_scale + 0.5])
         ax.legend()
 
     @classmethod

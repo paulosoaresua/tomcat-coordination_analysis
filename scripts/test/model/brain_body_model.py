@@ -71,8 +71,8 @@ if __name__ == "__main__":
                              full_samples.latent_body.time_steps_in_coordination_scale[0])
 
     fig = plt.figure()
-    brain_series.standardize()
-    brain_series.plot_observation_differences([fig.gca()], SELF_DEPENDENT)
+    body_series.standardize()
+    body_series.plot_observation_differences(fig.gca(), SELF_DEPENDENT)
     plt.plot(np.arange(TIME_STEPS), full_samples.coordination.coordination[0])
     plt.tight_layout()
     plt.show()
