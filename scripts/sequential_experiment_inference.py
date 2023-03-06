@@ -21,6 +21,7 @@ from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries
 from coordination.common.log import configure_log
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 """
 This scripts performs inferences in a subset of experiments from a dataset. Inferences are performed sequentially. That
@@ -216,13 +217,18 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             else:
                 idata.extend(idata_posterior)
 
+            _, idata_posterior_predictive = model.posterior_predictive(evidence=evidence, trace=idata_posterior,
+                                                                       seed=seed)
+            idata.extend(idata_posterior_predictive)
+
             num_divergences = float(idata.sample_stats.diverging.sum(dim=["chain", "draw"]))
             num_total_samples = num_samples * num_chains
             logger.info(
                 f"{num_divergences} divergences in {num_total_samples} samples --> {100.0 * num_divergences / num_total_samples}%.")
 
-            save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
+            # save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
             save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
+            save_predictive_posterior_plots(f"{results_dir}/plots/predictive_posterior", idata, evidence, model)
 
         # Save inference data
         with open(f"{results_dir}/inference_data.pkl", "wb") as f:
@@ -231,33 +237,48 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
 def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
     if isinstance(model, BrainModel) or isinstance(model, BrainBodyModel):
-        _plot_brain_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
+        _plot_brain_predictive_plots(out_dir, idata, single_evidence_series, model, True)
 
     if isinstance(model, BodyModel) or isinstance(model, BrainBodyModel):
-        _plot_body_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
+        _plot_body_predictive_plots(out_dir, idata, single_evidence_series, model, True)
 
     if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
-        _plot_vocalic_predictive_prior_plots(out_dir, idata, single_evidence_series, model)
+        _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series, model, True)
 
 
-def _plot_brain_predictive_prior_plots(out_dir: str,
-                                       idata: az.InferenceData,
-                                       single_evidence_series: Union[BrainSeries, BrainBodySeries],
-                                       model: Any):
-    brain_prior_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
+def save_predictive_posterior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
+    if isinstance(model, BrainModel) or isinstance(model, BrainBodyModel):
+        _plot_brain_predictive_plots(out_dir, idata, single_evidence_series, model, False)
+
+    if isinstance(model, BodyModel) or isinstance(model, BrainBodyModel):
+        _plot_body_predictive_plots(out_dir, idata, single_evidence_series, model, False)
+
+    if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
+        _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series, model, False)
+
+
+def _plot_brain_predictive_plots(out_dir: str,
+                                 idata: az.InferenceData,
+                                 single_evidence_series: Union[BrainSeries, BrainBodySeries],
+                                 model: Any,
+                                 prior: bool):
+    if prior:
+        brain_samples = idata.prior_predictive[model.obs_brain_variable_name].sel(chain=0)
+    else:
+        brain_samples = idata.posterior_predictive[model.obs_brain_variable_name].sel(chain=0)
 
     logger = logging.getLogger()
     logger.info("Generating brain plots")
-    subjects = brain_prior_samples.coords["subject"].data
+    subjects = brain_samples.coords["subject"].data
     for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
         plot_dir = f"{out_dir}/{subject}"
         os.makedirs(plot_dir, exist_ok=True)
 
-        brain_channels = brain_prior_samples.coords["brain_channel"].data
+        brain_channels = brain_samples.coords["brain_channel"].data
         for j, brain_channel in tqdm(enumerate(brain_channels),
                                      total=len(brain_channels),
                                      desc="Brain Channel", leave=False, position=1):
-            prior_samples = brain_prior_samples.sel(subject=subject, brain_channel=brain_channel)
+            prior_samples = brain_samples.sel(subject=subject, brain_channel=brain_channel)
 
             T = prior_samples.sizes["brain_time"]
             N = prior_samples.sizes["draw"]
@@ -274,20 +295,24 @@ def _plot_brain_predictive_prior_plots(out_dir: str,
             plt.close(fig)
 
 
-def _plot_body_predictive_prior_plots(out_dir: str,
-                                      idata: az.InferenceData,
-                                      single_evidence_series: Union[BodySeries, BrainBodySeries],
-                                      model: Any):
-    body_prior_samples = idata.prior_predictive[model.obs_body_variable_name].sel(chain=0)
+def _plot_body_predictive_plots(out_dir: str,
+                                idata: az.InferenceData,
+                                single_evidence_series: Union[BodySeries, BrainBodySeries],
+                                model: Any,
+                                prior: bool):
+    if prior:
+        body_samples = idata.prior_predictive[model.obs_body_variable_name].sel(chain=0)
+    else:
+        body_samples = idata.posterior_predictive[model.obs_body_variable_name].sel(chain=0)
 
     logger = logging.getLogger()
     logger.info("Generating body plots")
-    subjects = body_prior_samples.coords["subject"].data
+    subjects = body_samples.coords["subject"].data
     for i, subject in tqdm(enumerate(subjects), desc="Subject", total=len(subjects), position=0):
         plot_dir = f"{out_dir}/{subject}"
         os.makedirs(plot_dir, exist_ok=True)
 
-        prior_samples = body_prior_samples.sel(subject=subject, body_feature="total_energy")
+        prior_samples = body_samples.sel(subject=subject, body_feature="total_energy")
 
         T = prior_samples.sizes["body_time"]
         N = prior_samples.sizes["draw"]
@@ -304,20 +329,24 @@ def _plot_body_predictive_prior_plots(out_dir: str,
         plt.close(fig)
 
 
-def _plot_vocalic_predictive_prior_plots(out_dir: str,
-                                         idata: az.InferenceData,
-                                         single_evidence_series: Union[VocalicSeries, VocalicSemanticSeries],
-                                         model: Any):
-    vocalic_prior_samples = idata.prior_predictive[model.obs_vocalic_variable_name].sel(chain=0)
+def _plot_vocalic_predictive_plots(out_dir: str,
+                                   idata: az.InferenceData,
+                                   single_evidence_series: Union[VocalicSeries, VocalicSemanticSeries],
+                                   model: Any,
+                                   prior: bool):
+    if prior:
+        vocalic_samples = idata.prior_predictive[model.obs_vocalic_variable_name].sel(chain=0)
+    else:
+        vocalic_samples = idata.posterior_predictive[model.obs_vocalic_variable_name].sel(chain=0)
 
     logger = logging.getLogger()
     logger.info("Generating vocalic plots")
 
-    vocalic_features = vocalic_prior_samples.coords["vocalic_feature"].data
+    vocalic_features = vocalic_samples.coords["vocalic_feature"].data
     for j, vocalic_feature in tqdm(enumerate(vocalic_features),
                                    total=len(vocalic_features),
                                    desc="Vocalic Features", leave=False, position=1):
-        prior_samples = vocalic_prior_samples.sel(vocalic_feature=vocalic_feature)
+        prior_samples = vocalic_samples.sel(vocalic_feature=vocalic_feature)
 
         T = prior_samples.sizes["vocalic_time"]
         N = prior_samples.sizes["draw"]
@@ -338,27 +367,12 @@ def _plot_vocalic_predictive_prior_plots(out_dir: str,
 def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any, model: Any):
     os.makedirs(out_dir, exist_ok=True)
 
-    posterior_samples = model.inference_data_to_posterior_samples(idata)
-
-    T = posterior_samples.coordination.sizes["coordination_time"]
-    C = posterior_samples.coordination.sizes["chain"]
-    N = posterior_samples.coordination.sizes["draw"]
-    stacked_coordination_samples = posterior_samples.coordination.stack(chain_plus_draw=("chain", "draw"))
-
-    mean_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"])
-    sd_coordination = posterior_samples.coordination.std(dim=["chain", "draw"])
-    lower_band = np.maximum(mean_coordination - sd_coordination, 0)
-    upper_band = np.minimum(mean_coordination + sd_coordination, 1)
-
+    posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
     fig = plt.figure(figsize=(15, 8))
-    plt.plot(np.arange(T)[:, None].repeat(N * C, axis=1), stacked_coordination_samples, color="tab:blue", alpha=0.3,
-             zorder=1)
-    plt.fill_between(np.arange(T), lower_band, upper_band, color="tab:pink", alpha=0.8, zorder=2)
-    plt.plot(np.arange(T), mean_coordination, color="white", alpha=1, marker="o", markersize=5, linewidth=1,
-             linestyle="--", zorder=3)
+    posterior_samples.plot(fig.gca(), show_samples=True)
 
     if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
-        # Mark points with semantic link
+        # Mark points with vocalic
         time_points = evidence.time_steps_in_coordination_scale
         plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10,
                     zorder=4)
@@ -366,6 +380,7 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
     if isinstance(model, VocalicSemanticModel):
         # Mark points with semantic link
         time_points = evidence.semantic_link_time_steps_in_coordination_scale
+        mean_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"])
         links = mean_coordination[time_points]
         plt.scatter(time_points, links, c="black", alpha=1, marker="*", s=10, zorder=4)
 
