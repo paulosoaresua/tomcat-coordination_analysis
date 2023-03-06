@@ -37,7 +37,8 @@ if __name__ == "__main__":
                                      sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
                                      sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
                                      a_p_semantic_link=1,
-                                     b_p_semantic_link=1)
+                                     b_p_semantic_link=1,
+                                     initial_coordination=INITIAL_COORDINATION)
 
         model.semantic_link_cpn.parameters.p.value = 0.7
     else:
@@ -48,9 +49,9 @@ if __name__ == "__main__":
                              sd_sd_uc=1,
                              sd_mean_a0_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
                              sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
-                             sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)))
+                             sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
+                             initial_coordination=INITIAL_COORDINATION)
 
-    model.coordination_cpn.parameters.mean_uc0.value = logit(INITIAL_COORDINATION)
     model.coordination_cpn.parameters.sd_uc.value = np.array([1]) * 0.000001
     model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
     model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))

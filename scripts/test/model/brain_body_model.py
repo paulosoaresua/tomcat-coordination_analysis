@@ -9,9 +9,10 @@ from coordination.model.brain_model import BrainSeries
 from coordination.model.body_model import BodySeries
 
 # Parameters
+INITIAL_COORDINATION = 0.5
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
-NUM_BRAIN_CHANNELS = 10
+NUM_BRAIN_CHANNELS = 1
 SEED = 0
 SELF_DEPENDENT = True
 N = 1000
@@ -24,7 +25,7 @@ if __name__ == "__main__":
 
         warnings.simplefilter("ignore")
 
-    model = BrainBodyModel(initial_coordination=0.5,
+    model = BrainBodyModel(initial_coordination=INITIAL_COORDINATION,
                            subjects=list(map(str, np.arange(NUM_SUBJECTS))),
                            brain_channels=list(map(str, np.arange(NUM_BRAIN_CHANNELS))),
                            self_dependent=True,
@@ -38,7 +39,7 @@ if __name__ == "__main__":
                            sd_sd_o_body=np.ones((NUM_SUBJECTS, 1)),
                            a_mixture_weights=np.ones((NUM_SUBJECTS, NUM_SUBJECTS - 1)))
 
-    model.coordination_cpn.parameters.sd_uc.value = np.array([0.1])
+    model.coordination_cpn.parameters.sd_uc.value = np.array([1])
     model.latent_brain_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
     model.latent_brain_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
     model.latent_brain_cpn.parameters.mixture_weights.value = np.array([[0.3, 0.7], [0.8, 0.2], [0.1, 0.9]])
@@ -68,6 +69,13 @@ if __name__ == "__main__":
                              observation=full_samples.obs_body.values[0],
                              time_steps_in_coordination_scale=
                              full_samples.latent_body.time_steps_in_coordination_scale[0])
+
+    fig = plt.figure()
+    brain_series.standardize()
+    brain_series.plot_observation_differences([fig.gca()], SELF_DEPENDENT)
+    plt.plot(np.arange(TIME_STEPS), full_samples.coordination.coordination[0])
+    plt.tight_layout()
+    plt.show()
 
     evidence = BrainBodySeries(uuid="",
                                brain_series=brain_series,
