@@ -226,7 +226,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             logger.info(
                 f"{num_divergences} divergences in {num_total_samples} samples --> {100.0 * num_divergences / num_total_samples}%.")
 
-            # save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
+            save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
             save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
             save_predictive_posterior_plots(f"{results_dir}/plots/predictive_posterior", idata, evidence, model)
 
