@@ -40,6 +40,26 @@ class VocalicSeries:
         self.previous_time_diff_subject = previous_time_diff_subject
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
+    def chop(self, min_time_step: int, max_time_step: int):
+        """
+        Chops the series into a pre-defined range.
+        """
+        self.num_time_steps_in_coordination_scale = max_time_step - min_time_step
+        t_min_vocalic = 0
+        t_max_vocalic = 0
+        for t in range(self.num_time_steps_in_vocalic_scale):
+            if self.time_steps_in_coordination_scale[t] < min_time_step:
+                t_min_vocalic = t + 1
+
+            if self.time_steps_in_coordination_scale[t] < max_time_step:
+                t_max_vocalic = t + 1
+
+        self.subjects_in_time = self.subjects_in_time[t_min_vocalic:t_max_vocalic]
+        self.observation = self.observation[:, t_min_vocalic:t_max_vocalic]
+        self.previous_time_same_subject = np.maximum(self.previous_time_same_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
+        self.previous_time_diff_subject = np.maximum(self.previous_time_diff_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
+        self.time_steps_in_coordination_scale = self.time_steps_in_coordination_scale[t_min_vocalic:t_max_vocalic] - min_time_step
+
     def standardize(self):
         """
         Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose

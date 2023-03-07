@@ -46,6 +46,10 @@ class BrainBodySeries:
             body_series=body_series
         )
 
+    def chop(self, min_time_step: int, max_time_step: int):
+        self.body.chop(min_time_step, max_time_step)
+        self.brain.chop(min_time_step, max_time_step)
+
     def standardize(self):
         """
         Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose

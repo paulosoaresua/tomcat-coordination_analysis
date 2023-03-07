@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import xarray
 
@@ -22,7 +21,13 @@ class CoordinationPosteriorSamples:
     @classmethod
     def from_inference_data(cls, idata: Any) -> CoordinationPosteriorSamples:
         unbounded_coordination = idata.posterior["unbounded_coordination"]
-        coordination = sigmoid(unbounded_coordination)
+
+        if "coordination" in idata.posterior:
+            # Beta component
+            coordination = idata.posterior["coordination"]
+        else:
+            # Sigmoid component
+            coordination = sigmoid(unbounded_coordination)
 
         return cls(unbounded_coordination, coordination)
 

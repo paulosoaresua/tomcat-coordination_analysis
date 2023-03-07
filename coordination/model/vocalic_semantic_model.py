@@ -29,12 +29,11 @@ class VocalicSemanticSamples:
         self.obs_vocalic = obs_vocalic
 
 
-class VocalicSemanticSeries:
+class VocalicSemanticSeries(VocalicSeries):
 
     def __init__(self, uuid: str, vocalic_series: VocalicSeries,
                  semantic_link_time_steps_in_coordination_scale: np.ndarray):
-        self.uuid = uuid
-        self.vocalic = vocalic_series
+        super().__init__(uuid, vocalic_series)
         self.semantic_link_time_steps_in_coordination_scale = semantic_link_time_steps_in_coordination_scale
 
     @classmethod
@@ -47,20 +46,6 @@ class VocalicSemanticSeries:
             semantic_link_time_steps_in_coordination_scale=np.array(
                 literal_eval(evidence_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]))
         )
-
-    def standardize(self):
-        """
-        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
-        proximity relativity (how close measurements from different subjects are) which is important for the
-        coordination model.
-        """
-        self.vocalic.standardize()
-
-    def normalize_per_subject(self):
-        """
-        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
-        """
-        self.vocalic.normalize_per_subject()
 
     @property
     def num_time_steps_in_semantic_link_scale(self) -> int:

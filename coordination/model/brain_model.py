@@ -37,6 +37,24 @@ class BrainSeries:
         self.observation = observation
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
+    def chop(self, min_time_step: int, max_time_step: int):
+        """
+        Chops the series into a pre-defined range.
+        """
+        self.num_time_steps_in_coordination_scale = max_time_step - min_time_step
+        t_min_component = 0
+        t_max_component = 0
+        for t in range(self.num_time_steps_in_coordination_scale):
+            if self.time_steps_in_coordination_scale[t] < min_time_step:
+                t_min_component = t + 1
+
+            if self.time_steps_in_coordination_scale[t] < max_time_step:
+                t_max_component = t + 1
+
+        self.observation = self.observation[..., t_min_component:t_max_component]
+        self.time_steps_in_coordination_scale = self.time_steps_in_coordination_scale[
+                                                t_min_component:t_max_component] - min_time_step
+
     def standardize(self):
         """
         Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
