@@ -21,13 +21,7 @@ class CoordinationPosteriorSamples:
     @classmethod
     def from_inference_data(cls, idata: Any) -> CoordinationPosteriorSamples:
         unbounded_coordination = idata.posterior["unbounded_coordination"]
-
-        if "coordination" in idata.posterior:
-            # Beta component
-            coordination = idata.posterior["coordination"]
-        else:
-            # Sigmoid component
-            coordination = sigmoid(unbounded_coordination)
+        coordination = idata.posterior["coordination"]
 
         return cls(unbounded_coordination, coordination)
 

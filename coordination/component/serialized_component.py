@@ -28,7 +28,7 @@ def serialized_logp_with_self_dependency(serialized_component: Any,
     # If there's no previous observation from the same subject, we use the initial mean.
     mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
 
-    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
+    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component)
 
     return total_logp
 
@@ -229,7 +229,9 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
-                if t == 0:
+                if samples.prev_time_same_subject[s][t] < 0:
+                    # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
+                    # t_0 is the initial utterance of one of the subjects only.
                     samples.values[s][:, t] = norm(loc=self.parameters.mean_a0.value[samples.subjects[s][t]],
                                                    scale=self.parameters.sd_aa.value[samples.subjects[s][t]]).rvs(
                         size=self.dim_value)
@@ -283,7 +285,7 @@ class SerializedComponent:
                 u = np.random.uniform(size=(num_series, 1))
                 subjects[:, t] = np.argmax(u < cum_prob, axis=-1)
 
-        # Map None to -1
+        # Map 0 to -1
         subjects -= 1
         return subjects
 

@@ -93,7 +93,7 @@ class SigmoidGaussianCoordinationComponent:
                                                        dims=[time_dimension],
                                                        observed=unbounded_coordination_observed_values)
 
-        coordination = pm.Deterministic("coordination", pm.math.sigmoid(unbounded_coordination))
+        coordination = pm.Deterministic("coordination", pm.math.sigmoid(unbounded_coordination), dims=[time_dimension])
 
         return unbounded_coordination, coordination, sd_uc
 

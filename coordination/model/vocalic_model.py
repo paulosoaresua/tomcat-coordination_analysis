@@ -56,9 +56,12 @@ class VocalicSeries:
 
         self.subjects_in_time = self.subjects_in_time[t_min_vocalic:t_max_vocalic]
         self.observation = self.observation[:, t_min_vocalic:t_max_vocalic]
-        self.previous_time_same_subject = np.maximum(self.previous_time_same_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
-        self.previous_time_diff_subject = np.maximum(self.previous_time_diff_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
-        self.time_steps_in_coordination_scale = self.time_steps_in_coordination_scale[t_min_vocalic:t_max_vocalic] - min_time_step
+        self.previous_time_same_subject = np.maximum(
+            self.previous_time_same_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
+        self.previous_time_diff_subject = np.maximum(
+            self.previous_time_diff_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
+        self.time_steps_in_coordination_scale = self.time_steps_in_coordination_scale[
+                                                t_min_vocalic:t_max_vocalic] - min_time_step
 
     def standardize(self):
         """

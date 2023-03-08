@@ -193,8 +193,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         if normalize_observations:
             evidence.normalize_per_subject()
 
-        # evidence.chop(500, 800)
-
         # Project observations to the range [0,1]. This does not affect the estimated coordination but reduces
         # divergences with parameter mean_a0 that has prior with mass close to 0 (per choice).
         evidence.standardize()

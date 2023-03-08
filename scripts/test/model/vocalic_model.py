@@ -6,13 +6,12 @@ import numpy as np
 
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
-from coordination.common.functions import logit
 
 # Parameters
 INITIAL_COORDINATION = 0.5
-TIME_STEPS = 200
+TIME_STEPS = 1000
 NUM_SUBJECTS = 3
-NUM_VOCALIC_FEATURES = 4
+NUM_VOCALIC_FEATURES = 1
 TIME_SCALE_DENSITY = 0.2
 SEED = 0
 ADD_SEMANTIC_LINK = False
@@ -49,7 +48,7 @@ if __name__ == "__main__":
                              sd_sd_uc=1,
                              sd_mean_a0_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
                              sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
-                             sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
+                             sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)) * 0.01,
                              initial_coordination=INITIAL_COORDINATION)
 
     model.coordination_cpn.parameters.sd_uc.value = np.array([1])
@@ -62,13 +61,13 @@ if __name__ == "__main__":
                                           num_time_steps=TIME_STEPS,
                                           vocalic_time_scale_density=TIME_SCALE_DENSITY,
                                           semantic_link_time_scale_density=TIME_SCALE_DENSITY,
-                                          can_repeat_subject=False,
+                                          can_repeat_subject=True,
                                           seed=SEED)
     else:
         full_samples = model.draw_samples(num_series=1,
                                           num_time_steps=TIME_STEPS,
                                           vocalic_time_scale_density=TIME_SCALE_DENSITY,
-                                          can_repeat_subject=False,
+                                          can_repeat_subject=True,
                                           seed=SEED)
 
     evidence = VocalicSeries(uuid="",
