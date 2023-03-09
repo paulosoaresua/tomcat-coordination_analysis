@@ -66,7 +66,11 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
     noise = rng.normal(loc=0, scale=1, size=size) * sigma
 
     sample = np.zeros_like(noise)
-    prior_sample = rng.normal(loc=initial_mean[..., 0], scale=sigma[..., 0])
+
+    mean_0 = initial_mean if initial_mean.ndim == 1 else initial_mean[..., 0]
+    sd_0 = sigma if sigma.ndim == 1 else sigma[..., 0]
+
+    prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
@@ -76,7 +80,10 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
 
         mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
 
-        transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
+        if sigma.ndim == 1:
+            transition_sample = rng.normal(loc=mean, scale=sigma)
+        else:
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
 
         sample[..., t] = transition_sample
 
@@ -106,7 +113,10 @@ def serialized_random_without_self_dependency(initial_mean: np.ndarray,
 
         mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
 
-        transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
+        if sigma.ndim == 1:
+            transition_sample = rng.normal(loc=mean, scale=sigma)
+        else:
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
 
         sample[..., t] = transition_sample
 
@@ -164,11 +174,19 @@ class SerializedComponentSamples:
 class SerializedComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray):
+                 sd_sd_aa: np.ndarray, share_params: bool):
+        if share_params:
+            assert sd_mean_a0.ndim == 1
+            assert sd_sd_aa.ndim == 1
+        else:
+            assert (num_subjects, dim_value) == sd_mean_a0.shape
+            assert (num_subjects, dim_value) == sd_sd_aa.shape
+
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
         self.self_dependent = self_dependent
+        self.share_params = share_params
 
         self.parameters = SerializedComponentParameters(sd_mean_a0, sd_sd_aa)
 
@@ -232,9 +250,11 @@ class SerializedComponent:
                 if samples.prev_time_same_subject[s][t] < 0:
                     # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
                     # t_0 is the initial utterance of one of the subjects only.
-                    samples.values[s][:, t] = norm(loc=self.parameters.mean_a0.value[samples.subjects[s][t]],
-                                                   scale=self.parameters.sd_aa.value[samples.subjects[s][t]]).rvs(
-                        size=self.dim_value)
+
+                    if self.share_params:
+                        mean = self.parameters.mean_a0.value
+                    else:
+                        mean = self.parameters.mean_a0.value[samples.subjects[s][t]]
                 else:
                     C = coordination[s, samples.time_steps_in_coordination_scale[s][t]]
 
@@ -256,6 +276,13 @@ class SerializedComponent:
 
                     samples.values[s][:, t] = norm(loc=mean,
                                                    scale=self.parameters.sd_aa.value[samples.subjects[s][t]]).rvs()
+
+                if self.share_params:
+                    sd = self.parameters.sd_aa.value
+                else:
+                    sd = self.parameters.sd_aa.value[samples.subjects[s][t]]
+
+                samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
 
         return samples
 
@@ -294,14 +321,26 @@ class SerializedComponent:
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray,
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
 
-        mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
-        sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                              size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
+        if self.share_params:
+            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+                                    size=1, observed=self.parameters.mean_a0.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=1, observed=self.parameters.sd_aa.value)
+            mean = mean_a0
+            sd = sd_aa
+        else:
+            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+                                    size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
+
+            # One mean and sd per time step matching their subjects.
+            mean = mean_a0[subjects].transpose()
+            sd = sd_aa[subjects].transpose()
 
         if self.self_dependent:
-            logp_params = (mean_a0[subjects].transpose(),  # One mean and sd per time step matching their subjects.
-                           sd_aa[subjects].transpose(),
+            logp_params = (mean,
+                           sd,
                            coordination,
                            ptt.constant(prev_time_same_subject),
                            ptt.constant(prev_time_diff_subject),
@@ -312,8 +351,8 @@ class SerializedComponent:
                                                   random=random_fn, dims=[feature_dimension, time_dimension],
                                                   observed=observed_values)
         else:
-            logp_params = (mean_a0[subjects].transpose(),
-                           sd_aa[subjects].transpose(),
+            logp_params = (mean,
+                           sd,
                            coordination,
                            ptt.constant(prev_time_diff_subject),
                            ptt.constant(prev_diff_subject_mask))

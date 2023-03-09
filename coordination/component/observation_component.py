@@ -77,12 +77,16 @@ class SerializedObservationComponentSamples:
 
 class SerializedObservationComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray):
-        assert (num_subjects, dim_value) == sd_sd_o.shape
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray, share_params: bool):
+        if share_params:
+            assert sd_sd_o.ndim == 1
+        else:
+            assert (num_subjects, dim_value) == sd_sd_o.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
+        self.share_params = share_params
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
@@ -104,19 +108,30 @@ class SerializedObservationComponent:
 
         samples = SerializedObservationComponentSamples()
 
-        for s in range(len(latent_component)):
-            samples.values.append(norm(loc=latent_component[s], scale=self.parameters.sd_o.value[subjects[s]].T).rvs(
-                size=latent_component[s].shape))
+        for i in range(len(latent_component)):
+            if self.share_params:
+                sd = self.parameters.sd_o.value
+            else:
+                sd = self.parameters.sd_o.value[subjects[i]].T
+
+            samples.values.append(norm(loc=latent_component[i], scale=sd).rvs(size=latent_component[i].shape))
 
         return samples
 
     def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
                           time_dimension: str, observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                             size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+        if self.share_params:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=1, observed=self.parameters.sd_o.value)
+            sd = sd_o
+        else:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+            sd = sd_o[ptt.constant(subjects)].transpose()
 
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component,
-                                          sigma=sd_o[ptt.constant(subjects)].transpose(),
+        observation_component = pm.Normal(name=self.uuid,
+                                          mu=latent_component,
+                                          sigma=sd,
                                           dims=[feature_dimension, time_dimension],
                                           observed=observed_values)
 

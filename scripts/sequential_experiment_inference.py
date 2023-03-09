@@ -72,7 +72,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
               a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              normalize_observations: bool, ignore_bad_channels: bool):
+              normalize_observations: bool, ignore_bad_channels: bool, share_params: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -186,7 +186,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_mean_a0_vocalic=sd_mean_a0_vocalic,
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
-                                 initial_coordination=initial_coordination)
+                                 initial_coordination=initial_coordination,
+                                 share_params=share_params)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -394,8 +395,10 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
 def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
     os.makedirs(out_dir, exist_ok=True)
 
-    axes = az.plot_trace(idata, var_names=model.parameter_names)
-    # axes = az.plot_trace(idata, var_names=["mean_uc0", "sd_uc"])
+    sampled_vars = set(idata.posterior.data_vars)
+    var_names = list(set(model.parameter_names).intersection(sampled_vars))
+
+    axes = az.plot_trace(idata, var_names=var_names)
     fig = axes.ravel()[0].figure
     plt.tight_layout()
 
@@ -545,6 +548,8 @@ if __name__ == "__main__":
                              "standard deviation.")
     parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
                         help="Whether to remove bad brain channels from the observations.")
+    parser.add_argument("--share_params", type=int, required=False, default=0,
+                        help="Whether to share parameters across subjects and features.")
 
     args = parser.parse_args()
 
@@ -559,12 +564,17 @@ if __name__ == "__main__":
     arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
     arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
                                            args.num_subjects - 1)
-    arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects,
-                                            len(arg_vocalic_features))
-    arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects,
-                                          len(arg_vocalic_features))
-    arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects,
-                                         len(arg_vocalic_features))
+
+    if bool(args.share_params):
+        arg_sd_mean_a0_vocalic = np.array([float(args.sd_mean_a0_vocalic)])
+        arg_sd_sd_aa_vocalic = np.array([float(args.sd_sd_aa_vocalic)])
+        arg_sd_sd_o_vocalic = np.array([float(args.sd_sd_o_vocalic)])
+    else:
+        rows = args.num_subjects
+        cols = len(arg_vocalic_features)
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), rows, cols)
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), rows, cols)
+        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), rows, cols)
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
@@ -597,4 +607,5 @@ if __name__ == "__main__":
               a_p_semantic_link=args.a_p_semantic_link,
               b_p_semantic_link=args.b_p_semantic_link,
               normalize_observations=bool(args.normalize_observations),
-              ignore_bad_channels=bool(args.ignore_bad_channels))
+              ignore_bad_channels=bool(args.ignore_bad_channels),
+              share_params=bool(args.share_params))
