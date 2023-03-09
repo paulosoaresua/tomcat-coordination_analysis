@@ -174,7 +174,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          sd_sd_o_vocalic=sd_sd_o_vocalic,
                                          a_p_semantic_link=a_p_semantic_link,
                                          b_p_semantic_link=b_p_semantic_link,
-                                         initial_coordination=initial_coordination)
+                                         initial_coordination=initial_coordination,
+                                         share_params=share_params)
         elif model_name == "vocalic":
             evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
 
