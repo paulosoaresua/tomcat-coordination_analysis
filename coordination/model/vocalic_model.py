@@ -17,6 +17,14 @@ from coordination.component.observation_component import SerializedObservationCo
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
+VOCALIC_FEATURES = [
+    "pitch",
+    "intensity",
+    "jitter",
+    "shimmer"
+]
+
+
 class VocalicSamples:
 
     def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples,

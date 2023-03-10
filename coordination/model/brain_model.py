@@ -16,6 +16,30 @@ from coordination.component.observation_component import ObservationComponent, O
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
+BRAIN_CHANNELS = [
+    "s1-d1",
+    "s1-d2",
+    "s2-d1",
+    "s2-d3",
+    "s3-d1",
+    "s3-d3",
+    "s3-d4",
+    "s4-d2",
+    "s4-d4",
+    "s4-d5",
+    "s5-d3",
+    "s5-d4",
+    "s5-d6",
+    "s6-d4",
+    "s6-d6",
+    "s6-d7",
+    "s7-d5",
+    "s7-d7",
+    "s8-d6",
+    "s8-d7"
+]
+
+
 class BrainSamples:
 
     def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples, latent_brain: MixtureComponentSamples,

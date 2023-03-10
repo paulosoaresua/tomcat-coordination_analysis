@@ -15,12 +15,12 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from coordination.model.brain_model import BrainModel, BrainSeries
+from coordination.model.brain_model import BrainModel, BrainSeries, BRAIN_CHANNELS
 from coordination.model.body_model import BodyModel, BodySeries
 from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries
 from coordination.common.log import configure_log
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
-from coordination.model.vocalic_model import VocalicModel, VocalicSeries
+from coordination.model.vocalic_model import VocalicModel, VocalicSeries, VOCALIC_FEATURES
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 """
@@ -32,36 +32,6 @@ if not sys.warnoptions:
     import warnings
 
     warnings.simplefilter("ignore")
-
-BRAIN_CHANNELS = [
-    "s1-d1",
-    "s1-d2",
-    "s2-d1",
-    "s2-d3",
-    "s3-d1",
-    "s3-d3",
-    "s3-d4",
-    "s4-d2",
-    "s4-d4",
-    "s4-d5",
-    "s5-d3",
-    "s5-d4",
-    "s5-d6",
-    "s6-d4",
-    "s6-d6",
-    "s6-d7",
-    "s7-d5",
-    "s7-d7",
-    "s8-d6",
-    "s8-d7"
-]
-
-VOCALIC_FEATURES = [
-    "pitch",
-    "intensity",
-    "jitter",
-    "shimmer"
-]
 
 
 def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, model_name: str,
