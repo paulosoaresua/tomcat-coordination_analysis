@@ -368,7 +368,7 @@ def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
     os.makedirs(out_dir, exist_ok=True)
 
     sampled_vars = set(idata.posterior.data_vars)
-    var_names = list(set(model.parameter_names).intersection(sampled_vars))
+    var_names = sorted(list(set(model.parameter_names).intersection(sampled_vars)))
 
     axes = az.plot_trace(idata, var_names=var_names)
     fig = axes.ravel()[0].figure
