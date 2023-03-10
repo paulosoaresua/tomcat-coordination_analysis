@@ -173,9 +173,10 @@ class BrainModel:
 
     def __init__(self, subjects: List[str], brain_channels: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
-                 a_mixture_weights: np.ndarray, initial_coordination: Optional[float] = None):
+                 a_mixture_weights: np.ndarray, share_params: bool, initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
+        self.share_params = share_params
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -188,8 +189,13 @@ class BrainModel:
                                                  self_dependent=self_dependent,
                                                  sd_mean_a0=sd_mean_a0,
                                                  sd_sd_aa=sd_sd_aa,
-                                                 a_mixture_weights=a_mixture_weights)
-        self.obs_brain_cpn = ObservationComponent("obs_brain", len(subjects), len(brain_channels), sd_sd_o=sd_sd_o)
+                                                 a_mixture_weights=a_mixture_weights,
+                                                 share_params=share_params)
+        self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
+                                                  num_subjects=len(subjects),
+                                                  dim_value=len(brain_channels),
+                                                  sd_sd_o=sd_sd_o,
+                                                  share_params=share_params)
 
     @property
     def parameter_names(self) -> List[str]:

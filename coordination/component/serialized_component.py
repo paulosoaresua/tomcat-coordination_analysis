@@ -28,7 +28,7 @@ def serialized_logp_with_self_dependency(serialized_component: Any,
     # If there's no previous observation from the same subject, we use the initial mean.
     mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
 
-    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component)
+    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
 
     return total_logp
 
@@ -209,9 +209,14 @@ class SerializedComponent:
                      coordination: np.ndarray, can_repeat_subject: bool,
                      seed: Optional[int] = None) -> SerializedComponentSamples:
 
+        if self.share_params:
+            assert self.parameters.mean_a0.value.ndim == 1
+            assert self.parameters.sd_aa.value.ndim == 1
+        else:
+            assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
+            assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
+
         assert 0 <= time_scale_density <= 1
-        assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
-        assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
 
         set_random_seed(seed)
 
@@ -247,6 +252,11 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
+                if self.share_params:
+                    sd = self.parameters.sd_aa.value
+                else:
+                    sd = self.parameters.sd_aa.value[samples.subjects[s][t]]
+
                 if samples.prev_time_same_subject[s][t] < 0:
                     # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
                     # t_0 is the initial utterance of one of the subjects only.
@@ -255,6 +265,8 @@ class SerializedComponent:
                         mean = self.parameters.mean_a0.value
                     else:
                         mean = self.parameters.mean_a0.value[samples.subjects[s][t]]
+
+                    samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
                 else:
                     C = coordination[s, samples.time_steps_in_coordination_scale[s][t]]
 
@@ -274,15 +286,7 @@ class SerializedComponent:
 
                     mean = (D - S * prev_same_mask) * C * prev_diff_mask + S * prev_same_mask
 
-                    samples.values[s][:, t] = norm(loc=mean,
-                                                   scale=self.parameters.sd_aa.value[samples.subjects[s][t]]).rvs()
-
-                if self.share_params:
-                    sd = self.parameters.sd_aa.value
-                else:
-                    sd = self.parameters.sd_aa.value[samples.subjects[s][t]]
-
-                samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
+                    samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
 
         return samples
 

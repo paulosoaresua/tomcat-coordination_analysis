@@ -4,19 +4,27 @@ import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 
+from coordination.common.functions import logit
 from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries
 from coordination.model.brain_model import BrainSeries
 from coordination.model.body_model import BodySeries
 
 # Parameters
 INITIAL_COORDINATION = 0.5
+ESTIMATE_INITIAL_COORDINATION = True
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
-NUM_BRAIN_CHANNELS = 1
+NUM_BRAIN_CHANNELS = 2
 SEED = 0
 SELF_DEPENDENT = True
 N = 1000
 C = 2
+SHARE_PARAMS = True
+
+PARAM_ONES_BRAIN = np.ones(1) if SHARE_PARAMS else np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
+PARAM_ZEROS_BRAIN = np.zeros(1) if SHARE_PARAMS else np.zeros((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
+PARAM_ONES_BODY = np.ones(1) if SHARE_PARAMS else np.ones((NUM_SUBJECTS, 1))
+PARAM_ZEROS_BODY = np.zeros(1) if SHARE_PARAMS else np.zeros((NUM_SUBJECTS, 1))
 
 if __name__ == "__main__":
     if not sys.warnoptions:
@@ -31,23 +39,24 @@ if __name__ == "__main__":
                            self_dependent=True,
                            sd_mean_uc0=1,
                            sd_sd_uc=1,
-                           sd_mean_a0_brain=np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS)),
-                           sd_sd_aa_brain=np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS)),
-                           sd_sd_o_brain=np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS)),
-                           sd_mean_a0_body=np.ones((NUM_SUBJECTS, 1)),
-                           sd_sd_aa_body=np.ones((NUM_SUBJECTS, 1)),
-                           sd_sd_o_body=np.ones((NUM_SUBJECTS, 1)),
-                           a_mixture_weights=np.ones((NUM_SUBJECTS, NUM_SUBJECTS - 1)))
+                           sd_mean_a0_brain=PARAM_ONES_BRAIN,
+                           sd_sd_aa_brain=PARAM_ONES_BRAIN,
+                           sd_sd_o_brain=PARAM_ONES_BRAIN,
+                           sd_mean_a0_body=PARAM_ONES_BODY,
+                           sd_sd_aa_body=PARAM_ONES_BODY,
+                           sd_sd_o_body=PARAM_ONES_BODY,
+                           a_mixture_weights=np.ones((NUM_SUBJECTS, NUM_SUBJECTS - 1)),
+                           share_params=SHARE_PARAMS)
 
     model.coordination_cpn.parameters.sd_uc.value = np.array([1])
-    model.latent_brain_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
-    model.latent_brain_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
+    model.latent_brain_cpn.parameters.mean_a0.value = PARAM_ZEROS_BRAIN
+    model.latent_brain_cpn.parameters.sd_aa.value = PARAM_ONES_BRAIN
     model.latent_brain_cpn.parameters.mixture_weights.value = np.array([[0.3, 0.7], [0.8, 0.2], [0.1, 0.9]])
-    model.latent_body_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, 1))
-    model.latent_body_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, 1))
+    model.latent_body_cpn.parameters.mean_a0.value = PARAM_ZEROS_BODY
+    model.latent_body_cpn.parameters.sd_aa.value = PARAM_ONES_BODY
     model.latent_body_cpn.parameters.mixture_weights.value = model.latent_brain_cpn.parameters.mixture_weights.value
-    model.obs_brain_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
-    model.obs_body_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, 1))
+    model.obs_brain_cpn.parameters.sd_o.value = PARAM_ONES_BRAIN
+    model.obs_body_cpn.parameters.sd_o.value = PARAM_ONES_BODY
 
     full_samples = model.draw_samples(num_series=1,
                                       num_time_steps=TIME_STEPS,
@@ -70,28 +79,25 @@ if __name__ == "__main__":
                              time_steps_in_coordination_scale=
                              full_samples.latent_body.time_steps_in_coordination_scale[0])
 
-    fig = plt.figure()
-    body_series.standardize()
-    body_series.plot_observation_differences(fig.gca(), SELF_DEPENDENT)
-    plt.plot(np.arange(TIME_STEPS), full_samples.coordination.coordination[0])
-    plt.tight_layout()
-    plt.show()
-
     evidence = BrainBodySeries(uuid="",
                                brain_series=brain_series,
                                body_series=body_series)
 
     model.clear_parameter_values()
+    if not ESTIMATE_INITIAL_COORDINATION:
+        model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
+    model.prior_predictive(evidence, 2)
     pymc_model, idata = model.fit(evidence=evidence,
                                   burn_in=N,
                                   num_samples=N,
                                   num_chains=C,
                                   seed=SEED,
-                                  num_jobs=C)
+                                  num_jobs=4)
 
-    az.plot_trace(idata,
-                  var_names=["sd_uc", "mean_a0_latent_brain", "sd_aa_latent_brain", "mean_a0_latent_body",
-                             "sd_aa_latent_body", "sd_o_obs_brain", "sd_o_obs_body", "mixture_weights_latent_brain"])
+    sampled_vars = set(idata.posterior.data_vars)
+    var_names = list(set(model.parameter_names).intersection(sampled_vars))
+    az.plot_trace(idata, var_names=var_names)
+    plt.tight_layout()
     plt.show()
 
     posterior_samples = model.inference_data_to_posterior_samples(idata)

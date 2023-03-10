@@ -4,20 +4,26 @@ import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 
+from coordination.common.functions import logit
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
 
 # Parameters
 INITIAL_COORDINATION = 0.5
-TIME_STEPS = 1000
+ESTIMATE_INITIAL_COORDINATION = True
+TIME_STEPS = 200
 NUM_SUBJECTS = 3
-NUM_VOCALIC_FEATURES = 1
-TIME_SCALE_DENSITY = 0.2
+NUM_VOCALIC_FEATURES = 2
+TIME_SCALE_DENSITY = 1
 SEED = 0
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
 N = 1000
 C = 2
+SHARE_PARAMS = True
+
+PARAM_ONES = np.ones(1) if SHARE_PARAMS else np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+PARAM_ZEROS = np.zeros(1) if SHARE_PARAMS else np.zeros((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
 
 if __name__ == "__main__":
     if not sys.warnoptions:
@@ -32,12 +38,13 @@ if __name__ == "__main__":
                                      self_dependent=SELF_DEPENDENT,
                                      sd_mean_uc0=1,
                                      sd_sd_uc=1,
-                                     sd_mean_a0_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
-                                     sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
-                                     sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
+                                     sd_mean_a0_vocalic=PARAM_ONES,
+                                     sd_sd_aa_vocalic=PARAM_ONES,
+                                     sd_sd_o_vocalic=PARAM_ONES,
                                      a_p_semantic_link=1,
                                      b_p_semantic_link=1,
-                                     initial_coordination=INITIAL_COORDINATION)
+                                     initial_coordination=INITIAL_COORDINATION,
+                                     share_params=SHARE_PARAMS)
 
         model.semantic_link_cpn.parameters.p.value = 0.7
     else:
@@ -46,28 +53,29 @@ if __name__ == "__main__":
                              self_dependent=SELF_DEPENDENT,
                              sd_mean_uc0=1,
                              sd_sd_uc=1,
-                             sd_mean_a0_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
-                             sd_sd_aa_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)),
-                             sd_sd_o_vocalic=np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)) * 0.01,
-                             initial_coordination=INITIAL_COORDINATION)
+                             sd_mean_a0_vocalic=PARAM_ONES,
+                             sd_sd_aa_vocalic=PARAM_ONES,
+                             sd_sd_o_vocalic=PARAM_ONES,
+                             initial_coordination=INITIAL_COORDINATION,
+                             share_params=SHARE_PARAMS)
 
-    model.coordination_cpn.parameters.sd_uc.value = np.array([1])
-    model.latent_vocalic_cpn.parameters.mean_a0.value = np.zeros((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
-    model.latent_vocalic_cpn.parameters.sd_aa.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
-    model.obs_vocalic_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+    model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
+    model.latent_vocalic_cpn.parameters.mean_a0.value = PARAM_ZEROS
+    model.latent_vocalic_cpn.parameters.sd_aa.value = PARAM_ONES
+    model.obs_vocalic_cpn.parameters.sd_o.value = PARAM_ONES
 
     if ADD_SEMANTIC_LINK:
         full_samples = model.draw_samples(num_series=1,
                                           num_time_steps=TIME_STEPS,
                                           vocalic_time_scale_density=TIME_SCALE_DENSITY,
                                           semantic_link_time_scale_density=TIME_SCALE_DENSITY,
-                                          can_repeat_subject=True,
+                                          can_repeat_subject=False,
                                           seed=SEED)
     else:
         full_samples = model.draw_samples(num_series=1,
                                           num_time_steps=TIME_STEPS,
                                           vocalic_time_scale_density=TIME_SCALE_DENSITY,
-                                          can_repeat_subject=True,
+                                          can_repeat_subject=False,
                                           seed=SEED)
 
     evidence = VocalicSeries(uuid="",
@@ -87,6 +95,9 @@ if __name__ == "__main__":
                                          full_samples.semantic_link.time_steps_in_coordination_scale[0])
 
     model.clear_parameter_values()
+    if not ESTIMATE_INITIAL_COORDINATION:
+        model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
+    model.prior_predictive(evidence, 2)
     pymc_model, idata = model.fit(evidence=evidence,
                                   burn_in=N,
                                   num_samples=N,
@@ -94,7 +105,11 @@ if __name__ == "__main__":
                                   seed=SEED,
                                   num_jobs=C)
 
-    az.plot_trace(idata, var_names=model.parameter_names)
+    sampled_vars = set(idata.posterior.data_vars)
+    var_names = list(set(model.parameter_names).intersection(sampled_vars))
+
+    az.plot_trace(idata, var_names=var_names)
+    plt.tight_layout()
     plt.show()
 
     posterior_samples = model.inference_data_to_posterior_samples(idata)
