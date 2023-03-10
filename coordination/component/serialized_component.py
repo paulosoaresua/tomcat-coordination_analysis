@@ -80,8 +80,9 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
 
         mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
 
-        if sigma.ndim == 1:
-            transition_sample = rng.normal(loc=mean, scale=sigma)
+        if sigma.shape[1] == 1:
+            # Parameter sharing across subjects
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
         else:
             transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
 
@@ -109,13 +110,14 @@ def serialized_random_without_self_dependency(initial_mean: np.ndarray,
 
         # No self-dependency. The transition distribution is a blending between the previous value from another individual,
         # and a fixed mean.
-        S = initial_mean[..., t]
-
-        mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
-
-        if sigma.ndim == 1:
-            transition_sample = rng.normal(loc=mean, scale=sigma)
+        if sigma.shape[1] == 1:
+            # Parameter sharing across subjects
+            S = initial_mean[..., 0]
+            mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
         else:
+            S = initial_mean[..., t]
+            mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
             transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
 
         sample[..., t] = transition_sample
@@ -174,10 +176,10 @@ class SerializedComponentSamples:
 class SerializedComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray, share_params: bool):
-        if share_params:
-            assert sd_mean_a0.ndim == 1
-            assert sd_sd_aa.ndim == 1
+                 sd_sd_aa: np.ndarray, share_params_across_subjects: bool):
+        if share_params_across_subjects:
+            assert (dim_value, ) == sd_mean_a0.shape
+            assert (dim_value, ) == sd_sd_aa.shape
         else:
             assert (num_subjects, dim_value) == sd_mean_a0.shape
             assert (num_subjects, dim_value) == sd_sd_aa.shape
@@ -186,7 +188,7 @@ class SerializedComponent:
         self.num_subjects = num_subjects
         self.dim_value = dim_value
         self.self_dependent = self_dependent
-        self.share_params = share_params
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.parameters = SerializedComponentParameters(sd_mean_a0, sd_sd_aa)
 
@@ -209,9 +211,9 @@ class SerializedComponent:
                      coordination: np.ndarray, can_repeat_subject: bool,
                      seed: Optional[int] = None) -> SerializedComponentSamples:
 
-        if self.share_params:
-            assert self.parameters.mean_a0.value.ndim == 1
-            assert self.parameters.sd_aa.value.ndim == 1
+        if self.share_params_across_subjects:
+            assert (self.dim_value,) == self.parameters.mean_a0.value.shape
+            assert (self.dim_value,) == self.parameters.sd_aa.value.shape
         else:
             assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
             assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
@@ -223,6 +225,13 @@ class SerializedComponent:
         samples = SerializedComponentSamples()
         sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
                                                      can_repeat_subject)
+
+        if self.share_params_across_subjects:
+            mean_a0 = self.parameters.mean_a0.value[None, :].repeat(self.num_subjects, axis=0)
+            sd_aa = self.parameters.sd_aa.value[None, :].repeat(self.num_subjects, axis=0)
+        else:
+            mean_a0 = self.parameters.mean_a0.value
+            sd_aa = self.parameters.sd_aa.value
 
         for s in range(num_series):
             samples.subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
@@ -252,19 +261,12 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
-                if self.share_params:
-                    sd = self.parameters.sd_aa.value
-                else:
-                    sd = self.parameters.sd_aa.value[samples.subjects[s][t]]
-
                 if samples.prev_time_same_subject[s][t] < 0:
                     # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
                     # t_0 is the initial utterance of one of the subjects only.
 
-                    if self.share_params:
-                        mean = self.parameters.mean_a0.value
-                    else:
-                        mean = self.parameters.mean_a0.value[samples.subjects[s][t]]
+                    mean = mean_a0[samples.subjects[s][t]]
+                    sd = sd_aa[samples.subjects[s][t]]
 
                     samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
                 else:
@@ -279,7 +281,7 @@ class SerializedComponent:
                         # When there's no self dependency, the component either depends on the previous value of another subject,
                         # or it is samples around a fixed mean.
                         prev_same_mask = 1
-                        S = self.parameters.mean_a0.value[samples.subjects[s][t]]
+                        S = mean_a0[samples.subjects[s][t]]
 
                     prev_diff_mask = (samples.prev_time_diff_subject[s][t] != -1).astype(int)
                     D = samples.values[s][..., samples.prev_time_diff_subject[s][t]]
@@ -325,20 +327,23 @@ class SerializedComponent:
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray,
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
 
-        if self.share_params:
+        if self.share_params_across_subjects:
             mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=1, observed=self.parameters.mean_a0.value)
+                                    size=self.dim_value, observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=1, observed=self.parameters.sd_aa.value)
-            mean = mean_a0
-            sd = sd_aa
+                                  size=self.dim_value, observed=self.parameters.sd_aa.value)
+
+            # Resulting dimension: (features, 1). The last dimension will be broadcasted across time.
+            mean = mean_a0[:, None]
+            sd = sd_aa[:, None]
         else:
             mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
                                     size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                                   size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
 
-            # One mean and sd per time step matching their subjects.
+            # One mean and sd per time step matching their subjects. The indexing below results in a matrix of
+            # dimensions: (features, time)
             mean = mean_a0[subjects].transpose()
             sd = sd_aa[subjects].transpose()
 

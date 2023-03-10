@@ -123,6 +123,15 @@ class BodySeries:
         std = self.observation.std(axis=-1)[..., None]
         self.observation = (self.observation - mean) / std
 
+    def normalize_across_subject(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per feature.
+        """
+
+        mean = self.observation.mean(axis=(0, 2))[None, :, None]
+        std = self.observation.std(axis=(0, 2))[None, :, None]
+        self.observation = (self.observation - mean) / std
+
     @property
     def num_time_steps_in_body_scale(self) -> int:
         return self.observation.shape[-1]
@@ -158,9 +167,10 @@ class BodyModel:
 
     def __init__(self, subjects: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
-                 a_mixture_weights: np.ndarray, share_params: bool, initial_coordination: Optional[float] = None):
+                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
+                 initial_coordination: Optional[float] = None):
         self.subjects = subjects
-        self.share_params = share_params
+        self.share_params_across_subjects = share_params_across_subjects
 
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
@@ -177,12 +187,12 @@ class BodyModel:
                                                 sd_mean_a0=sd_mean_a0,
                                                 sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights,
-                                                share_params=share_params)
+                                                share_params_across_subjects=share_params_across_subjects)
         self.obs_body_cpn = ObservationComponent(uuid="obs_body",
                                                  num_subjects=len(subjects),
                                                  dim_value=self.num_body_features,
                                                  sd_sd_o=sd_sd_o,
-                                                 share_params=share_params)
+                                                 share_params_across_subjects=share_params_across_subjects)
 
     @property
     def parameter_names(self) -> List[str]:

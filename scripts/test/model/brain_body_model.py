@@ -16,13 +16,13 @@ TIME_STEPS = 200
 NUM_SUBJECTS = 3
 NUM_BRAIN_CHANNELS = 2
 SEED = 0
-SELF_DEPENDENT = True
+SELF_DEPENDENT = False
 N = 1000
 C = 2
 SHARE_PARAMS = True
 
-PARAM_ONES_BRAIN = np.ones(1) if SHARE_PARAMS else np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
-PARAM_ZEROS_BRAIN = np.zeros(1) if SHARE_PARAMS else np.zeros((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
+PARAM_ONES_BRAIN = np.ones(NUM_BRAIN_CHANNELS) if SHARE_PARAMS else np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
+PARAM_ZEROS_BRAIN = np.zeros(NUM_BRAIN_CHANNELS) if SHARE_PARAMS else np.zeros((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
 PARAM_ONES_BODY = np.ones(1) if SHARE_PARAMS else np.ones((NUM_SUBJECTS, 1))
 PARAM_ZEROS_BODY = np.zeros(1) if SHARE_PARAMS else np.zeros((NUM_SUBJECTS, 1))
 
@@ -46,23 +46,37 @@ if __name__ == "__main__":
                            sd_sd_aa_body=PARAM_ONES_BODY,
                            sd_sd_o_body=PARAM_ONES_BODY,
                            a_mixture_weights=np.ones((NUM_SUBJECTS, NUM_SUBJECTS - 1)),
-                           share_params=SHARE_PARAMS)
+                           share_params_across_subjects=SHARE_PARAMS)
 
+    # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.array([1])
-    model.latent_brain_cpn.parameters.mean_a0.value = PARAM_ZEROS_BRAIN
-    model.latent_brain_cpn.parameters.sd_aa.value = PARAM_ONES_BRAIN
+    model.latent_brain_cpn.parameters.mean_a0.value = np.array([[0.1, 2000], [0.5, 5000], [0.8, 9000]])
+    model.latent_brain_cpn.parameters.sd_aa.value = np.array([[0.5, 1000], [0.5, 1000], [0.5, 1000]])
     model.latent_brain_cpn.parameters.mixture_weights.value = np.array([[0.3, 0.7], [0.8, 0.2], [0.1, 0.9]])
-    model.latent_body_cpn.parameters.mean_a0.value = PARAM_ZEROS_BODY
-    model.latent_body_cpn.parameters.sd_aa.value = PARAM_ONES_BODY
+    model.latent_body_cpn.parameters.mean_a0.value = np.array([[20000], [50000], [90000]])
+    model.latent_body_cpn.parameters.sd_aa.value = np.array([[10000], [10000], [10000]])
     model.latent_body_cpn.parameters.mixture_weights.value = model.latent_brain_cpn.parameters.mixture_weights.value
-    model.obs_brain_cpn.parameters.sd_o.value = PARAM_ONES_BRAIN
-    model.obs_body_cpn.parameters.sd_o.value = PARAM_ONES_BODY
+    model.obs_brain_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, NUM_BRAIN_CHANNELS))
+    model.obs_body_cpn.parameters.sd_o.value = np.ones((NUM_SUBJECTS, 1))
+
+    # Disable parameter sharing temporarily so we can generate samples
+    model.share_params_across_subjects = False
+    model.latent_brain_cpn.share_params_across_subjects = False
+    model.latent_body_cpn.share_params_across_subjects = False
+    model.obs_brain_cpn.share_params_across_subjects = False
+    model.obs_body_cpn.share_params_across_subjects = False
 
     full_samples = model.draw_samples(num_series=1,
                                       num_time_steps=TIME_STEPS,
                                       brain_relative_frequency=4,
                                       body_relative_frequency=4,
                                       seed=SEED)
+
+    model.share_params_across_subjects = SHARE_PARAMS
+    model.latent_brain_cpn.share_params_across_subjects = SHARE_PARAMS
+    model.latent_body_cpn.share_params_across_subjects = SHARE_PARAMS
+    model.obs_brain_cpn.share_params_across_subjects = SHARE_PARAMS
+    model.obs_body_cpn.share_params_across_subjects = SHARE_PARAMS
 
     brain_series = BrainSeries(uuid="",
                                subjects=model.subjects,
@@ -83,10 +97,14 @@ if __name__ == "__main__":
                                brain_series=brain_series,
                                body_series=body_series)
 
+    evidence.normalize_across_subject()
+    evidence.standardize()
+
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:
         model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
     model.prior_predictive(evidence, 2)
+
     pymc_model, idata = model.fit(evidence=evidence,
                                   burn_in=N,
                                   num_samples=N,

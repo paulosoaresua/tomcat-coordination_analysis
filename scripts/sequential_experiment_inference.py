@@ -42,7 +42,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
               a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              normalize_observations: bool, ignore_bad_channels: bool, share_params: bool):
+              ignore_bad_channels: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -100,7 +100,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                sd_sd_aa=sd_sd_aa_brain,
                                sd_sd_o=sd_sd_o_brain,
                                a_mixture_weights=a_mixture_weights,
-                               initial_coordination=initial_coordination)
+                               initial_coordination=initial_coordination,
+                               share_params_across_subjects=True)
         elif model_name == "body":
             evidence = BodySeries.from_data_frame(row_df)
 
@@ -112,7 +113,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               sd_sd_aa=sd_sd_aa_body,
                               sd_sd_o=sd_sd_o_body,
                               a_mixture_weights=a_mixture_weights,
-                              initial_coordination=initial_coordination)
+                              initial_coordination=initial_coordination,
+                              share_params_across_subjects=True)
 
         elif model_name == "brain_body":
             evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
@@ -129,7 +131,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    sd_sd_aa_body=sd_sd_aa_body,
                                    sd_sd_o_body=sd_sd_o_body,
                                    a_mixture_weights=a_mixture_weights,
-                                   initial_coordination=initial_coordination)
+                                   initial_coordination=initial_coordination,
+                                   share_params_across_subjects=True)
 
         elif model_name == "vocalic_semantic":
             evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
@@ -145,7 +148,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          a_p_semantic_link=a_p_semantic_link,
                                          b_p_semantic_link=b_p_semantic_link,
                                          initial_coordination=initial_coordination,
-                                         share_params=share_params)
+                                         share_params_across_subjects=True)
         elif model_name == "vocalic":
             evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
 
@@ -158,15 +161,13 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
                                  initial_coordination=initial_coordination,
-                                 share_params=share_params)
+                                 share_params_across_subjects=True)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
-        if normalize_observations:
-            evidence.normalize_per_subject()
-
-        # Project observations to the range [0,1]. This does not affect the estimated coordination but reduces
-        # divergences with parameter mean_a0 that has prior with mass close to 0 (per choice).
+        # Data transformation tested and confirmed to work for observations with different values and magnitudes across
+        # features and subjects. We share parameters across subject but fit each feature their own parameters.
+        evidence.normalize_across_subject()
         evidence.standardize()
 
         idata = None
@@ -384,6 +385,26 @@ def str_to_matrix(string: str):
     return np.array(matrix)
 
 
+def matrix_to_size(matrix: np.ndarray, num_rows: int, num_cols: int) -> np.ndarray:
+    if matrix.shape == (1, 1):
+        matrix = matrix.repeat(num_rows, axis=0)
+        matrix = matrix.repeat(num_cols, axis=1)
+    else:
+        raise Exception(f"It's not possible to adjust matrix {matrix} to the dimensions {num_rows} x {num_cols}.")
+
+    return matrix
+
+
+def str_to_array(string: str, size: int):
+    array = np.array(list(map(float, string.split(","))))
+    if array.shape == (1,):
+        array = array.repeat(size)
+    elif array.shape != (size,):
+        raise Exception(f"It's not possible to adjust array {array} to the size ({size},).")
+
+    return array
+
+
 def str_to_features(string: str, complete_list: List[str]):
     if string == "all":
         return complete_list
@@ -400,16 +421,6 @@ def str_to_features(string: str, complete_list: List[str]):
             raise Exception(f"Invalid features: {invalid_features}")
 
         return valid_features
-
-
-def matrix_to_size(matrix: np.ndarray, num_rows: int, num_cols: int) -> np.ndarray:
-    if matrix.shape == (1, 1):
-        matrix = matrix.repeat(num_rows, axis=0)
-        matrix = matrix.repeat(num_cols, axis=1)
-    else:
-        raise Exception(f"It's not possible to adjust matrix {matrix} to the dimensions {num_rows} x {num_cols}.")
-
-    return matrix
 
 
 if __name__ == "__main__":
@@ -462,34 +473,22 @@ if __name__ == "__main__":
                         help="Standard deviation of the prior distribution of sd_uc")
     parser.add_argument("--sd_mean_a0_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_brain_0. If the parameters are "
-                             "different per subject and channels, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_aa_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_brain. If the parameters are "
-                             "different per subject and channels, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_o_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_obs_brain. If the parameters are "
-                             "different per subject and channels, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_mean_a0_body", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of mu_body_0. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x 1) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                        help="Standard deviation of the prior distribution of mu_body_0."),
     parser.add_argument("--sd_sd_aa_body", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_body. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                        help="Standard deviation of the prior distribution of sd_body."),
     parser.add_argument("--sd_sd_o_body", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_obs_body. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                        help="Standard deviation of the prior distribution of sd_obs_body."),
     parser.add_argument("--a_mixture_weights", type=str, required=False, default="1",
                         help="Parameter `a` of the prior distribution of mixture_weights. If the parameters are "
                              "different per subject and their influencers, it is possible to pass a matrix "
@@ -497,55 +496,45 @@ if __name__ == "__main__":
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects.")
     parser.add_argument("--sd_mean_a0_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_vocalic_0. If the parameters are "
-                             "different per subject and features, it is possible to pass a matrix "
-                             "(num_subjects x num_features) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_aa_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_vocalic. If the parameters are "
-                             "different per subject and features, it is possible to pass a matrix "
-                             "(num_subjects x num_features) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_o_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_obs_vocalic. If the parameters are "
-                             "different per subject and features, it is possible to pass a matrix "
-                             "(num_subjects x num_features) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--a_p_semantic_link", type=float, required=False, default="1",
                         help="Parameter `a` of the prior distribution of p_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
                         help="Parameter `b` of the prior distribution of p_link")
-    parser.add_argument("--normalize_observations", type=int, required=False, default=0,
-                        help="Whether we normalize observations per subject to ensure they have 0 mean and 1 "
-                             "standard deviation.")
     parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
                         help="Whether to remove bad brain channels from the observations.")
-    parser.add_argument("--share_params", type=int, required=False, default=0,
-                        help="Whether to share parameters across subjects and features.")
 
     args = parser.parse_args()
 
+    # Brain parameters
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
-    arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
-    arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects,
-                                          len(arg_brain_channels))
-    arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, len(arg_brain_channels))
-    arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, len(arg_brain_channels))
-    arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
-    arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
-    arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
+    dim = len(arg_brain_channels)
+    arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim)
+    arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim)
+    arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim)
     arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
                                            args.num_subjects - 1)
 
-    if bool(args.share_params):
-        arg_sd_mean_a0_vocalic = np.array([float(args.sd_mean_a0_vocalic)])
-        arg_sd_sd_aa_vocalic = np.array([float(args.sd_sd_aa_vocalic)])
-        arg_sd_sd_o_vocalic = np.array([float(args.sd_sd_o_vocalic)])
-    else:
-        rows = args.num_subjects
-        cols = len(arg_vocalic_features)
-        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), rows, cols)
-        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), rows, cols)
-        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), rows, cols)
+    # Body parameters
+    arg_sd_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
+    arg_sd_sd_aa_body = str_to_array(args.sd_sd_aa_body, 1)
+    arg_sd_sd_o_body = str_to_array(args.sd_sd_o_body, 1)
+
+    # Vocalic parameters
+    arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
+    dim = len(arg_vocalic_features)
+    arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim)
+    arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim)
+    arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim)
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
@@ -577,6 +566,4 @@ if __name__ == "__main__":
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
               b_p_semantic_link=args.b_p_semantic_link,
-              normalize_observations=bool(args.normalize_observations),
-              ignore_bad_channels=bool(args.ignore_bad_channels),
-              share_params=bool(args.share_params))
+              ignore_bad_channels=bool(args.ignore_bad_channels))

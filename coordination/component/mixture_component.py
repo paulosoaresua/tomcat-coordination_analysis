@@ -31,10 +31,7 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
 
     mean = (D - P_extended) * C + P_extended
 
-    if sigma.ndim == 1:
-        sd = sigma
-    else:
-        sd = ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None]
+    sd = ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None]
 
     pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended))
     total_logp += pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))).sum()
@@ -65,10 +62,7 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
 
     mean = (D - P_extended) * C + P_extended
 
-    if sigma.ndim == 1:
-        sd = sigma
-    else:
-        sd = ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None]
+    sd = ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None]
 
     pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended))
     total_logp += pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))).sum()
@@ -88,10 +82,7 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
                                         size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
 
-    if sigma.ndim == 1:
-        noise = rng.normal(loc=0, scale=1, size=size) * sigma
-    else:
-        noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
 
     # We sample the influencers in each time step using the mixture weights
     influencers = []
@@ -130,10 +121,7 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
                                            size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
 
-    if sigma.ndim == 1:
-        noise = rng.normal(loc=0, scale=1, size=size) * sigma
-    else:
-        noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
 
     # We sample the influencers in each time step using the mixture weights
     influencers = []
@@ -191,10 +179,10 @@ class MixtureComponentSamples:
 class MixtureComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray, share_params: bool):
-        if share_params:
-            assert sd_mean_a0.ndim == 1
-            assert sd_sd_aa.ndim == 1
+                 sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool):
+        if share_params_across_subjects:
+            assert (dim_value, ) == sd_mean_a0.shape
+            assert (dim_value, ) == sd_sd_aa.shape
         else:
             assert (num_subjects, dim_value) == sd_mean_a0.shape
             assert (num_subjects, dim_value) == sd_sd_aa.shape
@@ -205,7 +193,7 @@ class MixtureComponent:
         self.num_subjects = num_subjects
         self.dim_value = dim_value
         self.self_dependent = self_dependent
-        self.share_params = share_params
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.parameters = MixtureComponentParameters(sd_mean_a0=sd_mean_a0,
                                                      sd_sd_aa=sd_sd_aa,
@@ -233,10 +221,9 @@ class MixtureComponent:
 
     def draw_samples(self, num_series: int, relative_frequency: float,
                      coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
-
-        if self.share_params:
-            assert self.parameters.mean_a0.value.ndim == 1
-            assert self.parameters.sd_aa.value.ndim == 1
+        if self.share_params_across_subjects:
+            assert (self.dim_value, ) == self.parameters.mean_a0.value.shape
+            assert (self.dim_value, ) == self.parameters.sd_aa.value.shape
         else:
             assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
             assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
@@ -263,15 +250,17 @@ class MixtureComponent:
                                  size=(num_series, num_time_steps_in_cpn_scale)))
         influencers = np.array(influencers).swapaxes(0, 1)
 
-        if self.share_params:
-            sd = self.parameters.sd_aa.value
+        if self.share_params_across_subjects:
+            # Broadcasted across samples, subjects and time
+            sd = self.parameters.sd_aa.value[None, None, :]
         else:
             sd = self.parameters.sd_aa.value[None, :]
 
         for t in range(num_time_steps_in_cpn_scale):
             if t == 0:
-                if self.share_params:
-                    mean = self.parameters.mean_a0.value
+                if self.share_params_across_subjects:
+                    # Broadcasted across samples, subjects
+                    mean = self.parameters.mean_a0.value[None, None, :]
                 else:
                     mean = self.parameters.mean_a0.value[None, :]
 
@@ -285,9 +274,15 @@ class MixtureComponent:
                 D = P[:, influencers[..., t]][0]
 
                 if self.self_dependent:
-                    mean = (D - P) * C + P
+                    S = P
                 else:
-                    mean = (D - self.parameters.mean_a0.value[None, :]) * C + self.parameters.mean_a0.value[None, :]
+                    if self.share_params_across_subjects:
+                        # Broadcasted across samples and subjects
+                        S = self.parameters.mean_a0.value[None, None, :]
+                    else:
+                        S = self.parameters.mean_a0.value[None, :]
+
+                mean = (D - S) * C + S
 
                 samples.values[..., t] = norm(loc=mean, scale=sd).rvs()
                 samples.time_steps_in_coordination_scale[..., t] = time_in_coord_scale
@@ -297,8 +292,8 @@ class MixtureComponent:
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
                           observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None) -> Any:
-        if self.share_params:
-            param_size = 1
+        if self.share_params_across_subjects:
+            param_size = self.dim_value
         else:
             param_size = (self.num_subjects, self.dim_value)
 
@@ -309,6 +304,10 @@ class MixtureComponent:
         if sd_aa is None:
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                                   size=param_size, observed=self.parameters.sd_aa.value)
+
+        if self.share_params_across_subjects:
+            mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
+            sd_aa = sd_aa[None, :].repeat(self.num_subjects, axis=0)
 
         if mixture_weights is None:
             mixture_weights = pm.Dirichlet(name=self.mixture_weights_name,

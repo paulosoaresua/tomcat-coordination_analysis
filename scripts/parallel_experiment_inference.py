@@ -87,7 +87,6 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
                                      f'--a_p_semantic_link={a_p_semantic_link} ' \
                                      f'--b_p_semantic_link={b_p_semantic_link} ' \
-                                     f'--normalize_observations={normalize_observations} ' \
                                      f'--ignore_bad_channels={ignore_bad_channels}'
 
         tmux.create_window(tmux_window_name)
@@ -145,34 +144,22 @@ if __name__ == "__main__":
                         help="Standard deviation of the prior distribution of sd_uc")
     parser.add_argument("--sd_mean_a0_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_brain_0. If the parameters are "
-                             "different per subject and channels, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_aa_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_brain. If the parameters are "
-                             "different per subject and channels, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_o_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_obs_brain. If the parameters are "
-                             "different per subject and channels, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_mean_a0_body", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of mu_body_0. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x 1) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                        help="Standard deviation of the prior distribution of mu_body_0."),
     parser.add_argument("--sd_sd_aa_body", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_body. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                        help="Standard deviation of the prior distribution of sd_body."),
     parser.add_argument("--sd_sd_o_body", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_obs_body. If the parameters are "
-                             "different per subjects, it is possible to pass a matrix "
-                             "(num_subjects x num_channels) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                        help="Standard deviation of the prior distribution of sd_obs_body."),
     parser.add_argument("--a_mixture_weights", type=str, required=False, default="1",
                         help="Parameter `a` of the prior distribution of mixture_weights. If the parameters are "
                              "different per subject and their influencers, it is possible to pass a matrix "
@@ -180,26 +167,20 @@ if __name__ == "__main__":
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects.")
     parser.add_argument("--sd_mean_a0_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_vocalic_0. If the parameters are "
-                             "different per subject and features, it is possible to pass a matrix "
-                             "(num_subjects x num_features) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_aa_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_vocalic. If the parameters are "
-                             "different per subject and features, it is possible to pass a matrix "
-                             "(num_subjects x num_features) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_sd_o_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of sd_obs_vocalic. If the parameters are "
-                             "different per subject and features, it is possible to pass a matrix "
-                             "(num_subjects x num_features) in MATLAB style where rows are split by semi-colons "
-                             "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects and 2 channels.")
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--a_p_semantic_link", type=float, required=False, default=1,
                         help="Parameter `a` of the prior distribution of p_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default=1,
                         help="Parameter `b` of the prior distribution of p_link")
-    parser.add_argument("--normalize_observations", type=int, required=False, default=0,
-                        help="Whether we normalize observations per subject to ensure they have 0 mean and 1 "
-                             "standard deviation.")
     parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
                         help="Whether to remove bad brain channels from the observations.")
 

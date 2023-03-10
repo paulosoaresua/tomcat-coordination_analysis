@@ -16,7 +16,6 @@ from coordination.component.observation_component import SerializedObservationCo
     SerializedObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
-
 VOCALIC_FEATURES = [
     "pitch",
     "intensity",
@@ -90,9 +89,18 @@ class VocalicSeries:
 
         for subject in all_subjects:
             obs_per_subject = self.observation[:, self.subjects_in_time == subject]
-            mean = obs_per_subject.mean()
-            std = obs_per_subject.std()
+            mean = obs_per_subject.mean(axis=1)[:, None]
+            std = obs_per_subject.std(axis=1)[:, None]
             self.observation[:, self.subjects_in_time == subject] = (obs_per_subject - mean) / std
+
+    def normalize_across_subject(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per feature.
+        """
+
+        mean = self.observation.mean(axis=1)[:, None]
+        std = self.observation.std(axis=1)[:, None]
+        self.observation = (self.observation - mean) / std
 
     def plot_observations(self, axs: List[Any]):
         # One plot per channel
@@ -231,11 +239,11 @@ class VocalicModel:
 
     def __init__(self, num_subjects: int, vocalic_features: List[str],
                  self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_vocalic: np.ndarray,
-                 sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, share_params: bool,
+                 sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, share_params_across_subjects: bool,
                  initial_coordination: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.share_params = share_params
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -248,12 +256,12 @@ class VocalicModel:
                                                       self_dependent=self_dependent,
                                                       sd_mean_a0=sd_mean_a0_vocalic,
                                                       sd_sd_aa=sd_sd_aa_vocalic,
-                                                      share_params=share_params)
+                                                      share_params_across_subjects=share_params_across_subjects)
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
-                                                              share_params=share_params)
+                                                              share_params_across_subjects=share_params_across_subjects)
 
     @property
     def parameter_names(self) -> List[str]:
