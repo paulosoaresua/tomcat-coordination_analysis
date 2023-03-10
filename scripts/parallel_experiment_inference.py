@@ -27,7 +27,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
                        sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
                        sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
-                       normalize_observations: int, ignore_bad_channels: int):
+                       ignore_bad_channels: int):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -217,5 +217,4 @@ if __name__ == "__main__":
                        sd_sd_o_vocalic=args.sd_sd_o_vocalic,
                        a_p_semantic_link=args.a_p_semantic_link,
                        b_p_semantic_link=args.b_p_semantic_link,
-                       normalize_observations=args.normalize_observations,
                        ignore_bad_channels=args.ignore_bad_channels)
