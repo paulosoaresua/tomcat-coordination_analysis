@@ -15,6 +15,29 @@ from coordination.component.mixture_component import MixtureComponent, MixtureCo
 from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
+BRAIN_CHANNELS = [
+    "s1-d1",
+    "s1-d2",
+    "s2-d1",
+    "s2-d3",
+    "s3-d1",
+    "s3-d3",
+    "s3-d4",
+    "s4-d2",
+    "s4-d4",
+    "s4-d5",
+    "s5-d3",
+    "s5-d4",
+    "s5-d6",
+    "s6-d4",
+    "s6-d6",
+    "s6-d7",
+    "s7-d5",
+    "s7-d7",
+    "s8-d6",
+    "s8-d7"
+]
+
 
 class BrainSamples:
 
@@ -71,6 +94,15 @@ class BrainSeries:
         """
         mean = self.observation.mean(axis=-1)[..., None]
         std = self.observation.std(axis=-1)[..., None]
+        self.observation = (self.observation - mean) / std
+
+    def normalize_across_subject(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per feature.
+        """
+
+        mean = self.observation.mean(axis=(0, 2))[None, :, None]
+        std = self.observation.std(axis=(0, 2))[None, :, None]
         self.observation = (self.observation - mean) / std
 
     def plot_observations(self, axs: List[Any]):
@@ -173,9 +205,11 @@ class BrainModel:
 
     def __init__(self, subjects: List[str], brain_channels: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
-                 a_mixture_weights: np.ndarray, initial_coordination: Optional[float] = None):
+                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
+                 initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -188,8 +222,13 @@ class BrainModel:
                                                  self_dependent=self_dependent,
                                                  sd_mean_a0=sd_mean_a0,
                                                  sd_sd_aa=sd_sd_aa,
-                                                 a_mixture_weights=a_mixture_weights)
-        self.obs_brain_cpn = ObservationComponent("obs_brain", len(subjects), len(brain_channels), sd_sd_o=sd_sd_o)
+                                                 a_mixture_weights=a_mixture_weights,
+                                                 share_params_across_subjects=share_params_across_subjects)
+        self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
+                                                  num_subjects=len(subjects),
+                                                  dim_value=len(brain_channels),
+                                                  sd_sd_o=sd_sd_o,
+                                                  share_params_across_subjects=share_params_across_subjects)
 
     @property
     def parameter_names(self) -> List[str]:

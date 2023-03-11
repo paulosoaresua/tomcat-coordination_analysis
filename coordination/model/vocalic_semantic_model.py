@@ -49,18 +49,13 @@ class VocalicSemanticSeries:
         )
 
     def standardize(self):
-        """
-        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
-        proximity relativity (how close measurements from different subjects are) which is important for the
-        coordination model.
-        """
         self.vocalic.standardize()
 
     def normalize_per_subject(self):
-        """
-        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
-        """
         self.vocalic.normalize_per_subject()
+
+    def normalize_across_subject(self):
+        self.vocalic.normalize_across_subject()
 
     @property
     def num_time_steps_in_semantic_link_scale(self) -> int:
@@ -88,21 +83,32 @@ class VocalicSemanticModel:
     def __init__(self, num_subjects: int, vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
                  sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
+                 share_params_across_subjects: bool,
                  initial_coordination: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
-        self.latent_vocalic_cpn = SerializedComponent("latent_vocalic", num_subjects, len(vocalic_features),
-                                                      self_dependent,
-                                                      sd_mean_a0=sd_mean_a0_vocalic, sd_sd_aa=sd_sd_aa_vocalic)
-        self.semantic_link_cpn = LinkComponent("obs_semantic_link", a_p=a_p_semantic_link, b_p=b_p_semantic_link)
-        self.obs_vocalic_cpn = SerializedObservationComponent("obs_vocalic", num_subjects, len(vocalic_features),
-                                                              sd_sd_o=sd_sd_o_vocalic)
+        self.latent_vocalic_cpn = SerializedComponent(uuid="latent_vocalic",
+                                                      num_subjects=num_subjects,
+                                                      dim_value=len(vocalic_features),
+                                                      self_dependent=self_dependent,
+                                                      sd_mean_a0=sd_mean_a0_vocalic,
+                                                      sd_sd_aa=sd_sd_aa_vocalic,
+                                                      share_params_across_subjects=share_params_across_subjects)
+        self.semantic_link_cpn = LinkComponent("obs_semantic_link",
+                                               a_p=a_p_semantic_link,
+                                               b_p=b_p_semantic_link)
+        self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
+                                                              num_subjects=num_subjects,
+                                                              dim_value=len(vocalic_features),
+                                                              sd_sd_o=sd_sd_o_vocalic,
+                                                              share_params_across_subjects=share_params_across_subjects)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -191,7 +197,8 @@ class VocalicSemanticModel:
 
         return pymc_model, idata
 
-    def posterior_predictive(self, evidence: VocalicSemanticSeries, trace: az.InferenceData, seed: Optional[int] = None):
+    def posterior_predictive(self, evidence: VocalicSemanticSeries, trace: az.InferenceData,
+                             seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
             idata = pm.sample_posterior_predictive(trace=trace, random_seed=seed)

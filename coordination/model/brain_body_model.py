@@ -60,11 +60,12 @@ class BrainBodySeries:
         self.body.standardize()
 
     def normalize_per_subject(self):
-        """
-        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
-        """
         self.brain.normalize_per_subject()
         self.body.normalize_per_subject()
+
+    def normalize_across_subject(self):
+        self.brain.normalize_across_subject()
+        self.body.normalize_across_subject()
 
 
 class BrainBodyPosteriorSamples:
@@ -94,10 +95,12 @@ class BrainBodyModel:
     def __init__(self, subjects: List[str], brain_channels: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
                  sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
-                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray, initial_coordination: Optional[float] = None):
+                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
+                 initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.num_body_features = 1
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -110,17 +113,26 @@ class BrainBodyModel:
                                                  self_dependent=self_dependent,
                                                  sd_mean_a0=sd_mean_a0_brain,
                                                  sd_sd_aa=sd_sd_aa_brain,
-                                                 a_mixture_weights=a_mixture_weights)
+                                                 a_mixture_weights=a_mixture_weights,
+                                                 share_params_across_subjects=share_params_across_subjects)
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
                                                 self_dependent=self_dependent,
                                                 sd_mean_a0=sd_mean_a0_body,
                                                 sd_sd_aa=sd_sd_aa_body,
-                                                a_mixture_weights=a_mixture_weights)
-        self.obs_brain_cpn = ObservationComponent("obs_brain", len(subjects), len(brain_channels),
-                                                  sd_sd_o=sd_sd_o_brain)
-        self.obs_body_cpn = ObservationComponent("obs_body", len(subjects), 1, sd_sd_o=sd_sd_o_body)
+                                                a_mixture_weights=a_mixture_weights,
+                                                share_params_across_subjects=share_params_across_subjects)
+        self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
+                                                  num_subjects=len(subjects),
+                                                  dim_value=len(brain_channels),
+                                                  sd_sd_o=sd_sd_o_brain,
+                                                  share_params_across_subjects=share_params_across_subjects)
+        self.obs_body_cpn = ObservationComponent(uuid="obs_body",
+                                                 num_subjects=len(subjects),
+                                                 dim_value=self.num_body_features,
+                                                 sd_sd_o=sd_sd_o_body,
+                                                 share_params_across_subjects=share_params_across_subjects)
 
     @property
     def parameter_names(self) -> List[str]:

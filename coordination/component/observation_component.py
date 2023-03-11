@@ -26,43 +26,65 @@ class ObservationComponentSamples:
 
 class ObservationComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray):
-        assert (num_subjects, dim_value) == sd_sd_o.shape
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray, share_params_across_subjects: bool):
+        if share_params_across_subjects:
+            assert (dim_value, ) == sd_sd_o.shape
+        else:
+            assert (num_subjects, dim_value) == sd_sd_o.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
     @property
     def parameter_names(self) -> List[str]:
         return [
-            self._sd_o_name
+            self.sd_o_name
         ]
 
     @property
-    def _sd_o_name(self) -> str:
+    def sd_o_name(self) -> str:
         return f"sd_o_{self.uuid}"
 
     def draw_samples(self, latent_component: np.ndarray, seed: Optional[int] = None) -> ObservationComponentSamples:
-        assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
+        if self.share_params_across_subjects:
+            assert (self.dim_value, 1) == self.parameters.sd_o.value.shape
+        else:
+            assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
 
         samples = ObservationComponentSamples()
 
-        samples.values = norm(loc=latent_component, scale=self.parameters.sd_o.value[None, :, :, None]).rvs(
-            size=latent_component.shape)
+        # Dimension: (samples, subjects, features, time)
+        if self.share_params_across_subjects:
+            # Broadcasted across samples, subjects and time
+            sd = self.parameters.sd_o.value[None, None, :, None]
+        else:
+            # Broadcasted across samples and time
+            sd = self.parameters.sd_o.value[None, :, :, None]
+
+        samples.values = norm(loc=latent_component, scale=sd).rvs(size=latent_component.shape)
 
         return samples
 
     def update_pymc_model(self, latent_component: Any, subject_dimension: str, feature_dimension: str,
                           time_dimension: str, observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=self._sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                             size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+        if self.share_params_across_subjects:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=self.dim_value, observed=self.parameters.sd_o.value)
+            sd = sd_o[None, :, None]
+        else:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+            sd = sd_o[:, :, None]
 
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component, sigma=sd_o[:, :, None],
+        observation_component = pm.Normal(name=self.uuid,
+                                          mu=latent_component,
+                                          sigma=sd,
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
 
@@ -77,12 +99,16 @@ class SerializedObservationComponentSamples:
 
 class SerializedObservationComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray):
-        assert (num_subjects, dim_value) == sd_sd_o.shape
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray, share_params_across_subjects: bool):
+        if share_params_across_subjects:
+            assert (dim_value, ) == sd_sd_o.shape
+        else:
+            assert (num_subjects, dim_value) == sd_sd_o.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
+        self.share_params_across_subjects = share_params_across_subjects
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
@@ -98,25 +124,41 @@ class SerializedObservationComponent:
 
     def draw_samples(self, latent_component: List[np.ndarray],
                      subjects: List[np.ndarray], seed: Optional[int] = None) -> SerializedObservationComponentSamples:
-        assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
+        if self.share_params_across_subjects:
+            assert (self.dim_value, ) == self.parameters.sd_o.value.shape
+        else:
+            assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
 
         samples = SerializedObservationComponentSamples()
 
-        for s in range(len(latent_component)):
-            samples.values.append(norm(loc=latent_component[s], scale=self.parameters.sd_o.value[subjects[s]].T).rvs(
-                size=latent_component[s].shape))
+        for i in range(len(latent_component)):
+            if self.share_params_across_subjects:
+                # Broadcasted across time
+                sd = self.parameters.sd_o.value[:, None]
+            else:
+                sd = self.parameters.sd_o.value[subjects[i]].T
+
+            samples.values.append(norm(loc=latent_component[i], scale=sd).rvs(size=latent_component[i].shape))
 
         return samples
 
     def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
                           time_dimension: str, observed_values: Any) -> Any:
-        sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                             size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+        if self.share_params_across_subjects:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=self.dim_value, observed=self.parameters.sd_o.value)
+            # Broadcasted across time
+            sd = sd_o[:, None]
+        else:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+            sd = sd_o[ptt.constant(subjects)].transpose()
 
-        observation_component = pm.Normal(name=self.uuid, mu=latent_component,
-                                          sigma=sd_o[ptt.constant(subjects)].transpose(),
+        observation_component = pm.Normal(name=self.uuid,
+                                          mu=latent_component,
+                                          sigma=sd,
                                           dims=[feature_dimension, time_dimension],
                                           observed=observed_values)
 
