@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pymc as pm
@@ -26,9 +26,10 @@ class ObservationComponentSamples:
 
 class ObservationComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray, share_params_across_subjects: bool):
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray,
+                 share_params_across_subjects: bool):
         if share_params_across_subjects:
-            assert (dim_value, ) == sd_sd_o.shape
+            assert (dim_value,) == sd_sd_o.shape
         else:
             assert (num_subjects, dim_value) == sd_sd_o.shape
 
@@ -99,9 +100,14 @@ class SerializedObservationComponentSamples:
 
 class SerializedObservationComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray, share_params_across_subjects: bool):
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray,
+                 share_params_across_subjects: bool, share_params_across_genders: bool):
+        assert not (share_params_across_subjects and share_params_across_genders)
+
         if share_params_across_subjects:
-            assert (dim_value, ) == sd_sd_o.shape
+            assert (dim_value,) == sd_sd_o.shape
+        elif share_params_across_genders:
+            assert (2, dim_value) == sd_sd_o.shape
         else:
             assert (num_subjects, dim_value) == sd_sd_o.shape
 
@@ -109,6 +115,7 @@ class SerializedObservationComponent:
         self.num_subjects = num_subjects
         self.dim_value = dim_value
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_genders = share_params_across_genders
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
@@ -123,9 +130,12 @@ class SerializedObservationComponent:
         return f"sd_o_{self.uuid}"
 
     def draw_samples(self, latent_component: List[np.ndarray],
-                     subjects: List[np.ndarray], seed: Optional[int] = None) -> SerializedObservationComponentSamples:
+                     subjects: List[np.ndarray], gender_map: Dict[int, int],
+                     seed: Optional[int] = None) -> SerializedObservationComponentSamples:
         if self.share_params_across_subjects:
-            assert (self.dim_value, ) == self.parameters.sd_o.value.shape
+            assert (self.dim_value,) == self.parameters.sd_o.value.shape
+        elif self.share_params_across_genders:
+            assert (2, self.dim_value) == self.parameters.sd_o.value.shape
         else:
             assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
 
@@ -137,6 +147,9 @@ class SerializedObservationComponent:
             if self.share_params_across_subjects:
                 # Broadcasted across time
                 sd = self.parameters.sd_o.value[:, None]
+            elif self.share_params_across_genders:
+                genders = np.array([gender_map[subject] for subject in subjects[i]], dtype=int)
+                sd = self.parameters.sd_o.value[genders].T
             else:
                 sd = self.parameters.sd_o.value[subjects[i]].T
 
@@ -144,17 +157,23 @@ class SerializedObservationComponent:
 
         return samples
 
-    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
-                          time_dimension: str, observed_values: Any) -> Any:
+    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, gender_map: Dict[int, int],
+                          feature_dimension: str, time_dimension: str, observed_values: Any) -> Any:
         if self.share_params_across_subjects:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                                  size=self.dim_value, observed=self.parameters.sd_o.value)
             # Broadcasted across time
             sd = sd_o[:, None]
+        elif self.share_params_across_genders:
+            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
+                                 size=(2, self.dim_value), observed=self.parameters.sd_o.value)
+
+            genders = np.array([gender_map[subject] for subject in subjects], dtype=int)
+            sd = sd_o[genders].transpose()
         else:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                                  size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
-            sd = sd_o[ptt.constant(subjects)].transpose()
+            sd = sd_o[subjects].transpose()
 
         observation_component = pm.Normal(name=self.uuid,
                                           mu=latent_component,

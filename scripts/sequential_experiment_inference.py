@@ -15,6 +15,7 @@ import pandas as pd
 
 from tqdm import tqdm
 
+from coordination.common.utils import set_random_seed
 from coordination.model.brain_model import BrainModel, BrainSeries, BRAIN_CHANNELS
 from coordination.model.body_model import BodyModel, BodySeries
 from coordination.model.brain_body_model import BrainBodyModel, BrainBodySeries
@@ -42,10 +43,13 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
               a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              ignore_bad_channels: bool):
+              ignore_bad_channels: bool, share_params_across_subjects: bool, share_params_across_genders: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
+
+    if share_params_across_subjects and share_params_across_genders:
+        raise Exception("Parameters can be shared only across subjects or genders, not both.")
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
@@ -85,6 +89,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             logger.info(f"{len(removed_channels)} brain channels removed from the list. They are {removed_channels}")
 
         # Create evidence object from a data frame and associated model
+        # The vocalic model samples PNA genders uniformly. So we set the seed here for reproducibility.
+        set_random_seed(seed)
         if model_name == "brain":
             # We ignore channels globally instead of in the evidence object so we can adjust the prior
             # parameters and log that information.
@@ -152,6 +158,16 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         elif model_name == "vocalic":
             evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
 
+            if share_params_across_genders and evidence.num_genders < 2:
+                # All subjects have the same gender, so sharing parameters across gender is the same as sharing them
+                # across subjects since we won't be able to infer parameters for the missing gender.
+                share_params_across_genders = False
+                share_params_across_subjects = True
+                gender = list(evidence.gender_map.values())[0]
+                sd_mean_a0_vocalic = sd_mean_a0_vocalic[gender]
+                sd_sd_aa_vocalic = sd_sd_aa_vocalic[gender]
+                sd_sd_o_vocalic = sd_sd_o_vocalic[gender]
+
             model = VocalicModel(num_subjects=num_subjects,
                                  vocalic_features=vocalic_features,
                                  self_dependent=self_dependent,
@@ -161,7 +177,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
                                  initial_coordination=initial_coordination,
-                                 share_params_across_subjects=True)
+                                 share_params_across_subjects=share_params_across_subjects,
+                                 share_params_across_genders=share_params_across_genders)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -326,8 +343,13 @@ def _plot_vocalic_predictive_plots(out_dir: str,
 
         fig = plt.figure(figsize=(15, 8))
         plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-        plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
-                 markersize=5)
+
+        if isinstance(model, VocalicSemanticModel):
+            plt.plot(np.arange(T), single_evidence_series.vocalic.observation[j], color="tab:pink", alpha=1, marker="o",
+                     markersize=5)
+        else:
+            plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
+                     markersize=5)
         plt.title(f"Observed {vocalic_feature}")
         plt.xlabel(f"Time Step")
         plt.ylabel(vocalic_feature)
@@ -346,7 +368,10 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
 
     if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
         # Mark points with vocalic
-        time_points = evidence.time_steps_in_coordination_scale
+        if isinstance(model, VocalicModel):
+            time_points = evidence.time_steps_in_coordination_scale
+        else:
+            time_points = evidence.vocalic.time_steps_in_coordination_scale
         plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10,
                     zorder=4)
 
@@ -512,6 +537,11 @@ if __name__ == "__main__":
                         help="Parameter `b` of the prior distribution of p_link")
     parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
                         help="Whether to remove bad brain channels from the observations.")
+    parser.add_argument("--share_params_across_subjects", type=int, required=False, default=0,
+                        help="Whether to fit one parameter for all subjects.")
+    parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
+                             "only the parameters of that gender will be estimated.")
 
     args = parser.parse_args()
 
@@ -566,4 +596,6 @@ if __name__ == "__main__":
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
               a_p_semantic_link=args.a_p_semantic_link,
               b_p_semantic_link=args.b_p_semantic_link,
-              ignore_bad_channels=bool(args.ignore_bad_channels))
+              ignore_bad_channels=bool(args.ignore_bad_channels),
+              share_params_across_subjects=bool(args.share_params_across_subjects),
+              share_params_across_genders=bool(args.share_params_across_genders))
