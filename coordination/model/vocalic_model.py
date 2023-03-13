@@ -206,14 +206,14 @@ class VocalicSeries:
             uuid=evidence_df["experiment_id"].values[0],
             features=vocalic_features,
             num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
-            subjects_in_time=np.array(literal_eval(evidence_df["vocalic_subjects"].values[0])),
+            subjects_in_time=np.array(literal_eval(evidence_df["vocalic_subjects"].values[0]), dtype=int),
             observation=obs_vocalic,
             previous_time_same_subject=np.array(
-                literal_eval(evidence_df["vocalic_previous_time_same_subject"].values[0])),
+                literal_eval(evidence_df["vocalic_previous_time_same_subject"].values[0]), dtype=int),
             previous_time_diff_subject=np.array(
-                literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0])),
+                literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0]), dtype=int),
             time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0])),
+                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0]), dtype=int),
             gender_map=gender_map
         )
 

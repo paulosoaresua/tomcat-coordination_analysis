@@ -103,7 +103,7 @@ class BodySeries:
             num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
             observation=obs_body,
             time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["body_motion_energy_time_steps_in_coordination_scale"].values[0])))
+                literal_eval(evidence_df["body_motion_energy_time_steps_in_coordination_scale"].values[0]), dtype=int))
 
     def standardize(self):
         """

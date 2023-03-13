@@ -167,7 +167,7 @@ class BrainSeries:
             num_time_steps_in_coordination_scale=evidence_df["num_time_steps_in_coordination_scale"].values[0],
             observation=obs_brain,
             time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["nirs_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(evidence_df["nirs_time_steps_in_coordination_scale"].values[0]), dtype=int)
         )
 
     @property

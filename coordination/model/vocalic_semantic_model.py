@@ -53,7 +53,8 @@ class VocalicSemanticSeries:
             uuid=vocalic_series.uuid,
             vocalic_series=vocalic_series,
             semantic_link_time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(evidence_df["conversational_semantic_link_time_steps_in_coordination_scale"].values[0]),
+                dtype=int)
         )
 
     def standardize(self):
