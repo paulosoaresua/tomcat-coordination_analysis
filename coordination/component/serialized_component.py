@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pymc as pm
@@ -157,6 +157,9 @@ class SerializedComponentSamples:
         # For each time step in the component's scale, it contains the time step in the coordination scale
         self.time_steps_in_coordination_scale: List[np.ndarray] = []
 
+        # Map between subjects and their genders
+        self.gender_map: Dict[int, int] = {}
+
     @property
     def num_time_steps(self):
         if len(self.values) == 0:
@@ -176,10 +179,16 @@ class SerializedComponentSamples:
 class SerializedComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray, share_params_across_subjects: bool):
+                 sd_sd_aa: np.ndarray, share_params_across_subjects: bool, share_params_across_genders: bool):
+        assert not (share_params_across_subjects and share_params_across_genders)
+
         if share_params_across_subjects:
             assert (dim_value, ) == sd_mean_a0.shape
             assert (dim_value, ) == sd_sd_aa.shape
+        elif share_params_across_genders:
+            # 2 genders: Male or Female
+            assert (2, dim_value) == sd_mean_a0.shape
+            assert (2, dim_value) == sd_sd_aa.shape
         else:
             assert (num_subjects, dim_value) == sd_mean_a0.shape
             assert (num_subjects, dim_value) == sd_sd_aa.shape
@@ -189,6 +198,7 @@ class SerializedComponent:
         self.dim_value = dim_value
         self.self_dependent = self_dependent
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_genders = share_params_across_genders
 
         self.parameters = SerializedComponentParameters(sd_mean_a0, sd_sd_aa)
 
@@ -214,6 +224,9 @@ class SerializedComponent:
         if self.share_params_across_subjects:
             assert (self.dim_value,) == self.parameters.mean_a0.value.shape
             assert (self.dim_value,) == self.parameters.sd_aa.value.shape
+        elif self.share_params_across_genders:
+            assert (2, self.dim_value) == self.parameters.mean_a0.value.shape
+            assert (2, self.dim_value) == self.parameters.sd_aa.value.shape
         else:
             assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
             assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
@@ -223,8 +236,6 @@ class SerializedComponent:
         set_random_seed(seed)
 
         samples = SerializedComponentSamples()
-        sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
-                                                     can_repeat_subject)
 
         if self.share_params_across_subjects:
             mean_a0 = self.parameters.mean_a0.value[None, :].repeat(self.num_subjects, axis=0)
@@ -234,9 +245,14 @@ class SerializedComponent:
             sd_aa = self.parameters.sd_aa.value
 
         for s in range(num_series):
+            sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
+                                                         can_repeat_subject)
             samples.subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
             samples.time_steps_in_coordination_scale.append(
                 np.array([t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int))
+
+            # Make it simple for gender. Even subjects are Male and odd Female.
+            samples.gender_map = {idx: idx % 2 for idx in range(self.num_subjects)}
 
             num_time_steps_in_cpn_scale = len(samples.time_steps_in_coordination_scale[s])
 
@@ -261,12 +277,16 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
+                curr_subject = samples.subjects[s][t]
+                if self.share_params_across_genders:
+                    curr_subject = samples.gender_map[curr_subject]
+
                 if samples.prev_time_same_subject[s][t] < 0:
                     # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
                     # t_0 is the initial utterance of one of the subjects only.
 
-                    mean = mean_a0[samples.subjects[s][t]]
-                    sd = sd_aa[samples.subjects[s][t]]
+                    mean = mean_a0[curr_subject]
+                    sd = sd_aa[curr_subject]
 
                     samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
                 else:
@@ -281,12 +301,13 @@ class SerializedComponent:
                         # When there's no self dependency, the component either depends on the previous value of another subject,
                         # or it is samples around a fixed mean.
                         prev_same_mask = 1
-                        S = mean_a0[samples.subjects[s][t]]
+                        S = mean_a0[curr_subject]
 
                     prev_diff_mask = (samples.prev_time_diff_subject[s][t] != -1).astype(int)
                     D = samples.values[s][..., samples.prev_time_diff_subject[s][t]]
 
                     mean = (D - S * prev_same_mask) * C * prev_diff_mask + S * prev_same_mask
+                    sd = sd_aa[curr_subject]
 
                     samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
 
@@ -324,7 +345,7 @@ class SerializedComponent:
 
     def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
-                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray,
+                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
 
         if self.share_params_across_subjects:
@@ -336,6 +357,17 @@ class SerializedComponent:
             # Resulting dimension: (features, 1). The last dimension will be broadcasted across time.
             mean = mean_a0[:, None]
             sd = sd_aa[:, None]
+        elif self.share_params_across_genders:
+            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+                                    size=(2, self.dim_value), observed=self.parameters.mean_a0.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=(2, self.dim_value), observed=self.parameters.sd_aa.value)
+
+            # One mean and sd per time step matching their subjects' genders. The indexing below results in a matrix of
+            # dimensions: (features, time)
+            genders = np.array([gender_map[subject] for subject in subjects], dtype=int)
+            mean = mean_a0[genders].transpose()
+            sd = sd_aa[genders].transpose()
         else:
             mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
                                     size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)

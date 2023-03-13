@@ -27,7 +27,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
                        sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
                        sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
-                       ignore_bad_channels: int):
+                       ignore_bad_channels: int, share_params_across_subjects: int, share_params_across_genders: int):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -87,7 +87,9 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
                                      f'--a_p_semantic_link={a_p_semantic_link} ' \
                                      f'--b_p_semantic_link={b_p_semantic_link} ' \
-                                     f'--ignore_bad_channels={ignore_bad_channels}'
+                                     f'--ignore_bad_channels={ignore_bad_channels} ' \
+                                     f'--share_params_across_subjects={share_params_across_subjects} ' \
+                                     f'--share_params_across_genders={share_params_across_genders}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
@@ -183,6 +185,11 @@ if __name__ == "__main__":
                         help="Parameter `b` of the prior distribution of p_link")
     parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
                         help="Whether to remove bad brain channels from the observations.")
+    parser.add_argument("--share_params_across_subjects", type=int, required=False, default=0,
+                        help="Whether to fit one parameter for all subjects.")
+    parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
+                             "only the parameters of that gender will be estimated.")
 
     args = parser.parse_args()
 
@@ -217,4 +224,6 @@ if __name__ == "__main__":
                        sd_sd_o_vocalic=args.sd_sd_o_vocalic,
                        a_p_semantic_link=args.a_p_semantic_link,
                        b_p_semantic_link=args.b_p_semantic_link,
-                       ignore_bad_channels=args.ignore_bad_channels)
+                       ignore_bad_channels=args.ignore_bad_channels,
+                       share_params_across_subjects=args.share_params_across_subjects,
+                       share_params_across_genders=args.share_params_across_genders)

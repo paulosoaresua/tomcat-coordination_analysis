@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
@@ -37,7 +37,8 @@ class VocalicSeries:
 
     def __init__(self, uuid: str, features: List[str], num_time_steps_in_coordination_scale: int,
                  subjects_in_time: np.ndarray, observation: np.ndarray, previous_time_same_subject: np.ndarray,
-                 previous_time_diff_subject: np.ndarray, time_steps_in_coordination_scale: np.ndarray):
+                 previous_time_diff_subject: np.ndarray, time_steps_in_coordination_scale: np.ndarray,
+                 gender_map: Dict[int, int]):
         self.uuid = uuid
         self.features = features
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
@@ -46,6 +47,11 @@ class VocalicSeries:
         self.previous_time_same_subject = previous_time_same_subject
         self.previous_time_diff_subject = previous_time_diff_subject
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.gender_map = gender_map
+
+    @property
+    def num_genders(self) -> int:
+        return len(set(list(self.gender_map.values())))
 
     def chop(self, min_time_step: int, max_time_step: int):
         """
@@ -186,6 +192,16 @@ class VocalicSeries:
         # Swap axes such that the first dimension represents the different subjects and the second the vocalic features
         obs_vocalic = np.array(obs_vocalic)
 
+        gender_map = {}
+        gender_cols = ["red_gender", "green_gender", "blue_gender"]
+        for i, gender in enumerate(evidence_df[gender_cols].values[0]):
+            if gender == "M":
+                gender_map[i] = 0
+            elif gender == "F":
+                gender_map[i] = 1
+            else:
+                gender_map[i] = np.random.choice([0, 1])
+
         return cls(
             uuid=evidence_df["experiment_id"].values[0],
             features=vocalic_features,
@@ -197,7 +213,8 @@ class VocalicSeries:
             previous_time_diff_subject=np.array(
                 literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0])),
             time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0]))
+                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0])),
+            gender_map=gender_map
         )
 
     @property
@@ -240,10 +257,15 @@ class VocalicModel:
     def __init__(self, num_subjects: int, vocalic_features: List[str],
                  self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_vocalic: np.ndarray,
                  sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, share_params_across_subjects: bool,
-                 initial_coordination: Optional[float] = None):
+                 share_params_across_genders: bool, initial_coordination: Optional[float] = None):
+
+        # Either one or the other
+        assert not (share_params_across_genders and share_params_across_subjects)
+
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_genders = share_params_across_genders
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -256,12 +278,14 @@ class VocalicModel:
                                                       self_dependent=self_dependent,
                                                       sd_mean_a0=sd_mean_a0_vocalic,
                                                       sd_sd_aa=sd_sd_aa_vocalic,
-                                                      share_params_across_subjects=share_params_across_subjects)
+                                                      share_params_across_subjects=share_params_across_subjects,
+                                                      share_params_across_genders=share_params_across_genders)
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
-                                                              share_params_across_subjects=share_params_across_subjects)
+                                                              share_params_across_subjects=share_params_across_subjects,
+                                                              share_params_across_genders=share_params_across_genders)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -283,7 +307,8 @@ class VocalicModel:
                                                                       coordination=coordination_samples.coordination,
                                                                       can_repeat_subject=can_repeat_subject)
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
-                                                                subjects=latent_vocalic_samples.subjects)
+                                                                subjects=latent_vocalic_samples.subjects,
+                                                                gender_map=latent_vocalic_samples.gender_map)
 
         samples = VocalicSamples(coordination=coordination_samples, latent_vocalic=latent_vocalic_samples,
                                  obs_vocalic=obs_vocalic_samples)
@@ -306,6 +331,11 @@ class VocalicModel:
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "vocalic_time": np.arange(evidence.num_time_steps_in_vocalic_scale)}
 
+        if self.share_params_across_genders:
+            subjects_in_time = np.array([evidence.gender_map[subject] for subject in evidence.subjects_in_time])
+        else:
+            subjects_in_time = evidence.subjects_in_time
+
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
@@ -315,14 +345,16 @@ class VocalicModel:
                 prev_time_diff_subject=evidence.previous_time_diff_subject,
                 prev_same_subject_mask=evidence.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic_prev_diff_subject_mask,
-                subjects=evidence.subjects_in_time,
+                subjects=subjects_in_time,
+                gender_map=evidence.gender_map,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature")
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
-                                                   subjects=evidence.subjects_in_time,
+                                                   subjects=subjects_in_time,
+                                                   gender_map=evidence.gender_map,
                                                    observed_values=evidence.observation)
 
         return pymc_model
