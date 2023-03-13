@@ -71,7 +71,8 @@ if __name__ == "__main__":
                                      a_p_semantic_link=1,
                                      b_p_semantic_link=1,
                                      initial_coordination=INITIAL_COORDINATION,
-                                     share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF)
+                                     share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF,
+                                     share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF)
 
         model.semantic_link_cpn.parameters.p.value = 0.7
     else:

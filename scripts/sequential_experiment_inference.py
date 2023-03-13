@@ -88,15 +88,40 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
             logger.info(f"{len(removed_channels)} brain channels removed from the list. They are {removed_channels}")
 
-        # Create evidence object from a data frame and associated model
-        # The vocalic model samples PNA genders uniformly. So we set the seed here for reproducibility.
-        set_random_seed(seed)
+        # Evidence according to the model
         if model_name == "brain":
             # We ignore channels globally instead of in the evidence object so we can adjust the prior
             # parameters and log that information.
             evidence = BrainSeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
                                                    ignore_bad_channels=False)
+        elif model_name == "body":
+            evidence = BodySeries.from_data_frame(row_df)
 
+        elif model_name == "brain_body":
+            evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
+
+        elif model_name in ["vocalic", "vocalic_semantic"]:
+            # The vocalic model samples missing genders uniformly. So we set the seed here for reproducibility.
+            set_random_seed(seed)
+            if model_name == "vocalic":
+                evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
+            else:
+                evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
+
+            if share_params_across_genders and evidence.num_genders < 2:
+                # All subjects have the same gender, so sharing parameters across gender is the same as sharing them
+                # across subjects since we won't be able to infer parameters for the missing gender.
+                share_params_across_genders = False
+                share_params_across_subjects = True
+                gender = list(evidence.gender_map.values())[0]
+                sd_mean_a0_vocalic = sd_mean_a0_vocalic[gender]
+                sd_sd_aa_vocalic = sd_sd_aa_vocalic[gender]
+                sd_sd_o_vocalic = sd_sd_o_vocalic[gender]
+        else:
+            raise Exception(f"Invalid model {model_name}.")
+
+        # Models
+        if model_name == "brain":
             model = BrainModel(subjects=evidence.subjects,
                                brain_channels=brain_channels,
                                self_dependent=self_dependent,
@@ -109,8 +134,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                initial_coordination=initial_coordination,
                                share_params_across_subjects=True)
         elif model_name == "body":
-            evidence = BodySeries.from_data_frame(row_df)
-
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
                               sd_mean_uc0=sd_mean_uc0,
@@ -123,8 +146,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               share_params_across_subjects=True)
 
         elif model_name == "brain_body":
-            evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
-
             model = BrainBodyModel(subjects=evidence.subjects,
                                    brain_channels=brain_channels,
                                    self_dependent=self_dependent,
@@ -140,34 +161,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    initial_coordination=initial_coordination,
                                    share_params_across_subjects=True)
 
-        elif model_name == "vocalic_semantic":
-            evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
-
-            model = VocalicSemanticModel(num_subjects=num_subjects,
-                                         vocalic_features=vocalic_features,
-                                         self_dependent=self_dependent,
-                                         sd_mean_uc0=sd_mean_uc0,
-                                         sd_sd_uc=sd_sd_uc,
-                                         sd_mean_a0_vocalic=sd_mean_a0_vocalic,
-                                         sd_sd_aa_vocalic=sd_sd_aa_vocalic,
-                                         sd_sd_o_vocalic=sd_sd_o_vocalic,
-                                         a_p_semantic_link=a_p_semantic_link,
-                                         b_p_semantic_link=b_p_semantic_link,
-                                         initial_coordination=initial_coordination,
-                                         share_params_across_subjects=True)
         elif model_name == "vocalic":
-            evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
-
-            if share_params_across_genders and evidence.num_genders < 2:
-                # All subjects have the same gender, so sharing parameters across gender is the same as sharing them
-                # across subjects since we won't be able to infer parameters for the missing gender.
-                share_params_across_genders = False
-                share_params_across_subjects = True
-                gender = list(evidence.gender_map.values())[0]
-                sd_mean_a0_vocalic = sd_mean_a0_vocalic[gender]
-                sd_sd_aa_vocalic = sd_sd_aa_vocalic[gender]
-                sd_sd_o_vocalic = sd_sd_o_vocalic[gender]
-
             model = VocalicModel(num_subjects=num_subjects,
                                  vocalic_features=vocalic_features,
                                  self_dependent=self_dependent,
@@ -179,11 +173,26 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  initial_coordination=initial_coordination,
                                  share_params_across_subjects=share_params_across_subjects,
                                  share_params_across_genders=share_params_across_genders)
+
+        elif model_name == "vocalic_semantic":
+            model = VocalicSemanticModel(num_subjects=num_subjects,
+                                         vocalic_features=vocalic_features,
+                                         self_dependent=self_dependent,
+                                         sd_mean_uc0=sd_mean_uc0,
+                                         sd_sd_uc=sd_sd_uc,
+                                         sd_mean_a0_vocalic=sd_mean_a0_vocalic,
+                                         sd_sd_aa_vocalic=sd_sd_aa_vocalic,
+                                         sd_sd_o_vocalic=sd_sd_o_vocalic,
+                                         a_p_semantic_link=a_p_semantic_link,
+                                         b_p_semantic_link=b_p_semantic_link,
+                                         initial_coordination=initial_coordination,
+                                         share_params_across_subjects=share_params_across_subjects,
+                                         share_params_across_genders=share_params_across_genders)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
         # Data transformation tested and confirmed to work for observations with different values and magnitudes across
-        # features and subjects. We share parameters across subject but fit each feature their own parameters.
+        # features and subjects.
         evidence.normalize_across_subject()
         evidence.standardize()
 
@@ -548,23 +557,42 @@ if __name__ == "__main__":
     # Brain parameters
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
     dim = len(arg_brain_channels)
-    arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim)
-    arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim)
-    arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim)
     arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
                                            args.num_subjects - 1)
+    if bool(args.share_params_across_subjects):
+        arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim)
+        arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim)
+        arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim)
+    else:
+        arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects, dim)
+        arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, dim)
+        arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, dim)
 
     # Body parameters
-    arg_sd_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
-    arg_sd_sd_aa_body = str_to_array(args.sd_sd_aa_body, 1)
-    arg_sd_sd_o_body = str_to_array(args.sd_sd_o_body, 1)
+    if bool(args.share_params_across_subjects):
+        arg_sd_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
+        arg_sd_sd_aa_body = str_to_array(args.sd_sd_aa_body, 1)
+        arg_sd_sd_o_body = str_to_array(args.sd_sd_o_body, 1)
+    else:
+        arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, dim)
+        arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, dim)
+        arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, dim)
 
     # Vocalic parameters
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
     dim = len(arg_vocalic_features)
-    arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim)
-    arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim)
-    arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim)
+    if bool(args.share_params_across_subjects):
+        arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim)
+        arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim)
+        arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim)
+    elif bool(args.share_params_across_genders):
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, dim)
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, dim)
+        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), 2, dim)
+    else:
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, dim)
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, dim)
+        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, dim)
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
