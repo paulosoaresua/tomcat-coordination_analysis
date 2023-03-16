@@ -183,8 +183,8 @@ class SerializedComponent:
         assert not (share_params_across_subjects and share_params_across_genders)
 
         if share_params_across_subjects:
-            assert (dim_value, ) == sd_mean_a0.shape
-            assert (dim_value, ) == sd_sd_aa.shape
+            assert (dim_value,) == sd_mean_a0.shape
+            assert (dim_value,) == sd_sd_aa.shape
         elif share_params_across_genders:
             # 2 genders: Male or Female
             assert (2, dim_value) == sd_mean_a0.shape
@@ -358,8 +358,11 @@ class SerializedComponent:
             mean = mean_a0[:, None]
             sd = sd_aa[:, None]
         elif self.share_params_across_genders:
-            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(2, self.dim_value), observed=self.parameters.mean_a0.value)
+            # mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+            #                         size=(2, self.dim_value), observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=np.zeros((2, self.dim_value)),
+                                sigma=self.parameters.mean_a0.prior.sd,
+                                size=(2, self.dim_value), observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                                   size=(2, self.dim_value), observed=self.parameters.sd_aa.value)
 

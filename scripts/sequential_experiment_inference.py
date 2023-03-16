@@ -194,7 +194,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         # Data transformation tested and confirmed to work for observations with different values and magnitudes across
         # features and subjects.
         evidence.normalize_across_subject()
-        evidence.standardize()
+        # evidence.standardize()
 
         idata = None
         if do_prior:

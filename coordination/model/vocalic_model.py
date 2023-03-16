@@ -383,64 +383,64 @@ class VocalicModel:
         self.latent_vocalic_cpn.parameters.clear_values()
         self.obs_vocalic_cpn.parameters.clear_values()
 
-    def fit_with_particle_filter(self, evidence: VocalicSeries, num_samples: int, seed: Optional[int] = None):
-        np.random.seed(seed)
-        random.seed(seed)
-
-        if self.coordination_cpn.parameters.sd_uc.value is None:
-            mean_uc0 = norm(loc=self.coordination_cpn.parameters.sd_uc.prior.mean,
-                            scale=self.coordination_cpn.parameters.sd_uc.prior.sd).rvs(num_samples)[:, None]
-        else:
-            mean_uc0 = np.ones((num_samples, 1)) * self.coordination_cpn.parameters.sd_uc.value
-
-        if self.coordination_cpn.parameters.sd_uc.value is None:
-            sd_uc = halfnorm(scale=self.coordination_cpn.parameters.sd_uc.prior.sd).rvs(num_samples)[:, None]
-        else:
-            sd_uc = np.ones((num_samples, 1)) * self.coordination_cpn.parameters.sd_uc.value
-
-        if self.latent_vocalic_cpn.parameters.mean_a0.value is None:
-            mean_a0 = halfnorm(scale=self.latent_vocalic_cpn.parameters.mean_a0.prior.sd).rvs(num_samples)[:, None]
-        else:
-            mean_a0 = np.ones((num_samples, 1)) * self.latent_vocalic_cpn.parameters.mean_a0.value
-
-        if self.latent_vocalic_cpn.parameters.sd_aa.value is None:
-            sd_aa = halfnorm(scale=self.latent_vocalic_cpn.parameters.sd_aa.prior.sd).rvs(num_samples)[:, None]
-        else:
-            sd_aa = np.ones((num_samples, 1)) * self.latent_vocalic_cpn.parameters.sd_aa.value
-
-        if self.obs_vocalic_cpn.parameters.sd_o.value is None:
-            sd_o = halfnorm(scale=self.obs_vocalic_cpn.parameters.sd_o.prior.sd).rvs(num_samples)[:, None]
-        else:
-            sd_o = np.ones((num_samples, 1)) * self.obs_vocalic_cpn.parameters.sd_o.value
-
-        uc = 0
-        a_idx = 0
-        a = np.zeros((num_samples, evidence.num_vocalic_features, evidence.num_time_steps_in_coordination_scale))
-        for t in range(evidence.num_time_steps_in_coordination_scale):
-            if t == 0:
-                uc = norm(loc=mean_uc0, scale=sd_uc)
-            else:
-                uc = norm(loc=uc, scale=sd_uc)
-
-            c = sigmoid(uc)
-
-            if evidence.time_steps_in_coordination_scale[a_idx] == t:
-                if evidence.vocalic_prev_same_subject_mask[t] == 0 and evidence.vocalic_prev_diff_subject_mask[t] == 0:
-                    # Sample from prior
-                    a[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs()
-                elif evidence.vocalic_prev_diff_subject_mask[t] == 1:
-                    if evidence.vocalic_prev_same_subject_mask[t] < 0:
-                        previous_same = mean_a0
-                    else:
-                        previous_same = a[:, evidence.vocalic_prev_same_subject_mask[t]]
-
-                    mean = c * a[:, evidence.previous_time_diff_subject[t]] + (1 - c) * previous_same
-                    a[:, t] = norm(loc=mean, scale=sd_aa).rvs()
-
-                weights = norm(loc=a[:, t], scale=sd_o).pdf(evidence.observation[:, t])
-
-
-        sd_uc = self.coordination_cpn.parameters.sd_uc.value
+    # def fit_with_particle_filter(self, evidence: VocalicSeries, num_samples: int, seed: Optional[int] = None):
+    #     np.random.seed(seed)
+    #     random.seed(seed)
+    #
+    #     if self.coordination_cpn.parameters.sd_uc.value is None:
+    #         mean_uc0 = norm(loc=self.coordination_cpn.parameters.sd_uc.prior.mean,
+    #                         scale=self.coordination_cpn.parameters.sd_uc.prior.sd).rvs(num_samples)[:, None]
+    #     else:
+    #         mean_uc0 = np.ones((num_samples, 1)) * self.coordination_cpn.parameters.sd_uc.value
+    #
+    #     if self.coordination_cpn.parameters.sd_uc.value is None:
+    #         sd_uc = halfnorm(scale=self.coordination_cpn.parameters.sd_uc.prior.sd).rvs(num_samples)[:, None]
+    #     else:
+    #         sd_uc = np.ones((num_samples, 1)) * self.coordination_cpn.parameters.sd_uc.value
+    #
+    #     if self.latent_vocalic_cpn.parameters.mean_a0.value is None:
+    #         mean_a0 = halfnorm(scale=self.latent_vocalic_cpn.parameters.mean_a0.prior.sd).rvs(num_samples)[:, None]
+    #     else:
+    #         mean_a0 = np.ones((num_samples, 1)) * self.latent_vocalic_cpn.parameters.mean_a0.value
+    #
+    #     if self.latent_vocalic_cpn.parameters.sd_aa.value is None:
+    #         sd_aa = halfnorm(scale=self.latent_vocalic_cpn.parameters.sd_aa.prior.sd).rvs(num_samples)[:, None]
+    #     else:
+    #         sd_aa = np.ones((num_samples, 1)) * self.latent_vocalic_cpn.parameters.sd_aa.value
+    #
+    #     if self.obs_vocalic_cpn.parameters.sd_o.value is None:
+    #         sd_o = halfnorm(scale=self.obs_vocalic_cpn.parameters.sd_o.prior.sd).rvs(num_samples)[:, None]
+    #     else:
+    #         sd_o = np.ones((num_samples, 1)) * self.obs_vocalic_cpn.parameters.sd_o.value
+    #
+    #     uc = 0
+    #     a_idx = 0
+    #     a = np.zeros((num_samples, evidence.num_vocalic_features, evidence.num_time_steps_in_coordination_scale))
+    #     for t in range(evidence.num_time_steps_in_coordination_scale):
+    #         if t == 0:
+    #             uc = norm(loc=mean_uc0, scale=sd_uc)
+    #         else:
+    #             uc = norm(loc=uc, scale=sd_uc)
+    #
+    #         c = sigmoid(uc)
+    #
+    #         if evidence.time_steps_in_coordination_scale[a_idx] == t:
+    #             if evidence.vocalic_prev_same_subject_mask[t] == 0 and evidence.vocalic_prev_diff_subject_mask[t] == 0:
+    #                 # Sample from prior
+    #                 a[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs()
+    #             elif evidence.vocalic_prev_diff_subject_mask[t] == 1:
+    #                 if evidence.vocalic_prev_same_subject_mask[t] < 0:
+    #                     previous_same = mean_a0
+    #                 else:
+    #                     previous_same = a[:, evidence.vocalic_prev_same_subject_mask[t]]
+    #
+    #                 mean = c * a[:, evidence.previous_time_diff_subject[t]] + (1 - c) * previous_same
+    #                 a[:, t] = norm(loc=mean, scale=sd_aa).rvs()
+    #
+    #             weights = norm(loc=a[:, t], scale=sd_o).pdf(evidence.observation[:, t])
+    #
+    #
+    #     sd_uc = self.coordination_cpn.parameters.sd_uc.value
 
     @staticmethod
     def inference_data_to_posterior_samples(idata: az.InferenceData) -> VocalicPosteriorSamples:
