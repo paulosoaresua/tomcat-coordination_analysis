@@ -22,35 +22,41 @@ SELF_DEPENDENT = True
 N = 1000
 C = 2
 SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
-SHARE_PARAMS_ACROSS_GENDERS_GEN = True
-SHARE_PARAMS_ACROSS_SUBJECTS_INF = False
-SHARE_PARAMS_ACROSS_GENDERS_INF = True
+SHARE_PARAMS_ACROSS_GENDERS_GEN = False
+SHARE_PARAMS_ACROSS_FEATURES_GEN = False
+
+SHARE_PARAMS_ACROSS_SUBJECTS_INF = True
+SHARE_PARAMS_ACROSS_GENDERS_INF = False
+SHARE_PARAMS_ACROSS_FEATURES_INF = False
 
 # Different scales per features to test the model robustness
 set_random_seed(SEED)
-PARAM_SCALES = [10 ** (3 * i) for i in range(NUM_VOCALIC_FEATURES)]
-if SHARE_PARAMS_ACROSS_SUBJECTS_GEN:
-    TRUE_MEAN_AA = np.random.random(NUM_VOCALIC_FEATURES) * PARAM_SCALES
-    TRUE_SD_AA = np.random.random(NUM_VOCALIC_FEATURES) * PARAM_SCALES
-    TRUE_SD_OO = np.ones(NUM_VOCALIC_FEATURES)
-elif SHARE_PARAMS_ACROSS_GENDERS_GEN:
-    TRUE_MEAN_AA = np.random.random((2, NUM_VOCALIC_FEATURES)) * PARAM_SCALES
-    TRUE_SD_AA = np.random.random((2, NUM_VOCALIC_FEATURES)) * PARAM_SCALES
-    TRUE_SD_OO = np.ones((2, NUM_VOCALIC_FEATURES))
-else:
-    TRUE_MEAN_AA = np.random.random((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)) * PARAM_SCALES
-    TRUE_SD_AA = np.random.random((NUM_SUBJECTS, NUM_VOCALIC_FEATURES)) * PARAM_SCALES
-    TRUE_SD_OO = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+DIM = 1 if SHARE_PARAMS_ACROSS_FEATURES_GEN else NUM_VOCALIC_FEATURES
 
-if SHARE_PARAMS_ACROSS_SUBJECTS_INF:
-    PARAM_ONES = np.ones(NUM_VOCALIC_FEATURES)
-    PARAM_ZEROS = np.zeros(NUM_VOCALIC_FEATURES)
-elif SHARE_PARAMS_ACROSS_GENDERS_INF:
-    PARAM_ONES = np.ones((2, NUM_VOCALIC_FEATURES))
-    PARAM_ZEROS = np.zeros((2, NUM_VOCALIC_FEATURES))
+PARAM_SCALES = [10 ** (3 * i) for i in range(DIM)]
+if SHARE_PARAMS_ACROSS_SUBJECTS_GEN:
+    TRUE_MEAN_AA = np.random.random(DIM) * PARAM_SCALES
+    TRUE_SD_AA = np.random.random(DIM) * PARAM_SCALES
+    TRUE_SD_OO = np.ones(DIM)
+elif SHARE_PARAMS_ACROSS_GENDERS_GEN:
+    TRUE_MEAN_AA = np.random.random((2, DIM)) * PARAM_SCALES
+    TRUE_SD_AA = np.random.random((2, DIM)) * PARAM_SCALES
+    TRUE_SD_OO = np.ones((2, DIM))
 else:
-    PARAM_ONES = np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
-    PARAM_ZEROS = np.zeros((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
+    TRUE_MEAN_AA = np.random.random((NUM_SUBJECTS, DIM)) * PARAM_SCALES
+    TRUE_SD_AA = np.random.random((NUM_SUBJECTS, DIM)) * PARAM_SCALES
+    TRUE_SD_OO = np.ones((NUM_SUBJECTS, DIM))
+
+DIM = 1 if SHARE_PARAMS_ACROSS_FEATURES_INF else NUM_VOCALIC_FEATURES
+if SHARE_PARAMS_ACROSS_SUBJECTS_INF:
+    PARAM_ONES = np.ones(DIM)
+    PARAM_ZEROS = np.zeros(DIM)
+elif SHARE_PARAMS_ACROSS_GENDERS_INF:
+    PARAM_ONES = np.ones((2, DIM))
+    PARAM_ZEROS = np.zeros((2, DIM))
+else:
+    PARAM_ONES = np.ones((NUM_SUBJECTS, DIM))
+    PARAM_ZEROS = np.zeros((NUM_SUBJECTS, DIM))
 
 if __name__ == "__main__":
     if not sys.warnoptions:
@@ -89,7 +95,8 @@ if __name__ == "__main__":
                              sd_sd_o_vocalic=PARAM_ONES,
                              initial_coordination=INITIAL_COORDINATION,
                              share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF,
-                             share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF)
+                             share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF,
+                             share_params_across_features=SHARE_PARAMS_ACROSS_FEATURES_INF)
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
@@ -106,6 +113,9 @@ if __name__ == "__main__":
     model.share_params_across_genders = SHARE_PARAMS_ACROSS_GENDERS_GEN
     model.latent_vocalic_cpn.share_params_across_genders = SHARE_PARAMS_ACROSS_GENDERS_GEN
     model.obs_vocalic_cpn.share_params_across_genders = SHARE_PARAMS_ACROSS_GENDERS_GEN
+    model.share_params_across_features = SHARE_PARAMS_ACROSS_FEATURES_GEN
+    model.latent_vocalic_cpn.share_params_across_features = SHARE_PARAMS_ACROSS_FEATURES_GEN
+    model.obs_vocalic_cpn.share_params_across_features = SHARE_PARAMS_ACROSS_FEATURES_GEN
     if ADD_SEMANTIC_LINK:
         full_samples = model.draw_samples(num_series=1,
                                           num_time_steps=TIME_STEPS,
@@ -125,6 +135,9 @@ if __name__ == "__main__":
     model.share_params_across_genders = SHARE_PARAMS_ACROSS_GENDERS_INF
     model.latent_vocalic_cpn.share_params_across_genders = SHARE_PARAMS_ACROSS_GENDERS_INF
     model.obs_vocalic_cpn.share_params_across_genders = SHARE_PARAMS_ACROSS_GENDERS_INF
+    model.share_params_across_features = SHARE_PARAMS_ACROSS_FEATURES_INF
+    model.latent_vocalic_cpn.share_params_across_features = SHARE_PARAMS_ACROSS_FEATURES_INF
+    model.obs_vocalic_cpn.share_params_across_features = SHARE_PARAMS_ACROSS_FEATURES_INF
 
     evidence = VocalicSeries(uuid="",
                              features=list(map(str, np.arange(NUM_VOCALIC_FEATURES))),
@@ -143,7 +156,16 @@ if __name__ == "__main__":
                                          semantic_link_time_steps_in_coordination_scale=
                                          full_samples.semantic_link.time_steps_in_coordination_scale[0])
 
-    evidence.normalize_across_subject()
+    # Add different offsets to observations from different users
+    all_subjects = set(evidence.subjects_in_time)
+
+    offsets = [10 ** i for i in range(NUM_SUBJECTS)]
+    for i, subject in enumerate(all_subjects):
+        evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
+
+    evidence.normalize_per_subject()
+
+    # evidence.normalize_across_subject()
     # evidence.standardize()
 
     model.clear_parameter_values()

@@ -258,7 +258,8 @@ class VocalicModel:
                  self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray,
                  sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
                  share_params_across_subjects: bool, share_params_across_genders: bool,
-                 initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None):
+                 share_params_across_features: bool, initial_coordination: Optional[float] = None,
+                 sd_sd_c: Optional[float] = None):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -267,6 +268,7 @@ class VocalicModel:
         self.vocalic_features = vocalic_features
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
+        self.share_params_across_features = share_params_across_features
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -289,13 +291,15 @@ class VocalicModel:
                                                       sd_mean_a0=sd_mean_a0_vocalic,
                                                       sd_sd_aa=sd_sd_aa_vocalic,
                                                       share_params_across_subjects=share_params_across_subjects,
-                                                      share_params_across_genders=share_params_across_genders)
+                                                      share_params_across_genders=share_params_across_genders,
+                                                      share_params_across_features=share_params_across_features)
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
                                                               share_params_across_subjects=share_params_across_subjects,
-                                                              share_params_across_genders=share_params_across_genders)
+                                                              share_params_across_genders=share_params_across_genders,
+                                                              share_params_across_features=share_params_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
