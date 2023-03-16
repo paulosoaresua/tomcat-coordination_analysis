@@ -11,7 +11,7 @@ import xarray
 
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    SigmoidGaussianCoordinationComponentSamples
+    CoordinationComponentSamples
 from coordination.component.mixture_component import MixtureComponent, MixtureComponentSamples
 from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
@@ -19,7 +19,7 @@ from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 class BodySamples:
 
-    def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples, latent_body: MixtureComponentSamples,
+    def __init__(self, coordination: CoordinationComponentSamples, latent_body: MixtureComponentSamples,
                  obs_body: ObservationComponentSamples):
         self.coordination = coordination
         self.latent_body = latent_body

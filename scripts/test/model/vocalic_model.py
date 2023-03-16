@@ -24,7 +24,7 @@ C = 2
 SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
 SHARE_PARAMS_ACROSS_GENDERS_GEN = True
 SHARE_PARAMS_ACROSS_SUBJECTS_INF = False
-SHARE_PARAMS_ACROSS_GENDERS_INF = False
+SHARE_PARAMS_ACROSS_GENDERS_INF = True
 
 # Different scales per features to test the model robustness
 set_random_seed(SEED)
@@ -65,6 +65,7 @@ if __name__ == "__main__":
                                      self_dependent=SELF_DEPENDENT,
                                      sd_mean_uc0=1,
                                      sd_sd_uc=1,
+                                     mean_mean_a0_vocalic=PARAM_ZEROS,
                                      sd_mean_a0_vocalic=PARAM_ONES,
                                      sd_sd_aa_vocalic=PARAM_ONES,
                                      sd_sd_o_vocalic=PARAM_ONES,
@@ -81,6 +82,8 @@ if __name__ == "__main__":
                              self_dependent=SELF_DEPENDENT,
                              sd_mean_uc0=1,
                              sd_sd_uc=1,
+                             # sd_sd_c=1,
+                             mean_mean_a0_vocalic=PARAM_ZEROS,
                              sd_mean_a0_vocalic=PARAM_ONES,
                              sd_sd_aa_vocalic=PARAM_ONES,
                              sd_sd_o_vocalic=PARAM_ONES,
@@ -90,6 +93,7 @@ if __name__ == "__main__":
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
+    # model.coordination_cpn.parameters.sd_c.value = np.ones(1)
     model.latent_vocalic_cpn.parameters.mean_a0.value = TRUE_MEAN_AA  # np.array([[0.1, 2000], [0.5, 5000], [0.8, 9000]])
     model.latent_vocalic_cpn.parameters.sd_aa.value = TRUE_SD_AA  # np.array([[0.5, 1000], [0.5, 1000], [0.5, 1000]])
     model.obs_vocalic_cpn.parameters.sd_o.value = TRUE_SD_OO  # np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
@@ -140,7 +144,7 @@ if __name__ == "__main__":
                                          full_samples.semantic_link.time_steps_in_coordination_scale[0])
 
     evidence.normalize_across_subject()
-    evidence.standardize()
+    # evidence.standardize()
 
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:

@@ -10,7 +10,7 @@ import xarray
 
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    SigmoidGaussianCoordinationComponentSamples
+    CoordinationComponentSamples
 from coordination.component.mixture_component import MixtureComponent, MixtureComponentSamples
 from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
@@ -41,7 +41,7 @@ BRAIN_CHANNELS = [
 
 class BrainSamples:
 
-    def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples, latent_brain: MixtureComponentSamples,
+    def __init__(self, coordination: CoordinationComponentSamples, latent_brain: MixtureComponentSamples,
                  obs_brain: ObservationComponentSamples):
         self.coordination = coordination
         self.latent_brain = latent_brain

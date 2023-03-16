@@ -9,7 +9,7 @@ import xarray
 
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    SigmoidGaussianCoordinationComponentSamples
+    CoordinationComponentSamples
 from coordination.component.mixture_component import MixtureComponent, MixtureComponentSamples
 from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
 from coordination.model.body_model import BodyPosteriorSamples, BodySeries
@@ -18,7 +18,7 @@ from coordination.model.brain_model import BrainPosteriorSamples, BrainSeries
 
 class BrainBodySamples:
 
-    def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples, latent_brain: MixtureComponentSamples,
+    def __init__(self, coordination: CoordinationComponentSamples, latent_brain: MixtureComponentSamples,
                  latent_body: MixtureComponentSamples, obs_brain: ObservationComponentSamples,
                  obs_body: ObservationComponentSamples):
         self.coordination = coordination

@@ -22,6 +22,13 @@ def beta(mean: Union[float, np.ndarray], var: Union[float, np.ndarray]) -> Any:
     return scipy_beta(a, b)
 
 
+class CoordinationComponentSamples:
+
+    def __init__(self):
+        self.unbounded_coordination = np.array([])
+        self.coordination = np.array([])
+
+
 class SigmoidGaussianCoordinationComponentParameters:
 
     def __init__(self, sd_mean_uc0: float, sd_sd_uc: float):
@@ -31,13 +38,6 @@ class SigmoidGaussianCoordinationComponentParameters:
     def clear_values(self):
         self.mean_uc0.value = None
         self.sd_uc.value = None
-
-
-class SigmoidGaussianCoordinationComponentSamples:
-
-    def __init__(self):
-        self.unbounded_coordination = np.array([])
-        self.coordination = np.array([])
 
 
 class SigmoidGaussianCoordinationComponent:
@@ -61,10 +61,10 @@ class SigmoidGaussianCoordinationComponent:
         return f"sd_uc"
 
     def draw_samples(self, num_series: int, num_time_steps: int,
-                     seed: Optional[int] = None) -> SigmoidGaussianCoordinationComponentSamples:
+                     seed: Optional[int] = None) -> CoordinationComponentSamples:
         set_random_seed(seed)
 
-        samples = SigmoidGaussianCoordinationComponentSamples()
+        samples = CoordinationComponentSamples()
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
         samples.coordination = np.zeros((num_series, num_time_steps))
 
@@ -109,10 +109,6 @@ class BetaGaussianCoordinationComponentParameters(SigmoidGaussianCoordinationCom
         self.sd_c.value = None
 
 
-class BetaGaussianCoordinationComponentSamples(SigmoidGaussianCoordinationComponentSamples):
-    pass
-
-
 # For numerical stability in the Beta model
 MIN_COORDINATION = 1e-16
 MAX_COORDINATION = 1 - MIN_COORDINATION
@@ -144,10 +140,10 @@ class BetaGaussianCoordinationComponent:
         return f"sd_c"
 
     def draw_samples(self, num_series: int, num_time_steps: int,
-                     seed: Optional[int] = None) -> BetaGaussianCoordinationComponentSamples:
+                     seed: Optional[int] = None) -> CoordinationComponentSamples:
         set_random_seed(seed)
 
-        samples = BetaGaussianCoordinationComponentSamples()
+        samples = CoordinationComponentSamples()
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
         samples.coordination = np.zeros((num_series, num_time_steps))
 
