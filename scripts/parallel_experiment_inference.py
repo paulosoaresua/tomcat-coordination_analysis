@@ -237,4 +237,4 @@ if __name__ == "__main__":
                        ignore_bad_channels=args.ignore_bad_channels,
                        share_params_across_subjects=args.share_params_across_subjects,
                        share_params_across_genders=args.share_params_across_genders,
-                       share_params_across_genders=args.share_params_across_genders)
+                       share_params_across_features=args.share_params_across_features)
