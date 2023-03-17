@@ -196,10 +196,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         else:
             raise Exception(f"Invalid model {model_name}.")
 
-        # Data transformation tested and confirmed to work for observations with different values and magnitudes across
-        # features and subjects.
-        # evidence.normalize_across_subject()
-        # evidence.standardize()
+        # Data transformation to correct biological differences captured in the signals from different participant.
         evidence.normalize_per_subject()
 
         idata = None
@@ -410,11 +407,12 @@ def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
     sampled_vars = set(idata.posterior.data_vars)
     var_names = sorted(list(set(model.parameter_names).intersection(sampled_vars)))
 
-    axes = az.plot_trace(idata, var_names=var_names)
-    fig = axes.ravel()[0].figure
-    plt.tight_layout()
+    if len(var_names) > 0:
+        axes = az.plot_trace(idata, var_names=var_names)
+        fig = axes.ravel()[0].figure
+        plt.tight_layout()
 
-    fig.savefig(f"{out_dir}/parameters.png", format='png', bbox_inches='tight')
+        fig.savefig(f"{out_dir}/parameters.png", format='png', bbox_inches='tight')
 
 
 def str_to_matrix(string: str):
