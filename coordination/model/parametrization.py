@@ -13,7 +13,6 @@ class Parameter:
 class NormalParameterPrior:
 
     def __init__(self, mean: np.ndarray, sd: np.ndarray):
-        assert (mean >= 0).all()
         assert (sd > 0).all()
 
         self.mean = mean

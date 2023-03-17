@@ -41,9 +41,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float,
               sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray,
               sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
-              a_mixture_weights: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
-              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-              ignore_bad_channels: bool, share_params_across_subjects: bool, share_params_across_genders: bool):
+              a_mixture_weights: np.ndarray, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
+              sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
+              b_p_semantic_link: float, ignore_bad_channels: bool, share_params_across_subjects: bool,
+              share_params_across_genders: bool, share_params_across_features: bool):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -167,12 +168,14 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  self_dependent=self_dependent,
                                  sd_mean_uc0=sd_mean_uc0,
                                  sd_sd_uc=sd_sd_uc,
+                                 mean_mean_a0_vocalic=mean_mean_a0_vocalic,
                                  sd_mean_a0_vocalic=sd_mean_a0_vocalic,
                                  sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                  sd_sd_o_vocalic=sd_sd_o_vocalic,
                                  initial_coordination=initial_coordination,
                                  share_params_across_subjects=share_params_across_subjects,
-                                 share_params_across_genders=share_params_across_genders)
+                                 share_params_across_genders=share_params_across_genders,
+                                 share_params_across_features=share_params_across_features)
 
         elif model_name == "vocalic_semantic":
             model = VocalicSemanticModel(num_subjects=num_subjects,
@@ -180,6 +183,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          self_dependent=self_dependent,
                                          sd_mean_uc0=sd_mean_uc0,
                                          sd_sd_uc=sd_sd_uc,
+                                         mean_mean_a0_vocalic=mean_mean_a0_vocalic,
                                          sd_mean_a0_vocalic=sd_mean_a0_vocalic,
                                          sd_sd_aa_vocalic=sd_sd_aa_vocalic,
                                          sd_sd_o_vocalic=sd_sd_o_vocalic,
@@ -187,14 +191,13 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          b_p_semantic_link=b_p_semantic_link,
                                          initial_coordination=initial_coordination,
                                          share_params_across_subjects=share_params_across_subjects,
-                                         share_params_across_genders=share_params_across_genders)
+                                         share_params_across_genders=share_params_across_genders,
+                                         share_params_across_features=share_params_across_features)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
-        # Data transformation tested and confirmed to work for observations with different values and magnitudes across
-        # features and subjects.
-        evidence.normalize_across_subject()
-        evidence.standardize()
+        # Data transformation to correct biological differences captured in the signals from different participant.
+        evidence.normalize_per_subject()
 
         idata = None
         if do_prior:
@@ -404,11 +407,12 @@ def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
     sampled_vars = set(idata.posterior.data_vars)
     var_names = sorted(list(set(model.parameter_names).intersection(sampled_vars)))
 
-    axes = az.plot_trace(idata, var_names=var_names)
-    fig = axes.ravel()[0].figure
-    plt.tight_layout()
+    if len(var_names) > 0:
+        axes = az.plot_trace(idata, var_names=var_names)
+        fig = axes.ravel()[0].figure
+        plt.tight_layout()
 
-    fig.savefig(f"{out_dir}/parameters.png", format='png', bbox_inches='tight')
+        fig.savefig(f"{out_dir}/parameters.png", format='png', bbox_inches='tight')
 
 
 def str_to_matrix(string: str):
@@ -528,6 +532,10 @@ if __name__ == "__main__":
                              "different per subject and their influencers, it is possible to pass a matrix "
                              "(num_subjects x num_subject - 1) in MATLAB style where rows are split by semi-colons "
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects.")
+    parser.add_argument("--mean_mean_a0_vocalic", type=str, required=False, default="0",
+                        help="Mean of the prior distribution of mu_vocalic_0. If the parameters are "
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_mean_a0_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_vocalic_0. If the parameters are "
                              "different per feature, it is possible to pass an array as a comma-separated list of."
@@ -551,6 +559,8 @@ if __name__ == "__main__":
     parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
                         help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
                              "only the parameters of that gender will be estimated.")
+    parser.add_argument("--share_params_across_features", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per feature.")
 
     args = parser.parse_args()
 
@@ -580,16 +590,19 @@ if __name__ == "__main__":
 
     # Vocalic parameters
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
-    dim = len(arg_vocalic_features)
+    dim = 1 if bool(args.share_params_across_features) else len(arg_vocalic_features)
     if bool(args.share_params_across_subjects):
+        arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, dim)
         arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim)
         arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim)
         arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim)
     elif bool(args.share_params_across_genders):
+        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), 2, dim)
         arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, dim)
         arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, dim)
         arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), 2, dim)
     else:
+        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), args.num_subjects, dim)
         arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, dim)
         arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, dim)
         arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, dim)
@@ -619,6 +632,7 @@ if __name__ == "__main__":
               sd_sd_aa_body=arg_sd_sd_aa_body,
               sd_sd_o_body=arg_sd_sd_o_body,
               a_mixture_weights=arg_a_mixture_weights,
+              mean_mean_a0_vocalic=arg_mean_mean_a0_vocalic,
               sd_mean_a0_vocalic=arg_sd_mean_a0_vocalic,
               sd_sd_aa_vocalic=arg_sd_sd_aa_vocalic,
               sd_sd_o_vocalic=arg_sd_sd_o_vocalic,
@@ -626,4 +640,5 @@ if __name__ == "__main__":
               b_p_semantic_link=args.b_p_semantic_link,
               ignore_bad_channels=bool(args.ignore_bad_channels),
               share_params_across_subjects=bool(args.share_params_across_subjects),
-              share_params_across_genders=bool(args.share_params_across_genders))
+              share_params_across_genders=bool(args.share_params_across_genders),
+              share_params_across_features=bool(args.share_params_across_features))

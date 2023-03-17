@@ -25,9 +25,10 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        initial_coordination: float, num_subjects: int, brain_channels: str, vocalic_features: str,
                        self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_brain: str,
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
-                       sd_sd_o_body: str, a_mixture_weights: str, sd_mean_a0_vocalic: str, sd_sd_aa_vocalic: str,
-                       sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
-                       ignore_bad_channels: int, share_params_across_subjects: int, share_params_across_genders: int):
+                       sd_sd_o_body: str, a_mixture_weights: str, mean_mean_a0_vocalic: str, sd_mean_a0_vocalic: str,
+                       sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
+                       ignore_bad_channels: int, share_params_across_subjects: int, share_params_across_genders: int,
+                       share_params_across_features: int):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -82,6 +83,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--sd_sd_aa_body="{sd_sd_aa_body}" ' \
                                      f'--sd_sd_o_body="{sd_sd_o_body}" ' \
                                      f'--a_mixture_weights="{a_mixture_weights}" ' \
+                                     f'--mean_mean_a0_vocalic="{mean_mean_a0_vocalic}" ' \
                                      f'--sd_mean_a0_vocalic="{sd_mean_a0_vocalic}" ' \
                                      f'--sd_sd_aa_vocalic="{sd_sd_aa_vocalic}" ' \
                                      f'--sd_sd_o_vocalic="{sd_sd_o_vocalic}" ' \
@@ -89,7 +91,8 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--b_p_semantic_link={b_p_semantic_link} ' \
                                      f'--ignore_bad_channels={ignore_bad_channels} ' \
                                      f'--share_params_across_subjects={share_params_across_subjects} ' \
-                                     f'--share_params_across_genders={share_params_across_genders}'
+                                     f'--share_params_across_genders={share_params_across_genders} ' \
+                                     f'--share_params_across_features={share_params_across_features}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
@@ -167,6 +170,10 @@ if __name__ == "__main__":
                              "different per subject and their influencers, it is possible to pass a matrix "
                              "(num_subjects x num_subject - 1) in MATLAB style where rows are split by semi-colons "
                              "and columns by commas, e.g. 1,2;1,1;2,1  for 3 subjects.")
+    parser.add_argument("--mean_mean_a0_vocalic", type=str, required=False, default="0",
+                        help="Mean of the prior distribution of mu_vocalic_0. If the parameters are "
+                             "different per feature, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_mean_a0_vocalic", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_vocalic_0. If the parameters are "
                              "different per feature, it is possible to pass an array as a comma-separated list of."
@@ -190,6 +197,8 @@ if __name__ == "__main__":
     parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
                         help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
                              "only the parameters of that gender will be estimated.")
+    parser.add_argument("--share_params_across_features", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per feature.")
 
     args = parser.parse_args()
 
@@ -219,6 +228,7 @@ if __name__ == "__main__":
                        sd_sd_aa_body=args.sd_sd_aa_body,
                        sd_sd_o_body=args.sd_sd_o_body,
                        a_mixture_weights=args.a_mixture_weights,
+                       mean_mean_a0_vocalic=args.mean_mean_a0_vocalic,
                        sd_mean_a0_vocalic=args.sd_mean_a0_vocalic,
                        sd_sd_aa_vocalic=args.sd_sd_aa_vocalic,
                        sd_sd_o_vocalic=args.sd_sd_o_vocalic,
@@ -226,4 +236,5 @@ if __name__ == "__main__":
                        b_p_semantic_link=args.b_p_semantic_link,
                        ignore_bad_channels=args.ignore_bad_channels,
                        share_params_across_subjects=args.share_params_across_subjects,
-                       share_params_across_genders=args.share_params_across_genders)
+                       share_params_across_genders=args.share_params_across_genders,
+                       share_params_across_features=args.share_params_across_features)

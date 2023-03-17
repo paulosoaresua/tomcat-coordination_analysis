@@ -10,7 +10,7 @@ import xarray
 
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    SigmoidGaussianCoordinationComponentSamples
+    CoordinationComponentSamples, BetaGaussianCoordinationComponent
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
 from coordination.component.link_component import LinkComponent, LinkComponentSamples
 from coordination.component.observation_component import SerializedObservationComponent, \
@@ -20,7 +20,7 @@ from coordination.model.vocalic_model import VocalicSeries, VocalicPosteriorSamp
 
 class VocalicSemanticSamples:
 
-    def __init__(self, coordination: SigmoidGaussianCoordinationComponentSamples,
+    def __init__(self, coordination: CoordinationComponentSamples,
                  latent_vocalic: SerializedComponentSamples,
                  semantic_link: LinkComponentSamples, obs_vocalic: SerializedObservationComponentSamples):
         self.coordination = coordination
@@ -90,17 +90,27 @@ class VocalicSemanticPosteriorSamples:
 class VocalicSemanticModel:
 
     def __init__(self, num_subjects: int, vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float,
-                 sd_sd_uc: float, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
-                 sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
-                 share_params_across_subjects: bool, share_params_across_genders: bool,
-                 initial_coordination: Optional[float] = None):
+                 sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
+                 sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
+                 b_p_semantic_link: float, share_params_across_subjects: bool, share_params_across_genders: bool,
+                 share_params_across_features: bool, initial_coordination: Optional[float] = None,
+                 sd_sd_c: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
+        self.share_params_across_features = share_params_across_features
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                     sd_sd_uc=sd_sd_uc)
+        if sd_sd_c is None:
+            # Coordination is a deterministic transformation of its unbounded estimate
+            self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
+                                                                         sd_sd_uc=sd_sd_uc)
+        else:
+            # Coordination is a latent variable centered around its unbounded estimate
+            self.coordination_cpn = BetaGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
+                                                                      sd_sd_uc=sd_sd_uc,
+                                                                      sd_sd_c=sd_sd_c)
+
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
@@ -108,10 +118,12 @@ class VocalicSemanticModel:
                                                       num_subjects=num_subjects,
                                                       dim_value=len(vocalic_features),
                                                       self_dependent=self_dependent,
+                                                      mean_mean_a0=mean_mean_a0_vocalic,
                                                       sd_mean_a0=sd_mean_a0_vocalic,
                                                       sd_sd_aa=sd_sd_aa_vocalic,
                                                       share_params_across_subjects=share_params_across_subjects,
-                                                      share_params_across_genders=share_params_across_genders)
+                                                      share_params_across_genders=share_params_across_genders,
+                                                      share_params_across_features=share_params_across_features)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
                                                b_p=b_p_semantic_link)
@@ -120,7 +132,8 @@ class VocalicSemanticModel:
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
                                                               share_params_across_subjects=share_params_across_subjects,
-                                                              share_params_across_genders=share_params_across_genders)
+                                                              share_params_across_genders=share_params_across_genders,
+                                                              share_params_across_features=share_params_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -179,8 +192,8 @@ class VocalicSemanticModel:
 
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
-            _, coordination, _ = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")
-            latent_vocalic, _, _ = self.latent_vocalic_cpn.update_pymc_model(
+            coordination = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
+            latent_vocalic = self.latent_vocalic_cpn.update_pymc_model(
                 coordination=coordination[evidence.vocalic.time_steps_in_coordination_scale],
                 prev_time_same_subject=evidence.vocalic.previous_time_same_subject,
                 prev_time_diff_subject=evidence.vocalic.previous_time_diff_subject,
@@ -189,7 +202,7 @@ class VocalicSemanticModel:
                 subjects=evidence.vocalic.subjects_in_time,
                 gender_map=evidence.vocalic.gender_map,
                 time_dimension="vocalic_time",
-                feature_dimension="vocalic_feature")
+                feature_dimension="vocalic_feature")[0]
 
             self.semantic_link_cpn.update_pymc_model(
                 coordination=coordination[evidence.num_time_steps_in_semantic_link_scale],

@@ -6,7 +6,7 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 
 
 def serialized_logp_with_self_dependency(serialized_component: Any,
@@ -127,8 +127,8 @@ def serialized_random_without_self_dependency(initial_mean: np.ndarray,
 
 class SerializedComponentParameters:
 
-    def __init__(self, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
-        self.mean_a0 = Parameter(HalfNormalParameterPrior(sd_mean_a0))
+    def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
+        self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
         self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
 
     def clear_values(self):
@@ -178,20 +178,22 @@ class SerializedComponentSamples:
 
 class SerializedComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray, share_params_across_subjects: bool, share_params_across_genders: bool):
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
+                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_params_across_subjects: bool,
+                 share_params_across_genders: bool, share_params_across_features: bool):
         assert not (share_params_across_subjects and share_params_across_genders)
 
+        dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
-            assert (dim_value, ) == sd_mean_a0.shape
-            assert (dim_value, ) == sd_sd_aa.shape
+            assert (dim,) == sd_mean_a0.shape
+            assert (dim,) == sd_sd_aa.shape
         elif share_params_across_genders:
             # 2 genders: Male or Female
-            assert (2, dim_value) == sd_mean_a0.shape
-            assert (2, dim_value) == sd_sd_aa.shape
+            assert (2, dim) == sd_mean_a0.shape
+            assert (2, dim) == sd_sd_aa.shape
         else:
-            assert (num_subjects, dim_value) == sd_mean_a0.shape
-            assert (num_subjects, dim_value) == sd_sd_aa.shape
+            assert (num_subjects, dim) == sd_mean_a0.shape
+            assert (num_subjects, dim) == sd_sd_aa.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
@@ -199,8 +201,11 @@ class SerializedComponent:
         self.self_dependent = self_dependent
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
+        self.share_params_across_features = share_params_across_features
 
-        self.parameters = SerializedComponentParameters(sd_mean_a0, sd_sd_aa)
+        self.parameters = SerializedComponentParameters(mean_mean_a0=mean_mean_a0,
+                                                        sd_mean_a0=sd_mean_a0,
+                                                        sd_sd_aa=sd_sd_aa)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -221,15 +226,16 @@ class SerializedComponent:
                      coordination: np.ndarray, can_repeat_subject: bool,
                      seed: Optional[int] = None) -> SerializedComponentSamples:
 
+        dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            assert (self.dim_value,) == self.parameters.mean_a0.value.shape
-            assert (self.dim_value,) == self.parameters.sd_aa.value.shape
+            assert (dim,) == self.parameters.mean_a0.value.shape
+            assert (dim,) == self.parameters.sd_aa.value.shape
         elif self.share_params_across_genders:
-            assert (2, self.dim_value) == self.parameters.mean_a0.value.shape
-            assert (2, self.dim_value) == self.parameters.sd_aa.value.shape
+            assert (2, dim) == self.parameters.mean_a0.value.shape
+            assert (2, dim) == self.parameters.sd_aa.value.shape
         else:
-            assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
-            assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
+            assert (self.num_subjects, dim) == self.parameters.mean_a0.value.shape
+            assert (self.num_subjects, dim) == self.parameters.sd_aa.value.shape
 
         assert 0 <= time_scale_density <= 1
 
@@ -348,20 +354,23 @@ class SerializedComponent:
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
 
+        dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=self.dim_value, observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                sigma=self.parameters.mean_a0.prior.sd, size=dim,
+                                observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=self.dim_value, observed=self.parameters.sd_aa.value)
+                                  size=dim, observed=self.parameters.sd_aa.value)
 
             # Resulting dimension: (features, 1). The last dimension will be broadcasted across time.
             mean = mean_a0[:, None]
             sd = sd_aa[:, None]
         elif self.share_params_across_genders:
-            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(2, self.dim_value), observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                sigma=self.parameters.mean_a0.prior.sd, size=(2, dim),
+                                observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=(2, self.dim_value), observed=self.parameters.sd_aa.value)
+                                  size=(2, dim), observed=self.parameters.sd_aa.value)
 
             # One mean and sd per time step matching their subjects' genders. The indexing below results in a matrix of
             # dimensions: (features, time)
@@ -369,10 +378,11 @@ class SerializedComponent:
             mean = mean_a0[genders].transpose()
             sd = sd_aa[genders].transpose()
         else:
-            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(self.num_subjects, self.dim_value), observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
+                                observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_aa.value)
+                                  size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
 
             # One mean and sd per time step matching their subjects. The indexing below results in a matrix of
             # dimensions: (features, time)
