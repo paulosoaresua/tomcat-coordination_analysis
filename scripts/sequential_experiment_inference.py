@@ -23,6 +23,7 @@ from coordination.common.log import configure_log
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries, VOCALIC_FEATURES
 from coordination.model.coordination_model import CoordinationPosteriorSamples
+from coordination.component.serialized_component import Mode
 
 """
 This scripts performs inferences in a subset of experiments from a dataset. Inferences are performed sequentially. That
@@ -44,7 +45,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               a_mixture_weights: np.ndarray, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
               sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
               b_p_semantic_link: float, ignore_bad_channels: bool, share_params_across_subjects: bool,
-              share_params_across_genders: bool, share_params_across_features: bool):
+              share_params_across_genders: bool, share_params_across_features: bool, vocalic_mode: str):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -54,6 +55,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
+
+    vocalic_mode = Mode.BLENDING if vocalic_mode == "blending" else Mode.MIXTURE
 
     # Non-interactive backend to make sure it works in a TMUX session when executed from PyCharm.
     mpl.use("Agg")
@@ -175,7 +178,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  initial_coordination=initial_coordination,
                                  share_params_across_subjects=share_params_across_subjects,
                                  share_params_across_genders=share_params_across_genders,
-                                 share_params_across_features=share_params_across_features)
+                                 share_params_across_features=share_params_across_features,
+                                 mode=vocalic_mode)
 
         elif model_name == "vocalic_semantic":
             model = VocalicSemanticModel(num_subjects=num_subjects,
@@ -192,7 +196,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          initial_coordination=initial_coordination,
                                          share_params_across_subjects=share_params_across_subjects,
                                          share_params_across_genders=share_params_across_genders,
-                                         share_params_across_features=share_params_across_features)
+                                         share_params_across_features=share_params_across_features,
+                                         mode=vocalic_mode)
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -561,6 +566,8 @@ if __name__ == "__main__":
                              "only the parameters of that gender will be estimated.")
     parser.add_argument("--share_params_across_features", type=int, required=False, default=0,
                         help="Whether to fit one parameter per feature.")
+    parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
+                        help="How coordination controls vocalics from different individuals.")
 
     args = parser.parse_args()
 
@@ -641,4 +648,5 @@ if __name__ == "__main__":
               ignore_bad_channels=bool(args.ignore_bad_channels),
               share_params_across_subjects=bool(args.share_params_across_subjects),
               share_params_across_genders=bool(args.share_params_across_genders),
-              share_params_across_features=bool(args.share_params_across_features))
+              share_params_across_features=bool(args.share_params_across_features),
+              vocalic_mode=args.vocalic_mode)

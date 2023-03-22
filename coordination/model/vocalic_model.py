@@ -11,7 +11,7 @@ import xarray
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples, BetaGaussianCoordinationComponent
-from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
+from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
@@ -259,7 +259,7 @@ class VocalicModel:
                  sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
                  share_params_across_subjects: bool, share_params_across_genders: bool,
                  share_params_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None):
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -292,7 +292,8 @@ class VocalicModel:
                                                       sd_sd_aa=sd_sd_aa_vocalic,
                                                       share_params_across_subjects=share_params_across_subjects,
                                                       share_params_across_genders=share_params_across_genders,
-                                                      share_params_across_features=share_params_across_features)
+                                                      share_params_across_features=share_params_across_features,
+                                                      mode=mode)
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),

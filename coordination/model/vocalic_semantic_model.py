@@ -11,7 +11,7 @@ import xarray
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples, BetaGaussianCoordinationComponent
-from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
+from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
 from coordination.component.link_component import LinkComponent, LinkComponentSamples
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
@@ -94,7 +94,7 @@ class VocalicSemanticModel:
                  sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
                  b_p_semantic_link: float, share_params_across_subjects: bool, share_params_across_genders: bool,
                  share_params_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None):
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
         self.share_params_across_subjects = share_params_across_subjects
@@ -123,7 +123,8 @@ class VocalicSemanticModel:
                                                       sd_sd_aa=sd_sd_aa_vocalic,
                                                       share_params_across_subjects=share_params_across_subjects,
                                                       share_params_across_genders=share_params_across_genders,
-                                                      share_params_across_features=share_params_across_features)
+                                                      share_params_across_features=share_params_across_features,
+                                                      mode=mode)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
                                                b_p=b_p_semantic_link)
