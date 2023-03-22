@@ -381,7 +381,7 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
 
     posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
     fig = plt.figure(figsize=(15, 8))
-    posterior_samples.plot(fig.gca(), show_samples=True)
+    posterior_samples.plot(fig.gca(), show_samples=False, line_width=5)
 
     if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
         # Mark points with vocalic
@@ -389,15 +389,14 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
             time_points = evidence.time_steps_in_coordination_scale
         else:
             time_points = evidence.vocalic.time_steps_in_coordination_scale
-        plt.scatter(time_points, np.full_like(time_points, fill_value=1.05), c="black", alpha=1, marker="^", s=10,
-                    zorder=4)
+        y = posterior_samples.coordination.mean(dim=["chain", "draw"])[time_points]
+        plt.scatter(time_points, y, c="white", alpha=1, marker="o", s=3, zorder=4)
 
     if isinstance(model, VocalicSemanticModel):
         # Mark points with semantic link
         time_points = evidence.semantic_link_time_steps_in_coordination_scale
-        mean_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"])
-        links = mean_coordination[time_points]
-        plt.scatter(time_points, links, c="black", alpha=1, marker="*", s=10, zorder=4)
+        y = posterior_samples.coordination.mean(dim=["chain", "draw"])[time_points]
+        plt.scatter(time_points, y + 0.05, c="white", alpha=1, marker="*", s=10, zorder=4)
 
     plt.title(f"Coordination")
     plt.xlabel(f"Time Step")
