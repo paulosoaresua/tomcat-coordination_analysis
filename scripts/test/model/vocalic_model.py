@@ -8,15 +8,17 @@ from coordination.common.utils import set_random_seed
 from coordination.common.functions import logit
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
+from coordination.component.serialized_component import Mode
 
 # Parameters
+MODE = Mode.MIXTURE
 INITIAL_COORDINATION = 0.5
 ESTIMATE_INITIAL_COORDINATION = True
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
 NUM_VOCALIC_FEATURES = 2
 TIME_SCALE_DENSITY = 1
-SEED = 0
+SEED = 1
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
 N = 1000
@@ -27,7 +29,7 @@ SHARE_PARAMS_ACROSS_FEATURES_GEN = False
 
 SHARE_PARAMS_ACROSS_SUBJECTS_INF = True
 SHARE_PARAMS_ACROSS_GENDERS_INF = False
-SHARE_PARAMS_ACROSS_FEATURES_INF = False
+SHARE_PARAMS_ACROSS_FEATURES_INF = True
 
 # Different scales per features to test the model robustness
 set_random_seed(SEED)
@@ -79,7 +81,9 @@ if __name__ == "__main__":
                                      b_p_semantic_link=1,
                                      initial_coordination=INITIAL_COORDINATION,
                                      share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF,
-                                     share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF)
+                                     share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF,
+                                     share_params_across_features=SHARE_PARAMS_ACROSS_FEATURES_INF,
+                                     mode=MODE)
 
         model.semantic_link_cpn.parameters.p.value = 0.7
     else:
@@ -96,7 +100,8 @@ if __name__ == "__main__":
                              initial_coordination=INITIAL_COORDINATION,
                              share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF,
                              share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF,
-                             share_params_across_features=SHARE_PARAMS_ACROSS_FEATURES_INF)
+                             share_params_across_features=SHARE_PARAMS_ACROSS_FEATURES_INF,
+                             mode=MODE)
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
@@ -164,9 +169,8 @@ if __name__ == "__main__":
         evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
 
     evidence.normalize_per_subject()
-
-    # evidence.normalize_across_subject()
-    # evidence.standardize()
+    evidence.normalize_across_subject()
+    evidence.standardize()
 
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:

@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
+from enum import Enum
 import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
@@ -9,14 +10,19 @@ from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 
 
-def serialized_logp_with_self_dependency(serialized_component: Any,
-                                         initial_mean: Any,
-                                         sigma: Any,
-                                         coordination: Any,
-                                         prev_time_same_subject: ptt.TensorConstant,
-                                         prev_time_diff_subject: ptt.TensorConstant,
-                                         prev_same_subject_mask: ptt.TensorConstant,
-                                         prev_diff_subject_mask: ptt.TensorConstant):
+class Mode(Enum):
+    BLENDING = 0
+    MIXTURE = 1
+
+
+def blending_logp(serialized_component: Any,
+                  initial_mean: Any,
+                  sigma: Any,
+                  coordination: Any,
+                  prev_time_same_subject: ptt.TensorConstant,
+                  prev_time_diff_subject: ptt.TensorConstant,
+                  prev_same_subject_mask: ptt.TensorConstant,
+                  prev_diff_subject_mask: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     S = serialized_component[..., prev_time_same_subject]  # d x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
@@ -33,12 +39,12 @@ def serialized_logp_with_self_dependency(serialized_component: Any,
     return total_logp
 
 
-def serialized_logp_without_self_dependency(serialized_component: Any,
-                                            initial_mean: Any,
-                                            sigma: Any,
-                                            coordination: Any,
-                                            prev_time_diff_subject: ptt.TensorConstant,
-                                            prev_diff_subject_mask: ptt.TensorConstant):
+def blending_logp_no_self_dependency(serialized_component: Any,
+                                     initial_mean: Any,
+                                     sigma: Any,
+                                     coordination: Any,
+                                     prev_time_diff_subject: ptt.TensorConstant,
+                                     prev_diff_subject_mask: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
 
@@ -52,15 +58,15 @@ def serialized_logp_without_self_dependency(serialized_component: Any,
     return total_logp
 
 
-def serialized_random_with_self_dependency(initial_mean: np.ndarray,
-                                           sigma: np.ndarray,
-                                           coordination: np.ndarray,
-                                           prev_time_same_subject: np.ndarray,
-                                           prev_time_diff_subject: np.ndarray,
-                                           prev_same_subject_mask: np.ndarray,
-                                           prev_diff_subject_mask: np.ndarray,
-                                           rng: Optional[np.random.Generator] = None,
-                                           size: Optional[Tuple[int]] = None) -> np.ndarray:
+def blending_random(initial_mean: np.ndarray,
+                    sigma: np.ndarray,
+                    coordination: np.ndarray,
+                    prev_time_same_subject: np.ndarray,
+                    prev_time_diff_subject: np.ndarray,
+                    prev_same_subject_mask: np.ndarray,
+                    prev_diff_subject_mask: np.ndarray,
+                    rng: Optional[np.random.Generator] = None,
+                    size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
 
     noise = rng.normal(loc=0, scale=1, size=size) * sigma
@@ -76,7 +82,14 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
         # Previous sample from the same individual
-        S = sample[..., prev_time_same_subject[t]] * prev_same_subject_mask[t]
+
+        if prev_same_subject_mask[t] == 1:
+            S = sample[..., prev_time_same_subject[t]]
+        else:
+            if initial_mean.shape[1] == 1:
+                S = initial_mean[..., 0]
+            else:
+                S = initial_mean[..., t]
 
         mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
 
@@ -91,13 +104,13 @@ def serialized_random_with_self_dependency(initial_mean: np.ndarray,
     return sample + noise
 
 
-def serialized_random_without_self_dependency(initial_mean: np.ndarray,
-                                              sigma: np.ndarray,
-                                              coordination: np.ndarray,
-                                              prev_time_diff_subject: np.ndarray,
-                                              prev_diff_subject_mask: np.ndarray,
-                                              rng: Optional[np.random.Generator] = None,
-                                              size: Optional[Tuple[int]] = None) -> np.ndarray:
+def blending_random_no_self_dependency(initial_mean: np.ndarray,
+                                       sigma: np.ndarray,
+                                       coordination: np.ndarray,
+                                       prev_time_diff_subject: np.ndarray,
+                                       prev_diff_subject_mask: np.ndarray,
+                                       rng: Optional[np.random.Generator] = None,
+                                       size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
 
     noise = rng.normal(loc=0, scale=1, size=size) * sigma
@@ -118,6 +131,135 @@ def serialized_random_without_self_dependency(initial_mean: np.ndarray,
         else:
             S = initial_mean[..., t]
             mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
+
+        sample[..., t] = transition_sample
+
+    return sample + noise
+
+
+def mixture_logp(serialized_component: Any,
+                 initial_mean: Any,
+                 sigma: Any,
+                 coordination: Any,
+                 prev_time_same_subject: ptt.TensorConstant,
+                 prev_time_diff_subject: ptt.TensorConstant,
+                 prev_same_subject_mask: ptt.TensorConstant,
+                 prev_diff_subject_mask: ptt.TensorConstant):
+    C = coordination[None, :]  # 1 x t
+    S = serialized_component[..., prev_time_same_subject]  # d x t
+    D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    SM = prev_same_subject_mask[None, :]  # 1 x t
+    DM = prev_diff_subject_mask[None, :]  # 1 x t
+
+    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+    # If there's no previous observation from the same subject, we use the initial mean.
+    logp_same = pm.logp(pm.Normal.dist(mu=(S * SM + (1 - SM) * initial_mean), sigma=sigma, shape=D.shape),
+                        serialized_component)
+    logp_diff = pm.logp(pm.Normal.dist(mu=D, sigma=sigma, shape=D.shape), serialized_component)
+
+    total_logp = pm.math.log(C * DM * pm.math.exp(logp_diff) + (1 - C * DM) * pm.math.exp(logp_same)).sum()
+
+    return total_logp
+
+
+def mixture_logp_no_self_dependency(serialized_component: Any,
+                                    initial_mean: Any,
+                                    sigma: Any,
+                                    coordination: Any,
+                                    prev_time_diff_subject: ptt.TensorConstant,
+                                    prev_diff_subject_mask: ptt.TensorConstant):
+    C = coordination[None, :]  # 1 x t
+    D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    DM = prev_diff_subject_mask[None, :]  # 1 x t
+
+    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+    logp_same = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=D.shape), serialized_component)
+    logp_diff = pm.logp(pm.Normal.dist(mu=D, sigma=sigma, shape=D.shape), serialized_component)
+
+    total_logp = pm.math.log(C * DM * pm.math.exp(logp_diff) + (1 - C * DM) * pm.math.exp(logp_same)).sum()
+
+    return total_logp
+
+
+def mixture_random(initial_mean: np.ndarray,
+                   sigma: np.ndarray,
+                   coordination: np.ndarray,
+                   prev_time_same_subject: np.ndarray,
+                   prev_time_diff_subject: np.ndarray,
+                   prev_same_subject_mask: np.ndarray,
+                   prev_diff_subject_mask: np.ndarray,
+                   rng: Optional[np.random.Generator] = None,
+                   size: Optional[Tuple[int]] = None) -> np.ndarray:
+    num_time_steps = coordination.shape[-1]
+
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma
+
+    sample = np.zeros_like(noise)
+
+    mean_0 = initial_mean if initial_mean.ndim == 1 else initial_mean[..., 0]
+    sd_0 = sigma if sigma.ndim == 1 else sigma[..., 0]
+
+    prior_sample = rng.normal(loc=mean_0, scale=sd_0)
+    sample[..., 0] = prior_sample
+    for t in np.arange(1, num_time_steps):
+        # Previous sample from a different individual
+        D = sample[..., prev_time_diff_subject[t]]
+        # Previous sample from the same individual
+        S = sample[..., prev_time_same_subject[t]] * prev_same_subject_mask[t]
+
+        if prev_diff_subject_mask[t] == 1 and np.random.rand() <= coordination[t]:
+            mean = D
+        else:
+            mean = S * prev_same_subject_mask[t] + mean_0 * (1 - prev_same_subject_mask[t])
+
+        if sigma.shape[1] == 1:
+            # Parameter sharing across subjects
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
+        else:
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
+
+        sample[..., t] = transition_sample
+
+    return sample + noise
+
+
+def mixture_random_no_self_dependency(initial_mean: np.ndarray,
+                                      sigma: np.ndarray,
+                                      coordination: np.ndarray,
+                                      prev_time_diff_subject: np.ndarray,
+                                      prev_diff_subject_mask: np.ndarray,
+                                      rng: Optional[np.random.Generator] = None,
+                                      size: Optional[Tuple[int]] = None) -> np.ndarray:
+    num_time_steps = coordination.shape[-1]
+
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma
+
+    sample = np.zeros_like(noise)
+
+    for t in np.arange(1, num_time_steps):
+        # Previous sample from a different individual
+        D = sample[..., prev_time_diff_subject[t]]
+
+        if sigma.shape[1] == 1:
+            # Parameter sharing across subjects
+            S = initial_mean[..., 0]
+        else:
+            S = initial_mean[..., t]
+
+        if prev_diff_subject_mask[t] == 1 and np.random.rand() <= coordination[t]:
+            mean = D
+        else:
+            mean = S
+
+        # No self-dependency. The transition distribution is a blending between the previous value from another individual,
+        # and a fixed mean.
+        if sigma.shape[1] == 1:
+            # Parameter sharing across subjects
+            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
+        else:
             transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
 
         sample[..., t] = transition_sample
@@ -180,7 +322,7 @@ class SerializedComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_params_across_subjects: bool,
-                 share_params_across_genders: bool, share_params_across_features: bool):
+                 share_params_across_genders: bool, share_params_across_features: bool, mode: Mode = Mode.BLENDING):
         assert not (share_params_across_subjects and share_params_across_genders)
 
         dim = 1 if share_params_across_features else dim_value
@@ -202,6 +344,7 @@ class SerializedComponent:
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
         self.share_params_across_features = share_params_across_features
+        self.mode = mode
 
         self.parameters = SerializedComponentParameters(mean_mean_a0=mean_mean_a0,
                                                         sd_mean_a0=sd_mean_a0,
@@ -286,6 +429,8 @@ class SerializedComponent:
                 curr_subject = samples.subjects[s][t]
                 if self.share_params_across_genders:
                     curr_subject = samples.gender_map[curr_subject]
+                elif self.share_params_across_subjects:
+                    curr_subject = 0
 
                 if samples.prev_time_same_subject[s][t] < 0:
                     # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
@@ -301,18 +446,22 @@ class SerializedComponent:
                     if self.self_dependent:
                         # When there's self dependency, the component either depends on the previous value of another subject,
                         # or the previous value of the same subject.
-                        prev_same_mask = (samples.prev_time_same_subject[s][t] != -1).astype(int)
                         S = samples.values[s][..., samples.prev_time_same_subject[s][t]]
                     else:
                         # When there's no self dependency, the component either depends on the previous value of another subject,
                         # or it is samples around a fixed mean.
-                        prev_same_mask = 1
                         S = mean_a0[curr_subject]
 
                     prev_diff_mask = (samples.prev_time_diff_subject[s][t] != -1).astype(int)
                     D = samples.values[s][..., samples.prev_time_diff_subject[s][t]]
 
-                    mean = (D - S * prev_same_mask) * C * prev_diff_mask + S * prev_same_mask
+                    if self.mode == Mode.BLENDING:
+                        mean = (D - S) * C * prev_diff_mask + S
+                    else:
+                        if prev_diff_mask == 1 and np.random.rand() <= C:
+                            mean = D
+                        else:
+                            mean = S
                     sd = sd_aa[curr_subject]
 
                     samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
@@ -397,9 +546,10 @@ class SerializedComponent:
                            ptt.constant(prev_time_diff_subject),
                            ptt.constant(prev_same_subject_mask),
                            ptt.constant(prev_diff_subject_mask))
-            random_fn = serialized_random_with_self_dependency
-            serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=serialized_logp_with_self_dependency,
-                                                  random=random_fn, dims=[feature_dimension, time_dimension],
+            logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
+            random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
+            serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
+                                                  dims=[feature_dimension, time_dimension],
                                                   observed=observed_values)
         else:
             logp_params = (mean,
@@ -407,9 +557,10 @@ class SerializedComponent:
                            coordination,
                            ptt.constant(prev_time_diff_subject),
                            ptt.constant(prev_diff_subject_mask))
-            random_fn = serialized_random_without_self_dependency
-            serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=serialized_logp_without_self_dependency,
-                                                  random=random_fn, dims=[feature_dimension, time_dimension],
+            logp_fn = blending_logp_no_self_dependency if self.mode == Mode.BLENDING else mixture_logp_no_self_dependency
+            random_fn = blending_random_no_self_dependency if self.mode == Mode.BLENDING else mixture_random_no_self_dependency
+            serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
+                                                  dims=[feature_dimension, time_dimension],
                                                   observed=observed_values)
 
         return serialized_component, mean_a0, sd_aa
