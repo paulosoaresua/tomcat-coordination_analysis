@@ -182,6 +182,9 @@ class SerializedObservationComponent:
                                  size=(self.num_subjects, dim), observed=self.parameters.sd_o.value)
             sd = sd_o[subjects].transpose()
 
+        if self.share_params_across_features:
+            sd = sd.repeat(self.dim_value, axis=0)
+
         observation_component = pm.Normal(name=self.uuid,
                                           mu=latent_component,
                                           sigma=sd,

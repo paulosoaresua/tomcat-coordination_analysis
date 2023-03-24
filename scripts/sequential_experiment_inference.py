@@ -54,6 +54,32 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         raise Exception("Parameters can be shared only across subjects or genders, not both.")
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
+
+    if share_params_across_genders:
+        set_random_seed(seed)
+        # Fill up missing genders from the distribution of known genders in the dataset.
+        gender_cols = [col for col in evidence_df.columns.tolist() if "gender" in col]
+        male_counts = 0
+        female_counts = 0
+        for _, row in evidence_df[gender_cols].iterrows():
+            for gender in row.values:
+                if gender == "M":
+                    male_counts += 1
+                elif gender == "F":
+                    female_counts += 1
+        p_male = 1.0 * male_counts / (male_counts + female_counts)
+
+        def fill_missing_gender(g: str):
+            if g not in ["M", "F"]:
+                g = np.random.choice(["M", "F"], 1, p=[p_male, 1 - p_male])[0]
+
+            return g
+
+        for gender_col in gender_cols:
+            evidence_df[gender_col] = evidence_df[gender_col].apply(fill_missing_gender)
+
+    set_random_seed(seed)
+
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
 
     vocalic_mode = Mode.BLENDING if vocalic_mode == "blending" else Mode.MIXTURE
@@ -105,8 +131,6 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
 
         elif model_name in ["vocalic", "vocalic_semantic"]:
-            # The vocalic model samples missing genders uniformly. So we set the seed here for reproducibility.
-            set_random_seed(seed)
             if model_name == "vocalic":
                 evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
             else:
@@ -202,7 +226,10 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             raise Exception(f"Invalid model {model_name}.")
 
         # Data transformation to correct biological differences captured in the signals from different participant.
-        evidence.normalize_per_subject()
+        if share_params_across_genders:
+            evidence.normalize_per_gender()
+        else:
+            evidence.normalize_per_subject()
 
         idata = None
         if do_prior:

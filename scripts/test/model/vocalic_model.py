@@ -6,19 +6,20 @@ import numpy as np
 
 from coordination.common.utils import set_random_seed
 from coordination.common.functions import logit
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
 from coordination.component.serialized_component import Mode
 
 # Parameters
-MODE = Mode.MIXTURE
+MODE = Mode.BLENDING
 INITIAL_COORDINATION = 0.5
 ESTIMATE_INITIAL_COORDINATION = True
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
 NUM_VOCALIC_FEATURES = 2
 TIME_SCALE_DENSITY = 1
-SEED = 1
+SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
 N = 1000
@@ -27,8 +28,8 @@ SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
 SHARE_PARAMS_ACROSS_GENDERS_GEN = False
 SHARE_PARAMS_ACROSS_FEATURES_GEN = False
 
-SHARE_PARAMS_ACROSS_SUBJECTS_INF = True
-SHARE_PARAMS_ACROSS_GENDERS_INF = False
+SHARE_PARAMS_ACROSS_SUBJECTS_INF = False
+SHARE_PARAMS_ACROSS_GENDERS_INF = True
 SHARE_PARAMS_ACROSS_FEATURES_INF = True
 
 # Different scales per features to test the model robustness
@@ -134,6 +135,12 @@ if __name__ == "__main__":
                                           vocalic_time_scale_density=TIME_SCALE_DENSITY,
                                           can_repeat_subject=False,
                                           seed=SEED)
+
+
+    # plt.figure()
+    # plt.plot(np.arange(TIME_STEPS), full_samples.coordination.coordination[0])
+    # plt.show()
+
     model.share_params_across_subjects = SHARE_PARAMS_ACROSS_SUBJECTS_INF
     model.latent_vocalic_cpn.share_params_across_subjects = SHARE_PARAMS_ACROSS_SUBJECTS_INF
     model.obs_vocalic_cpn.share_params_across_subjects = SHARE_PARAMS_ACROSS_SUBJECTS_INF
@@ -161,16 +168,24 @@ if __name__ == "__main__":
                                          semantic_link_time_steps_in_coordination_scale=
                                          full_samples.semantic_link.time_steps_in_coordination_scale[0])
 
-    # Add different offsets to observations from different users
-    all_subjects = set(evidence.subjects_in_time)
+    if SHARE_PARAMS_ACROSS_GENDERS_GEN:
+        # Add different offsets to observations from different users' genders
+        offsets = [10 ** i for i in range(2)]
+        genders_in_time = np.array([evidence.gender_map[s] for s in evidence.subjects_in_time])
+        for i, gender in enumerate([0, 1]):
+            evidence.observation[:, genders_in_time == gender] += offsets[i]
+    elif SHARE_PARAMS_ACROSS_SUBJECTS_GEN:
+        # Add different offsets to observations from different users
+        all_subjects = set(evidence.subjects_in_time)
 
-    offsets = [10 ** i for i in range(NUM_SUBJECTS)]
-    for i, subject in enumerate(all_subjects):
-        evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
+        offsets = [10 ** i for i in range(NUM_SUBJECTS)]
+        for i, subject in enumerate(all_subjects):
+            evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
 
-    evidence.normalize_per_subject()
-    evidence.normalize_across_subject()
-    evidence.standardize()
+    if SHARE_PARAMS_ACROSS_GENDERS_INF:
+        evidence.normalize_per_gender()
+    elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
+        evidence.normalize_per_subject()
 
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:
@@ -191,26 +206,24 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    posterior_samples = model.inference_data_to_posterior_samples(idata)
-
-    stacked_coordination_samples = posterior_samples.coordination.stack(chain_plus_draw=("chain", "draw"))
-    avg_coordination = posterior_samples.coordination.mean(dim=["chain", "draw"]).to_numpy()
+    posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
+    estimated = posterior_samples.coordination.mean(dim=["chain", "draw"]).to_numpy()
 
     plt.figure(figsize=(15, 8))
-    plt.plot(np.arange(TIME_STEPS)[:, None].repeat(N * C, axis=1), stacked_coordination_samples, color="tab:blue",
-             alpha=0.3, zorder=1)
-    plt.plot(range(TIME_STEPS), full_samples.coordination.coordination[0], label="Real", color="black", marker="o",
-             markersize=5, zorder=2)
-    plt.plot(range(TIME_STEPS), avg_coordination, label="Inferred", color="tab:pink", markersize=5, zorder=3)
+    posterior_samples.plot(plt.gca(), line_width=5)
+    plt.plot(range(TIME_STEPS), full_samples.coordination.coordination[0], label="Real", color="black", zorder=3)
 
     if ADD_SEMANTIC_LINK:
-        plt.scatter(full_samples.semantic_link.time_steps_in_coordination_scale[0],
-                    full_samples.coordination.coordination[
-                        0, full_samples.semantic_link.time_steps_in_coordination_scale[0]], c="white", marker="*", s=3,
-                    zorder=4)
+        time_steps = full_samples.semantic_link.time_steps_in_coordination_scale[0]
+        plt.scatter(time_steps, estimated[time_steps] + 0.05, c="white", marker="*", s=10, zorder=4, label="Semantic Link")
     plt.title("Coordination")
     plt.legend()
     plt.show()
 
-    print(f"Real Coordination Average: {full_samples.coordination.coordination[0].mean()}")
-    print(f"Estimated Coordination Average: {avg_coordination.mean()}")
+    real = full_samples.coordination.coordination[0]
+
+    print(f"Real Coordination Average: {real.mean()}")
+    print(f"Estimated Coordination Average: {estimated.mean()}")
+
+    mse = np.sqrt(np.square(real - estimated).sum())
+    print(f"MSE = {mse}")

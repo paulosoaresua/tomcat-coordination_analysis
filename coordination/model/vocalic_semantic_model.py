@@ -60,6 +60,9 @@ class VocalicSemanticSeries:
     def standardize(self):
         self.vocalic.standardize()
 
+    def normalize_per_gender(self):
+        self.vocalic.normalize_per_gender()
+
     def normalize_per_subject(self):
         self.vocalic.normalize_per_subject()
 
