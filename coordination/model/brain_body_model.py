@@ -36,8 +36,9 @@ class BrainBodySeries:
         self.body = body_series
 
     @classmethod
-    def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str]):
-        brain_series = BrainSeries.from_data_frame(evidence_df=evidence_df, brain_channels=brain_channels)
+    def from_data_frame(cls, evidence_df: pd.DataFrame, brain_channels: List[str], ignore_bad_brain_channels: bool):
+        brain_series = BrainSeries.from_data_frame(evidence_df=evidence_df, brain_channels=brain_channels,
+                                                   ignore_bad_channels=ignore_bad_brain_channels)
         body_series = BodySeries.from_data_frame(evidence_df=evidence_df)
 
         return cls(
@@ -96,11 +97,12 @@ class BrainBodyModel:
                  sd_sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
                  sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
                  sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
-                 initial_coordination: Optional[float] = None):
+                 share_params_across_features: bool, initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.num_body_features = 1
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_features = share_params_across_features
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -114,7 +116,8 @@ class BrainBodyModel:
                                                  sd_mean_a0=sd_mean_a0_brain,
                                                  sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights,
-                                                 share_params_across_subjects=share_params_across_subjects)
+                                                 share_params_across_subjects=share_params_across_subjects,
+                                                 share_params_across_features=share_params_across_features)
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
@@ -122,17 +125,20 @@ class BrainBodyModel:
                                                 sd_mean_a0=sd_mean_a0_body,
                                                 sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights,
-                                                share_params_across_subjects=share_params_across_subjects)
+                                                share_params_across_subjects=share_params_across_subjects,
+                                                share_params_across_features=share_params_across_features)
         self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
                                                   num_subjects=len(subjects),
                                                   dim_value=len(brain_channels),
                                                   sd_sd_o=sd_sd_o_brain,
-                                                  share_params_across_subjects=share_params_across_subjects)
+                                                  share_params_across_subjects=share_params_across_subjects,
+                                                  share_params_across_features=share_params_across_features)
         self.obs_body_cpn = ObservationComponent(uuid="obs_body",
                                                  num_subjects=len(subjects),
                                                  dim_value=self.num_body_features,
                                                  sd_sd_o=sd_sd_o_body,
-                                                 share_params_across_subjects=share_params_across_subjects)
+                                                 share_params_across_subjects=share_params_across_subjects,
+                                                 share_params_across_features=share_params_across_features)
 
     @property
     def parameter_names(self) -> List[str]:

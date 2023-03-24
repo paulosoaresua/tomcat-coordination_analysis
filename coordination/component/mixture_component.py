@@ -179,13 +179,15 @@ class MixtureComponentSamples:
 class MixtureComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool):
+                 sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool, share_params_across_features: bool):
+
+        dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
-            assert (dim_value, ) == sd_mean_a0.shape
-            assert (dim_value, ) == sd_sd_aa.shape
+            assert (dim, ) == sd_mean_a0.shape
+            assert (dim, ) == sd_sd_aa.shape
         else:
-            assert (num_subjects, dim_value) == sd_mean_a0.shape
-            assert (num_subjects, dim_value) == sd_sd_aa.shape
+            assert (num_subjects, dim) == sd_mean_a0.shape
+            assert (num_subjects, dim) == sd_sd_aa.shape
 
         assert (num_subjects, num_subjects - 1) == a_mixture_weights.shape
 
@@ -194,6 +196,7 @@ class MixtureComponent:
         self.dim_value = dim_value
         self.self_dependent = self_dependent
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_features = share_params_across_features
 
         self.parameters = MixtureComponentParameters(sd_mean_a0=sd_mean_a0,
                                                      sd_sd_aa=sd_sd_aa,
@@ -221,12 +224,14 @@ class MixtureComponent:
 
     def draw_samples(self, num_series: int, relative_frequency: float,
                      coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
+
+        dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            assert (self.dim_value, ) == self.parameters.mean_a0.value.shape
-            assert (self.dim_value, ) == self.parameters.sd_aa.value.shape
+            assert (dim, ) == self.parameters.mean_a0.value.shape
+            assert (dim, ) == self.parameters.sd_aa.value.shape
         else:
-            assert (self.num_subjects, self.dim_value) == self.parameters.mean_a0.value.shape
-            assert (self.num_subjects, self.dim_value) == self.parameters.sd_aa.value.shape
+            assert (self.num_subjects, dim) == self.parameters.mean_a0.value.shape
+            assert (self.num_subjects, dim) == self.parameters.sd_aa.value.shape
 
         assert relative_frequency >= 1
         assert (self.num_subjects, self.num_subjects - 1) == self.parameters.mixture_weights.value.shape
@@ -292,22 +297,21 @@ class MixtureComponent:
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
                           observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None) -> Any:
-        if self.share_params_across_subjects:
-            param_size = self.dim_value
-        else:
-            param_size = (self.num_subjects, self.dim_value)
 
-        if mean_a0 is None:
+        dim = 1 if self.share_params_across_features else self.dim_value
+        if self.share_params_across_subjects:
             mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=param_size, observed=self.parameters.mean_a0.value)
-
-        if sd_aa is None:
+                                    size=dim, observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=param_size, observed=self.parameters.sd_aa.value)
+                                  size=dim, observed=self.parameters.sd_aa.value)
 
-        if self.share_params_across_subjects:
             mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
             sd_aa = sd_aa[None, :].repeat(self.num_subjects, axis=0)
+        else:
+            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
+                                    size=(self.num_subjects, dim), observed=self.parameters.mean_a0.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
 
         if mixture_weights is None:
             mixture_weights = pm.Dirichlet(name=self.mixture_weights_name,

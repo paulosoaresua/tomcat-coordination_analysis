@@ -53,6 +53,9 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
     if share_params_across_subjects and share_params_across_genders:
         raise Exception("Parameters can be shared only across subjects or genders, not both.")
 
+    if share_params_across_genders and "vocalic" not in model_name:
+        raise Exception("Gender normalization is only implemented in vocalic models.")
+
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
 
     if share_params_across_genders:
@@ -125,16 +128,17 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = BrainSeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
                                                    ignore_bad_channels=False)
         elif model_name == "body":
-            evidence = BodySeries.from_data_frame(row_df)
+            evidence = BodySeries.from_data_frame(evidence_df=row_df)
 
         elif model_name == "brain_body":
-            evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
+            evidence = BrainBodySeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
+                                                       ignore_bad_brain_channels=False)
 
         elif model_name in ["vocalic", "vocalic_semantic"]:
             if model_name == "vocalic":
-                evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
+                evidence = VocalicSeries.from_data_frame(evidence_df=row_df, vocalic_features=vocalic_features)
             else:
-                evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
+                evidence = VocalicSemanticSeries.from_data_frame(evidence_df=row_df, vocalic_features=vocalic_features)
 
             if share_params_across_genders and evidence.num_genders < 2:
                 # All subjects have the same gender, so sharing parameters across gender is the same as sharing them
@@ -160,7 +164,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                sd_sd_o=sd_sd_o_brain,
                                a_mixture_weights=a_mixture_weights,
                                initial_coordination=initial_coordination,
-                               share_params_across_subjects=True)
+                               share_params_across_subjects=share_params_across_subjects,
+                               share_params_across_features=share_params_across_features)
         elif model_name == "body":
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
@@ -171,10 +176,12 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               sd_sd_o=sd_sd_o_body,
                               a_mixture_weights=a_mixture_weights,
                               initial_coordination=initial_coordination,
-                              share_params_across_subjects=True)
+                              share_params_across_subjects=share_params_across_subjects,
+                              share_params_across_features=share_params_across_features)
 
         elif model_name == "brain_body":
-            model = BrainBodyModel(subjects=evidence.subjects,
+            # The list of subjects should be the same for brain and body so it doesn't matter the one we use.
+            model = BrainBodyModel(subjects=evidence.brain.subjects,
                                    brain_channels=brain_channels,
                                    self_dependent=self_dependent,
                                    sd_mean_uc0=sd_mean_uc0,
@@ -187,7 +194,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    sd_sd_o_body=sd_sd_o_body,
                                    a_mixture_weights=a_mixture_weights,
                                    initial_coordination=initial_coordination,
-                                   share_params_across_subjects=True)
+                                   share_params_across_subjects=share_params_across_subjects,
+                                   share_params_across_features=share_params_across_features)
 
         elif model_name == "vocalic":
             model = VocalicModel(num_subjects=num_subjects,
@@ -281,19 +289,26 @@ def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_ev
 
 
 def save_predictive_posterior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
-    if isinstance(model, BrainModel) or isinstance(model, BrainBodyModel):
+    if isinstance(model, BrainBodyModel):
+        _plot_brain_predictive_plots(out_dir, idata, single_evidence_series.brain, model, False)
+        _plot_body_predictive_plots(out_dir, idata, single_evidence_series.body, model, False)
+
+    elif isinstance(model, BrainModel):
         _plot_brain_predictive_plots(out_dir, idata, single_evidence_series, model, False)
 
-    if isinstance(model, BodyModel) or isinstance(model, BrainBodyModel):
+    elif isinstance(model, BodyModel):
         _plot_body_predictive_plots(out_dir, idata, single_evidence_series, model, False)
 
-    if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
+    elif isinstance(model, VocalicModel):
         _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series, model, False)
+
+    elif isinstance(model, VocalicSemanticModel):
+        _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series.vocalic, model, False)
 
 
 def _plot_brain_predictive_plots(out_dir: str,
                                  idata: az.InferenceData,
-                                 single_evidence_series: Union[BrainSeries, BrainBodySeries],
+                                 single_evidence_series: BrainSeries,
                                  model: Any,
                                  prior: bool):
     if prior:
@@ -331,7 +346,7 @@ def _plot_brain_predictive_plots(out_dir: str,
 
 def _plot_body_predictive_plots(out_dir: str,
                                 idata: az.InferenceData,
-                                single_evidence_series: Union[BodySeries, BrainBodySeries],
+                                single_evidence_series: BodySeries,
                                 model: Any,
                                 prior: bool):
     if prior:
@@ -365,7 +380,7 @@ def _plot_body_predictive_plots(out_dir: str,
 
 def _plot_vocalic_predictive_plots(out_dir: str,
                                    idata: az.InferenceData,
-                                   single_evidence_series: Union[VocalicSeries, VocalicSemanticSeries],
+                                   single_evidence_series: VocalicSeries,
                                    model: Any,
                                    prior: bool):
     if prior:
@@ -387,13 +402,8 @@ def _plot_vocalic_predictive_plots(out_dir: str,
 
         fig = plt.figure(figsize=(15, 8))
         plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-
-        if isinstance(model, VocalicSemanticModel):
-            plt.plot(np.arange(T), single_evidence_series.vocalic.observation[j], color="tab:pink", alpha=1, marker="o",
-                     markersize=5)
-        else:
-            plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
-                     markersize=5)
+        plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
+                 markersize=5)
         plt.title(f"Observed {vocalic_feature}")
         plt.xlabel(f"Time Step")
         plt.ylabel(vocalic_feature)

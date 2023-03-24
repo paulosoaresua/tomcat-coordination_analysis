@@ -3,7 +3,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pymc as pm
 from scipy.stats import norm
-import pytensor.tensor as ptt
 
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior
@@ -27,16 +26,19 @@ class ObservationComponentSamples:
 class ObservationComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray,
-                 share_params_across_subjects: bool):
+                 share_params_across_subjects: bool, share_params_across_features: bool):
+
+        dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
-            assert (dim_value,) == sd_sd_o.shape
+            assert (dim,) == sd_sd_o.shape
         else:
-            assert (num_subjects, dim_value) == sd_sd_o.shape
+            assert (num_subjects, dim) == sd_sd_o.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_features = share_params_across_features
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
@@ -51,10 +53,11 @@ class ObservationComponent:
         return f"sd_o_{self.uuid}"
 
     def draw_samples(self, latent_component: np.ndarray, seed: Optional[int] = None) -> ObservationComponentSamples:
+        dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            assert (self.dim_value, 1) == self.parameters.sd_o.value.shape
+            assert (dim,) == self.parameters.sd_o.value.shape
         else:
-            assert (self.num_subjects, self.dim_value) == self.parameters.sd_o.value.shape
+            assert (self.num_subjects, dim) == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
 
@@ -74,13 +77,16 @@ class ObservationComponent:
 
     def update_pymc_model(self, latent_component: Any, subject_dimension: str, feature_dimension: str,
                           time_dimension: str, observed_values: Any) -> Any:
+        dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                                 size=self.dim_value, observed=self.parameters.sd_o.value)
+                                 size=dim, observed=self.parameters.sd_o.value)
+            # Broadcasted across subject and time
             sd = sd_o[None, :, None]
         else:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                                 size=(self.num_subjects, self.dim_value), observed=self.parameters.sd_o.value)
+                                 size=(self.num_subjects, dim), observed=self.parameters.sd_o.value)
+            # Broadcasted across time
             sd = sd_o[:, :, None]
 
         observation_component = pm.Normal(name=self.uuid,
