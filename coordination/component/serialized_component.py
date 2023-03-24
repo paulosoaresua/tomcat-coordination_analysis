@@ -538,6 +538,10 @@ class SerializedComponent:
             mean = mean_a0[subjects].transpose()
             sd = sd_aa[subjects].transpose()
 
+        if self.share_params_across_features:
+            mean = mean.repeat(self.dim_value, axis=0)
+            sd = sd.repeat(self.dim_value, axis=0)
+
         if self.self_dependent:
             logp_params = (mean,
                            sd,

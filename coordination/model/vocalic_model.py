@@ -99,6 +99,19 @@ class VocalicSeries:
             std = obs_per_subject.std(axis=1)[:, None]
             self.observation[:, self.subjects_in_time == subject] = (obs_per_subject - mean) / std
 
+    def normalize_per_gender(self):
+        """
+        Make sure measurements have mean 0 and standard deviation 1 per gender and feature.
+        """
+
+        genders_in_time = np.array([self.gender_map[s] for s in self.subjects_in_time])
+
+        for gender in [0, 1]:  # Male and Female
+            obs_per_gender = self.observation[:, genders_in_time == gender]
+            mean = obs_per_gender.mean(axis=1)[:, None]
+            std = obs_per_gender.std(axis=1)[:, None]
+            self.observation[:, genders_in_time == gender] = (obs_per_gender - mean) / std
+
     def normalize_across_subject(self):
         """
         Make sure measurements have mean 0 and standard deviation 1 per feature.
