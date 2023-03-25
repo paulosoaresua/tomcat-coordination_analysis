@@ -204,7 +204,7 @@ class BrainPosteriorSamples:
 class BrainModel:
 
     def __init__(self, subjects: List[str], brain_channels: List[str], self_dependent: bool, sd_mean_uc0: float,
-                 sd_sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
+                 sd_sd_uc: float, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
                  a_mixture_weights: np.ndarray, share_params_across_subjects: bool, share_params_across_features: bool,
                  initial_coordination: Optional[float] = None):
         self.subjects = subjects
@@ -221,6 +221,7 @@ class BrainModel:
                                                  num_subjects=len(subjects),
                                                  dim_value=len(brain_channels),
                                                  self_dependent=self_dependent,
+                                                 mean_mean_a0=mean_mean_a0,
                                                  sd_mean_a0=sd_mean_a0,
                                                  sd_sd_aa=sd_sd_aa,
                                                  a_mixture_weights=a_mixture_weights,

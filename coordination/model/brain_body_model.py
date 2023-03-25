@@ -94,10 +94,11 @@ class BrainBodyPosteriorSamples:
 class BrainBodyModel:
 
     def __init__(self, subjects: List[str], brain_channels: List[str], self_dependent: bool, sd_mean_uc0: float,
-                 sd_sd_uc: float, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
-                 sd_sd_o_brain: np.ndarray, sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray,
-                 sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
-                 share_params_across_features: bool, initial_coordination: Optional[float] = None):
+                 sd_sd_uc: float, mean_mean_a0_brain: np.ndarray, sd_mean_a0_brain: np.ndarray,
+                 sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray,
+                 sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
+                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool, share_params_across_features: bool,
+                 initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.num_body_features = 1
@@ -113,6 +114,7 @@ class BrainBodyModel:
                                                  num_subjects=len(subjects),
                                                  dim_value=len(brain_channels),
                                                  self_dependent=self_dependent,
+                                                 mean_mean_a0=mean_mean_a0_brain,
                                                  sd_mean_a0=sd_mean_a0_brain,
                                                  sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights,
@@ -122,6 +124,7 @@ class BrainBodyModel:
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
                                                 self_dependent=self_dependent,
+                                                mean_mean_a0=mean_mean_a0_body,
                                                 sd_mean_a0=sd_mean_a0_body,
                                                 sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights,

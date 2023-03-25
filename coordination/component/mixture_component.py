@@ -7,7 +7,8 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior, \
+    NormalParameterPrior
 
 
 def mixture_logp_with_self_dependency(mixture_component: Any,
@@ -152,8 +153,9 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
 
 class MixtureComponentParameters:
 
-    def __init__(self, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray):
-        self.mean_a0 = Parameter(HalfNormalParameterPrior(sd_mean_a0))
+    def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
+                 a_mixture_weights: np.ndarray):
+        self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
         self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
         self.mixture_weights = Parameter(DirichletParameterPrior(a_mixture_weights))
 
@@ -178,14 +180,17 @@ class MixtureComponentSamples:
 
 class MixtureComponent:
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool, share_params_across_features: bool):
+    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
+                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray,
+                 share_params_across_subjects: bool, share_params_across_features: bool):
 
         dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
-            assert (dim, ) == sd_mean_a0.shape
-            assert (dim, ) == sd_sd_aa.shape
+            assert (dim,) == mean_mean_a0.shape
+            assert (dim,) == sd_mean_a0.shape
+            assert (dim,) == sd_sd_aa.shape
         else:
+            assert (num_subjects, dim) == mean_mean_a0.shape
             assert (num_subjects, dim) == sd_mean_a0.shape
             assert (num_subjects, dim) == sd_sd_aa.shape
 
@@ -198,7 +203,8 @@ class MixtureComponent:
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_features = share_params_across_features
 
-        self.parameters = MixtureComponentParameters(sd_mean_a0=sd_mean_a0,
+        self.parameters = MixtureComponentParameters(mean_mean_a0=mean_mean_a0,
+                                                     sd_mean_a0=sd_mean_a0,
                                                      sd_sd_aa=sd_sd_aa,
                                                      a_mixture_weights=a_mixture_weights)
 
@@ -227,8 +233,8 @@ class MixtureComponent:
 
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            assert (dim, ) == self.parameters.mean_a0.value.shape
-            assert (dim, ) == self.parameters.sd_aa.value.shape
+            assert (dim,) == self.parameters.mean_a0.value.shape
+            assert (dim,) == self.parameters.sd_aa.value.shape
         else:
             assert (self.num_subjects, dim) == self.parameters.mean_a0.value.shape
             assert (self.num_subjects, dim) == self.parameters.sd_aa.value.shape
@@ -300,16 +306,18 @@ class MixtureComponent:
 
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=dim, observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                sigma=self.parameters.mean_a0.prior.sd, size=dim,
+                                observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                                   size=dim, observed=self.parameters.sd_aa.value)
 
             mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
             sd_aa = sd_aa[None, :].repeat(self.num_subjects, axis=0)
         else:
-            mean_a0 = pm.HalfNormal(name=self.mean_a0_name, sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(self.num_subjects, dim), observed=self.parameters.mean_a0.value)
+            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
+                                observed=self.parameters.mean_a0.value)
             sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
                                   size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
 
