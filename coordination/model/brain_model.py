@@ -204,12 +204,13 @@ class BrainPosteriorSamples:
 class BrainModel:
 
     def __init__(self, subjects: List[str], brain_channels: List[str], self_dependent: bool, sd_mean_uc0: float,
-                 sd_sd_uc: float, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
-                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
+                 sd_sd_uc: float, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, sd_sd_o: np.ndarray,
+                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool, share_params_across_features: bool,
                  initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.share_params_across_subjects = share_params_across_subjects
+        self.share_params_across_features = share_params_across_features
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -220,15 +221,18 @@ class BrainModel:
                                                  num_subjects=len(subjects),
                                                  dim_value=len(brain_channels),
                                                  self_dependent=self_dependent,
+                                                 mean_mean_a0=mean_mean_a0,
                                                  sd_mean_a0=sd_mean_a0,
                                                  sd_sd_aa=sd_sd_aa,
                                                  a_mixture_weights=a_mixture_weights,
-                                                 share_params_across_subjects=share_params_across_subjects)
+                                                 share_params_across_subjects=share_params_across_subjects,
+                                                 share_params_across_features=share_params_across_features)
         self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
                                                   num_subjects=len(subjects),
                                                   dim_value=len(brain_channels),
                                                   sd_sd_o=sd_sd_o,
-                                                  share_params_across_subjects=share_params_across_subjects)
+                                                  share_params_across_subjects=share_params_across_subjects,
+                                                  share_params_across_features=share_params_across_features)
 
     @property
     def parameter_names(self) -> List[str]:

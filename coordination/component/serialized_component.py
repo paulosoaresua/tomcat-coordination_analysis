@@ -327,13 +327,16 @@ class SerializedComponent:
 
         dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
+            assert (dim,) == mean_mean_a0.shape
             assert (dim,) == sd_mean_a0.shape
             assert (dim,) == sd_sd_aa.shape
         elif share_params_across_genders:
             # 2 genders: Male or Female
+            assert (2, dim) == mean_mean_a0.shape
             assert (2, dim) == sd_mean_a0.shape
             assert (2, dim) == sd_sd_aa.shape
         else:
+            assert (num_subjects, dim) == mean_mean_a0.shape
             assert (num_subjects, dim) == sd_mean_a0.shape
             assert (num_subjects, dim) == sd_sd_aa.shape
 

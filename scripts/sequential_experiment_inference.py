@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional
 
 import argparse
 from ast import literal_eval
@@ -40,18 +40,22 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               burn_in: int, num_samples: int, num_chains: int, seed: int, num_inference_jobs: int, do_prior: bool,
               do_posterior: bool, initial_coordination: Optional[float], num_subjects: int, brain_channels: List[str],
               vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float,
-              sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray,
-              sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
-              a_mixture_weights: np.ndarray, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
-              sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
-              b_p_semantic_link: float, ignore_bad_channels: bool, share_params_across_subjects: bool,
-              share_params_across_genders: bool, share_params_across_features: bool, vocalic_mode: str):
+              mean_mean_a0_brain: np.ndarray, sd_mean_a0_brain: np.ndarray, sd_sd_aa_brain: np.ndarray,
+              sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray, sd_mean_a0_body: np.ndarray,
+              sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray, a_mixture_weights: np.ndarray,
+              mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
+              sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
+              ignore_bad_channels: bool, share_params_across_subjects: bool, share_params_across_genders: bool,
+              share_params_across_features: bool, vocalic_mode: str):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
 
     if share_params_across_subjects and share_params_across_genders:
         raise Exception("Parameters can be shared only across subjects or genders, not both.")
+
+    if share_params_across_genders and "vocalic" not in model_name:
+        raise Exception("Gender normalization is only implemented in vocalic models.")
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
 
@@ -112,6 +116,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                 if brain_channels[i] in bad_channels:
                     removed_channels.append(brain_channels[i])
                     del brain_channels[i]
+                    mean_mean_a0_brain = np.delete(mean_mean_a0_brain, i, axis=1)
                     sd_mean_a0_brain = np.delete(sd_mean_a0_brain, i, axis=1)
                     sd_sd_aa_brain = np.delete(sd_sd_aa_brain, i, axis=1)
                     sd_sd_o_brain = np.delete(sd_sd_o_brain, i, axis=1)
@@ -125,16 +130,17 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
             evidence = BrainSeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
                                                    ignore_bad_channels=False)
         elif model_name == "body":
-            evidence = BodySeries.from_data_frame(row_df)
+            evidence = BodySeries.from_data_frame(evidence_df=row_df)
 
         elif model_name == "brain_body":
-            evidence = BrainBodySeries.from_data_frame(row_df, brain_channels)
+            evidence = BrainBodySeries.from_data_frame(evidence_df=row_df, brain_channels=brain_channels,
+                                                       ignore_bad_brain_channels=False)
 
         elif model_name in ["vocalic", "vocalic_semantic"]:
             if model_name == "vocalic":
-                evidence = VocalicSeries.from_data_frame(row_df, vocalic_features)
+                evidence = VocalicSeries.from_data_frame(evidence_df=row_df, vocalic_features=vocalic_features)
             else:
-                evidence = VocalicSemanticSeries.from_data_frame(row_df, vocalic_features)
+                evidence = VocalicSemanticSeries.from_data_frame(evidence_df=row_df, vocalic_features=vocalic_features)
 
             if share_params_across_genders and evidence.num_genders < 2:
                 # All subjects have the same gender, so sharing parameters across gender is the same as sharing them
@@ -155,39 +161,47 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                self_dependent=self_dependent,
                                sd_mean_uc0=sd_mean_uc0,
                                sd_sd_uc=sd_sd_uc,
+                               mean_mean_a0=mean_mean_a0_brain,
                                sd_mean_a0=sd_mean_a0_brain,
                                sd_sd_aa=sd_sd_aa_brain,
                                sd_sd_o=sd_sd_o_brain,
                                a_mixture_weights=a_mixture_weights,
                                initial_coordination=initial_coordination,
-                               share_params_across_subjects=True)
+                               share_params_across_subjects=share_params_across_subjects,
+                               share_params_across_features=share_params_across_features)
         elif model_name == "body":
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
                               sd_mean_uc0=sd_mean_uc0,
                               sd_sd_uc=sd_sd_uc,
+                              mean_mean_a0=mean_mean_a0_body,
                               sd_mean_a0=sd_mean_a0_body,
                               sd_sd_aa=sd_sd_aa_body,
                               sd_sd_o=sd_sd_o_body,
                               a_mixture_weights=a_mixture_weights,
                               initial_coordination=initial_coordination,
-                              share_params_across_subjects=True)
+                              share_params_across_subjects=share_params_across_subjects,
+                              share_params_across_features=share_params_across_features)
 
         elif model_name == "brain_body":
-            model = BrainBodyModel(subjects=evidence.subjects,
+            # The list of subjects should be the same for brain and body so it doesn't matter the one we use.
+            model = BrainBodyModel(subjects=evidence.brain.subjects,
                                    brain_channels=brain_channels,
                                    self_dependent=self_dependent,
                                    sd_mean_uc0=sd_mean_uc0,
                                    sd_sd_uc=sd_sd_uc,
+                                   mean_mean_a0_brain=mean_mean_a0_brain,
                                    sd_mean_a0_brain=sd_mean_a0_brain,
                                    sd_sd_aa_brain=sd_sd_aa_brain,
                                    sd_sd_o_brain=sd_sd_o_brain,
+                                   mean_mean_a0_body=mean_mean_a0_body,
                                    sd_mean_a0_body=sd_mean_a0_body,
                                    sd_sd_aa_body=sd_sd_aa_body,
                                    sd_sd_o_body=sd_sd_o_body,
                                    a_mixture_weights=a_mixture_weights,
                                    initial_coordination=initial_coordination,
-                                   share_params_across_subjects=True)
+                                   share_params_across_subjects=share_params_across_subjects,
+                                   share_params_across_features=share_params_across_features)
 
         elif model_name == "vocalic":
             model = VocalicModel(num_subjects=num_subjects,
@@ -228,7 +242,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         # Data transformation to correct biological differences captured in the signals from different participant.
         if share_params_across_genders:
             evidence.normalize_per_gender()
-        else:
+        elif share_params_across_subjects:
             evidence.normalize_per_subject()
 
         idata = None
@@ -281,19 +295,26 @@ def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_ev
 
 
 def save_predictive_posterior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
-    if isinstance(model, BrainModel) or isinstance(model, BrainBodyModel):
+    if isinstance(model, BrainBodyModel):
+        _plot_brain_predictive_plots(out_dir, idata, single_evidence_series.brain, model, False)
+        _plot_body_predictive_plots(out_dir, idata, single_evidence_series.body, model, False)
+
+    elif isinstance(model, BrainModel):
         _plot_brain_predictive_plots(out_dir, idata, single_evidence_series, model, False)
 
-    if isinstance(model, BodyModel) or isinstance(model, BrainBodyModel):
+    elif isinstance(model, BodyModel):
         _plot_body_predictive_plots(out_dir, idata, single_evidence_series, model, False)
 
-    if isinstance(model, VocalicModel) or isinstance(model, VocalicSemanticModel):
+    elif isinstance(model, VocalicModel):
         _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series, model, False)
+
+    elif isinstance(model, VocalicSemanticModel):
+        _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series.vocalic, model, False)
 
 
 def _plot_brain_predictive_plots(out_dir: str,
                                  idata: az.InferenceData,
-                                 single_evidence_series: Union[BrainSeries, BrainBodySeries],
+                                 single_evidence_series: BrainSeries,
                                  model: Any,
                                  prior: bool):
     if prior:
@@ -331,7 +352,7 @@ def _plot_brain_predictive_plots(out_dir: str,
 
 def _plot_body_predictive_plots(out_dir: str,
                                 idata: az.InferenceData,
-                                single_evidence_series: Union[BodySeries, BrainBodySeries],
+                                single_evidence_series: BodySeries,
                                 model: Any,
                                 prior: bool):
     if prior:
@@ -365,7 +386,7 @@ def _plot_body_predictive_plots(out_dir: str,
 
 def _plot_vocalic_predictive_plots(out_dir: str,
                                    idata: az.InferenceData,
-                                   single_evidence_series: Union[VocalicSeries, VocalicSemanticSeries],
+                                   single_evidence_series: VocalicSeries,
                                    model: Any,
                                    prior: bool):
     if prior:
@@ -387,13 +408,8 @@ def _plot_vocalic_predictive_plots(out_dir: str,
 
         fig = plt.figure(figsize=(15, 8))
         plt.plot(np.arange(T)[:, None].repeat(N, axis=1), prior_samples.T, color="tab:blue", alpha=0.3)
-
-        if isinstance(model, VocalicSemanticModel):
-            plt.plot(np.arange(T), single_evidence_series.vocalic.observation[j], color="tab:pink", alpha=1, marker="o",
-                     markersize=5)
-        else:
-            plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
-                     markersize=5)
+        plt.plot(np.arange(T), single_evidence_series.observation[j], color="tab:pink", alpha=1, marker="o",
+                 markersize=5)
         plt.title(f"Observed {vocalic_feature}")
         plt.xlabel(f"Time Step")
         plt.ylabel(vocalic_feature)
@@ -540,6 +556,10 @@ if __name__ == "__main__":
                         help="Standard deviation of the prior distribution of mean_uc0")
     parser.add_argument("--sd_sd_uc", type=float, required=False, default=1,
                         help="Standard deviation of the prior distribution of sd_uc")
+    parser.add_argument("--mean_mean_a0_brain", type=str, required=False, default="0",
+                        help="Mean of the prior distribution of mu_brain_0. If the parameters are "
+                             "different per channel, it is possible to pass an array as a comma-separated list of."
+                             "numbers."),
     parser.add_argument("--sd_mean_a0_brain", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_brain_0. If the parameters are "
                              "different per channel, it is possible to pass an array as a comma-separated list of."
@@ -552,6 +572,8 @@ if __name__ == "__main__":
                         help="Standard deviation of the prior distribution of sd_obs_brain. If the parameters are "
                              "different per channel, it is possible to pass an array as a comma-separated list of."
                              "numbers."),
+    parser.add_argument("--mean_mean_a0_body", type=str, required=False, default="0",
+                        help="Mean of the prior distribution of mu_body_0."),
     parser.add_argument("--sd_mean_a0_body", type=str, required=False, default="1",
                         help="Standard deviation of the prior distribution of mu_body_0."),
     parser.add_argument("--sd_sd_aa_body", type=str, required=False, default="1",
@@ -599,27 +621,31 @@ if __name__ == "__main__":
 
     # Brain parameters
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
-    dim = len(arg_brain_channels)
+    dim = 1 if bool(args.share_params_across_features) else len(arg_brain_channels)
     arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
                                            args.num_subjects - 1)
     if bool(args.share_params_across_subjects):
+        arg_mean_mean_a0_brain = str_to_array(args.mean_mean_a0_brain, dim)
         arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim)
         arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim)
         arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim)
     else:
+        arg_mean_mean_a0_brain = matrix_to_size(str_to_matrix(args.mean_mean_a0_brain), args.num_subjects, dim)
         arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects, dim)
         arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, dim)
         arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, dim)
 
     # Body parameters
     if bool(args.share_params_across_subjects):
+        arg_mean_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
         arg_sd_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
         arg_sd_sd_aa_body = str_to_array(args.sd_sd_aa_body, 1)
         arg_sd_sd_o_body = str_to_array(args.sd_sd_o_body, 1)
     else:
-        arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, dim)
-        arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, dim)
-        arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, dim)
+        arg_mean_mean_a0_body = matrix_to_size(str_to_matrix(args.mean_mean_a0_body), args.num_subjects, 1)
+        arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
+        arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
+        arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
 
     # Vocalic parameters
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
@@ -658,9 +684,11 @@ if __name__ == "__main__":
               self_dependent=args.self_dependent,
               sd_mean_uc0=args.sd_mean_uc0,
               sd_sd_uc=args.sd_sd_uc,
+              mean_mean_a0_brain=arg_mean_mean_a0_brain,
               sd_mean_a0_brain=arg_sd_mean_a0_brain,
               sd_sd_aa_brain=arg_sd_sd_aa_brain,
               sd_sd_o_brain=arg_sd_sd_o_brain,
+              mean_mean_a0_body=arg_mean_mean_a0_body,
               sd_mean_a0_body=arg_sd_mean_a0_body,
               sd_sd_aa_body=arg_sd_sd_aa_body,
               sd_sd_o_body=arg_sd_sd_o_body,
