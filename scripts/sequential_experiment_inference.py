@@ -651,19 +651,19 @@ if __name__ == "__main__":
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
     dim = 1 if bool(args.share_params_across_features) else len(arg_vocalic_features)
     if bool(args.share_params_across_subjects):
-        arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, dim)
-        arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim)
-        arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim)
+        arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, len(arg_vocalic_features))
+        arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, len(arg_vocalic_features))
+        arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, len(arg_vocalic_features))
         arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim)
     elif bool(args.share_params_across_genders):
-        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), 2, dim)
-        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, dim)
-        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, dim)
+        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), 2, len(arg_vocalic_features))
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, len(arg_vocalic_features))
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, len(arg_vocalic_features))
         arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), 2, dim)
     else:
-        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), args.num_subjects, dim)
-        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, dim)
-        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, dim)
+        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), args.num_subjects, len(arg_vocalic_features))
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, len(arg_vocalic_features))
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, len(arg_vocalic_features))
         arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, dim)
 
     inference(out_dir=args.out_dir,

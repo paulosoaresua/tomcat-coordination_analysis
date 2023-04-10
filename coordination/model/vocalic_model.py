@@ -305,7 +305,7 @@ class VocalicModel:
                                                       sd_sd_aa=sd_sd_aa_vocalic,
                                                       share_params_across_subjects=share_params_across_subjects,
                                                       share_params_across_genders=share_params_across_genders,
-                                                      share_params_across_features=share_params_across_features,
+                                                      share_params_across_features=False,
                                                       mode=mode)
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
