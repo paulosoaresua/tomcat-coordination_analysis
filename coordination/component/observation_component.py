@@ -81,11 +81,13 @@ class ObservationComponent:
         if self.share_params_across_subjects:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                                  size=dim, observed=self.parameters.sd_o.value)
+
             # Broadcasted across subject and time
             sd = sd_o[None, :, None]
         else:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                                  size=(self.num_subjects, dim), observed=self.parameters.sd_o.value)
+
             # Broadcasted across time
             sd = sd_o[:, :, None]
 
@@ -175,7 +177,6 @@ class SerializedObservationComponent:
         if self.share_params_across_subjects:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
                                  size=dim, observed=self.parameters.sd_o.value)
-            # Broadcasted across time
             sd = sd_o[:, None]
         elif self.share_params_across_genders:
             sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,

@@ -28,7 +28,8 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        sd_sd_o_body: str, a_mixture_weights: str, mean_mean_a0_vocalic: str, sd_mean_a0_vocalic: str,
                        sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
                        ignore_bad_channels: int, share_params_across_subjects: int, share_params_across_genders: int,
-                       share_params_across_features: int, vocalic_mode: str):
+                       share_params_across_features_latent: int, share_params_across_features_observation: int,
+                       vocalic_mode: str):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -92,7 +93,8 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--ignore_bad_channels={ignore_bad_channels} ' \
                                      f'--share_params_across_subjects={share_params_across_subjects} ' \
                                      f'--share_params_across_genders={share_params_across_genders} ' \
-                                     f'--share_params_across_features={share_params_across_features} ' \
+                                     f'--share_params_across_features_latent={share_params_across_features_latent} ' \
+                                     f'--share_params_across_features_observation={share_params_across_features_observation} ' \
                                      f'--vocalic_mode={vocalic_mode}'
 
         tmux.create_window(tmux_window_name)
@@ -198,8 +200,10 @@ if __name__ == "__main__":
     parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
                         help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
                              "only the parameters of that gender will be estimated.")
-    parser.add_argument("--share_params_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one parameter per feature.")
+    parser.add_argument("--share_params_across_features_latent", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per feature in the latent component.")
+    parser.add_argument("--share_params_across_features_observation", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per feature in the observation component.")
     parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
                         help="How coordination controls vocalics from different individuals.")
 
@@ -240,5 +244,6 @@ if __name__ == "__main__":
                        ignore_bad_channels=args.ignore_bad_channels,
                        share_params_across_subjects=args.share_params_across_subjects,
                        share_params_across_genders=args.share_params_across_genders,
-                       share_params_across_features=args.share_params_across_features,
+                       share_params_across_features_latent=args.share_params_across_features_latent,
+                       share_params_across_features_observation=args.share_params_across_features_observation,
                        vocalic_mode=args.vocalic_mode)

@@ -46,7 +46,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray,
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
               ignore_bad_channels: bool, share_params_across_subjects: bool, share_params_across_genders: bool,
-              share_params_across_features: bool, vocalic_mode: str):
+              share_params_across_features_latent: bool, share_params_across_features_observation: bool,
+              vocalic_mode: str):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -168,7 +169,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                a_mixture_weights=a_mixture_weights,
                                initial_coordination=initial_coordination,
                                share_params_across_subjects=share_params_across_subjects,
-                               share_params_across_features=share_params_across_features)
+                               share_params_across_features_latent=share_params_across_features_latent,
+                               share_params_across_features_observation=share_params_across_features_observation)
         elif model_name == "body":
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
@@ -181,7 +183,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               a_mixture_weights=a_mixture_weights,
                               initial_coordination=initial_coordination,
                               share_params_across_subjects=share_params_across_subjects,
-                              share_params_across_features=share_params_across_features)
+                              share_params_across_features_latent=share_params_across_features_latent,
+                              share_params_across_features_observation=share_params_across_features_observation)
 
         elif model_name == "brain_body":
             # The list of subjects should be the same for brain and body so it doesn't matter the one we use.
@@ -201,7 +204,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    a_mixture_weights=a_mixture_weights,
                                    initial_coordination=initial_coordination,
                                    share_params_across_subjects=share_params_across_subjects,
-                                   share_params_across_features=share_params_across_features)
+                                   share_params_across_features_latent=share_params_across_features_latent,
+                                   share_params_across_features_observation=share_params_across_features_observation)
 
         elif model_name == "vocalic":
             model = VocalicModel(num_subjects=num_subjects,
@@ -216,7 +220,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  initial_coordination=initial_coordination,
                                  share_params_across_subjects=share_params_across_subjects,
                                  share_params_across_genders=share_params_across_genders,
-                                 share_params_across_features=share_params_across_features,
+                                 share_params_across_features_latent=share_params_across_features_latent,
+                                 share_params_across_features_observation=share_params_across_features_observation,
                                  mode=vocalic_mode)
 
         elif model_name == "vocalic_semantic":
@@ -234,7 +239,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          initial_coordination=initial_coordination,
                                          share_params_across_subjects=share_params_across_subjects,
                                          share_params_across_genders=share_params_across_genders,
-                                         share_params_across_features=share_params_across_features,
+                                         share_params_across_features_latent=share_params_across_features_latent,
+                                         share_params_across_features_observation=share_params_across_features_observation,
                                          mode=vocalic_mode)
         else:
             raise Exception(f"Invalid model {model_name}.")
@@ -612,8 +618,10 @@ if __name__ == "__main__":
     parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
                         help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
                              "only the parameters of that gender will be estimated.")
-    parser.add_argument("--share_params_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one parameter per feature.")
+    parser.add_argument("--share_params_across_features_latent", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per feature in the latent component.")
+    parser.add_argument("--share_params_across_features_observation", type=int, required=False, default=0,
+                        help="Whether to fit one parameter per feature in the observation component.")
     parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
                         help="How coordination controls vocalics from different individuals.")
 
@@ -621,19 +629,20 @@ if __name__ == "__main__":
 
     # Brain parameters
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
-    dim = 1 if bool(args.share_params_across_features) else len(arg_brain_channels)
+    dim_latent = 1 if bool(args.share_params_across_features_latent) else len(arg_brain_channels)
+    dim_observation = 1 if bool(args.share_params_across_features_observation) else len(arg_brain_channels)
     arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
                                            args.num_subjects - 1)
     if bool(args.share_params_across_subjects):
-        arg_mean_mean_a0_brain = str_to_array(args.mean_mean_a0_brain, dim)
-        arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim)
-        arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim)
-        arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim)
+        arg_mean_mean_a0_brain = str_to_array(args.mean_mean_a0_brain, dim_latent)
+        arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim_latent)
+        arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim_latent)
+        arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim_observation)
     else:
-        arg_mean_mean_a0_brain = matrix_to_size(str_to_matrix(args.mean_mean_a0_brain), args.num_subjects, dim)
-        arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects, dim)
-        arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, dim)
-        arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, dim)
+        arg_mean_mean_a0_brain = matrix_to_size(str_to_matrix(args.mean_mean_a0_brain), args.num_subjects, dim_latent)
+        arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects, dim_latent)
+        arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, dim_latent)
+        arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, dim_observation)
 
     # Body parameters
     if bool(args.share_params_across_subjects):
@@ -649,22 +658,24 @@ if __name__ == "__main__":
 
     # Vocalic parameters
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
-    dim = 1 if bool(args.share_params_across_features) else len(arg_vocalic_features)
+    dim_latent = 1 if bool(args.share_params_across_features_latent) else len(arg_vocalic_features)
+    dim_observation = 1 if bool(args.share_params_across_features_observation) else len(arg_vocalic_features)
     if bool(args.share_params_across_subjects):
-        arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, len(arg_vocalic_features))
-        arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, len(arg_vocalic_features))
-        arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, len(arg_vocalic_features))
-        arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim)
+        arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, dim_latent)
+        arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim_latent)
+        arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim_latent)
+        arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim_observation)
     elif bool(args.share_params_across_genders):
-        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), 2, len(arg_vocalic_features))
-        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, len(arg_vocalic_features))
-        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, len(arg_vocalic_features))
-        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), 2, dim)
+        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), 2, dim_latent)
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, dim_latent)
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, dim_latent)
+        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), 2, dim_observation)
     else:
-        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), args.num_subjects, len(arg_vocalic_features))
-        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, len(arg_vocalic_features))
-        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, len(arg_vocalic_features))
-        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, dim)
+        arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), args.num_subjects,
+                                                  dim_latent)
+        arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, dim_latent)
+        arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, dim_latent)
+        arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, dim_observation)
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
@@ -702,5 +713,6 @@ if __name__ == "__main__":
               ignore_bad_channels=bool(args.ignore_bad_channels),
               share_params_across_subjects=bool(args.share_params_across_subjects),
               share_params_across_genders=bool(args.share_params_across_genders),
-              share_params_across_features=bool(args.share_params_across_features),
+              share_params_across_features_latent=bool(args.share_params_across_features_latent),
+              share_params_across_features_observation=bool(args.share_params_across_features_observation),
               vocalic_mode=args.vocalic_mode)

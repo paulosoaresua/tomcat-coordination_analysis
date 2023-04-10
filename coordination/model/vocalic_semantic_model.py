@@ -96,13 +96,13 @@ class VocalicSemanticModel:
                  sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
                  sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
                  b_p_semantic_link: float, share_params_across_subjects: bool, share_params_across_genders: bool,
-                 share_params_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
+                 share_params_across_features_latent: bool, share_params_across_features_observation: bool,
+                 initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
+                 mode: Mode = Mode.BLENDING):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
-        self.share_params_across_features = share_params_across_features
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -126,7 +126,7 @@ class VocalicSemanticModel:
                                                       sd_sd_aa=sd_sd_aa_vocalic,
                                                       share_params_across_subjects=share_params_across_subjects,
                                                       share_params_across_genders=share_params_across_genders,
-                                                      share_params_across_features=share_params_across_features,
+                                                      share_params_across_features=share_params_across_features_latent,
                                                       mode=mode)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
@@ -137,7 +137,7 @@ class VocalicSemanticModel:
                                                               sd_sd_o=sd_sd_o_vocalic,
                                                               share_params_across_subjects=share_params_across_subjects,
                                                               share_params_across_genders=share_params_across_genders,
-                                                              share_params_across_features=share_params_across_features)
+                                                              share_params_across_features=share_params_across_features_observation)
 
     @property
     def parameter_names(self) -> List[str]:
