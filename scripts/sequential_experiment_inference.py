@@ -833,7 +833,7 @@ if __name__ == "__main__":
         if args.sd_o_vocalic is not None:
             arg_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_o_vocalic), args.num_subjects, dim_observation)
 
-    arg_p_semantic_link = None if args.p_semantic_link else np.array([args.p_semantic_link])
+    arg_p_semantic_link = None if args.p_semantic_link is None else np.array([args.p_semantic_link])
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
