@@ -22,14 +22,16 @@ will be responsible for performing inference sequentially in the experiments ass
 def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: str,
                        num_parallel_processes: int, model: str, burn_in: int, num_samples: int, num_chains: int,
                        seed: int, num_inference_jobs: int, do_prior: int, do_posterior: int,
-                       initial_coordination: float, num_subjects: int, brain_channels: str, vocalic_features: str,
+                       initial_coordination: str, num_subjects: int, brain_channels: str, vocalic_features: str,
                        self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_brain: str,
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
                        sd_sd_o_body: str, a_mixture_weights: str, mean_mean_a0_vocalic: str, sd_mean_a0_vocalic: str,
                        sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
                        ignore_bad_channels: int, share_params_across_subjects: int, share_params_across_genders: int,
                        share_params_across_features_latent: int, share_params_across_features_observation: int,
-                       vocalic_mode: str):
+                       vocalic_mode: str, sd_uc: str, mean_a0_brain: str, sd_aa_brain: str, sd_o_brain: str,
+                       mean_a0_body: str, sd_aa_body: str, sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str,
+                       sd_aa_vocalic: str, sd_o_vocalic: str, p_semantic_link: str):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -57,7 +59,19 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
         tmux_window_name = experiment_ids
 
         # Call the actual inference script
-        initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination >= 0 else ''
+        initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination != "" else ""
+        sd_uc_arg = f'--sd_uc={sd_uc} ' if sd_uc != "" else ""
+        mean_a0_brain_arg = f'--mean_a0_brain={mean_a0_brain} ' if mean_a0_brain != "" else ""
+        sd_aa_brain_arg = f'--sd_aa_brain={sd_aa_brain} ' if sd_aa_brain != "" else ""
+        mixture_weights_arg = f'--mixture_weights={mixture_weights} ' if mixture_weights != "" else ""
+        sd_o_brain_arg = f'--sd_o_brain={sd_o_brain} ' if sd_o_brain != "" else ""
+        mean_a0_body_arg = f'--mean_a0_body={mean_a0_body} ' if mean_a0_body != "" else ""
+        sd_aa_body_arg = f'--sd_aa_body={sd_aa_body} ' if sd_aa_body != "" else ""
+        sd_o_body_arg = f'--sd_o_body={sd_o_body} ' if sd_o_body != "" else ""
+        mean_a0_vocalic_arg = f'--mean_a0_vocalic={mean_a0_vocalic} ' if mean_a0_vocalic != "" else ""
+        sd_aa_vocalic_arg = f'--sd_aa_vocalic={sd_aa_vocalic} ' if sd_aa_vocalic != "" else ""
+        sd_o_vocalic_arg = f'--sd_o_vocalic={sd_o_vocalic} ' if sd_o_vocalic != "" else ""
+        p_semantic_link_arg = f'--p_semantic_link={p_semantic_link} ' if p_semantic_link != "" else ""
         call_python_script_command = f'python3 "{project_dir}/scripts/sequential_experiment_inference.py" ' \
                                      f'--out_dir="{results_folder}" ' \
                                      f'--experiment_ids="{experiment_ids}" ' \
@@ -71,6 +85,18 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--do_prior={do_prior} ' \
                                      f'--do_posterior={do_posterior} ' \
                                      f'{initial_coordination_arg} ' \
+                                     f'{sd_uc_arg} '\
+                                     f'{mean_a0_brain_arg} ' \
+                                     f'{sd_aa_brain_arg} ' \
+                                     f'{mixture_weights_arg} ' \
+                                     f'{sd_o_brain_arg} ' \
+                                     f'{mean_a0_body_arg} ' \
+                                     f'{sd_aa_body_arg} ' \
+                                     f'{sd_o_body_arg} ' \
+                                     f'{mean_a0_vocalic_arg} ' \
+                                     f'{sd_aa_vocalic_arg} ' \
+                                     f'{sd_o_vocalic_arg} '\
+                                     f'{p_semantic_link_arg} ' \
                                      f'--num_subjects={num_subjects} ' \
                                      f'--brain_channels="{brain_channels}" ' \
                                      f'--vocalic_features="{vocalic_features}" ' \
@@ -136,7 +162,7 @@ if __name__ == "__main__":
                         help="Whether to perform prior predictive check or not. Use the value 0 to deactivate.")
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
                         help="Whether to perform posterior inference or not. Use the value 0 to deactivate.")
-    parser.add_argument("--initial_coordination", type=float, required=False, default=-1,
+    parser.add_argument("--initial_coordination", type=str, required=False, default="",
                         help="Initial coordination value.")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")
@@ -206,6 +232,41 @@ if __name__ == "__main__":
                         help="Whether to fit one parameter per feature in the observation component.")
     parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
                         help="How coordination controls vocalics from different individuals.")
+    parser.add_argument("--sd_uc", type=str, required=False, default="",
+                        help="Fixed value for sd_uc. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mean_a0_brain", type=str, required=False, default="",
+                        help="Fixed value for mean_a0_brain. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_aa_brain", type=str, required=False, default="",
+                        help="Fixed value for sd_aa_brain. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_o_brain", type=str, required=False, default="",
+                        help="Fixed value for sd_o_brain. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_mixture_weights", type=str, required=False, default="",
+                        help="Fixed value for mixture_weights. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mean_a0_body", type=str, required=False, default="",
+                        help="Fixed value for mean_a0_body. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_aa_body", type=str, required=False, default="",
+                        help="Fixed value for sd_aa_body. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_o_body", type=str, required=False, default="",
+                        help="Fixed value for sd_o_body. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mean_a0_vocalic", type=str, required=False, default="",
+                        help="Fixed value for mean_a0_vocalic. It can be passed in single number, array form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_aa_vocalic", type=str, required=False, default="",
+                        help="Fixed value for sd_aa_vocalic. It can be passed in single number, array form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_o_vocalic", type=str, required=False, default="",
+                        help="Fixed value for sd_o_vocalic. It can be passed in single number, array form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--p_semantic_link", type=str, required=False, default="",
+                        help="Fixed value for p_semantic_link.")
 
     args = parser.parse_args()
 
@@ -246,4 +307,16 @@ if __name__ == "__main__":
                        share_params_across_genders=args.share_params_across_genders,
                        share_params_across_features_latent=args.share_params_across_features_latent,
                        share_params_across_features_observation=args.share_params_across_features_observation,
-                       vocalic_mode=args.vocalic_mode)
+                       vocalic_mode=args.vocalic_mode,
+                       sd_uc=args.sd_uc,
+                       mean_a0_brain=args.mean_a0_brain,
+                       sd_aa_brain=args.sd_aa_brain,
+                       sd_o_brain=args.sd_o_brain,
+                       mean_a0_body=args.mean_a0_body,
+                       sd_aa_body=args.sd_aa_body,
+                       sd_o_body=args.sd_o_body,
+                       mixture_weights=args.mixture_weights,
+                       mean_a0_vocalic=args.mean_a0_vocalic,
+                       sd_aa_vocalic=args.sd_aa_vocalic,
+                       sd_o_vocalic=args.sd_o_vocalic,
+                       p_semantic_link=args.p_semantic_link)

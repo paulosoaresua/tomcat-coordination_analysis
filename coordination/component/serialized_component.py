@@ -511,11 +511,8 @@ class SerializedComponent:
             mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
                                 sigma=self.parameters.mean_a0.prior.sd, size=dim,
                                 observed=self.parameters.mean_a0.value)
-            # sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-            #                       size=dim, observed=self.parameters.sd_aa.value)
-            sd_aa = pm.InverseGamma(name=self.sd_aa_name, alpha=self.parameters.sd_aa.prior.sd,
-                                   beta=self.parameters.sd_aa.prior.sd, size=dim,
-                                   observed=self.parameters.sd_aa.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=dim, observed=self.parameters.sd_aa.value)
 
             # Resulting dimension: (features, 1). The last dimension will be broadcasted across time.
             mean = mean_a0[:, None]
@@ -524,11 +521,8 @@ class SerializedComponent:
             mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
                                 sigma=self.parameters.mean_a0.prior.sd, size=(2, dim),
                                 observed=self.parameters.mean_a0.value)
-            # sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-            #                       size=(2, dim), observed=self.parameters.sd_aa.value)
-            sd_aa = pm.InverseGamma(name=self.sd_aa_name, alpha=self.parameters.sd_aa.prior.sd,
-                                    beta=self.parameters.sd_aa.prior.sd, size=(2, dim),
-                                    observed=self.parameters.sd_aa.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=(2, dim), observed=self.parameters.sd_aa.value)
 
             # One mean and sd per time step matching their subjects' genders. The indexing below results in a matrix of
             # dimensions: (features, time)
@@ -539,11 +533,8 @@ class SerializedComponent:
             mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
                                 sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
                                 observed=self.parameters.mean_a0.value)
-            # sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-            #                       size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
-            sd_aa = pm.InverseGamma(name=self.sd_aa_name, alpha=self.parameters.sd_aa.prior.sd,
-                                    beta=self.parameters.sd_aa.prior.sd, size=(self.num_subjects, dim),
-                                    observed=self.parameters.sd_aa.value)
+            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                  size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
 
             # One mean and sd per time step matching their subjects. The indexing below results in a matrix of
             # dimensions: (features, time)

@@ -47,7 +47,11 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float, b_p_semantic_link: float,
               ignore_bad_channels: bool, share_params_across_subjects: bool, share_params_across_genders: bool,
               share_params_across_features_latent: bool, share_params_across_features_observation: bool,
-              vocalic_mode: str):
+              vocalic_mode: str, sd_uc: np.ndarray, mean_a0_brain: Optional[np.ndarray],
+              sd_aa_brain: Optional[np.ndarray], sd_o_brain: Optional[np.ndarray], mean_a0_body: Optional[np.ndarray],
+              sd_aa_body: Optional[np.ndarray], sd_o_body: Optional[np.ndarray], mixture_weights: Optional[np.ndarray],
+              mean_a0_vocalic: Optional[np.ndarray], sd_aa_vocalic: Optional[np.ndarray],
+              sd_o_vocalic: Optional[np.ndarray], p_semantic_link: Optional[np.ndarray]):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -171,6 +175,13 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                share_params_across_subjects=share_params_across_subjects,
                                share_params_across_features_latent=share_params_across_features_latent,
                                share_params_across_features_observation=share_params_across_features_observation)
+
+            model.coordination_cpn.parameters.sd_uc.value = sd_uc
+            model.latent_brain_cpn.parameters.mean_a0.value = mean_a0_brain
+            model.latent_brain_cpn.parameters.sd_aa.value = sd_aa_brain
+            model.latent_brain_cpn.parameters.mixture_weights.value = mixture_weights
+            model.obs_brain_cpn.parameters.sd_o.value = sd_o_brain
+
         elif model_name == "body":
             model = BodyModel(subjects=evidence.subjects,
                               self_dependent=self_dependent,
@@ -185,6 +196,12 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                               share_params_across_subjects=share_params_across_subjects,
                               share_params_across_features_latent=share_params_across_features_latent,
                               share_params_across_features_observation=share_params_across_features_observation)
+
+            model.coordination_cpn.parameters.sd_uc.value = sd_uc
+            model.latent_body_cpn.parameters.mean_a0.value = mean_a0_body
+            model.latent_body_cpn.parameters.sd_aa.value = sd_aa_body
+            model.latent_body_cpn.parameters.mixture_weights.value = mixture_weights
+            model.obs_body_cpn.parameters.sd_o.value = sd_o_body
 
         elif model_name == "brain_body":
             # The list of subjects should be the same for brain and body so it doesn't matter the one we use.
@@ -207,6 +224,16 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                    share_params_across_features_latent=share_params_across_features_latent,
                                    share_params_across_features_observation=share_params_across_features_observation)
 
+            model.coordination_cpn.parameters.sd_uc.value = sd_uc
+            model.latent_brain_cpn.parameters.mean_a0.value = mean_a0_brain
+            model.latent_brain_cpn.parameters.sd_aa.value = sd_aa_brain
+            model.latent_brain_cpn.parameters.mixture_weights.value = mixture_weights
+            model.obs_brain_cpn.parameters.sd_o.value = sd_o_brain
+            model.latent_body_cpn.parameters.mean_a0.value = mean_a0_body
+            model.latent_body_cpn.parameters.sd_aa.value = sd_aa_body
+            model.latent_body_cpn.parameters.mixture_weights.value = mixture_weights
+            model.obs_body_cpn.parameters.sd_o.value = sd_o_body
+
         elif model_name == "vocalic":
             model = VocalicModel(num_subjects=num_subjects,
                                  vocalic_features=vocalic_features,
@@ -223,6 +250,11 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  share_params_across_features_latent=share_params_across_features_latent,
                                  share_params_across_features_observation=share_params_across_features_observation,
                                  mode=vocalic_mode)
+
+            model.coordination_cpn.parameters.sd_uc.value = sd_uc
+            model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
+            model.latent_vocalic_cpn.parameters.sd_aa.value = sd_aa_vocalic
+            model.obs_vocalic_cpn.parameters.sd_o.value = sd_o_vocalic
 
         elif model_name == "vocalic_semantic":
             model = VocalicSemanticModel(num_subjects=num_subjects,
@@ -242,6 +274,12 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                          share_params_across_features_latent=share_params_across_features_latent,
                                          share_params_across_features_observation=share_params_across_features_observation,
                                          mode=vocalic_mode)
+
+            model.coordination_cpn.parameters.sd_uc.value = sd_uc
+            model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
+            model.latent_vocalic_cpn.parameters.sd_aa.value = sd_aa_vocalic
+            model.obs_vocalic_cpn.parameters.sd_o.value = sd_o_vocalic
+            model.semantic_link_cpn.parameters.p.value = p_semantic_link
         else:
             raise Exception(f"Invalid model {model_name}.")
 
@@ -624,8 +662,45 @@ if __name__ == "__main__":
                         help="Whether to fit one parameter per feature in the observation component.")
     parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
                         help="How coordination controls vocalics from different individuals.")
+    parser.add_argument("--sd_uc", type=float, required=False,
+                        help="Fixed value for sd_uc. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mean_a0_brain", type=str, required=False,
+                        help="Fixed value for mean_a0_brain. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_aa_brain", type=str, required=False,
+                        help="Fixed value for sd_aa_brain. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_o_brain", type=str, required=False,
+                        help="Fixed value for sd_o_brain. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mixture_weights", type=str, required=False,
+                        help="Fixed value for mixture_weights. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mean_a0_body", type=str, required=False,
+                        help="Fixed value for mean_a0_body. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_aa_body", type=str, required=False,
+                        help="Fixed value for sd_aa_body. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_o_body", type=str, required=False,
+                        help="Fixed value for sd_o_body. It can be passed in single number, array or matrix form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--mean_a0_vocalic", type=str, required=False,
+                        help="Fixed value for mean_a0_vocalic. It can be passed in single number, array form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_aa_vocalic", type=str, required=False,
+                        help="Fixed value for sd_aa_vocalic. It can be passed in single number, array form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--sd_o_vocalic", type=str, required=False,
+                        help="Fixed value for sd_o_vocalic. It can be passed in single number, array form "
+                             "depending on how parameters are shared.")
+    parser.add_argument("--p_semantic_link", type=float, required=False,
+                        help="Fixed value for p_semantic_link.")
 
     args = parser.parse_args()
+
+    arg_sd_uc = None if args.sd_uc is None else np.array([float(args.sd_uc)])
 
     # Brain parameters
     arg_brain_channels = str_to_features(args.brain_channels, BRAIN_CHANNELS)
@@ -633,49 +708,132 @@ if __name__ == "__main__":
     dim_observation = 1 if bool(args.share_params_across_features_observation) else len(arg_brain_channels)
     arg_a_mixture_weights = matrix_to_size(str_to_matrix(args.a_mixture_weights), args.num_subjects,
                                            args.num_subjects - 1)
+    arg_mixture_weights = None
+
+    if args.mixture_weights is not None:
+        arg_mixture_weights = matrix_to_size(str_to_matrix(args.mixture_weights), args.num_subjects,
+                                             args.num_subjects - 1)
+
+    arg_mean_a0_brain = None
+    arg_sd_aa_brain = None
+    arg_sd_o_brain = None
     if bool(args.share_params_across_subjects):
         arg_mean_mean_a0_brain = str_to_array(args.mean_mean_a0_brain, dim_latent)
         arg_sd_mean_a0_brain = str_to_array(args.sd_mean_a0_brain, dim_latent)
         arg_sd_sd_aa_brain = str_to_array(args.sd_sd_aa_brain, dim_latent)
         arg_sd_sd_o_brain = str_to_array(args.sd_sd_o_brain, dim_observation)
+
+        if args.mean_a0_brain is not None:
+            arg_mean_a0_brain = str_to_array(args.mean_a0_brain, dim_latent)
+
+        if args.sd_aa_brain is not None:
+            arg_sd_aa_brain = str_to_array(args.sd_aa_brain, dim_latent)
+
+        if args.sd_o_brain is not None:
+            arg_sd_o_brain = str_to_array(args.sd_o_brain, dim_observation)
     else:
         arg_mean_mean_a0_brain = matrix_to_size(str_to_matrix(args.mean_mean_a0_brain), args.num_subjects, dim_latent)
         arg_sd_mean_a0_brain = matrix_to_size(str_to_matrix(args.sd_mean_a0_brain), args.num_subjects, dim_latent)
         arg_sd_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_sd_aa_brain), args.num_subjects, dim_latent)
         arg_sd_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_sd_o_brain), args.num_subjects, dim_observation)
 
+        if args.mean_a0_brain is not None:
+            arg_mean_a0_brain = matrix_to_size(str_to_matrix(args.mean_a0_brain), args.num_subjects, dim_latent)
+
+        if args.sd_aa_brain is not None:
+            arg_sd_aa_brain = matrix_to_size(str_to_matrix(args.sd_aa_brain), args.num_subjects, dim_latent)
+
+        if args.sd_o_brain is not None:
+            arg_sd_o_brain = matrix_to_size(str_to_matrix(args.sd_o_brain), args.num_subjects, dim_observation)
+
     # Body parameters
+    arg_mean_a0_body = None
+    arg_sd_aa_body = None
+    arg_sd_o_body = None
     if bool(args.share_params_across_subjects):
         arg_mean_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
         arg_sd_mean_a0_body = str_to_array(args.sd_mean_a0_body, 1)
         arg_sd_sd_aa_body = str_to_array(args.sd_sd_aa_body, 1)
         arg_sd_sd_o_body = str_to_array(args.sd_sd_o_body, 1)
+
+        if args.mean_a0_body is not None:
+            arg_mean_a0_body = str_to_array(args.mean_a0_body, 1)
+
+        if args.sd_aa_body is not None:
+            arg_sd_aa_body = str_to_array(args.sd_aa_body, 1)
+
+        if args.sd_o_body is not None:
+            arg_sd_o_body = str_to_array(args.sd_o_body, 1)
     else:
         arg_mean_mean_a0_body = matrix_to_size(str_to_matrix(args.mean_mean_a0_body), args.num_subjects, 1)
         arg_sd_mean_a0_body = matrix_to_size(str_to_matrix(args.sd_mean_a0_body), args.num_subjects, 1)
         arg_sd_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_sd_aa_body), args.num_subjects, 1)
         arg_sd_sd_o_body = matrix_to_size(str_to_matrix(args.sd_sd_o_body), args.num_subjects, 1)
 
+        if args.mean_a0_body is not None:
+            arg_mean_a0_body = matrix_to_size(str_to_matrix(args.mean_a0_body), args.num_subjects, 1)
+
+        if args.sd_aa_body is not None:
+            arg_sd_aa_body = matrix_to_size(str_to_matrix(args.sd_aa_body), args.num_subjects, 1)
+
+        if args.sd_o_body is not None:
+            arg_sd_o_body = matrix_to_size(str_to_matrix(args.sd_o_body), args.num_subjects, 1)
+
     # Vocalic parameters
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
     dim_latent = 1 if bool(args.share_params_across_features_latent) else len(arg_vocalic_features)
     dim_observation = 1 if bool(args.share_params_across_features_observation) else len(arg_vocalic_features)
+
+    arg_mean_a0_vocalic = None
+    arg_sd_aa_vocalic = None
+    arg_sd_o_vocalic = None
     if bool(args.share_params_across_subjects):
         arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, dim_latent)
         arg_sd_mean_a0_vocalic = str_to_array(args.sd_mean_a0_vocalic, dim_latent)
         arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim_latent)
         arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim_observation)
+
+        if args.mean_a0_vocalic is not None:
+            arg_mean_a0_vocalic = str_to_array(args.mean_a0_vocalic, dim_latent)
+
+        if args.sd_aa_vocalic is not None:
+            arg_sd_aa_vocalic = str_to_array(args.sd_aa_vocalic, dim_latent)
+
+        if args.sd_o_vocalic is not None:
+            arg_sd_o_vocalic = str_to_array(args.sd_o_vocalic, dim_observation)
+
     elif bool(args.share_params_across_genders):
         arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), 2, dim_latent)
         arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), 2, dim_latent)
         arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), 2, dim_latent)
         arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), 2, dim_observation)
+
+        if args.mean_a0_vocalic is not None:
+            arg_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_a0_vocalic), 2, dim_latent)
+
+        if args.sd_aa_vocalic is not None:
+            arg_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_aa_vocalic), 2, dim_latent)
+
+        if args.sd_o_vocalic is not None:
+            arg_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_o_vocalic), 2, dim_observation)
+
     else:
         arg_mean_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_mean_a0_vocalic), args.num_subjects,
                                                   dim_latent)
         arg_sd_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.sd_mean_a0_vocalic), args.num_subjects, dim_latent)
         arg_sd_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_aa_vocalic), args.num_subjects, dim_latent)
         arg_sd_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_sd_o_vocalic), args.num_subjects, dim_observation)
+
+        if args.mean_a0_vocalic is not None:
+            arg_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_a0_vocalic), args.num_subjects, dim_latent)
+
+        if args.sd_aa_vocalic is not None:
+            arg_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_aa_vocalic), args.num_subjects, dim_latent)
+
+        if args.sd_o_vocalic is not None:
+            arg_sd_o_vocalic = matrix_to_size(str_to_matrix(args.sd_o_vocalic), args.num_subjects, dim_observation)
+
+    arg_p_semantic_link = None if args.p_semantic_link else np.array([args.p_semantic_link])
 
     inference(out_dir=args.out_dir,
               experiment_ids=args.experiment_ids.split(","),
@@ -715,4 +873,16 @@ if __name__ == "__main__":
               share_params_across_genders=bool(args.share_params_across_genders),
               share_params_across_features_latent=bool(args.share_params_across_features_latent),
               share_params_across_features_observation=bool(args.share_params_across_features_observation),
-              vocalic_mode=args.vocalic_mode)
+              vocalic_mode=args.vocalic_mode,
+              sd_uc=arg_sd_uc,
+              mean_a0_brain=arg_mean_a0_brain,
+              sd_aa_brain=arg_sd_aa_brain,
+              sd_o_brain=arg_sd_o_brain,
+              mean_a0_body=arg_mean_a0_body,
+              sd_aa_body=arg_sd_aa_body,
+              sd_o_body=arg_sd_o_body,
+              mixture_weights=arg_mixture_weights,
+              mean_a0_vocalic=arg_mean_a0_vocalic,
+              sd_aa_vocalic=arg_sd_aa_vocalic,
+              sd_o_vocalic=arg_sd_o_vocalic,
+              p_semantic_link=arg_p_semantic_link)
