@@ -244,7 +244,7 @@ if __name__ == "__main__":
     parser.add_argument("--sd_o_brain", type=str, required=False, default="",
                         help="Fixed value for sd_o_brain. It can be passed in single number, array or matrix form "
                              "depending on how parameters are shared.")
-    parser.add_argument("--sd_mixture_weights", type=str, required=False, default="",
+    parser.add_argument("--mixture_weights", type=str, required=False, default="",
                         help="Fixed value for mixture_weights. It can be passed in single number, array or matrix form "
                              "depending on how parameters are shared.")
     parser.add_argument("--mean_a0_body", type=str, required=False, default="",
