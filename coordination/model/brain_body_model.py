@@ -97,13 +97,13 @@ class BrainBodyModel:
                  sd_sd_uc: float, mean_mean_a0_brain: np.ndarray, sd_mean_a0_brain: np.ndarray,
                  sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray,
                  sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
-                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool, share_params_across_features: bool,
+                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
+                 share_params_across_features_latent: bool, share_params_across_features_observation: bool,
                  initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.num_body_features = 1
         self.share_params_across_subjects = share_params_across_subjects
-        self.share_params_across_features = share_params_across_features
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -119,7 +119,7 @@ class BrainBodyModel:
                                                  sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights,
                                                  share_params_across_subjects=share_params_across_subjects,
-                                                 share_params_across_features=share_params_across_features)
+                                                 share_params_across_features=share_params_across_features_latent)
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
@@ -129,19 +129,19 @@ class BrainBodyModel:
                                                 sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights,
                                                 share_params_across_subjects=share_params_across_subjects,
-                                                share_params_across_features=share_params_across_features)
+                                                share_params_across_features=share_params_across_features_latent)
         self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
                                                   num_subjects=len(subjects),
                                                   dim_value=len(brain_channels),
                                                   sd_sd_o=sd_sd_o_brain,
                                                   share_params_across_subjects=share_params_across_subjects,
-                                                  share_params_across_features=share_params_across_features)
+                                                  share_params_across_features=share_params_across_features_observation)
         self.obs_body_cpn = ObservationComponent(uuid="obs_body",
                                                  num_subjects=len(subjects),
                                                  dim_value=self.num_body_features,
                                                  sd_sd_o=sd_sd_o_body,
                                                  share_params_across_subjects=share_params_across_subjects,
-                                                 share_params_across_features=share_params_across_features)
+                                                 share_params_across_features=share_params_across_features_observation)
 
     @property
     def parameter_names(self) -> List[str]:
