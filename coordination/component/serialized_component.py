@@ -1,11 +1,14 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from enum import Enum
 import numpy as np
 import pymc as pm
+import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
+from coordination.common.functions import one_hot_encode
+from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 
@@ -15,17 +18,70 @@ class Mode(Enum):
     MIXTURE = 1
 
 
+def logp_f_feed_forward(X: Any,
+                        nn_layers: Any,
+                        activation_function_number: Any,
+                        prev_same_subjects: ptt.TensorConstant,
+                        prev_diff_subjects: ptt.TensorConstant):
+    def forward(W, X, A, B, act_number):
+        activation = ActivationFunction.from_number(act_number.eval())
+        z = pm.math.dot(W.transpose(), ptt.concatenate([X, A, B], axis=0))
+        return activation(z)
+
+    if nn_layers.shape.prod().eval() == 0:
+        # If there are no layers, return original value
+        return X
+
+    res, updates = pt.scan(forward,
+                           outputs_info=X,
+                           sequences=[nn_layers],
+                           non_sequences=[prev_same_subjects, prev_diff_subjects, activation_function_number])
+
+    return res[-1]
+
+
+def logp_f_feed_forward_no_self_dependency(X: Any,
+                                           nn_layers: Any,
+                                           activation_function_number: Any,
+                                           prev_diff_subjects: ptt.TensorConstant):
+    def forward(W, X, B, act_number):
+        activation = ActivationFunction.from_number(act_number.eval())
+        z = pm.math.dot(W.transpose(), ptt.concatenate([X, B], axis=0))
+        return activation(z)
+
+    if np.any(np.array(nn_layers.shape) == 0):
+        # If there are no layers, return original value
+        return X
+
+    res, updates = pt.scan(forward,
+                           outputs_info=X,
+                           sequences=[nn_layers],
+                           non_sequences=[prev_diff_subjects, activation_function_number])
+    return res[-1]
+
+
 def blending_logp(serialized_component: Any,
                   initial_mean: Any,
                   sigma: Any,
                   coordination: Any,
+                  f_nn_layers: Any,
+                  f_nn_bias: Any,
+                  f_activation_function_number: ptt.TensorConstant,
                   prev_time_same_subject: ptt.TensorConstant,
                   prev_time_diff_subject: ptt.TensorConstant,
                   prev_same_subject_mask: ptt.TensorConstant,
-                  prev_diff_subject_mask: ptt.TensorConstant):
+                  prev_diff_subject_mask: ptt.TensorConstant,
+                  prev_same_subjects: ptt.TensorConstant,
+                  prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     S = serialized_component[..., prev_time_same_subject]  # d x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    # D = logp_f_feed_forward(D, f_nn_layers, f_activation_function_number, prev_same_subjects, prev_diff_subjects)
+    activation = ActivationFunction.from_number(f_activation_function_number.eval())
+    z = pm.math.dot(f_nn_layers.transpose(),
+                    ptt.concatenate([D, prev_same_subjects, prev_diff_subjects], axis=0)) + f_nn_bias[:, None]
+    D = activation(z)
 
     SM = prev_same_subject_mask[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
@@ -43,10 +99,15 @@ def blending_logp_no_self_dependency(serialized_component: Any,
                                      initial_mean: Any,
                                      sigma: Any,
                                      coordination: Any,
+                                     f_nn_layers: Any,
+                                     f_activation_function_number: ptt.TensorConstant,
                                      prev_time_diff_subject: ptt.TensorConstant,
-                                     prev_diff_subject_mask: ptt.TensorConstant):
+                                     prev_diff_subject_mask: ptt.TensorConstant,
+                                     prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    D = logp_f_feed_forward_no_self_dependency(D, f_nn_layers, f_activation_function_number, prev_diff_subjects)
 
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
@@ -61,10 +122,14 @@ def blending_logp_no_self_dependency(serialized_component: Any,
 def blending_random(initial_mean: np.ndarray,
                     sigma: np.ndarray,
                     coordination: np.ndarray,
+                    f_nn_layers: List[Any],
+                    f_activation_function_number: int,
                     prev_time_same_subject: np.ndarray,
                     prev_time_diff_subject: np.ndarray,
                     prev_same_subject_mask: np.ndarray,
                     prev_diff_subject_mask: np.ndarray,
+                    prev_same_subjects: np.ndarray,
+                    prev_diff_subjects: np.ndarray,
                     rng: Optional[np.random.Generator] = None,
                     size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -78,11 +143,18 @@ def blending_random(initial_mean: np.ndarray,
 
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
+    activation = ActivationFunction.from_number(f_activation_function_number)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
-        D = sample[..., prev_time_diff_subject[t]]
-        # Previous sample from the same individual
+        D = sample[..., prev_time_diff_subject[t]]  # d-vector
 
+        for W in f_nn_layers:
+            # Transform D with a function that depends on the previous value of a different speaker, that speaker and
+            # the current one's identity.
+            z = pm.math.dot(ptt.concatenate([D, prev_same_subjects[t], prev_diff_subjects[t]]), W)
+            D = activation(z)
+
+        # Previous sample from the same individual
         if prev_same_subject_mask[t] == 1:
             S = sample[..., prev_time_same_subject[t]]
         else:
@@ -107,8 +179,11 @@ def blending_random(initial_mean: np.ndarray,
 def blending_random_no_self_dependency(initial_mean: np.ndarray,
                                        sigma: np.ndarray,
                                        coordination: np.ndarray,
+                                       f_nn_layers: List[Any],
+                                       f_activation_function_number: int,
                                        prev_time_diff_subject: np.ndarray,
                                        prev_diff_subject_mask: np.ndarray,
+                                       prev_diff_subjects: np.ndarray,
                                        rng: Optional[np.random.Generator] = None,
                                        size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -117,9 +192,15 @@ def blending_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
+    activation = ActivationFunction.from_number(f_activation_function_number)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
+
+        for W in f_nn_layers:
+            # Transform D with a function that depends on the previous value of a different speaker, and its identify
+            z = pm.math.dot(ptt.concatenate([D, prev_diff_subjects[t]]), W)
+            D = activation(z)
 
         # No self-dependency. The transition distribution is a blending between the previous value from another individual,
         # and a fixed mean.
@@ -142,13 +223,19 @@ def mixture_logp(serialized_component: Any,
                  initial_mean: Any,
                  sigma: Any,
                  coordination: Any,
+                 f_nn_layers: Any,
+                 f_activation_function_number: ptt.TensorConstant,
                  prev_time_same_subject: ptt.TensorConstant,
                  prev_time_diff_subject: ptt.TensorConstant,
                  prev_same_subject_mask: ptt.TensorConstant,
-                 prev_diff_subject_mask: ptt.TensorConstant):
+                 prev_diff_subject_mask: ptt.TensorConstant,
+                 prev_same_subjects: ptt.TensorConstant,
+                 prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     S = serialized_component[..., prev_time_same_subject]  # d x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    D = logp_f_feed_forward(D, f_nn_layers, f_activation_function_number, prev_same_subjects, prev_diff_subjects)
 
     SM = prev_same_subject_mask[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
@@ -168,10 +255,16 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
                                     initial_mean: Any,
                                     sigma: Any,
                                     coordination: Any,
+                                    f_nn_layers: Any,
+                                    f_activation_function_number: ptt.TensorConstant,
                                     prev_time_diff_subject: ptt.TensorConstant,
-                                    prev_diff_subject_mask: ptt.TensorConstant):
+                                    prev_diff_subject_mask: ptt.TensorConstant,
+
+                                    prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
     D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    D = logp_f_feed_forward_no_self_dependency(D, f_nn_layers, f_activation_function_number, prev_diff_subjects)
 
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
@@ -187,10 +280,14 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
 def mixture_random(initial_mean: np.ndarray,
                    sigma: np.ndarray,
                    coordination: np.ndarray,
+                   f_nn_layers: List[Any],
+                   f_activation_function_number: int,
                    prev_time_same_subject: np.ndarray,
                    prev_time_diff_subject: np.ndarray,
                    prev_same_subject_mask: np.ndarray,
                    prev_diff_subject_mask: np.ndarray,
+                   prev_same_subjects: np.ndarray,
+                   prev_diff_subjects: np.ndarray,
                    rng: Optional[np.random.Generator] = None,
                    size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -204,9 +301,17 @@ def mixture_random(initial_mean: np.ndarray,
 
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
+    activation = ActivationFunction.from_number(f_activation_function_number)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
+
+        for W in f_nn_layers:
+            # Transform D with a function that depends on the previous value of a different speaker, that speaker and
+            # the current one's identity.
+            z = pm.math.dot(ptt.concatenate([D, prev_same_subjects[t], prev_diff_subjects[t]]), W)
+            D = activation(z)
+
         # Previous sample from the same individual
         S = sample[..., prev_time_same_subject[t]] * prev_same_subject_mask[t]
 
@@ -229,8 +334,11 @@ def mixture_random(initial_mean: np.ndarray,
 def mixture_random_no_self_dependency(initial_mean: np.ndarray,
                                       sigma: np.ndarray,
                                       coordination: np.ndarray,
+                                      f_nn_layers: List[Any],
+                                      f_activation_function_number: int,
                                       prev_time_diff_subject: np.ndarray,
                                       prev_diff_subject_mask: np.ndarray,
+                                      prev_diff_subjects: np.ndarray,
                                       rng: Optional[np.random.Generator] = None,
                                       size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -239,9 +347,16 @@ def mixture_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
+    activation = ActivationFunction.from_number(f_activation_function_number)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
+
+        for W in f_nn_layers:
+            # Transform D with a function that depends on the previous value of a different speaker, that speaker and
+            # the current one's identity.
+            z = pm.math.dot(ptt.concatenate([D, prev_diff_subjects[t]]), W)
+            D = activation(z)
 
         if sigma.shape[1] == 1:
             # Parameter sharing across subjects
@@ -322,7 +437,8 @@ class SerializedComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_params_across_subjects: bool,
-                 share_params_across_genders: bool, share_params_across_features: bool, mode: Mode = Mode.BLENDING):
+                 share_params_across_genders: bool, share_params_across_features: bool, mode: Mode = Mode.BLENDING,
+                 f: Optional[Callable] = None):
         assert not (share_params_across_subjects and share_params_across_genders)
 
         dim = 1 if share_params_across_features else dim_value
@@ -348,6 +464,7 @@ class SerializedComponent:
         self.share_params_across_genders = share_params_across_genders
         self.share_params_across_features = share_params_across_features
         self.mode = mode
+        self.f = f
 
         self.parameters = SerializedComponentParameters(mean_mean_a0=mean_mean_a0,
                                                         sd_mean_a0=sd_mean_a0,
@@ -367,6 +484,10 @@ class SerializedComponent:
     @property
     def sd_aa_name(self) -> str:
         return f"sd_aa_{self.uuid}"
+
+    @property
+    def f_nn_weights_name(self) -> str:
+        return f"f_nn_weights_{self.uuid}"
 
     def draw_samples(self, num_series: int, time_scale_density: float,
                      coordination: np.ndarray, can_repeat_subject: bool,
@@ -458,6 +579,15 @@ class SerializedComponent:
                     prev_diff_mask = (samples.prev_time_diff_subject[s][t] != -1).astype(int)
                     D = samples.values[s][..., samples.prev_time_diff_subject[s][t]]
 
+                    if self.f is not None:
+                        source_subject = samples.subjects[s][samples.prev_time_diff_subject[s][t]]
+
+                        if self.self_dependent:
+                            target_subject = samples.subjects[s][t]
+                            D = self.f(D, source_subject, target_subject)
+                        else:
+                            D = self.f(D, source_subject)
+
                     if self.mode == Mode.BLENDING:
                         mean = (D - S) * C * prev_diff_mask + S
                     else:
@@ -504,7 +634,8 @@ class SerializedComponent:
     def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
-                          feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None) -> Any:
+                          feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
+                          num_hidden_layers_f: int = 0, activation_function_f: str = "linear") -> Any:
 
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
@@ -545,14 +676,50 @@ class SerializedComponent:
             mean = mean.repeat(self.dim_value, axis=0)
             sd = sd.repeat(self.dim_value, axis=0)
 
+        # We use a neural network to fit the function f
+        # f_nn_layers = []
+        # if num_hidden_layers_f > 0:
+        #     # Extra dimensions for one-hot-encode of the previous subject ids
+        #     # If there's self-dependency then we need two subjects, the id of the current subject and the id of the
+        #     # previous different subject. If there's no self-dependency, we only need the id of the latter.
+        #     one_hot_encode_size = self.num_subjects
+        #     extra_dim = 2 * one_hot_encode_size if self.self_dependent else one_hot_encode_size
+        #     weight_dims = (self.dim_value + extra_dim, self.dim_value)
+        #
+        #     for layer in range(num_hidden_layers_f):
+        #         # Each weight receives a vector of features plus 2 unique numbers identifying the previous and current
+        #         # speaker
+        #         f_nn_layers.append(pm.Normal(f"{self.f_nn_weights_name}_{layer}", mu=0, sigma=1,
+        #                                      size=weight_dims))
+        f_nn_layers = []
+        if num_hidden_layers_f > 0:
+            # Extra dimensions for one-hot-encode of the previous subject ids
+            # If there's self-dependency then we need two subjects, the id of the current subject and the id of the
+            # previous different subject. If there's no self-dependency, we only need the id of the latter.
+            one_hot_encode_size = self.num_subjects
+            extra_dim = 2 * one_hot_encode_size if self.self_dependent else one_hot_encode_size
+            weight_dims = (self.dim_value + extra_dim, self.dim_value)
+
+            # Each weight receives a vector of features plus 2 unique numbers identifying the previous and current
+            # speaker
+            f_nn_layers = pm.Normal(self.f_nn_weights_name, mu=0, sigma=1, size=weight_dims)
+            f_bias = pm.Normal(f"{self.f_nn_weights_name}_bias", mu=0, sigma=1, size=self.dim_value)
+
+        f_activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_f]
+
         if self.self_dependent:
             logp_params = (mean,
                            sd,
                            coordination,
+                           f_nn_layers,
+                           f_bias,
+                           f_activation_function_number,
                            ptt.constant(prev_time_same_subject),
                            ptt.constant(prev_time_diff_subject),
                            ptt.constant(prev_same_subject_mask),
-                           ptt.constant(prev_diff_subject_mask))
+                           ptt.constant(prev_diff_subject_mask),
+                           ptt.constant(one_hot_encode(subjects[prev_time_same_subject], self.num_subjects)),
+                           ptt.constant(one_hot_encode(subjects[prev_time_diff_subject], self.num_subjects)))
             logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
             random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
             serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
@@ -562,12 +729,15 @@ class SerializedComponent:
             logp_params = (mean,
                            sd,
                            coordination,
+                           f_nn_layers,
+                           f_activation_function_number,
                            ptt.constant(prev_time_diff_subject),
-                           ptt.constant(prev_diff_subject_mask))
+                           ptt.constant(prev_diff_subject_mask),
+                           ptt.constant(one_hot_encode(subjects[prev_time_diff_subject], self.num_subjects)))
             logp_fn = blending_logp_no_self_dependency if self.mode == Mode.BLENDING else mixture_logp_no_self_dependency
             random_fn = blending_random_no_self_dependency if self.mode == Mode.BLENDING else mixture_random_no_self_dependency
             serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
                                                   dims=[feature_dimension, time_dimension],
                                                   observed=observed_values)
 
-        return serialized_component, mean_a0, sd_aa
+        return serialized_component, mean_a0, sd_aa, f_nn_layers

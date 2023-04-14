@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
@@ -273,7 +273,8 @@ class VocalicModel:
                  share_params_across_subjects: bool, share_params_across_genders: bool,
                  share_params_across_features_latent: bool, share_params_across_features_observation: bool,
                  initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
-                 mode: Mode = Mode.BLENDING):
+                 mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
+                 activation_function_f: str = "linear"):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -282,6 +283,8 @@ class VocalicModel:
         self.vocalic_features = vocalic_features
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
+        self.num_hidden_layers_f = num_hidden_layers_f
+        self.activation_function_f = activation_function_f
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -306,7 +309,8 @@ class VocalicModel:
                                                       share_params_across_subjects=share_params_across_subjects,
                                                       share_params_across_genders=share_params_across_genders,
                                                       share_params_across_features=share_params_across_features_latent,
-                                                      mode=mode)
+                                                      mode=mode,
+                                                      f=f)
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
@@ -376,7 +380,9 @@ class VocalicModel:
                 subjects=subjects_in_time,
                 gender_map=evidence.gender_map,
                 time_dimension="vocalic_time",
-                feature_dimension="vocalic_feature")[0]
+                feature_dimension="vocalic_feature",
+                num_hidden_layers_f=self.num_hidden_layers_f,
+                activation_function_f=self.activation_function_f)[0]
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
                                                    feature_dimension="vocalic_feature",
