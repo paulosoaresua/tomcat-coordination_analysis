@@ -238,7 +238,5 @@ if __name__ == "__main__":
 
     print("")
     print("f(.)")
-    for layer in range(NUM_LAYERS_F):
-        print(idata.posterior[f"f_nn_weights_latent_vocalic"].mean(dim=["chain", "draw"]))
-        print(idata.posterior[f"f_nn_weights_latent_vocalic_bias"].mean(dim=["chain", "draw"]))
+    print(idata.posterior[f"f_nn_weights_latent_vocalic"].mean(dim=["chain", "draw"]))
 
