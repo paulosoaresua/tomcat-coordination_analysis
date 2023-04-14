@@ -82,10 +82,6 @@ def blending_logp(serialized_component: Any,
     f_nn_layers = f_nn_weights.reshape((num_layers, input_dim, f_nn_weights.shape[-1]))
 
     D = logp_f_feed_forward(D, f_nn_layers, f_activation_function_number, prev_same_subjects, prev_diff_subjects)
-    # activation = ActivationFunction.from_number(f_activation_function_number.eval())
-    # z = pm.math.dot(f_nn_layers.transpose(),
-    #                 ptt.concatenate([D, prev_same_subjects, prev_diff_subjects], axis=0)) + f_nn_bias[:, None]
-    # D = activation(z)
 
     SM = prev_same_subject_mask[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
@@ -130,7 +126,7 @@ def blending_logp_no_self_dependency(serialized_component: Any,
 def blending_random(initial_mean: np.ndarray,
                     sigma: np.ndarray,
                     coordination: np.ndarray,
-                    f_nn_layers: List[Any],
+                    f_nn_weights: np.ndarray,
                     f_activation_function_number: int,
                     prev_time_same_subject: np.ndarray,
                     prev_time_diff_subject: np.ndarray,
@@ -151,7 +147,13 @@ def blending_random(initial_mean: np.ndarray,
 
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
+
+    # Features + 1 one-hot-encode representation of the subject id + bias term
+    input_dim = mean_0.shape[0] + 2 * prev_diff_subjects.shape[0] + 1
+    num_layers = int(f_nn_weights.shape[0] / input_dim)
+    f_nn_layers = f_nn_weights.reshape((num_layers, input_dim, f_nn_weights.shape[-1]))
     activation = ActivationFunction.from_number(f_activation_function_number)
+
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]  # d-vector
@@ -159,7 +161,7 @@ def blending_random(initial_mean: np.ndarray,
         for W in f_nn_layers:
             # Transform D with a function that depends on the previous value of a different speaker, that speaker and
             # the current one's identity.
-            z = pm.math.dot(ptt.concatenate([D, prev_same_subjects[t], prev_diff_subjects[t]]), W)
+            z = np.dot(np.concatenate([D, prev_same_subjects[:, t], prev_diff_subjects[:, t], [1]]), W)
             D = activation(z)
 
         # Previous sample from the same individual
@@ -187,7 +189,7 @@ def blending_random(initial_mean: np.ndarray,
 def blending_random_no_self_dependency(initial_mean: np.ndarray,
                                        sigma: np.ndarray,
                                        coordination: np.ndarray,
-                                       f_nn_layers: List[Any],
+                                       f_nn_weights: np.ndarray,
                                        f_activation_function_number: int,
                                        prev_time_diff_subject: np.ndarray,
                                        prev_diff_subject_mask: np.ndarray,
@@ -200,14 +202,19 @@ def blending_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
+    # Features + 1 one-hot-encode representation of the subject id + bias term
+    input_dim = sample.shape[0] + prev_diff_subjects.shape[0] + 1
+    num_layers = int(f_nn_weights.shape[0] / input_dim)
+    f_nn_layers = f_nn_weights.reshape((num_layers, input_dim, f_nn_weights.shape[-1]))
     activation = ActivationFunction.from_number(f_activation_function_number)
+
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
 
         for W in f_nn_layers:
             # Transform D with a function that depends on the previous value of a different speaker, and its identify
-            z = pm.math.dot(ptt.concatenate([D, prev_diff_subjects[t]]), W)
+            z = np.dot(np.concatenate([D, prev_diff_subjects[:, t], [1]]), W)
             D = activation(z)
 
         # No self-dependency. The transition distribution is a blending between the previous value from another individual,
@@ -296,7 +303,7 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
 def mixture_random(initial_mean: np.ndarray,
                    sigma: np.ndarray,
                    coordination: np.ndarray,
-                   f_nn_layers: List[Any],
+                   f_nn_weights: np.ndarray,
                    f_activation_function_number: int,
                    prev_time_same_subject: np.ndarray,
                    prev_time_diff_subject: np.ndarray,
@@ -317,7 +324,13 @@ def mixture_random(initial_mean: np.ndarray,
 
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
+
+    # Features + 1 one-hot-encode representation of the subject id + bias term
+    input_dim = mean_0.shape[0] + 2 * prev_diff_subjects.shape[0] + 1
+    num_layers = int(f_nn_weights.shape[0] / input_dim)
+    f_nn_layers = f_nn_weights.reshape((num_layers, input_dim, f_nn_weights.shape[-1]))
     activation = ActivationFunction.from_number(f_activation_function_number)
+
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
@@ -325,7 +338,7 @@ def mixture_random(initial_mean: np.ndarray,
         for W in f_nn_layers:
             # Transform D with a function that depends on the previous value of a different speaker, that speaker and
             # the current one's identity.
-            z = pm.math.dot(ptt.concatenate([D, prev_same_subjects[t], prev_diff_subjects[t]]), W)
+            z = np.dot(np.concatenate([D, prev_same_subjects[:, t], prev_diff_subjects[:, t], [1]]), W)
             D = activation(z)
 
         # Previous sample from the same individual
@@ -350,7 +363,7 @@ def mixture_random(initial_mean: np.ndarray,
 def mixture_random_no_self_dependency(initial_mean: np.ndarray,
                                       sigma: np.ndarray,
                                       coordination: np.ndarray,
-                                      f_nn_layers: List[Any],
+                                      f_nn_weights: np.ndarray,
                                       f_activation_function_number: int,
                                       prev_time_diff_subject: np.ndarray,
                                       prev_diff_subject_mask: np.ndarray,
@@ -363,7 +376,12 @@ def mixture_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
+    # Features + 1 one-hot-encode representation of the subject id + bias term
+    input_dim = sample.shape[0] + prev_diff_subjects.shape[0] + 1
+    num_layers = int(f_nn_weights.shape[0] / input_dim)
+    f_nn_layers = f_nn_weights.reshape((num_layers, input_dim, f_nn_weights.shape[-1]))
     activation = ActivationFunction.from_number(f_activation_function_number)
+
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
@@ -371,7 +389,7 @@ def mixture_random_no_self_dependency(initial_mean: np.ndarray,
         for W in f_nn_layers:
             # Transform D with a function that depends on the previous value of a different speaker, that speaker and
             # the current one's identity.
-            z = pm.math.dot(ptt.concatenate([D, prev_diff_subjects[t]]), W)
+            z = np.dot(np.concatenate([D, prev_diff_subjects[:, t], [1]]), W)
             D = activation(z)
 
         if sigma.shape[1] == 1:
@@ -713,7 +731,8 @@ class SerializedComponent:
             # dimension of CustomDist. To work around it, I join will the layer dimension with the input one.
             # Inside the logp function, I will reshape the weights variable back to its original 3 dimensions:
             # #layers x #input x #output, so we can perform the feed-forward step.
-            weights_reshaped = pm.Deterministic('weights_reshaped', weights.reshape((num_hidden_layers_f * (self.dim_value + extra_dim), self.dim_value)))
+            weights_reshaped = pm.Deterministic('weights_reshaped', weights.reshape(
+                (num_hidden_layers_f * (self.dim_value + extra_dim), self.dim_value)))
 
         # f_nn_layers = []
         # f_bias = []

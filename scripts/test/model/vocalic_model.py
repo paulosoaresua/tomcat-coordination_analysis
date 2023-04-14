@@ -22,8 +22,14 @@ TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
-F = lambda x, d, s: x + 5
 NUM_LAYERS_F = 1
+if NUM_LAYERS_F > 0:
+    if SELF_DEPENDENT:
+        F = lambda x, d, s: x + 5
+    else:
+        F = lambda x, d: x + 5
+else:
+    F = None
 ACT_FUNCTION = "linear"
 N = 1000
 C = 2
@@ -198,7 +204,7 @@ if __name__ == "__main__":
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:
         model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
-    # model.prior_predictive(evidence, 2)
+    model.prior_predictive(evidence, 2)
 
     pymc_model, idata = model.fit(evidence=evidence,
                                   burn_in=N,
