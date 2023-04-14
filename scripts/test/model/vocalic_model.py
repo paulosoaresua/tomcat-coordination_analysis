@@ -22,6 +22,15 @@ TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
+NUM_LAYERS_F = 1
+if NUM_LAYERS_F > 0:
+    if SELF_DEPENDENT:
+        F = lambda x, d, s: x + 5
+    else:
+        F = lambda x, d: x + 5
+else:
+    F = None
+ACT_FUNCTION = "linear"
 N = 1000
 C = 2
 SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
@@ -83,7 +92,8 @@ if __name__ == "__main__":
                                      initial_coordination=INITIAL_COORDINATION,
                                      share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF,
                                      share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF,
-                                     share_params_across_features=SHARE_PARAMS_ACROSS_FEATURES_INF,
+                                     share_params_across_features_latent=SHARE_PARAMS_ACROSS_FEATURES_INF,
+                                     share_params_across_features_observation=SHARE_PARAMS_ACROSS_FEATURES_INF,
                                      mode=MODE)
 
         model.semantic_link_cpn.parameters.p.value = 0.7
@@ -101,8 +111,12 @@ if __name__ == "__main__":
                              initial_coordination=INITIAL_COORDINATION,
                              share_params_across_subjects=SHARE_PARAMS_ACROSS_SUBJECTS_INF,
                              share_params_across_genders=SHARE_PARAMS_ACROSS_GENDERS_INF,
-                             share_params_across_features=SHARE_PARAMS_ACROSS_FEATURES_INF,
-                             mode=MODE)
+                             share_params_across_features_latent=SHARE_PARAMS_ACROSS_FEATURES_INF,
+                             share_params_across_features_observation=SHARE_PARAMS_ACROSS_FEATURES_INF,
+                             mode=MODE,
+                             f=F,
+                             num_hidden_layers_f=NUM_LAYERS_F,
+                             activation_function_f=ACT_FUNCTION)
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
@@ -227,3 +241,8 @@ if __name__ == "__main__":
 
     mse = np.sqrt(np.square(real - estimated).sum())
     print(f"MSE = {mse}")
+
+    print("")
+    print("f(.)")
+    print(idata.posterior[f"f_nn_weights_latent_vocalic"].mean(dim=["chain", "draw"]))
+
