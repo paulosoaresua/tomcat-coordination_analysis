@@ -73,8 +73,11 @@ def blending_logp(serialized_component: Any,
                   prev_same_subjects: ptt.TensorConstant,
                   prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
-    S = serialized_component[..., prev_time_same_subject]  # d x t
-    D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
+    # the serialized component is one
+    S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
+    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
     # Features + 2 one-hot-encode representation of the subject id + bias term
     input_dim = serialized_component.shape[0] + 2 * prev_same_subjects.shape[0] + 1
@@ -105,7 +108,10 @@ def blending_logp_no_self_dependency(serialized_component: Any,
                                      prev_diff_subject_mask: ptt.TensorConstant,
                                      prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
-    D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
+    # the serialized component is one
+    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
     # Features + 1 one-hot-encode representation of the subject id + bias term
     input_dim = serialized_component.shape[0] + prev_diff_subjects.shape[0] + 1
@@ -247,8 +253,11 @@ def mixture_logp(serialized_component: Any,
                  prev_same_subjects: ptt.TensorConstant,
                  prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
-    S = serialized_component[..., prev_time_same_subject]  # d x t
-    D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
+    # the serialized component is one
+    S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
+    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
     # Features + 2 one-hot-encode representation of the subject id + bias term
     input_dim = serialized_component.shape[0] + 2 * prev_same_subjects.shape[0] + 1
@@ -281,7 +290,10 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
 
                                     prev_diff_subjects: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
-    D = serialized_component[..., prev_time_diff_subject]  # d x t
+
+    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
+    # the serialized component is one
+    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
     # Features + 1 one-hot-encode representation of the subject id + bias term
     input_dim = serialized_component.shape[0] + prev_diff_subjects.shape[0] + 1
@@ -733,21 +745,6 @@ class SerializedComponent:
             # #layers x #input x #output, so we can perform the feed-forward step.
             weights_reshaped = pm.Deterministic('weights_reshaped', weights.reshape(
                 (num_hidden_layers_f * (self.dim_value + extra_dim), self.dim_value)))
-
-        # f_nn_layers = []
-        # f_bias = []
-        # if num_hidden_layers_f > 0:
-        #     # Extra dimensions for one-hot-encode of the previous subject ids
-        #     # If there's self-dependency then we need two subjects, the id of the current subject and the id of the
-        #     # previous different subject. If there's no self-dependency, we only need the id of the latter.
-        #     one_hot_encode_size = self.num_subjects
-        #     extra_dim = 2 * one_hot_encode_size if self.self_dependent else one_hot_encode_size
-        #     weight_dims = (self.dim_value + extra_dim, self.dim_value)
-        #
-        #     # Each weight receives a vector of features plus 2 unique numbers identifying the previous and current
-        #     # speaker
-        #     f_nn_layers = pm.Normal(self.f_nn_weights_name, mu=0, sigma=1, size=weight_dims)
-        #     f_bias = pm.Normal(f"{self.f_nn_weights_name}_bias", mu=0, sigma=1, size=self.dim_value)
 
         f_activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_f]
 
