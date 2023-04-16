@@ -681,7 +681,8 @@ class SerializedComponent:
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
-                          num_hidden_layers_f: int = 0, activation_function_f: str = "linear") -> Any:
+                          num_hidden_layers_f: int = 0, activation_function_f: str = "linear",
+                          observed_weights_f: Optional[Any] = None) -> Any:
 
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
@@ -737,7 +738,8 @@ class SerializedComponent:
 
             weight_dims = (num_hidden_layers_f, self.dim_value + extra_dim, self.dim_value)
 
-            weights = pm.Normal(f"{self.f_nn_weights_name}", mu=0, sigma=1, size=weight_dims)
+            weights = pm.Normal(f"{self.f_nn_weights_name}", mu=0, sigma=1, size=weight_dims,
+                                observed=observed_weights_f)
 
             # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
             # dimension of CustomDist. To work around it, I join will the layer dimension with the input one.
