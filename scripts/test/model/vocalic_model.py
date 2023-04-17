@@ -22,7 +22,9 @@ TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
-NUM_LAYERS_F = 1
+NUM_LAYERS_EMISSION_NN = 2
+ACTIVATIONS_EMISSION_NN = "linear"
+NUM_LAYERS_F = 0
 if NUM_LAYERS_F > 0:
     if SELF_DEPENDENT:
         F = lambda x, d, s: x + 5
@@ -116,11 +118,12 @@ if __name__ == "__main__":
                              mode=MODE,
                              f=F,
                              num_hidden_layers_f=NUM_LAYERS_F,
-                             activation_function_f=ACT_FUNCTION)
+                             activation_function_f=ACT_FUNCTION,
+                             nn_layers_emission=NUM_LAYERS_EMISSION_NN,
+                             nn_activation_emission=ACTIVATIONS_EMISSION_NN)
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
-    # model.coordination_cpn.parameters.sd_c.value = np.ones(1)
     model.latent_vocalic_cpn.parameters.mean_a0.value = TRUE_MEAN_AA  # np.array([[0.1, 2000], [0.5, 5000], [0.8, 9000]])
     model.latent_vocalic_cpn.parameters.sd_aa.value = TRUE_SD_AA  # np.array([[0.5, 1000], [0.5, 1000], [0.5, 1000]])
     model.obs_vocalic_cpn.parameters.sd_o.value = TRUE_SD_OO  # np.ones((NUM_SUBJECTS, NUM_VOCALIC_FEATURES))
@@ -196,10 +199,10 @@ if __name__ == "__main__":
         for i, subject in enumerate(all_subjects):
             evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
 
-    if SHARE_PARAMS_ACROSS_GENDERS_INF:
-        evidence.normalize_per_gender()
-    elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
-        evidence.normalize_per_subject()
+    # if SHARE_PARAMS_ACROSS_GENDERS_INF:
+    #     evidence.normalize_per_gender()
+    # elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
+    #     evidence.normalize_per_subject()
 
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:

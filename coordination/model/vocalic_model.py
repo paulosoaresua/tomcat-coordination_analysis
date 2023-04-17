@@ -8,9 +8,10 @@ import pandas as pd
 import pymc as pm
 import xarray
 
-from coordination.common.functions import logit
+from coordination.common.functions import logit, one_hot_encode
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples, BetaGaussianCoordinationComponent
+from coordination.component.neural_network import NeuralNetwork
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
@@ -274,7 +275,8 @@ class VocalicModel:
                  share_params_across_features_latent: bool, share_params_across_features_observation: bool,
                  initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
                  mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
-                 activation_function_f: str = "linear"):
+                 activation_function_f: str = "linear", nn_layers_emission: int = 0,
+                 nn_activation_emission: str = "linear"):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -311,6 +313,16 @@ class VocalicModel:
                                                       share_params_across_features=share_params_across_features_latent,
                                                       mode=mode,
                                                       f=f)
+
+        if nn_layers_emission > 0:
+            # All layers have the same number of units and the same activation function
+            self.emission_nn = NeuralNetwork(uuid="emission_nn",
+                                             units_per_layer=[len(vocalic_features)] * nn_layers_emission,
+                                             activations=[nn_activation_emission] * nn_layers_emission)
+        else:
+            # No transformation between latent and observation
+            self.emission_nn = None
+
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
@@ -332,13 +344,23 @@ class VocalicModel:
         return self.obs_vocalic_cpn.uuid
 
     def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
-                     can_repeat_subject: bool, seed: Optional[int] = None) -> VocalicSamples:
+                     can_repeat_subject: bool, seed: Optional[int] = None,
+                     apply_emission_nn: bool = False) -> VocalicSamples:
         coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
         latent_vocalic_samples = self.latent_vocalic_cpn.draw_samples(num_series=num_series,
                                                                       time_scale_density=vocalic_time_scale_density,
                                                                       coordination=coordination_samples.coordination,
                                                                       can_repeat_subject=can_repeat_subject)
-        obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
+
+        obs_input = latent_vocalic_samples.values
+        if apply_emission_nn and self.emission_nn is not None:
+            obs_input = []
+            for X in latent_vocalic_samples.values:
+                obs_input.append(self.emission_nn.predict(np.concatenate(
+                    [X, one_hot_encode(latent_vocalic_samples.subjects, self.num_subjects),
+                     np.ones((1, latent_vocalic_samples.num_time_steps))]).T).T)
+
+        obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=obs_input,
                                                                 subjects=latent_vocalic_samples.subjects,
                                                                 gender_map=latent_vocalic_samples.gender_map)
 
@@ -384,7 +406,17 @@ class VocalicModel:
                 num_hidden_layers_f=self.num_hidden_layers_f,
                 activation_function_f=self.activation_function_f)[0]
 
-            self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
+            obs_input = latent_vocalic
+            if self.emission_nn is not None:
+                # features + subject id (one ht encode) + bias term
+                X = pm.Deterministic("augmented_latent_vocalic", pm.math.concatenate(
+                    [latent_vocalic, one_hot_encode(evidence.subjects_in_time, self.num_subjects),
+                     np.ones((1, evidence.num_time_steps_in_vocalic_scale))]))
+                _, outputs = self.emission_nn.update_pymc_model(X.transpose())
+
+                obs_input = outputs[-1].transpose()
+
+            self.obs_vocalic_cpn.update_pymc_model(latent_component=obs_input,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
                                                    subjects=subjects_in_time,
