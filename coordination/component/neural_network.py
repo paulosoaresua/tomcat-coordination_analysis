@@ -2,6 +2,7 @@ from typing import Any, List
 
 import numpy as np
 import pymc as pm
+import pytensor.tensor as ptt
 
 from coordination.common.activation_function import ActivationFunction
 
@@ -43,17 +44,23 @@ class NeuralNetwork:
         return X
 
     def update_pymc_model(self, input_data: Any) -> Any:
-        size_in = input_data.shape[-1]
         weights = []
         outputs = []
         X = input_data
+        # Number of features + bias
+        size_in = input_data.shape[-1] + 1
         for layer, num_units in enumerate(self.units_per_layer):
             activation = ActivationFunction.from_name(self.activations[layer])
             W = pm.Normal(f"{self.weights_name}_{layer}", mu=0, sigma=1, size=(size_in, num_units),
                                 observed=self.parameters.weights[layer])
-            X = pm.Deterministic(f"a_{layer}", activation(pm.math.dot(X, W)))
+            X = pm.Deterministic(f"a_{layer}", activation(pm.math.dot(NeuralNetwork._add_bias(X), W)))
             weights.append(W)
             outputs.append(X)
-            size_in = num_units
+            # Units + bias
+            size_in = num_units + 1
 
         return weights, outputs
+
+    @staticmethod
+    def _add_bias(X: Any):
+        return pm.math.concatenate([X, ptt.ones((X.shape[0], 1))], axis=1)
