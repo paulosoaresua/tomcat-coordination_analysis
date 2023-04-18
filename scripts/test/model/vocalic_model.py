@@ -22,9 +22,10 @@ TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
-NUM_LAYERS_EMISSION_NN = 2
+NUM_LAYERS_EMISSION_NN = 0
 ACTIVATIONS_EMISSION_NN = "linear"
-NUM_LAYERS_F = 0
+NUM_LAYERS_F = 1
+HIDDEN_DIM_F = 1
 if NUM_LAYERS_F > 0:
     if SELF_DEPENDENT:
         F = lambda x, d, s: x + 5
@@ -32,7 +33,7 @@ if NUM_LAYERS_F > 0:
         F = lambda x, d: x + 5
 else:
     F = None
-ACT_FUNCTION = "linear"
+ACT_FUNCTION_F = "linear"
 N = 1000
 C = 2
 SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
@@ -118,7 +119,8 @@ if __name__ == "__main__":
                              mode=MODE,
                              f=F,
                              num_hidden_layers_f=NUM_LAYERS_F,
-                             activation_function_f=ACT_FUNCTION,
+                             activation_function_f=ACT_FUNCTION_F,
+                             hidden_fim_f=HIDDEN_DIM_F,
                              nn_layers_emission=NUM_LAYERS_EMISSION_NN,
                              nn_activation_emission=ACTIVATIONS_EMISSION_NN)
 

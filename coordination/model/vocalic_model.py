@@ -275,7 +275,7 @@ class VocalicModel:
                  share_params_across_features_latent: bool, share_params_across_features_observation: bool,
                  initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
                  mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
-                 activation_function_f: str = "linear", nn_layers_emission: int = 0,
+                 activation_function_f: str = "linear", hidden_dim_f: int = 4, nn_layers_emission: int = 0,
                  nn_activation_emission: str = "linear"):
 
         # Either one or the other
@@ -286,6 +286,7 @@ class VocalicModel:
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_genders = share_params_across_genders
         self.num_hidden_layers_f = num_hidden_layers_f
+        self.hidden_dim_f = hidden_dim_f
         self.activation_function_f = activation_function_f
 
         if sd_sd_c is None:
@@ -316,6 +317,7 @@ class VocalicModel:
 
         if nn_layers_emission > 0:
             # All layers have the same number of units and the same activation function
+            # TODO: size of initial and final
             self.emission_nn = NeuralNetwork(uuid="emission_nn",
                                              units_per_layer=[len(vocalic_features)] * nn_layers_emission,
                                              activations=[nn_activation_emission] * nn_layers_emission)
@@ -404,14 +406,17 @@ class VocalicModel:
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature",
                 num_hidden_layers_f=self.num_hidden_layers_f,
+                hidden_dim_f=self.hidden_dim_f,
                 activation_function_f=self.activation_function_f)[0]
 
             obs_input = latent_vocalic
             if self.emission_nn is not None:
                 # features + subject id (one ht encode) + bias term
-                X = pm.Deterministic("augmented_latent_vocalic", pm.math.concatenate(
-                    [latent_vocalic, one_hot_encode(evidence.subjects_in_time, self.num_subjects),
-                     np.ones((1, evidence.num_time_steps_in_vocalic_scale))]))
+                X = pm.Deterministic("augmented_latent_vocalic",
+                                     latent_vocalic[None, :, :] * one_hot_encode(evidence.subjects_in_time,
+                                                                                 self.num_subjects)[:, None, :].reshape(
+                                         len(self.vocalic_features) * self.num_subjects,
+                                         evidence.num_time_steps_in_vocalic_scale))
                 _, outputs = self.emission_nn.update_pymc_model(X.transpose())
 
                 obs_input = outputs[-1].transpose()
