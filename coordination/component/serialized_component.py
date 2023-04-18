@@ -25,84 +25,88 @@ def add_bias(X: Any):
         return ptt.concatenate([X, ptt.ones((1, X.shape[-1]))], axis=0)
 
 
-def f_feed_forward_logp(input_data: Any,
-                        f_nn_initial_layer: Any,
-                        f_nn_hidden_layers: Any,
-                        f_nn_output_layer: Any,
-                        pairs: Any,
-                        activation_function_number: Any):
+def feed_forward_logp_f(input_data: Any,
+                        input_layer_f: Any,
+                        hidden_layers_f: Any,
+                        output_layer_f: Any,
+                        activation_function_number_f: ptt.TensorConstant,
+                        pairs: Any):
     def forward(W, X, act_number):
-        activation = ActivationFunction.from_number(act_number.eval())
+        fn = ActivationFunction.from_number(act_number.eval())
         z = pm.math.dot(W.transpose(), add_bias(X))
-        return activation(z)
+        return fn(z)
 
-    if f_nn_initial_layer.shape.prod().eval() == 0:
+    if input_layer_f.shape.prod().eval() == 0:
+        # Only transform the input data if a NN was specified
         return input_data
 
-    num_features = input_data.shape[0]
-    num_time_steps = input_data.shape[1]
-    hidden_dim = f_nn_initial_layer.shape[1]  # == f_nn_output_layer.shape[0]
-    num_pairs = pairs.shape[0]
-    input_data = (input_data[None, :, :] * pairs[:, None, :]).reshape((num_pairs * num_features, num_time_steps))
+    hidden_dim = input_layer_f.shape[1]  # == f_nn_output_layer.shape[0]
 
-    activation = ActivationFunction.from_number(activation_function_number.eval())
-    X = activation(pm.math.dot(f_nn_initial_layer.transpose(), add_bias(input_data)))
+    # Concatenate the pair IDs over time to the input data with the features over time
+    input_data = ptt.concatenate([input_data, pairs], axis=0)
 
-    # At version 5.0.2, PyMC does not allow to pass any argument to a logp function that has more dimensions
-    # than the CustomDist itself. To work around, we pass f_nn_hidden_layers with first and second dimensions
-    # merged, and here we retrieve the 3 dimensions by reshaping the tensor, where the first dimension if the
-    # number of hidden layers.
-    num_hidden_layers = ptt.cast(f_nn_hidden_layers.shape[0] / (hidden_dim + 1), "int32")
-    if num_hidden_layers.eval() > 0:
-        f_nn_hidden_layers = f_nn_hidden_layers.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
+    # Input layer activations
+    activation = ActivationFunction.from_number(activation_function_number_f.eval())
+    a0 = activation(pm.math.dot(input_layer_f.transpose(), add_bias(input_data)))
 
-        res, updates = pt.scan(forward,
-                               outputs_info=X,
-                               sequences=[f_nn_hidden_layers],
-                               non_sequences=[activation_function_number])
+    # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
+    num_hidden_layers = ptt.cast(hidden_layers_f.shape[0] / (hidden_dim + 1), "int32")
+    hidden_layers_f = hidden_layers_f.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
 
-        X = res[-1]
+    # Feed-Forward through the hidden layers
+    res, updates = pt.scan(forward,
+                           outputs_info=a0,
+                           sequences=[hidden_layers_f],
+                           non_sequences=[activation_function_number_f])
 
-    return activation(pm.math.dot(f_nn_output_layer.transpose(), add_bias(X)))
+    h = res[-1]
+
+    # Output layer activation
+    out = activation(pm.math.dot(output_layer_f.transpose(), add_bias(h)))
+
+    return out
 
 
-def f_feed_forward_random(input_data: np.ndarray,
-                          f_nn_initial_layer: np.ndarray,
-                          f_nn_hidden_layers: np.ndarray,
-                          f_nn_output_layer: np.ndarray,
-                          pairs: np.ndarray,
-                          activation: Any):
-    if len(f_nn_initial_layer) == 0:
+def feed_forward_random_f(input_data: np.ndarray,
+                          input_layer_f: np.ndarray,
+                          hidden_layers_f: np.ndarray,
+                          output_layer_f: np.ndarray,
+                          activation: Callable,
+                          pairs: np.ndarray):
+    if len(input_layer_f) == 0:
         return input_data
 
-    num_features = len(input_data)
-    hidden_dim = f_nn_initial_layer.shape[1]
-    num_pairs = pairs.shape[0]
-    input_data = (input_data[None, :] * pairs[:, None]).reshape(num_pairs * num_features)
+    hidden_dim = input_layer_f.shape[1]  # == f_nn_output_layer.shape[0]
 
-    # Number of units in the hidden layers + bias term
-    num_layers = int(f_nn_hidden_layers.shape[0] / (hidden_dim + 1))
-    f_nn_hidden_layers = f_nn_hidden_layers.reshape((num_layers, hidden_dim + 1, hidden_dim))
+    # Concatenate the pair IDs to the input data with the features.
+    input_data = ptt.concatenate([input_data, pairs], axis=0)
 
-    X = activation(np.dot(add_bias(input_data[:, None]).T, f_nn_initial_layer))
+    # Input layer activations
+    a0 = activation(pm.math.dot(input_layer_f.transpose(), add_bias(input_data)))
 
-    for W in f_nn_hidden_layers:
-        # Transform D with a function that depends on the previous value of a different speaker, that speaker and
-        # the current one's identity.
-        z = np.dot(add_bias(X.T).T, W)
-        X = activation(z)
+    # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
+    num_hidden_layers = int(hidden_layers_f.shape[0] / (hidden_dim + 1))
+    hidden_layers_f = hidden_layers_f.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
 
-    return activation(np.dot(add_bias(X.T).T, f_nn_output_layer))[0]
+    # Feed-Forward through the hidden layers
+    h = a0
+    for W in hidden_layers_f:
+        h = activation(np.dot(W.transpose(), h))
+
+    # Output layer activation.
+    out = activation(np.dot(output_layer_f.transpose(), h))
+
+    return out
 
 
 def blending_logp(serialized_component: Any,
                   initial_mean: Any,
                   sigma: Any,
                   coordination: Any,
-                  f_nn_initial_layer: Any,
-                  f_nn_hidden_layers: Any,
-                  f_nn_output_layer: Any,
-                  f_activation_function_number: ptt.TensorConstant,
+                  input_layer_f: Any,
+                  hidden_layers_f: Any,
+                  output_layer_f: Any,
+                  activation_function_number_f: ptt.TensorConstant,
                   prev_time_same_subject: ptt.TensorConstant,
                   prev_time_diff_subject: ptt.TensorConstant,
                   prev_same_subject_mask: ptt.TensorConstant,
@@ -115,8 +119,12 @@ def blending_logp(serialized_component: Any,
     S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    D = f_feed_forward_logp(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs,
-                            f_activation_function_number)
+    D = feed_forward_logp_f(input_data=D,
+                            input_layer_f=input_layer_f,
+                            hidden_layers_f=hidden_layers_f,
+                            output_layer_f=output_layer_f,
+                            activation_function_number_f=activation_function_number_f,
+                            pairs=pairs)
 
     SM = prev_same_subject_mask[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
@@ -134,10 +142,10 @@ def blending_logp_no_self_dependency(serialized_component: Any,
                                      initial_mean: Any,
                                      sigma: Any,
                                      coordination: Any,
-                                     f_nn_initial_layer: Any,
-                                     f_nn_hidden_layers: Any,
-                                     f_nn_output_layer: Any,
-                                     f_activation_function_number: ptt.TensorConstant,
+                                     input_layer_f: Any,
+                                     hidden_layers_f: Any,
+                                     output_layer_f: Any,
+                                     activation_function_number_f: ptt.TensorConstant,
                                      prev_time_diff_subject: ptt.TensorConstant,
                                      prev_diff_subject_mask: ptt.TensorConstant,
                                      pairs: ptt.TensorConstant):
@@ -147,8 +155,12 @@ def blending_logp_no_self_dependency(serialized_component: Any,
     # the serialized component is one
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    D = f_feed_forward_logp(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs,
-                            f_activation_function_number)
+    D = feed_forward_logp_f(input_data=D,
+                            input_layer_f=input_layer_f,
+                            hidden_layers_f=hidden_layers_f,
+                            output_layer_f=output_layer_f,
+                            activation_function_number_f=activation_function_number_f,
+                            pairs=pairs)
 
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
@@ -163,10 +175,10 @@ def blending_logp_no_self_dependency(serialized_component: Any,
 def blending_random(initial_mean: np.ndarray,
                     sigma: np.ndarray,
                     coordination: np.ndarray,
-                    f_nn_initial_layer: Any,
-                    f_nn_hidden_layers: Any,
-                    f_nn_output_layer: Any,
-                    f_activation_function_number: int,
+                    input_layer_f: np.ndarray,
+                    hidden_layers_f: np.ndarray,
+                    output_layer_f: np.ndarray,
+                    activation_function_number_f: int,
                     prev_time_same_subject: np.ndarray,
                     prev_time_diff_subject: np.ndarray,
                     prev_same_subject_mask: np.ndarray,
@@ -186,12 +198,18 @@ def blending_random(initial_mean: np.ndarray,
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
 
-    activation = ActivationFunction.from_number(f_activation_function_number)
+    activation = ActivationFunction.from_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]  # d-vector
 
-        D = f_feed_forward_random(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs[:, t], activation)
+        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
+        D = feed_forward_random_f(input_data=D[:, None],
+                                  input_layer_f=input_layer_f,
+                                  hidden_layers_f=hidden_layers_f,
+                                  output_layer_f=output_layer_f,
+                                  activation=activation,
+                                  pairs=pairs[:, t][:, None])[:, 0]
 
         # Previous sample from the same individual
         if prev_same_subject_mask[t] == 1:
@@ -218,10 +236,10 @@ def blending_random(initial_mean: np.ndarray,
 def blending_random_no_self_dependency(initial_mean: np.ndarray,
                                        sigma: np.ndarray,
                                        coordination: np.ndarray,
-                                       f_nn_initial_layer: Any,
-                                       f_nn_hidden_layers: Any,
-                                       f_nn_output_layer: Any,
-                                       f_activation_function_number: int,
+                                       input_layer_f: np.ndarray,
+                                       hidden_layers_f: np.ndarray,
+                                       output_layer_f: np.ndarray,
+                                       activation_function_number_f: int,
                                        prev_time_diff_subject: np.ndarray,
                                        prev_diff_subject_mask: np.ndarray,
                                        pairs: np.ndarray,
@@ -233,12 +251,18 @@ def blending_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
-    activation = ActivationFunction.from_number(f_activation_function_number)
+    activation = ActivationFunction.from_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
 
-        D = f_feed_forward_random(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs, activation)
+        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
+        D = feed_forward_random_f(input_data=D[:, None],
+                                  input_layer_f=input_layer_f,
+                                  hidden_layers_f=hidden_layers_f,
+                                  output_layer_f=output_layer_f,
+                                  activation=activation,
+                                  pairs=pairs[:, t][:, None])[:, 0]
 
         # No self-dependency. The transition distribution is a blending between the previous value from another individual,
         # and a fixed mean.
@@ -261,10 +285,10 @@ def mixture_logp(serialized_component: Any,
                  initial_mean: Any,
                  sigma: Any,
                  coordination: Any,
-                 f_nn_initial_layer: Any,
-                 f_nn_hidden_layers: Any,
-                 f_nn_output_layer: Any,
-                 f_activation_function_number: ptt.TensorConstant,
+                 input_layer_f: Any,
+                 hidden_layers_f: Any,
+                 output_layer_f: Any,
+                 activation_function_number_f: ptt.TensorConstant,
                  prev_time_same_subject: ptt.TensorConstant,
                  prev_time_diff_subject: ptt.TensorConstant,
                  prev_same_subject_mask: ptt.TensorConstant,
@@ -277,8 +301,12 @@ def mixture_logp(serialized_component: Any,
     S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    D = f_feed_forward_logp(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs,
-                            f_activation_function_number)
+    D = feed_forward_logp_f(input_data=D,
+                            input_layer_f=input_layer_f,
+                            hidden_layers_f=hidden_layers_f,
+                            output_layer_f=output_layer_f,
+                            activation_function_number_f=activation_function_number_f,
+                            pairs=pairs)
 
     SM = prev_same_subject_mask[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
@@ -298,10 +326,10 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
                                     initial_mean: Any,
                                     sigma: Any,
                                     coordination: Any,
-                                    f_nn_initial_layer: Any,
-                                    f_nn_hidden_layers: Any,
-                                    f_nn_output_layer: Any,
-                                    f_activation_function_number: ptt.TensorConstant,
+                                    input_layer_f: Any,
+                                    hidden_layers_f: Any,
+                                    output_layer_f: Any,
+                                    activation_function_number_f: ptt.TensorConstant,
                                     prev_time_diff_subject: ptt.TensorConstant,
                                     prev_diff_subject_mask: ptt.TensorConstant,
                                     pairs: ptt.TensorConstant):
@@ -311,8 +339,12 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
     # the serialized component is one
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    D = f_feed_forward_logp(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs,
-                            f_activation_function_number)
+    D = feed_forward_logp_f(input_data=D,
+                            input_layer_f=input_layer_f,
+                            hidden_layers_f=hidden_layers_f,
+                            output_layer_f=output_layer_f,
+                            activation_function_number_f=activation_function_number_f,
+                            pairs=pairs)
 
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
@@ -328,10 +360,10 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
 def mixture_random(initial_mean: np.ndarray,
                    sigma: np.ndarray,
                    coordination: np.ndarray,
-                   f_nn_initial_layer: Any,
-                   f_nn_hidden_layers: Any,
-                   f_nn_output_layer: Any,
-                   f_activation_function_number: int,
+                   input_layer_f: np.ndarray,
+                   hidden_layers_f: np.ndarray,
+                   output_layer_f: np.ndarray,
+                   activation_function_number_f: int,
                    prev_time_same_subject: np.ndarray,
                    prev_time_diff_subject: np.ndarray,
                    prev_same_subject_mask: np.ndarray,
@@ -351,12 +383,18 @@ def mixture_random(initial_mean: np.ndarray,
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
 
-    activation = ActivationFunction.from_number(f_activation_function_number)
+    activation = ActivationFunction.from_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
 
-        D = f_feed_forward_random(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs, activation)
+        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
+        D = feed_forward_random_f(input_data=D[:, None],
+                                  input_layer_f=input_layer_f,
+                                  hidden_layers_f=hidden_layers_f,
+                                  output_layer_f=output_layer_f,
+                                  activation=activation,
+                                  pairs=pairs[:, t][:, None])[:, 0]
 
         # Previous sample from the same individual
         S = sample[..., prev_time_same_subject[t]] * prev_same_subject_mask[t]
@@ -380,10 +418,10 @@ def mixture_random(initial_mean: np.ndarray,
 def mixture_random_no_self_dependency(initial_mean: np.ndarray,
                                       sigma: np.ndarray,
                                       coordination: np.ndarray,
-                                      f_nn_initial_layer: Any,
-                                      f_nn_hidden_layers: Any,
-                                      f_nn_output_layer: Any,
-                                      f_activation_function_number: int,
+                                      input_layer_f: np.ndarray,
+                                      hidden_layers_f: np.ndarray,
+                                      output_layer_f: np.ndarray,
+                                      activation_function_number_f: int,
                                       prev_time_diff_subject: np.ndarray,
                                       prev_diff_subject_mask: np.ndarray,
                                       pairs: np.ndarray,
@@ -395,12 +433,18 @@ def mixture_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
-    activation = ActivationFunction.from_number(f_activation_function_number)
+    activation = ActivationFunction.from_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
 
-        D = f_feed_forward_random(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs, activation)
+        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
+        D = feed_forward_random_f(input_data=D[:, None],
+                                  input_layer_f=input_layer_f,
+                                  hidden_layers_f=hidden_layers_f,
+                                  output_layer_f=output_layer_f,
+                                  activation=activation,
+                                  pairs=pairs[:, t][:, None])[:, 0]
 
         if sigma.shape[1] == 1:
             # Parameter sharing across subjects
@@ -431,10 +475,15 @@ class SerializedComponentParameters:
     def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
         self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
         self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
+        # A list containing 3 tensors. One with the weights of the first layer, the second with the weights for the
+        # hidden layers (3 dimensions, with first dimension indicating the number of layers), and the third containing
+        # the weights of the output layer.
+        self.weights_f: Optional[List[np.ndarray]] = None
 
     def clear_values(self):
         self.mean_a0.value = None
         self.sd_aa.value = None
+        self.weights_f = None
 
 
 class SerializedComponentSamples:
@@ -675,13 +724,11 @@ class SerializedComponent:
         subjects -= 1
         return subjects
 
-    def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
-                          prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
-                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
-                          feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
-                          num_hidden_layers_f: int = 0, activation_function_f: str = "linear", hidden_dim_f: int = 4,
-                          observed_weights_f: Optional[List[np.ndarray]] = None) -> Any:
-
+    def _create_random_parameters(self, subjects: np.ndarray, gender_map: Dict[int, int]):
+        """
+        This function creates the initial mean and standard deviation of the serialized component distribution as
+        random variables.
+        """
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
             mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
@@ -721,63 +768,97 @@ class SerializedComponent:
             mean = mean.repeat(self.dim_value, axis=0)
             sd = sd.repeat(self.dim_value, axis=0)
 
-        # We use a neural network to fit the function f
-        f_initial_layer = []
-        f_hidden_layers = []
-        f_final_layer = []
+        return mean, sd, mean_a0, sd_aa
+
+    def _create_random_weights_f(self, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str):
+        """
+        This function creates the weights used to fit the function f(.) as random variables. Because the serialized
+        component uses a CustomDist, all the arguments of the logp function we pass must be tensors. So, we cannot
+        pass a list of tensors from different sizes, otherwise the program will crash when it tries to convert that
+        to a single tensor. Therefore, the strategy is to have 3 sets of weights, the first one represents the weights
+        in the input layer, the second will be a list of weights with the same dimensions, which represent the weights
+        in the hidden layers, and the last one will be weights in the last (output) layer.
+        """
+
+        # Gather observations from each layer. If some weights are pre-set, we don't need to infer them.
+        if self.parameters.weights_f is None:
+            observed_weights_f = [None] * 3
+        else:
+            observed_weights_f = self.parameters.weights_f
+
+        # All possible combinations of source and target subjects. We will pass the combination of previous subject ID
+        # (different than the current one) and current subject id as a one-hot-encode (OHE) vector to the NN so it can
+        # learn how to establish different patterns for dependencies across different subjects.
+        # Because the previous and current subject will never be the same where f(.) is applied, we can reduce the
+        # dimension by the number of subject in the model instead of having an OHE vector of size num_subjects ^ 2.
+        one_hot_encode_size = self.num_subjects * (self.num_subjects - 1)
+
+        # Features + subject pair ID + bias term
+        input_layer_dim_in = self.dim_value + one_hot_encode_size + 1
+        input_layer_dim_out = dim_hidden_layer
+
+        hidden_layer_dim_in = dim_hidden_layer + 1
+        hidden_layer_dim_out = dim_hidden_layer
+
+        output_layer_dim_in = dim_hidden_layer + 1
+        output_layer_dim_out = self.dim_value
+
+        input_layer = pm.Normal(f"{self.f_nn_weights_name}_in", size=(input_layer_dim_in, input_layer_dim_out),
+                                observed=observed_weights_f[0])
+
+        hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden", mu=0, sigma=1,
+                                  size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                  observed=observed_weights_f[1])
+
+        # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
+        # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
+        # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
+        # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
+        hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
+            (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+
+        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out", size=(output_layer_dim_in, output_layer_dim_out),
+                                 observed=observed_weights_f[2])
+
+        # Because we cannot pass a string or a function to CustomDist, we will identify a function by a number and
+        # we will retrieve it's implementation in the feed-forward function.
+        activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_name]
+
+        return input_layer, hidden_layers, output_layer, activation_function_number
+
+    def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
+                          prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
+                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
+                          feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
+                          num_hidden_layers_f: int = 0, activation_function_f: str = "linear",
+                          hidden_dim_f: int = 4) -> Any:
+
+        mean, sd, mean_a0, sd_aa = self._create_random_parameters(subjects, gender_map)
+
         if num_hidden_layers_f > 0:
-            if observed_weights_f is None:
-                observed_weights_f = [None] * 3
+            input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
+                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=hidden_dim_f,
+                activation_function_name=activation_function_f)
+        else:
+            input_layer_f = []
+            hidden_layers_f = []
+            output_layer_f = []
+            activation_function_number_f = []
 
-            # All possible combinations of source and target subjects
-            one_hot_encode_size = self.num_subjects * (self.num_subjects - 1)
-
-            # Extra bias term
-            initial_layer_dim_in = one_hot_encode_size * self.dim_value + 1
-            final_layer_dim_in = hidden_dim_f + 1
-            hidden_layer_dim_in = hidden_dim_f + 1
-
-            f_initial_layer = pm.Normal(f"{self.f_nn_weights_name}_in", size=(initial_layer_dim_in, hidden_dim_f),
-                                        observed=observed_weights_f[0])
-
-            if num_hidden_layers_f > 1:
-                # The initial layer is a special kind of layer because dim_in can be different than dim_out
-                # but we consider as part of the hidden layers. We have to declare it separate because of the
-                # dimensionality issue. PyMC will transform a list of tensors to a tensor, so adding the initial layer
-                # to the list of hidden layers would crash the program.
-                f_hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden", mu=0, sigma=1,
-                                            size=(num_hidden_layers_f - 1, hidden_layer_dim_in, hidden_dim_f),
-                                            observed=observed_weights_f[1])
-
-                # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
-                # dimension of CustomDist. To work around it, I join will the layer dimension with the input one for
-                # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
-                # #layers x #input x #output, so we can perform the feed-forward step.
-                f_hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", f_hidden_layers.reshape(
-                    ((num_hidden_layers_f - 1) * hidden_layer_dim_in, hidden_dim_f)))
-
-            f_final_layer = pm.Normal(f"{self.f_nn_weights_name}_out", size=(final_layer_dim_in, self.dim_value),
-                                      observed=observed_weights_f[2])
-
-        f_activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_f]
-        # One-hot-encode representation of the current subject and previous different one over time
-
-        num_time_steps = len(subjects)
-        pairs = np.zeros((self.num_subjects * (self.num_subjects - 1), num_time_steps))
-        for t in range(num_time_steps):
-            source_subject = one_hot_encode(np.array([subjects[prev_time_diff_subject[t]]]), self.num_subjects)
-            # Because source and target subjects are always different, we can reduce the dimension by the number of subjects.
-            target_subject = one_hot_encode(np.array([min(subjects[t], self.num_subjects - 2)]), self.num_subjects - 1)
-            pairs[:, t] = np.dot(source_subject, target_subject.T).flatten()
-
+        # Create one-hot-encode vectors for the different pairs
+        source_subject = one_hot_encode([subjects[prev_time_diff_subject]], self.num_subjects)
+        # Because source and target subjects are always different, we can use one less dimension to identify the target
+        target_subject = one_hot_encode(np.minimum(subjects, self.num_subjects - 2), self.num_subjects - 1)
+        pairs = np.einsum("ijk,jlk->ilk", source_subject[:, None, :], target_subject[None, :, :]).reshape(-1,
+                                                                                                          len(subjects))
         if self.self_dependent:
             logp_params = (mean,
                            sd,
                            coordination,
-                           f_initial_layer,
-                           f_hidden_layers,
-                           f_final_layer,
-                           f_activation_function_number,
+                           input_layer_f,
+                           hidden_layers_f,
+                           output_layer_f,
+                           activation_function_number_f,
                            ptt.constant(prev_time_same_subject),
                            ptt.constant(prev_time_diff_subject),
                            ptt.constant(prev_same_subject_mask),
@@ -792,10 +873,10 @@ class SerializedComponent:
             logp_params = (mean,
                            sd,
                            coordination,
-                           f_initial_layer,
-                           f_hidden_layers,
-                           f_final_layer,
-                           f_activation_function_number,
+                           input_layer_f,
+                           hidden_layers_f,
+                           output_layer_f,
+                           activation_function_number_f,
                            ptt.constant(prev_time_diff_subject),
                            ptt.constant(prev_diff_subject_mask),
                            ptt.constant(pairs))
@@ -805,4 +886,4 @@ class SerializedComponent:
                                                   dims=[feature_dimension, time_dimension],
                                                   observed=observed_values)
 
-        return serialized_component, mean_a0, sd_aa, (f_initial_layer, f_hidden_layers, f_final_layer)
+        return serialized_component, mean_a0, sd_aa, (input_layer_f, hidden_layers_f, output_layer_f)

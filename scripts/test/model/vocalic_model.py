@@ -17,7 +17,7 @@ INITIAL_COORDINATION = 0.5
 ESTIMATE_INITIAL_COORDINATION = True
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
-NUM_VOCALIC_FEATURES = 3
+NUM_VOCALIC_FEATURES = 2
 TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
@@ -25,7 +25,7 @@ SELF_DEPENDENT = True
 NUM_LAYERS_EMISSION_NN = 0
 ACTIVATIONS_EMISSION_NN = "linear"
 NUM_LAYERS_F = 1
-HIDDEN_DIM_F = 1
+HIDDEN_DIM_F = 2
 if NUM_LAYERS_F > 0:
     if SELF_DEPENDENT:
         F = lambda x, d, s: x + 5
@@ -155,7 +155,6 @@ if __name__ == "__main__":
                                           can_repeat_subject=False,
                                           seed=SEED)
 
-
     # plt.figure()
     # plt.plot(np.arange(TIME_STEPS), full_samples.coordination.coordination[0])
     # plt.show()
@@ -207,6 +206,9 @@ if __name__ == "__main__":
         evidence.normalize_per_subject()
 
     model.clear_parameter_values()
+    model.latent_vocalic_cpn.parameters.weights_f = [np.array(
+        [[1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [0, 1], [0, 1], [0, 1], [0, 1],
+         [0, 1], [0, 1], [5, 5]]), None, np.array([[1, 0], [0, 1], [0, 0]])]
     if not ESTIMATE_INITIAL_COORDINATION:
         model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
     model.prior_predictive(evidence, 2)
@@ -234,7 +236,8 @@ if __name__ == "__main__":
 
     if ADD_SEMANTIC_LINK:
         time_steps = full_samples.semantic_link.time_steps_in_coordination_scale[0]
-        plt.scatter(time_steps, estimated[time_steps] + 0.05, c="white", marker="*", s=10, zorder=4, label="Semantic Link")
+        plt.scatter(time_steps, estimated[time_steps] + 0.05, c="white", marker="*", s=10, zorder=4,
+                    label="Semantic Link")
     plt.title("Coordination")
     plt.legend()
     plt.show()
@@ -252,4 +255,3 @@ if __name__ == "__main__":
     print(idata.posterior[f"f_nn_weights_latent_vocalic_in"].mean(dim=["chain", "draw"]))
     print(idata.posterior[f"f_nn_weights_latent_vocalic_out"].mean(dim=["chain", "draw"]))
     print(idata.posterior[f"f_nn_weights_latent_vocalic_hidden"].mean(dim=["chain", "draw"]))
-

@@ -23,42 +23,45 @@ class TestSerializedComponent(unittest.TestCase):
         prev_time_same_subject_mask = ptt.switch(prev_time_same_subject >= 0, 1, 0)
         prev_time_diff_subject_mask = ptt.switch(prev_time_diff_subject >= 0, 1, 0)
         subjects = ptt.constant(np.array([0, 0, 1, 0]))
-        prev_same_subjects = ptt.constant(one_hot_encode(subjects[prev_time_same_subject].eval(), 2))
-        prev_diff_subjects = ptt.constant(one_hot_encode(subjects[prev_time_diff_subject].eval(), 2))
+        curr_subjects = one_hot_encode(np.minimum(subjects.eval(), 0), 1)
+        prev_diff_subjects = one_hot_encode(subjects[prev_time_diff_subject].eval(), 2)
+        pairs = ptt.constant(
+            np.einsum("ijk,jlk->ilk", prev_diff_subjects[:, None, :], curr_subjects[None, :, :]).reshape(2, 4))
 
         # We add a bias of 1 in the first layer. The second layer does nothing. It's just to test the model
         # can be deeper.
-        f_nn_weights = ptt.constant([
-            # num_features (2) + 2 ohe (size 2) + bias = 7 rows
-            np.array([[1, 0],
-                      [0, 1],
-                      [0, 0],
-                      [0, 0],
-                      [0, 0],
-                      [0, 0],
-                      [1, 1]]),
-            np.array([[1, 0],
-                      [0, 1],
-                      [0, 0],
-                      [0, 0],
-                      [0, 0],
-                      [0, 0],
-                      [0, 0]]),
-        ]).reshape((2 * 7, 2))
-        f_activation_function_number = ActivationFunction.NAME_TO_NUMBER["linear"]
+        f_nn_initial_layer = ptt.constant([
+            [1, 0],
+            [1, 0],
+            [0, 1],
+            [0, 1],
+            [1, 1],
+        ])
+        f_nn_hidden_layers = ptt.constant([[
+            [1, 0],
+            [0, 1],
+            [0, 0]
+        ]])
+        f_nn_output_layer = ptt.constant([
+            [1, 0],
+            [0, 1],
+            [0, 0],
+        ])
+        f_activation_function_number = ptt.constant(ActivationFunction.NAME_TO_NUMBER["linear"])
 
         estimated_logp = blending_logp(serialized_component=serialized_component,
                                        initial_mean=initial_mean[subjects].T,
                                        sigma=sigma[subjects].T,
                                        coordination=coordination,
-                                       f_nn_weights=f_nn_weights,
+                                       f_nn_initial_layer=f_nn_initial_layer,
+                                       f_nn_hidden_layers=f_nn_hidden_layers,
+                                       f_nn_output_layer=f_nn_output_layer,
                                        f_activation_function_number=f_activation_function_number,
                                        prev_time_same_subject=prev_time_same_subject,
                                        prev_time_diff_subject=prev_time_diff_subject,
                                        prev_same_subject_mask=prev_time_same_subject_mask,
                                        prev_diff_subject_mask=prev_time_diff_subject_mask,
-                                       prev_same_subjects=prev_same_subjects,
-                                       prev_diff_subjects=prev_diff_subjects)
+                                       pairs=pairs)
 
         real_logp = -1.839006347788640e+03
         self.assertAlmostEqual(estimated_logp.eval(), real_logp)
@@ -67,14 +70,15 @@ class TestSerializedComponent(unittest.TestCase):
                                       initial_mean=initial_mean[subjects].T,
                                       sigma=sigma[subjects].T,
                                       coordination=coordination,
-                                      f_nn_weights=f_nn_weights,
+                                      f_nn_initial_layer=f_nn_initial_layer,
+                                      f_nn_hidden_layers=f_nn_hidden_layers,
+                                      f_nn_output_layer=f_nn_output_layer,
                                       f_activation_function_number=f_activation_function_number,
                                       prev_time_same_subject=prev_time_same_subject,
                                       prev_time_diff_subject=prev_time_diff_subject,
                                       prev_same_subject_mask=prev_time_same_subject_mask,
                                       prev_diff_subject_mask=prev_time_diff_subject_mask,
-                                      prev_same_subjects=prev_same_subjects,
-                                      prev_diff_subjects=prev_diff_subjects)
+                                      pairs=pairs)
 
         real_logp = -5.587311433139678e+02
         self.assertAlmostEqual(estimated_logp.eval(), real_logp)
