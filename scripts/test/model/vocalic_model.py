@@ -17,7 +17,7 @@ INITIAL_COORDINATION = 0.5
 ESTIMATE_INITIAL_COORDINATION = True
 TIME_STEPS = 200
 NUM_SUBJECTS = 3
-NUM_VOCALIC_FEATURES = 1
+NUM_VOCALIC_FEATURES = 3
 TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
@@ -40,9 +40,9 @@ SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
 SHARE_PARAMS_ACROSS_GENDERS_GEN = False
 SHARE_PARAMS_ACROSS_FEATURES_GEN = False
 
-SHARE_PARAMS_ACROSS_SUBJECTS_INF = False
-SHARE_PARAMS_ACROSS_GENDERS_INF = True
-SHARE_PARAMS_ACROSS_FEATURES_INF = True
+SHARE_PARAMS_ACROSS_SUBJECTS_INF = True
+SHARE_PARAMS_ACROSS_GENDERS_INF = False
+SHARE_PARAMS_ACROSS_FEATURES_INF = False
 
 # Different scales per features to test the model robustness
 set_random_seed(SEED)
@@ -120,7 +120,7 @@ if __name__ == "__main__":
                              f=F,
                              num_hidden_layers_f=NUM_LAYERS_F,
                              activation_function_f=ACT_FUNCTION_F,
-                             hidden_fim_f=HIDDEN_DIM_F,
+                             hidden_dim_f=HIDDEN_DIM_F,
                              nn_layers_emission=NUM_LAYERS_EMISSION_NN,
                              nn_activation_emission=ACTIVATIONS_EMISSION_NN)
 
@@ -201,10 +201,10 @@ if __name__ == "__main__":
         for i, subject in enumerate(all_subjects):
             evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
 
-    # if SHARE_PARAMS_ACROSS_GENDERS_INF:
-    #     evidence.normalize_per_gender()
-    # elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
-    #     evidence.normalize_per_subject()
+    if SHARE_PARAMS_ACROSS_GENDERS_INF:
+        evidence.normalize_per_gender()
+    elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
+        evidence.normalize_per_subject()
 
     model.clear_parameter_values()
     if not ESTIMATE_INITIAL_COORDINATION:
@@ -249,5 +249,7 @@ if __name__ == "__main__":
 
     print("")
     print("f(.)")
-    print(idata.posterior[f"f_nn_weights_latent_vocalic"].mean(dim=["chain", "draw"]))
+    print(idata.posterior[f"f_nn_weights_latent_vocalic_in"].mean(dim=["chain", "draw"]))
+    print(idata.posterior[f"f_nn_weights_latent_vocalic_out"].mean(dim=["chain", "draw"]))
+    print(idata.posterior[f"f_nn_weights_latent_vocalic_hidden"].mean(dim=["chain", "draw"]))
 

@@ -43,24 +43,27 @@ def f_feed_forward_logp(input_data: Any,
     num_time_steps = input_data.shape[1]
     hidden_dim = f_nn_initial_layer.shape[1]  # == f_nn_output_layer.shape[0]
     num_pairs = pairs.shape[0]
-    input_data = (input_data[None, :, :] * pairs[:, None, :]).reshape(num_pairs * num_features, num_time_steps)
+    input_data = (input_data[None, :, :] * pairs[:, None, :]).reshape((num_pairs * num_features, num_time_steps))
+
+    activation = ActivationFunction.from_number(activation_function_number.eval())
+    X = activation(pm.math.dot(f_nn_initial_layer.transpose(), add_bias(input_data)))
 
     # At version 5.0.2, PyMC does not allow to pass any argument to a logp function that has more dimensions
     # than the CustomDist itself. To work around, we pass f_nn_hidden_layers with first and second dimensions
     # merged, and here we retrieve the 3 dimensions by reshaping the tensor, where the first dimension if the
     # number of hidden layers.
-    num_layers = ptt.cast(f_nn_hidden_layers.shape[0] / hidden_dim, "int32")
-    f_nn_hidden_layers = f_nn_hidden_layers.reshape((num_layers, hidden_dim, hidden_dim))
+    num_hidden_layers = ptt.cast(f_nn_hidden_layers.shape[0] / (hidden_dim + 1), "int32")
+    if num_hidden_layers.eval() > 0:
+        f_nn_hidden_layers = f_nn_hidden_layers.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
 
-    activation = ActivationFunction.from_number(activation_function_number.eval())
-    X = activation(pm.math.dot(f_nn_initial_layer.transpose(), add_bias(input_data)))
+        res, updates = pt.scan(forward,
+                               outputs_info=X,
+                               sequences=[f_nn_hidden_layers],
+                               non_sequences=[activation_function_number])
 
-    res, updates = pt.scan(forward,
-                           outputs_info=X,
-                           sequences=[f_nn_hidden_layers],
-                           non_sequences=[activation_function_number])
+        X = res[-1]
 
-    return activation(pm.math.dot(f_nn_output_layer.transpose(), add_bias(res[-1])))
+    return activation(pm.math.dot(f_nn_output_layer.transpose(), add_bias(X)))
 
 
 def f_feed_forward_random(input_data: np.ndarray,
@@ -78,18 +81,18 @@ def f_feed_forward_random(input_data: np.ndarray,
     input_data = (input_data[None, :] * pairs[:, None]).reshape(num_pairs * num_features)
 
     # Number of units in the hidden layers + bias term
-    num_layers = int(f_nn_hidden_layers.shape[0] / hidden_dim)
-    f_nn_hidden_layers = f_nn_hidden_layers.reshape((num_layers, hidden_dim, hidden_dim))
+    num_layers = int(f_nn_hidden_layers.shape[0] / (hidden_dim + 1))
+    f_nn_hidden_layers = f_nn_hidden_layers.reshape((num_layers, hidden_dim + 1, hidden_dim))
 
-    X = activation(np.dot(add_bias(input_data), f_nn_initial_layer))
+    X = activation(np.dot(add_bias(input_data[:, None]).T, f_nn_initial_layer))
 
     for W in f_nn_hidden_layers:
         # Transform D with a function that depends on the previous value of a different speaker, that speaker and
         # the current one's identity.
-        z = np.dot(add_bias(X), W)
+        z = np.dot(add_bias(X.T).T, W)
         X = activation(z)
 
-    return activation(np.dot(add_bias(X), f_nn_output_layer))
+    return activation(np.dot(add_bias(X.T).T, f_nn_output_layer))[0]
 
 
 def blending_logp(serialized_component: Any,
@@ -188,7 +191,7 @@ def blending_random(initial_mean: np.ndarray,
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]  # d-vector
 
-        D = f_feed_forward_random(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs, activation)
+        D = f_feed_forward_random(D, f_nn_initial_layer, f_nn_hidden_layers, f_nn_output_layer, pairs[:, t], activation)
 
         # Previous sample from the same individual
         if prev_same_subject_mask[t] == 1:
@@ -723,6 +726,9 @@ class SerializedComponent:
         f_hidden_layers = []
         f_final_layer = []
         if num_hidden_layers_f > 0:
+            if observed_weights_f is None:
+                observed_weights_f = [None] * 3
+
             # All possible combinations of source and target subjects
             one_hot_encode_size = self.num_subjects * (self.num_subjects - 1)
 
@@ -734,29 +740,35 @@ class SerializedComponent:
             f_initial_layer = pm.Normal(f"{self.f_nn_weights_name}_in", size=(initial_layer_dim_in, hidden_dim_f),
                                         observed=observed_weights_f[0])
 
-            f_hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden", mu=0, sigma=1,
-                                        size=(num_hidden_layers_f, hidden_layer_dim_in, hidden_dim_f),
-                                        observed=observed_weights_f[1])
+            if num_hidden_layers_f > 1:
+                # The initial layer is a special kind of layer because dim_in can be different than dim_out
+                # but we consider as part of the hidden layers. We have to declare it separate because of the
+                # dimensionality issue. PyMC will transform a list of tensors to a tensor, so adding the initial layer
+                # to the list of hidden layers would crash the program.
+                f_hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden", mu=0, sigma=1,
+                                            size=(num_hidden_layers_f - 1, hidden_layer_dim_in, hidden_dim_f),
+                                            observed=observed_weights_f[1])
+
+                # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
+                # dimension of CustomDist. To work around it, I join will the layer dimension with the input one for
+                # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
+                # #layers x #input x #output, so we can perform the feed-forward step.
+                f_hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", f_hidden_layers.reshape(
+                    ((num_hidden_layers_f - 1) * hidden_layer_dim_in, hidden_dim_f)))
 
             f_final_layer = pm.Normal(f"{self.f_nn_weights_name}_out", size=(final_layer_dim_in, self.dim_value),
                                       observed=observed_weights_f[2])
-
-            # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
-            # dimension of CustomDist. To work around it, I join will the layer dimension with the input one for
-            # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
-            # #layers x #input x #output, so we can perform the feed-forward step.
-            f_hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", f_hidden_layers.reshape(
-                (num_hidden_layers_f * hidden_layer_dim_in, hidden_dim_f)))
 
         f_activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_f]
         # One-hot-encode representation of the current subject and previous different one over time
 
         num_time_steps = len(subjects)
-        pairs = np.zeros(self.num_subjects ** 2, num_time_steps)
+        pairs = np.zeros((self.num_subjects * (self.num_subjects - 1), num_time_steps))
         for t in range(num_time_steps):
-            source_subject = one_hot_encode(subjects[prev_time_diff_subject[t]], self.num_subjects)
-            target_subject = one_hot_encode(subjects[t], self.num_subjects)
-            pairs[:, t] = np.dot(source_subject[:, None], target_subject[None, :]).flatten()
+            source_subject = one_hot_encode(np.array([subjects[prev_time_diff_subject[t]]]), self.num_subjects)
+            # Because source and target subjects are always different, we can reduce the dimension by the number of subjects.
+            target_subject = one_hot_encode(np.array([min(subjects[t], self.num_subjects - 2)]), self.num_subjects - 1)
+            pairs[:, t] = np.dot(source_subject, target_subject.T).flatten()
 
         if self.self_dependent:
             logp_params = (mean,

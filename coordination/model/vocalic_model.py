@@ -316,8 +316,7 @@ class VocalicModel:
                                                       f=f)
 
         if nn_layers_emission > 0:
-            # All layers have the same number of units and the same activation function
-            # TODO: size of initial and final
+            # One-hot-encode representation of the current speaker + bias term
             self.emission_nn = NeuralNetwork(uuid="emission_nn",
                                              units_per_layer=[len(vocalic_features)] * nn_layers_emission,
                                              activations=[nn_activation_emission] * nn_layers_emission)
