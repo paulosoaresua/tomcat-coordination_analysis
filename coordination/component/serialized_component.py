@@ -1,6 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from enum import Enum
+import math
 import numpy as np
 import pymc as pm
 import pytensor as pt
@@ -783,12 +784,10 @@ class SerializedComponent:
         else:
             observed_weights_f = self.parameters.weights_f
 
-        # All possible combinations of source and target subjects. We will pass the combination of previous subject ID
+        # All possible pairs of subjects. We will pass the combination of previous subject ID
         # (different than the current one) and current subject id as a one-hot-encode (OHE) vector to the NN so it can
         # learn how to establish different patterns for dependencies across different subjects.
-        # Because the previous and current subject will never be the same where f(.) is applied, we can reduce the
-        # dimension by the number of subject in the model instead of having an OHE vector of size num_subjects ^ 2.
-        one_hot_encode_size = self.num_subjects * (self.num_subjects - 1)
+        one_hot_encode_size = math.comb(self.num_subjects, 2)
 
         # Features + subject pair ID + bias term
         input_layer_dim_in = self.dim_value + one_hot_encode_size + 1
@@ -842,12 +841,26 @@ class SerializedComponent:
             output_layer_f = []
             activation_function_number_f = 0
 
-        # Create one-hot-encode vectors for the different pairs
-        source_subject = one_hot_encode(subjects[prev_time_diff_subject], self.num_subjects)
-        # Because source and target subjects are always different, we can use one less dimension to identify the target
-        target_subject = one_hot_encode(np.minimum(subjects, self.num_subjects - 2), self.num_subjects - 1)
-        pairs = np.einsum("ijk,jlk->ilk", source_subject[:, None, :], target_subject[None, :, :]).reshape(-1,
-                                                                                                          len(subjects))
+        # Fill a dictionary with an ID for each pair of subjects.
+        pairs_dict = {}
+        pair_id = 0
+        for i in range(self.num_subjects):
+            for j in range(i + 1, self.num_subjects):
+                pairs_dict[f"{i}#{j}"] = pair_id
+                pair_id += 1
+
+        # Create one-hot-encode (OHE) vectors for the different pairs
+        num_time_steps = len(subjects)
+        pairs = np.zeros((len(pairs_dict), num_time_steps))
+        for t in range(num_time_steps):
+            source_subject = subjects[prev_time_diff_subject[t]]
+            target_subject = subjects[t]
+            pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
+            pair_id = pairs_dict[pair_key]
+
+            # Mark the index as 1 to create a OHE representation for that pair at time step t.
+            pairs[pair_id, t] = 1
+
         if self.self_dependent:
             logp_params = (mean,
                            sd,

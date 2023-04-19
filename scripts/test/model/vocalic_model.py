@@ -25,12 +25,12 @@ SELF_DEPENDENT = True
 
 # Function f(.)
 NUM_HIDDEN_LAYERS_F = 1
-DIM_HIDDEN_LAYER_F = NUM_VOCALIC_FEATURES
+DIM_HIDDEN_LAYER_F = 3  # NUM_VOCALIC_FEATURES
 if NUM_HIDDEN_LAYERS_F > 0:
     F = lambda x, d, s: x + 5
 else:
     F = None
-ACTIVATION_FUNCTION_F = "linear"
+ACTIVATION_FUNCTION_F = "tanh"
 
 # Emission function
 NUM_LAYERS_EMISSION_NN = 0
@@ -50,7 +50,8 @@ SHARE_PARAMS_ACROSS_FEATURES_INF = False
 set_random_seed(SEED)
 DIM = 1 if SHARE_PARAMS_ACROSS_FEATURES_GEN else NUM_VOCALIC_FEATURES
 
-PARAM_SCALES = [10 ** (3 * i) for i in range(DIM)]
+# PARAM_SCALES = [10 ** (3 * i) for i in range(DIM)]
+PARAM_SCALES = [1 ** (3 * i) for i in range(DIM)]
 if SHARE_PARAMS_ACROSS_SUBJECTS_GEN:
     TRUE_MEAN_AA = np.random.random(DIM) * PARAM_SCALES
     TRUE_SD_AA = np.random.random(DIM) * PARAM_SCALES
@@ -202,43 +203,49 @@ if __name__ == "__main__":
     #     for i, subject in enumerate(all_subjects):
     #         evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
 
-    if SHARE_PARAMS_ACROSS_GENDERS_INF:
-        evidence.normalize_per_gender()
-    elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
-        evidence.normalize_per_subject()
+    # if SHARE_PARAMS_ACROSS_GENDERS_INF:
+    #     evidence.normalize_per_gender()
+    # elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
+    #     evidence.normalize_per_subject()
 
-    b00 = 5 / evidence.observation[0, evidence.subjects_in_time == 0].std()
-    b01 = 5 / evidence.observation[1, evidence.subjects_in_time == 0].std()
-    b10 = 5 / evidence.observation[0, evidence.subjects_in_time == 1].std()
-    b11 = 5 / evidence.observation[1, evidence.subjects_in_time == 1].std()
-    b20 = 5 / evidence.observation[0, evidence.subjects_in_time == 2].std()
-    b21 = 5 / evidence.observation[1, evidence.subjects_in_time == 2].std()
+    # b00 = 5 / evidence.observation[0, evidence.subjects_in_time == 0].std()
+    # b01 = 5 / evidence.observation[1, evidence.subjects_in_time == 0].std()
+    # b10 = 5 / evidence.observation[0, evidence.subjects_in_time == 1].std()
+    # b11 = 5 / evidence.observation[1, evidence.subjects_in_time == 1].std()
+    # b20 = 5 / evidence.observation[0, evidence.subjects_in_time == 2].std()
+    # b21 = 5 / evidence.observation[1, evidence.subjects_in_time == 2].std()
 
     model.clear_parameter_values()
-    model.latent_vocalic_cpn.parameters.weights_f = [
-        # Input layer
-        np.array([[1, 0],
-                  [0, 1],
-                  [b00, b01],
-                  [b00, b01],
-                  [b10, b11],
-                  [b10, b11],
-                  [b20, b21],
-                  [b20, b21],
-                  [0, 0]]),
-
-        # Hidden layers
-        np.array([
-            np.array([[1, 0],
-                      [0, 1],
-                      [0, 0]])
-        ]),
-
-        # Output layer
-        np.array([[1, 0],
-                  [0, 1],
-                  [0, 0]])
-    ]
+    # model.latent_vocalic_cpn.parameters.weights_f = [
+    #     # Input layer
+    #     np.array([[1, 0],
+    #               [0, 1],
+    #               # [b00, b01],
+    #               # [b00, b01],
+    #               # [b10, b11],
+    #               # [b10, b11],
+    #               # [b20, b21],
+    #               # [b20, b21],
+    #               [0, 0],
+    #               [0, 0],
+    #               [0, 0],
+    #               [0, 0],
+    #               [0, 0],
+    #               [0, 0],
+    #               [5, 5]]),
+    #
+    #     # Hidden layers
+    #     np.array([
+    #         np.array([[1, 0],
+    #                   [0, 1],
+    #                   [0, 0]])
+    #     ]),
+    #
+    #     # Output layer
+    #     np.array([[1, 0],
+    #               [0, 1],
+    #               [0, 0]])
+    # ]
     if not ESTIMATE_INITIAL_COORDINATION:
         model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
     model.prior_predictive(evidence, 2)
