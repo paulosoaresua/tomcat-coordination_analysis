@@ -32,7 +32,7 @@ def feed_forward_logp_f(input_data: Any,
                         activation_function_number_f: ptt.TensorConstant,
                         pairs: Any):
     def forward(W, X, act_number):
-        fn = ActivationFunction.from_number(act_number.eval())
+        fn = ActivationFunction.from_pytensor_number(act_number.eval())
         z = pm.math.dot(W.transpose(), add_bias(X))
         return fn(z)
 
@@ -46,7 +46,7 @@ def feed_forward_logp_f(input_data: Any,
     input_data = ptt.concatenate([input_data, pairs], axis=0)
 
     # Input layer activations
-    activation = ActivationFunction.from_number(activation_function_number_f.eval())
+    activation = ActivationFunction.from_pytensor_number(activation_function_number_f.eval())
     a0 = activation(pm.math.dot(input_layer_f.transpose(), add_bias(input_data)))
 
     # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
@@ -79,10 +79,10 @@ def feed_forward_random_f(input_data: np.ndarray,
     hidden_dim = input_layer_f.shape[1]  # == f_nn_output_layer.shape[0]
 
     # Concatenate the pair IDs to the input data with the features.
-    input_data = ptt.concatenate([input_data, pairs], axis=0)
+    input_data = np.concatenate([input_data, pairs], axis=0)
 
     # Input layer activations
-    a0 = activation(pm.math.dot(input_layer_f.transpose(), add_bias(input_data)))
+    a0 = activation(np.dot(input_layer_f.transpose(), add_bias(input_data)))
 
     # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
     num_hidden_layers = int(hidden_layers_f.shape[0] / (hidden_dim + 1))
@@ -91,10 +91,10 @@ def feed_forward_random_f(input_data: np.ndarray,
     # Feed-Forward through the hidden layers
     h = a0
     for W in hidden_layers_f:
-        h = activation(np.dot(W.transpose(), h))
+        h = activation(np.dot(W.transpose(), add_bias(h)))
 
     # Output layer activation.
-    out = activation(np.dot(output_layer_f.transpose(), h))
+    out = activation(np.dot(output_layer_f.transpose(), add_bias(h)))
 
     return out
 
@@ -198,7 +198,7 @@ def blending_random(initial_mean: np.ndarray,
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
 
-    activation = ActivationFunction.from_number(activation_function_number_f)
+    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]  # d-vector
@@ -251,7 +251,7 @@ def blending_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
-    activation = ActivationFunction.from_number(activation_function_number_f)
+    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
@@ -383,7 +383,7 @@ def mixture_random(initial_mean: np.ndarray,
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
 
-    activation = ActivationFunction.from_number(activation_function_number_f)
+    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
@@ -433,7 +433,7 @@ def mixture_random_no_self_dependency(initial_mean: np.ndarray,
 
     sample = np.zeros_like(noise)
 
-    activation = ActivationFunction.from_number(activation_function_number_f)
+    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
@@ -674,12 +674,9 @@ class SerializedComponent:
 
                     if self.f is not None:
                         source_subject = samples.subjects[s][samples.prev_time_diff_subject[s][t]]
+                        target_subject = samples.subjects[s][t]
 
-                        if self.self_dependent:
-                            target_subject = samples.subjects[s][t]
-                            D = self.f(D, source_subject, target_subject)
-                        else:
-                            D = self.f(D, source_subject)
+                        D = self.f(D, source_subject, target_subject)
 
                     if self.mode == Mode.BLENDING:
                         mean = (D - S) * C * prev_diff_mask + S
@@ -830,23 +827,23 @@ class SerializedComponent:
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
-                          num_hidden_layers_f: int = 0, activation_function_f: str = "linear",
-                          hidden_dim_f: int = 4) -> Any:
+                          num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
+                          dim_hidden_layer_f: int = 0) -> Any:
 
         mean, sd, mean_a0, sd_aa = self._create_random_parameters(subjects, gender_map)
 
         if num_hidden_layers_f > 0:
             input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=hidden_dim_f,
-                activation_function_name=activation_function_f)
+                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=dim_hidden_layer_f,
+                activation_function_name=activation_function_name_f)
         else:
             input_layer_f = []
             hidden_layers_f = []
             output_layer_f = []
-            activation_function_number_f = []
+            activation_function_number_f = 0
 
         # Create one-hot-encode vectors for the different pairs
-        source_subject = one_hot_encode([subjects[prev_time_diff_subject]], self.num_subjects)
+        source_subject = one_hot_encode(subjects[prev_time_diff_subject], self.num_subjects)
         # Because source and target subjects are always different, we can use one less dimension to identify the target
         target_subject = one_hot_encode(np.minimum(subjects, self.num_subjects - 2), self.num_subjects - 1)
         pairs = np.einsum("ijk,jlk->ilk", source_subject[:, None, :], target_subject[None, :, :]).reshape(-1,

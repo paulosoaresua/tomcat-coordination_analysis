@@ -22,18 +22,20 @@ TIME_SCALE_DENSITY = 1
 SEED = 1  # 1, 7
 ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
-NUM_LAYERS_EMISSION_NN = 0
-ACTIVATIONS_EMISSION_NN = "linear"
-NUM_LAYERS_F = 1
-HIDDEN_DIM_F = 2
-if NUM_LAYERS_F > 0:
-    if SELF_DEPENDENT:
-        F = lambda x, d, s: x + 5
-    else:
-        F = lambda x, d: x + 5
+
+# Function f(.)
+NUM_HIDDEN_LAYERS_F = 1
+DIM_HIDDEN_LAYER_F = NUM_VOCALIC_FEATURES
+if NUM_HIDDEN_LAYERS_F > 0:
+    F = lambda x, d, s: x + 5
 else:
     F = None
-ACT_FUNCTION_F = "linear"
+ACTIVATION_FUNCTION_F = "linear"
+
+# Emission function
+NUM_LAYERS_EMISSION_NN = 0
+ACTIVATIONS_EMISSION_NN = "linear"
+
 N = 1000
 C = 2
 SHARE_PARAMS_ACROSS_SUBJECTS_GEN = False
@@ -118,9 +120,9 @@ if __name__ == "__main__":
                              share_params_across_features_observation=SHARE_PARAMS_ACROSS_FEATURES_INF,
                              mode=MODE,
                              f=F,
-                             num_hidden_layers_f=NUM_LAYERS_F,
-                             activation_function_f=ACT_FUNCTION_F,
-                             hidden_dim_f=HIDDEN_DIM_F,
+                             num_hidden_layers_f=NUM_HIDDEN_LAYERS_F,
+                             activation_function_name_f=ACTIVATION_FUNCTION_F,
+                             dim_hidden_layer_f=DIM_HIDDEN_LAYER_F,
                              nn_layers_emission=NUM_LAYERS_EMISSION_NN,
                              nn_activation_emission=ACTIVATIONS_EMISSION_NN)
 
@@ -186,29 +188,57 @@ if __name__ == "__main__":
                                          semantic_link_time_steps_in_coordination_scale=
                                          full_samples.semantic_link.time_steps_in_coordination_scale[0])
 
-    if SHARE_PARAMS_ACROSS_GENDERS_GEN:
-        # Add different offsets to observations from different users' genders
-        offsets = [10 ** i for i in range(2)]
-        genders_in_time = np.array([evidence.gender_map[s] for s in evidence.subjects_in_time])
-        for i, gender in enumerate([0, 1]):
-            evidence.observation[:, genders_in_time == gender] += offsets[i]
-    elif SHARE_PARAMS_ACROSS_SUBJECTS_GEN:
-        # Add different offsets to observations from different users
-        all_subjects = set(evidence.subjects_in_time)
-
-        offsets = [10 ** i for i in range(NUM_SUBJECTS)]
-        for i, subject in enumerate(all_subjects):
-            evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
+    # if SHARE_PARAMS_ACROSS_GENDERS_GEN:
+    #     # Add different offsets to observations from different users' genders
+    #     offsets = [10 ** i for i in range(2)]
+    #     genders_in_time = np.array([evidence.gender_map[s] for s in evidence.subjects_in_time])
+    #     for i, gender in enumerate([0, 1]):
+    #         evidence.observation[:, genders_in_time == gender] += offsets[i]
+    # elif SHARE_PARAMS_ACROSS_SUBJECTS_GEN:
+    #     # Add different offsets to observations from different users
+    #     all_subjects = set(evidence.subjects_in_time)
+    #
+    #     offsets = [10 ** i for i in range(NUM_SUBJECTS)]
+    #     for i, subject in enumerate(all_subjects):
+    #         evidence.observation[:, evidence.subjects_in_time == subject] += offsets[i]
 
     if SHARE_PARAMS_ACROSS_GENDERS_INF:
         evidence.normalize_per_gender()
     elif SHARE_PARAMS_ACROSS_SUBJECTS_INF:
         evidence.normalize_per_subject()
 
+    b00 = 5 / evidence.observation[0, evidence.subjects_in_time == 0].std()
+    b01 = 5 / evidence.observation[1, evidence.subjects_in_time == 0].std()
+    b10 = 5 / evidence.observation[0, evidence.subjects_in_time == 1].std()
+    b11 = 5 / evidence.observation[1, evidence.subjects_in_time == 1].std()
+    b20 = 5 / evidence.observation[0, evidence.subjects_in_time == 2].std()
+    b21 = 5 / evidence.observation[1, evidence.subjects_in_time == 2].std()
+
     model.clear_parameter_values()
-    model.latent_vocalic_cpn.parameters.weights_f = [np.array(
-        [[1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [0, 1], [0, 1], [0, 1], [0, 1],
-         [0, 1], [0, 1], [5, 5]]), None, np.array([[1, 0], [0, 1], [0, 0]])]
+    model.latent_vocalic_cpn.parameters.weights_f = [
+        # Input layer
+        np.array([[1, 0],
+                  [0, 1],
+                  [b00, b01],
+                  [b00, b01],
+                  [b10, b11],
+                  [b10, b11],
+                  [b20, b21],
+                  [b20, b21],
+                  [0, 0]]),
+
+        # Hidden layers
+        np.array([
+            np.array([[1, 0],
+                      [0, 1],
+                      [0, 0]])
+        ]),
+
+        # Output layer
+        np.array([[1, 0],
+                  [0, 1],
+                  [0, 0]])
+    ]
     if not ESTIMATE_INITIAL_COORDINATION:
         model.coordination_cpn.parameters.mean_uc0.value = np.array([logit(INITIAL_COORDINATION)])
     model.prior_predictive(evidence, 2)
