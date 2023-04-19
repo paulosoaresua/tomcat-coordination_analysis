@@ -4,8 +4,6 @@ from datetime import datetime
 import random
 
 import numpy as np
-import pytensor as pt
-import pytensor.tensor as ptt
 
 
 def json_serial(obj):
