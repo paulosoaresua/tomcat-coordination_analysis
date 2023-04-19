@@ -24,10 +24,10 @@ ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
 
 # Function f(.)
-NUM_HIDDEN_LAYERS_F = 1
-DIM_HIDDEN_LAYER_F = 3  # NUM_VOCALIC_FEATURES
+NUM_HIDDEN_LAYERS_F = 2
+DIM_HIDDEN_LAYER_F = 4  # NUM_VOCALIC_FEATURES
 if NUM_HIDDEN_LAYERS_F > 0:
-    F = lambda x, d, s: x + 5
+    F = lambda x, d, s: x + 0.1
 else:
     F = None
 ACTIVATION_FUNCTION_F = "tanh"
@@ -220,19 +220,10 @@ if __name__ == "__main__":
     #     # Input layer
     #     np.array([[1, 0],
     #               [0, 1],
-    #               # [b00, b01],
-    #               # [b00, b01],
-    #               # [b10, b11],
-    #               # [b10, b11],
-    #               # [b20, b21],
-    #               # [b20, b21],
     #               [0, 0],
     #               [0, 0],
     #               [0, 0],
-    #               [0, 0],
-    #               [0, 0],
-    #               [0, 0],
-    #               [5, 5]]),
+    #               [0.1, 0.1]]),
     #
     #     # Hidden layers
     #     np.array([

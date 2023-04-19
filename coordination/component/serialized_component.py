@@ -62,8 +62,8 @@ def feed_forward_logp_f(input_data: Any,
 
     h = res[-1]
 
-    # Output layer activation
-    out = activation(pm.math.dot(output_layer_f.transpose(), add_bias(h)))
+    # Final result. We don't apply any activation to the final layer not to squeeze the values.
+    out = pm.math.dot(output_layer_f.transpose(), add_bias(h))
 
     return out
 
