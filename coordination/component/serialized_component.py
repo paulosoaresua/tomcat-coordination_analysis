@@ -853,13 +853,14 @@ class SerializedComponent:
         num_time_steps = len(subjects)
         pairs = np.zeros((len(pairs_dict), num_time_steps))
         for t in range(num_time_steps):
-            source_subject = subjects[prev_time_diff_subject[t]]
-            target_subject = subjects[t]
-            pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
-            pair_id = pairs_dict[pair_key]
+            if prev_time_diff_subject[t] >= 0:
+                source_subject = subjects[prev_time_diff_subject[t]]
+                target_subject = subjects[t]
+                pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
+                pair_id = pairs_dict[pair_key]
 
-            # Mark the index as 1 to create a OHE representation for that pair at time step t.
-            pairs[pair_id, t] = 1
+                # Mark the index as 1 to create a OHE representation for that pair at time step t.
+                pairs[pair_id, t] = 1
 
         if self.self_dependent:
             logp_params = (mean,
