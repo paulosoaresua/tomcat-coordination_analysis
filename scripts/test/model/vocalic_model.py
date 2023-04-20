@@ -25,7 +25,7 @@ SELF_DEPENDENT = True
 
 # Function f(.)
 NUM_HIDDEN_LAYERS_F = 2
-DIM_HIDDEN_LAYER_F = 4  # NUM_VOCALIC_FEATURES
+DIM_HIDDEN_LAYER_F = 8  # NUM_VOCALIC_FEATURES
 if NUM_HIDDEN_LAYERS_F > 0:
     F = lambda x, d, s: x + 0.1
 else:
@@ -33,8 +33,9 @@ else:
 ACTIVATION_FUNCTION_F = "tanh"
 
 # Emission function
-NUM_LAYERS_EMISSION_NN = 0
-ACTIVATIONS_EMISSION_NN = "linear"
+NUM_HIDDEN_LAYERS_G = 2
+DIM_HIDDEN_LAYER_G = 4
+ACTIVATION_FUNCTION_G = "tanh"
 
 N = 1000
 C = 2
@@ -124,8 +125,10 @@ if __name__ == "__main__":
                              num_hidden_layers_f=NUM_HIDDEN_LAYERS_F,
                              activation_function_name_f=ACTIVATION_FUNCTION_F,
                              dim_hidden_layer_f=DIM_HIDDEN_LAYER_F,
-                             nn_layers_emission=NUM_LAYERS_EMISSION_NN,
-                             nn_activation_emission=ACTIVATIONS_EMISSION_NN)
+                             num_hidden_layers_g=NUM_HIDDEN_LAYERS_G,
+                             dim_hidden_layer_g=DIM_HIDDEN_LAYER_G,
+                             activation_function_name_g=ACTIVATION_FUNCTION_G,
+                             sd_weights_f=5)
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)

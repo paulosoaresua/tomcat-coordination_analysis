@@ -1,30 +1,40 @@
-from typing import Any, List
+from typing import Any, List, Optional
 
 import numpy as np
 import pymc as pm
+import pytensor as pt
 import pytensor.tensor as ptt
 
 from coordination.common.activation_function import ActivationFunction
+from coordination.model.parametrization import Parameter, NormalParameterPrior
+
+
+def add_bias(X: Any):
+    if isinstance(X, np.ndarray):
+        return np.concatenate([X, np.ones((X.shape[0], 1))], axis=1)
+    else:
+        return ptt.concatenate([X, ptt.ones((X.shape[0], 1))], axis=1)
 
 
 class NeuralNetworkParameters:
 
-    def __init__(self, num_layers: int):
-        # One per layer
-        self.weights: List[np.array] = [None] * num_layers
+    def __init__(self, mean_weights: float, sd_weights: float):
+        self.weights = Parameter(NormalParameterPrior(np.array([mean_weights]), np.array([sd_weights])))
 
     def clear_values(self):
-        self.weights = [None] * len(self.weights)
+        self.weights.value = None
 
 
 class NeuralNetwork:
 
-    def __init__(self, uuid: str, units_per_layer: List[int], activations: List[str]):
+    def __init__(self, uuid: str, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str,
+                 mean_weights: float = 0, sd_weights: float = 1):
         self.uuid = uuid
-        self.units_per_layer = units_per_layer
-        self.activations = activations
+        self.num_hidden_layers = num_hidden_layers
+        self.dim_hidden_layer = dim_hidden_layer
+        self.activation_function_name = activation_function_name
 
-        self.parameters = NeuralNetworkParameters(len(units_per_layer))
+        self.parameters = NeuralNetworkParameters(mean_weights=mean_weights, sd_weights=sd_weights)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -36,31 +46,74 @@ class NeuralNetwork:
         return f"{self.uuid}_weights"
 
     def predict(self, input_data: np.ndarray) -> np.array:
-        X = input_data
-        for layer, W in enumerate(self.parameters.weights):
-            activation = ActivationFunction.from_name(self.activations[layer])
-            X = activation(np.dot(X, W))
+        activation = ActivationFunction.from_numpy_name(self.activation_function_name)
 
-        return X
+        # Input layer
+        a0 = activation(np.dot(add_bias(input_data), self.parameters.weights[0]))
 
-    def update_pymc_model(self, input_data: Any) -> Any:
-        weights = []
-        outputs = []
-        X = input_data
-        # Number of features + bias
-        size_in = input_data.shape[-1] + 1
-        for layer, num_units in enumerate(self.units_per_layer):
-            activation = ActivationFunction.from_name(self.activations[layer])
-            W = pm.Normal(f"{self.weights_name}_{layer}", mu=0, sigma=1, size=(size_in, num_units),
-                                observed=self.parameters.weights[layer])
-            X = pm.Deterministic(f"a_{layer}", activation(pm.math.dot(NeuralNetwork._add_bias(X), W)))
-            weights.append(W)
-            outputs.append(X)
-            # Units + bias
-            size_in = num_units + 1
+        # Hidden layers
+        h = a0
+        for W in enumerate(self.parameters.weights[1]):
+            h = activation(np.dot(add_bias(h), W))
 
-        return weights, outputs
+        # Output layer
+        output = np.dot(add_bias(h), self.parameters.weights[2])
 
-    @staticmethod
-    def _add_bias(X: Any):
-        return pm.math.concatenate([X, ptt.ones((X.shape[0], 1))], axis=1)
+        return output
+
+    def update_pymc_model(self, input_data: Any, output_dim: int) -> Any:
+        if self.parameters.weights.value is None:
+            observed_weights = [None] * 3
+        else:
+            observed_weights = self.parameters.weights.value
+
+        # Features + bias term
+        input_layer_dim_in = input_data.shape[1] + 1
+        input_layer_dim_out = self.dim_hidden_layer
+
+        hidden_layer_dim_in = self.dim_hidden_layer + 1
+        hidden_layer_dim_out = self.dim_hidden_layer
+
+        output_layer_dim_in = self.dim_hidden_layer + 1
+        output_layer_dim_out = output_dim
+
+        activation = ActivationFunction.from_pytensor_name(self.activation_function_name)
+
+        # Input activation
+        input_layer = pm.Normal(f"{self.weights_name}_in",
+                                mu=self.parameters.weights.prior.mean,
+                                sigma=self.parameters.weights.prior.sd,
+                                size=(input_layer_dim_in, input_layer_dim_out),
+                                observed=observed_weights[0])
+        a0 = activation(pm.math.dot(add_bias(input_data), input_layer))
+
+        # Hidden layers activations
+        hidden_layers = pm.Normal(f"{self.weights_name}_hidden",
+                                  mu=self.parameters.weights.prior.mean,
+                                  sigma=self.parameters.weights.prior.sd,
+                                  size=(self.num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                  observed=observed_weights[1])
+
+        def forward(W, X, act_number):
+            fn = ActivationFunction.from_pytensor_number(act_number.eval())
+            z = pm.math.dot(add_bias(X), W)
+            return fn(z)
+
+        # Feed-Forward through the hidden layers
+        res, updates = pt.scan(forward,
+                               outputs_info=a0,
+                               sequences=[hidden_layers],
+                               non_sequences=[ActivationFunction.NAME_TO_NUMBER[self.activation_function_name]])
+
+        h = res[-1]
+
+        # Output value
+        output_layer = pm.Normal(f"{self.weights_name}_out",
+                                 mu=self.parameters.weights.prior.mean,
+                                 sigma=self.parameters.weights.prior.sd,
+                                 size=(output_layer_dim_in, output_layer_dim_out),
+                                 observed=observed_weights[2])
+
+        output = pm.math.dot(add_bias(h), output_layer)
+
+        return output, input_layer, hidden_layers, output_layer

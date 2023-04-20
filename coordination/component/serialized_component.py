@@ -8,7 +8,6 @@ import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
-from coordination.common.functions import one_hot_encode
 from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
@@ -473,18 +472,16 @@ def mixture_random_no_self_dependency(initial_mean: np.ndarray,
 
 class SerializedComponentParameters:
 
-    def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
+    def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, mean_weights_f: float,
+                 sd_weights_f: float):
         self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
         self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
-        # A list containing 3 tensors. One with the weights of the first layer, the second with the weights for the
-        # hidden layers (3 dimensions, with first dimension indicating the number of layers), and the third containing
-        # the weights of the output layer.
-        self.weights_f: Optional[List[np.ndarray]] = None
+        self.weights_f = Parameter(NormalParameterPrior(np.array(mean_weights_f), np.array([sd_weights_f])))
 
     def clear_values(self):
         self.mean_a0.value = None
         self.sd_aa.value = None
-        self.weights_f = None
+        self.weights_f.value = None
 
 
 class SerializedComponentSamples:
@@ -532,7 +529,7 @@ class SerializedComponent:
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_params_across_subjects: bool,
                  share_params_across_genders: bool, share_params_across_features: bool, mode: Mode = Mode.BLENDING,
-                 f: Optional[Callable] = None):
+                 f: Optional[Callable] = None, mean_weights_f: float = 0, sd_weights_f: float = 1):
         assert not (share_params_across_subjects and share_params_across_genders)
 
         dim = 1 if share_params_across_features else dim_value
@@ -562,7 +559,9 @@ class SerializedComponent:
 
         self.parameters = SerializedComponentParameters(mean_mean_a0=mean_mean_a0,
                                                         sd_mean_a0=sd_mean_a0,
-                                                        sd_sd_aa=sd_sd_aa)
+                                                        sd_sd_aa=sd_sd_aa,
+                                                        mean_weights_f=mean_weights_f,
+                                                        sd_weights_f=sd_weights_f)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -779,10 +778,10 @@ class SerializedComponent:
         """
 
         # Gather observations from each layer. If some weights are pre-set, we don't need to infer them.
-        if self.parameters.weights_f is None:
+        if self.parameters.weights_f.value is None:
             observed_weights_f = [None] * 3
         else:
-            observed_weights_f = self.parameters.weights_f
+            observed_weights_f = self.parameters.weights_f.value
 
         # All possible pairs of subjects. We will pass the combination of previous subject ID
         # (different than the current one) and current subject id as a one-hot-encode (OHE) vector to the NN so it can
@@ -799,10 +798,15 @@ class SerializedComponent:
         output_layer_dim_in = dim_hidden_layer + 1
         output_layer_dim_out = self.dim_value
 
-        input_layer = pm.Normal(f"{self.f_nn_weights_name}_in", size=(input_layer_dim_in, input_layer_dim_out),
+        input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
+                                mu=self.parameters.weights_f.prior.mean,
+                                sigma=self.parameters.weights_f.prior.sd,
+                                size=(input_layer_dim_in, input_layer_dim_out),
                                 observed=observed_weights_f[0])
 
-        hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden", mu=0, sigma=1,
+        hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden",
+                                  mu=self.parameters.weights_f.prior.mean,
+                                  sigma=self.parameters.weights_f.prior.sd,
                                   size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
                                   observed=observed_weights_f[1])
 
@@ -813,7 +817,10 @@ class SerializedComponent:
         hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
             (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
 
-        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out", size=(output_layer_dim_in, output_layer_dim_out),
+        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",
+                                 mu=self.parameters.weights_f.prior.mean,
+                                 sigma=self.parameters.weights_f.prior.sd,
+                                 size=(output_layer_dim_in, output_layer_dim_out),
                                  observed=observed_weights_f[2])
 
         # Because we cannot pass a string or a function to CustomDist, we will identify a function by a number and

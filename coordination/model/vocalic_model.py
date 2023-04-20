@@ -275,8 +275,9 @@ class VocalicModel:
                  share_params_across_features_latent: bool, share_params_across_features_observation: bool,
                  initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
                  mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
-                 dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear", nn_layers_emission: int = 0,
-                 nn_activation_emission: str = "linear"):
+                 dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear", num_hidden_layers_g: int = 0,
+                 dim_hidden_layer_g: int = 0, activation_function_name_g: str = "linear", mean_weights_f: float = 0,
+                 sd_weights_f: float = 1, mean_weights_g: float = 0, sd_weights_g: float = 1):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -313,16 +314,21 @@ class VocalicModel:
                                                       share_params_across_genders=share_params_across_genders,
                                                       share_params_across_features=share_params_across_features_latent,
                                                       mode=mode,
-                                                      f=f)
+                                                      f=f,
+                                                      mean_weights_f=mean_weights_f,
+                                                      sd_weights_f=sd_weights_f)
 
-        if nn_layers_emission > 0:
-            # One-hot-encode representation of the current speaker + bias term
-            self.emission_nn = NeuralNetwork(uuid="emission_nn",
-                                             units_per_layer=[len(vocalic_features)] * nn_layers_emission,
-                                             activations=[nn_activation_emission] * nn_layers_emission)
+        if num_hidden_layers_g > 0:
+            # One-hot-encode representation of the current speaker + time step + bias term
+            self.g_nn = NeuralNetwork(uuid="g",
+                                      num_hidden_layers=num_hidden_layers_g,
+                                      dim_hidden_layer=dim_hidden_layer_g,
+                                      activation_function_name=activation_function_name_g,
+                                      mean_weights=mean_weights_g,
+                                      sd_weights=sd_weights_g)
         else:
             # No transformation between latent and observation
-            self.emission_nn = None
+            self.g_nn = None
 
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
@@ -346,7 +352,7 @@ class VocalicModel:
 
     def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
                      can_repeat_subject: bool, seed: Optional[int] = None,
-                     apply_emission_nn: bool = False) -> VocalicSamples:
+                     apply_g: bool = False) -> VocalicSamples:
         coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
         latent_vocalic_samples = self.latent_vocalic_cpn.draw_samples(num_series=num_series,
                                                                       time_scale_density=vocalic_time_scale_density,
@@ -354,12 +360,14 @@ class VocalicModel:
                                                                       can_repeat_subject=can_repeat_subject)
 
         obs_input = latent_vocalic_samples.values
-        # if apply_emission_nn and self.emission_nn is not None:
-        #     obs_input = []
-        #     for X in latent_vocalic_samples.values:
-        #         obs_input.append(self.emission_nn.predict(np.concatenate(
-        #             [X, one_hot_encode(latent_vocalic_samples.subjects, self.num_subjects),
-        #              np.ones((1, latent_vocalic_samples.num_time_steps))]).T).T)
+        if apply_g and self.g_nn is not None:
+            obs_input = []
+            for X in latent_vocalic_samples.values:
+                # features + OHE subject + time step
+                extended_X = np.concatenate([X, one_hot_encode(latent_vocalic_samples.subjects, self.num_subjects),
+                                             latent_vocalic_samples.time_steps_in_coordination_scale])
+                # Transpose to pass time ain dimension 0 to the NN and transpose the predictions back
+                obs_input.append(self.g_nn.predict(extended_X.T).T)
 
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=obs_input,
                                                                 subjects=latent_vocalic_samples.subjects,
@@ -409,16 +417,16 @@ class VocalicModel:
                 activation_function_name_f=self.activation_function_name_f)[0]
 
             obs_input = latent_vocalic
-            # if self.emission_nn is not None:
-            #     # features + subject id (one ht encode) + bias term
-            #     X = pm.Deterministic("augmented_latent_vocalic",
-            #                          latent_vocalic[None, :, :] * one_hot_encode(evidence.subjects_in_time,
-            #                                                                      self.num_subjects)[:, None, :].reshape(
-            #                              len(self.vocalic_features) * self.num_subjects,
-            #                              evidence.num_time_steps_in_vocalic_scale))
-            #     _, outputs = self.emission_nn.update_pymc_model(X.transpose())
-            #
-            #     obs_input = outputs[-1].transpose()
+            if self.g_nn is not None:
+                # features + subject id (one ht encode) + bias term
+                X = pm.Deterministic("augmented_latent_vocalic",
+                                     pm.math.concatenate(
+                                         [latent_vocalic, one_hot_encode(evidence.subjects_in_time, self.num_subjects),
+                                          evidence.time_steps_in_coordination_scale[None, :]]))
+                outputs = self.g_nn.update_pymc_model(input_data=X.transpose(),
+                                                      output_dim=latent_vocalic.shape[0])[0]
+
+                obs_input = outputs.transpose()
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=obs_input,
                                                    feature_dimension="vocalic_feature",
