@@ -8,7 +8,6 @@ import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
-from coordination.common.functions import one_hot_encode
 from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
