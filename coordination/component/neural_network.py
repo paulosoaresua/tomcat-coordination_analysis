@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 
 import numpy as np
 import pymc as pm
+import pytensor as pt
 import pytensor.tensor as ptt
 
 from coordination.common.activation_function import ActivationFunction
@@ -75,38 +76,35 @@ class NeuralNetwork:
         output_layer_dim_in = self.dim_hidden_layer + 1
         output_layer_dim_out = output_dim
 
-        input_layer = pm.Normal(f"{self.uuid}_in", size=(input_layer_dim_in, input_layer_dim_out),
+        activation = ActivationFunction.from_pytensor_name(self.activation_function_name)
+
+        # Input activation
+        input_layer = pm.Normal(f"{self.weights_name}_in", size=(input_layer_dim_in, input_layer_dim_out),
                                 observed=observed_weights[0])
+        a0 = activation(pm.math.dot(add_bias(input_data), input_layer))
 
-        hidden_layers = pm.Normal(f"{self.uuid}_hidden", mu=0, sigma=1,
-                                  size=(self.n, hidden_layer_dim_in, hidden_layer_dim_out),
-                                  observed=observed_weights_f[1])
+        # Hidden layers activations
+        hidden_layers = pm.Normal(f"{self.weights_name}_hidden", mu=0, sigma=1,
+                                      size=(self.num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                      observed=observed_weights[1])
 
-        # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
-        # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
-        # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
-        # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
-        hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
-            (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+        def forward(W, X, act_number):
+            fn = ActivationFunction.from_pytensor_number(act_number.eval())
+            z = pm.math.dot(add_bias(X), W)
+            return fn(z)
 
-        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out", size=(output_layer_dim_in, output_layer_dim_out),
-                                 observed=observed_weights_f[2])
+        # Feed-Forward through the hidden layers
+        res, updates = pt.scan(forward,
+                               outputs_info=a0,
+                               sequences=[hidden_layers],
+                               non_sequences=[ActivationFunction.NAME_TO_NUMBER[self.activation_function_name]])
 
-        X = input_data
-        # Number of features + bias
-        size_in = input_data.shape[-1] + 1
-        for layer, num_units in enumerate(self.units_per_layer):
-            activation = ActivationFunction.from_name(self.activations[layer])
-            W = pm.Normal(f"{self.weights_name}_{layer}", mu=0, sigma=1, size=(size_in, num_units),
-                          observed=self.parameters.weights[layer])
-            X = pm.Deterministic(f"a_{layer}", activation(pm.math.dot(NeuralNetwork._add_bias(X), W)))
-            weights.append(W)
-            outputs.append(X)
-            # Units + bias
-            size_in = num_units + 1
+        h = res[-1]
 
-        return weights, outputs
+        # Output value
+        output_layer = pm.Normal(f"{self.weights_name}_out", size=(output_layer_dim_in, output_layer_dim_out),
+                                 observed=observed_weights[2])
 
-    @staticmethod
-    def _add_bias(X: Any):
-        return pm.math.concatenate([X, ptt.ones((X.shape[0], 1))], axis=1)
+        output = pm.math.dot(add_bias(h), output_layer)
+
+        return output, input_layer, hidden_layers, output_layer
