@@ -276,7 +276,8 @@ class VocalicModel:
                  initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
                  mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
                  dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear", num_hidden_layers_g: int = 0,
-                 dim_hidden_layer_g: int = 0, activation_function_name_g: str = "linear"):
+                 dim_hidden_layer_g: int = 0, activation_function_name_g: str = "linear", mean_weights_f: float = 0,
+                 sd_weights_f: float = 1, mean_weights_g: float = 0, sd_weights_g: float = 1):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -313,14 +314,18 @@ class VocalicModel:
                                                       share_params_across_genders=share_params_across_genders,
                                                       share_params_across_features=share_params_across_features_latent,
                                                       mode=mode,
-                                                      f=f)
+                                                      f=f,
+                                                      mean_weights_f=mean_weights_f,
+                                                      sd_weights_f=sd_weights_f)
 
         if num_hidden_layers_g > 0:
             # One-hot-encode representation of the current speaker + time step + bias term
             self.g_nn = NeuralNetwork(uuid="g",
                                       num_hidden_layers=num_hidden_layers_g,
                                       dim_hidden_layer=dim_hidden_layer_g,
-                                      activation_function_name=activation_function_name_g)
+                                      activation_function_name=activation_function_name_g,
+                                      mean_weights=mean_weights_g,
+                                      sd_weights=sd_weights_g)
         else:
             # No transformation between latent and observation
             self.g_nn = None

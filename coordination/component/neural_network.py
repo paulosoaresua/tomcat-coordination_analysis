@@ -6,6 +6,7 @@ import pytensor as pt
 import pytensor.tensor as ptt
 
 from coordination.common.activation_function import ActivationFunction
+from coordination.model.parametrization import Parameter, NormalParameterPrior
 
 
 def add_bias(X: Any):
@@ -17,23 +18,23 @@ def add_bias(X: Any):
 
 class NeuralNetworkParameters:
 
-    def __init__(self):
-        # One per layer
-        self.weights: Optional[List[np.array]] = None
+    def __init__(self, mean_weights: float, sd_weights: float):
+        self.weights = Parameter(NormalParameterPrior(np.array([mean_weights]), np.array([sd_weights])))
 
     def clear_values(self):
-        self.weights = None
+        self.weights.value = None
 
 
 class NeuralNetwork:
 
-    def __init__(self, uuid: str, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str):
+    def __init__(self, uuid: str, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str,
+                 mean_weights: float = 0, sd_weights: float = 1):
         self.uuid = uuid
         self.num_hidden_layers = num_hidden_layers
         self.dim_hidden_layer = dim_hidden_layer
         self.activation_function_name = activation_function_name
 
-        self.parameters = NeuralNetworkParameters()
+        self.parameters = NeuralNetworkParameters(mean_weights=mean_weights, sd_weights=sd_weights)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -61,10 +62,10 @@ class NeuralNetwork:
         return output
 
     def update_pymc_model(self, input_data: Any, output_dim: int) -> Any:
-        if self.parameters.weights is None:
+        if self.parameters.weights.value is None:
             observed_weights = [None] * 3
         else:
-            observed_weights = self.parameters.weights
+            observed_weights = self.parameters.weights.value
 
         # Features + bias term
         input_layer_dim_in = input_data.shape[1] + 1
@@ -79,14 +80,19 @@ class NeuralNetwork:
         activation = ActivationFunction.from_pytensor_name(self.activation_function_name)
 
         # Input activation
-        input_layer = pm.Normal(f"{self.weights_name}_in", size=(input_layer_dim_in, input_layer_dim_out),
+        input_layer = pm.Normal(f"{self.weights_name}_in",
+                                mu=self.parameters.weights.prior.mean,
+                                sigma=self.parameters.weights.prior.sd,
+                                size=(input_layer_dim_in, input_layer_dim_out),
                                 observed=observed_weights[0])
         a0 = activation(pm.math.dot(add_bias(input_data), input_layer))
 
         # Hidden layers activations
-        hidden_layers = pm.Normal(f"{self.weights_name}_hidden", mu=0, sigma=1,
-                                      size=(self.num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
-                                      observed=observed_weights[1])
+        hidden_layers = pm.Normal(f"{self.weights_name}_hidden",
+                                  mu=self.parameters.weights.prior.mean,
+                                  sigma=self.parameters.weights.prior.sd,
+                                  size=(self.num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                  observed=observed_weights[1])
 
         def forward(W, X, act_number):
             fn = ActivationFunction.from_pytensor_number(act_number.eval())
@@ -102,7 +108,10 @@ class NeuralNetwork:
         h = res[-1]
 
         # Output value
-        output_layer = pm.Normal(f"{self.weights_name}_out", size=(output_layer_dim_in, output_layer_dim_out),
+        output_layer = pm.Normal(f"{self.weights_name}_out",
+                                 mu=self.parameters.weights.prior.mean,
+                                 sigma=self.parameters.weights.prior.sd,
+                                 size=(output_layer_dim_in, output_layer_dim_out),
                                  observed=observed_weights[2])
 
         output = pm.math.dot(add_bias(h), output_layer)
