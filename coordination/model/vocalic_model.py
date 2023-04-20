@@ -3,6 +3,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
+import math
 import numpy as np
 import pandas as pd
 import pymc as pm
@@ -15,6 +16,7 @@ from coordination.component.neural_network import NeuralNetwork
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
+from coordination.component.lag import Lag, LagSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 VOCALIC_FEATURES = [
@@ -277,7 +279,7 @@ class VocalicModel:
                  mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
                  dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear", num_hidden_layers_g: int = 0,
                  dim_hidden_layer_g: int = 0, activation_function_name_g: str = "linear", mean_weights_f: float = 0,
-                 sd_weights_f: float = 1, mean_weights_g: float = 0, sd_weights_g: float = 1):
+                 sd_weights_f: float = 1, mean_weights_g: float = 0, sd_weights_g: float = 1, max_vocalic_lag: int = 0):
 
         # Either one or the other
         assert not (share_params_across_genders and share_params_across_subjects)
@@ -303,6 +305,8 @@ class VocalicModel:
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
+        self.lag_cpn = Lag("vocalic_lag", max_lag=max_vocalic_lag)
+
         self.latent_vocalic_cpn = SerializedComponent(uuid="latent_vocalic",
                                                       num_subjects=num_subjects,
                                                       dim_value=len(vocalic_features),
@@ -316,7 +320,8 @@ class VocalicModel:
                                                       mode=mode,
                                                       f=f,
                                                       mean_weights_f=mean_weights_f,
-                                                      sd_weights_f=sd_weights_f)
+                                                      sd_weights_f=sd_weights_f,
+                                                      max_lag=max_vocalic_lag)
 
         if num_hidden_layers_g > 0:
             # One-hot-encode representation of the current speaker + time step + bias term
@@ -402,8 +407,10 @@ class VocalicModel:
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             coordination = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
+            lag = self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2))
             latent_vocalic = self.latent_vocalic_cpn.update_pymc_model(
                 coordination=coordination[evidence.time_steps_in_coordination_scale],
+                lag=lag,
                 prev_time_same_subject=evidence.previous_time_same_subject,
                 prev_time_diff_subject=evidence.previous_time_diff_subject,
                 prev_same_subject_mask=evidence.vocalic_prev_same_subject_mask,
