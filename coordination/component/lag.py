@@ -51,17 +51,10 @@ class Lag:
         return samples
 
     def update_pymc_model(self, num_lags) -> Any:
-        # lag = pm.DiscreteUniform(self.lag_name,
-        #                          lower=self.parameters.lag.prior.lower,
-        #                          upper=self.parameters.lag.prior.upper,
-        #                          size=num_lags,
-        #                          observed=self.parameters.lag.value)
-
-        k = self.parameters.lag.prior.upper - self.parameters.lag.prior.lower + 1
-        p = 1.0 / k
-        lag = pm.Categorical(self.lag_name,
-                             p=np.full(shape=(k,), fill_value=p),
-                             size=num_lags,
-                             observed=self.parameters.lag.value)
+        lag = pm.DiscreteUniform(self.lag_name,
+                                 lower=self.parameters.lag.prior.lower,
+                                 upper=self.parameters.lag.prior.upper,
+                                 size=num_lags,
+                                 observed=self.parameters.lag.value)
 
         return lag

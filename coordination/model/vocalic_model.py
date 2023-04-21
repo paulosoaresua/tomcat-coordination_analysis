@@ -305,7 +305,10 @@ class VocalicModel:
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
-        self.lag_cpn = Lag("vocalic_lag", max_lag=max_vocalic_lag)
+        if max_vocalic_lag > 0:
+            self.lag_cpn = Lag("vocalic_lag", max_lag=max_vocalic_lag)
+        else:
+            self.lag_cpn = None
 
         self.latent_vocalic_cpn = SerializedComponent(uuid="latent_vocalic",
                                                       num_subjects=num_subjects,
@@ -408,7 +411,7 @@ class VocalicModel:
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             coordination = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
-            lag = self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2))
+            lag = None if self.lag_cpn is None else self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2))
             latent_vocalic = self.latent_vocalic_cpn.update_pymc_model(
                 coordination=coordination[evidence.time_steps_in_coordination_scale],
                 lag=lag,

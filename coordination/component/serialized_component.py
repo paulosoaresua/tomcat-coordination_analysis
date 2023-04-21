@@ -831,12 +831,12 @@ class SerializedComponent:
 
         return input_layer, hidden_layers, output_layer, activation_function_number
 
-    def update_pymc_model(self, coordination: Any, lag: Any, prev_time_same_subject: np.ndarray,
+    def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
                           num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
-                          dim_hidden_layer_f: int = 0) -> Any:
+                          dim_hidden_layer_f: int = 0, lag: Optional[Any] = None) -> Any:
 
         mean, sd, mean_a0, sd_aa = self._create_random_parameters(subjects, gender_map)
 
@@ -879,12 +879,8 @@ class SerializedComponent:
                 # Mark the index as 1 to create a OHE representation for that pair at time step t.
                 pairs_ohe[pair_id, t] = 1
 
-        # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
-        # and the direction of their coupling.
-        symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
-
-        # Create a Lag table
-        if self.max_lag > 0:
+        if lag is not None:
+            # Create a Lag table
             lag_table = np.full(shape=(2 * self.max_lag + 1, num_time_steps), fill_value=-1)
             subject_times = [[t for t, _ in enumerate(subjects) if subjects[t] == s] for s in range(self.num_subjects)]
             for t in range(num_time_steps):
@@ -904,6 +900,10 @@ class SerializedComponent:
                     lag_table[min_local_lag + self.max_lag: max_local_lag + self.max_lag + 1, t] = subject_times[
                                                                                                        prev_diff_subject][
                                                                                                    lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
+
+            # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
+            # and the direction of their coupling.
+            symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
 
             prev_time_diff_subject = \
             ptt.take_along_axis(lag_table, self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag), 0)[0]
