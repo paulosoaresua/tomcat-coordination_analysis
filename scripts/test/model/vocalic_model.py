@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # b21 = 5 / evidence.observation[1, evidence.subjects_in_time == 2].std()
 
     model.clear_parameter_values()
-    model.lag_cpn.parameters.lag.value = np.array([0, 0, 0])
+    # model.lag_cpn.parameters.lag.value = np.array([0, 0, 0])
     # model.latent_vocalic_cpn.parameters.weights_f = [
     #     # Input layer
     #     np.array([[1, 0],

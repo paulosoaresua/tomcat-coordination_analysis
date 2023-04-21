@@ -348,6 +348,7 @@ class VocalicModel:
         names = self.coordination_cpn.parameter_names
         names.extend(self.latent_vocalic_cpn.parameter_names)
         names.extend(self.obs_vocalic_cpn.parameter_names)
+        names.extend(self.lag_cpn.parameter_names)
 
         return names
 

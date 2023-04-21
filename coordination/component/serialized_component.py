@@ -884,28 +884,30 @@ class SerializedComponent:
         symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
 
         # Create a Lag table
-        # if self.max_lag > 0:
-        #     lag_table = np.full(shape=(2 * self.max_lag + 1, num_time_steps), fill_value=-1)
-        #     subject_times = [[t for t, _ in enumerate(subjects) if subjects[t] == s] for s in range(self.num_subjects)]
-        #     for t in range(num_time_steps):
-        #         if prev_time_diff_subject[t] >= 0:
-        #             # Previous subject different than the current one
-        #             prev_diff_subject = subjects[prev_time_diff_subject[t]]
-        #
-        #             # In the array containing all time steps when the previous other subject had observations, find
-        #             # the index of the time step associated with prev_time_diff_subject[t]. This will be the index for lag
-        #             # zero.
-        #             lag_zero_idx = np.searchsorted(subject_times[prev_diff_subject], prev_time_diff_subject[t])
-        #             min_lag = -min(lag_zero_idx, self.max_lag)
-        #             max_lag = min(len(subject_times[prev_diff_subject]) - lag_zero_idx - 1, self.max_lag)
-        #
-        #             # The rows range from -K to K, where K is the max lag size. So, to access an element with lag l, we do
-        #             # lat_table[K + l, :].
-        #             lag_table[min_lag + self.max_lag: max_lag + self.max_lag + 1, t] = subject_times[prev_diff_subject][
-        #                                                                                lag_zero_idx + min_lag:lag_zero_idx + max_lag + 1]
-        #
-        #     prev_time_diff_subject = ptt.take_along_axis(lag_table, symmetric_lag[None, :], 0)[0]
-        #     prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
+        if self.max_lag > 0:
+            lag_table = np.full(shape=(2 * self.max_lag + 1, num_time_steps), fill_value=-1)
+            subject_times = [[t for t, _ in enumerate(subjects) if subjects[t] == s] for s in range(self.num_subjects)]
+            for t in range(num_time_steps):
+                if prev_time_diff_subject[t] >= 0:
+                    # Previous subject different than the current one
+                    prev_diff_subject = subjects[prev_time_diff_subject[t]]
+
+                    # In the array containing all time steps when the previous other subject had observations, find
+                    # the index of the time step associated with prev_time_diff_subject[t]. This will be the index for lag
+                    # zero.
+                    lag_zero_idx = np.searchsorted(subject_times[prev_diff_subject], prev_time_diff_subject[t])
+                    min_local_lag = -min(lag_zero_idx, self.max_lag)
+                    max_local_lag = min(len(subject_times[prev_diff_subject]) - lag_zero_idx - 1, self.max_lag)
+
+                    # The rows range from -K to K, where K is the max lag size. So, to access an element with lag l, we do
+                    # lat_table[K + l, :].
+                    lag_table[min_local_lag + self.max_lag: max_local_lag + self.max_lag + 1, t] = subject_times[
+                                                                                                       prev_diff_subject][
+                                                                                                   lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
+
+            prev_time_diff_subject = \
+            ptt.take_along_axis(lag_table, self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag), 0)[0]
+            prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
 
         if self.self_dependent:
             logp_params = (mean,
