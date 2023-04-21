@@ -42,3 +42,12 @@ class BetaParameterPrior:
 
         self.a = a
         self.b = b
+
+
+class UniformDiscreteParameterPrior:
+
+    def __init__(self, lower: int, upper: int):
+        assert lower <= upper
+
+        self.lower = lower
+        self.upper = upper

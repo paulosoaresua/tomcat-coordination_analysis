@@ -24,7 +24,7 @@ ADD_SEMANTIC_LINK = False
 SELF_DEPENDENT = True
 
 # Function f(.)
-NUM_HIDDEN_LAYERS_F = 2
+NUM_HIDDEN_LAYERS_F = 0
 DIM_HIDDEN_LAYER_F = 8  # NUM_VOCALIC_FEATURES
 if NUM_HIDDEN_LAYERS_F > 0:
     F = lambda x, d, s: x + 0.1
@@ -33,7 +33,7 @@ else:
 ACTIVATION_FUNCTION_F = "tanh"
 
 # Emission function
-NUM_HIDDEN_LAYERS_G = 2
+NUM_HIDDEN_LAYERS_G = 0
 DIM_HIDDEN_LAYER_G = 4
 ACTIVATION_FUNCTION_G = "tanh"
 
@@ -128,7 +128,8 @@ if __name__ == "__main__":
                              num_hidden_layers_g=NUM_HIDDEN_LAYERS_G,
                              dim_hidden_layer_g=DIM_HIDDEN_LAYER_G,
                              activation_function_name_g=ACTIVATION_FUNCTION_G,
-                             sd_weights_f=5)
+                             sd_weights_f=5,
+                             max_vocalic_lag=5)
 
     # Generate samples with different feature values per subject and different scales per feature
     model.coordination_cpn.parameters.sd_uc.value = np.ones(1)
@@ -219,6 +220,7 @@ if __name__ == "__main__":
     # b21 = 5 / evidence.observation[1, evidence.subjects_in_time == 2].std()
 
     model.clear_parameter_values()
+    # model.lag_cpn.parameters.lag.value = np.array([0, 0, 0])
     # model.latent_vocalic_cpn.parameters.weights_f = [
     #     # Input layer
     #     np.array([[1, 0],

@@ -10,7 +10,8 @@ from scipy.stats import norm
 
 from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior, \
+    UniformDiscreteParameterPrior
 
 
 class Mode(Enum):
@@ -109,8 +110,8 @@ def blending_logp(serialized_component: Any,
                   activation_function_number_f: ptt.TensorConstant,
                   prev_time_same_subject: ptt.TensorConstant,
                   prev_time_diff_subject: ptt.TensorConstant,
-                  prev_same_subject_mask: ptt.TensorConstant,
-                  prev_diff_subject_mask: ptt.TensorConstant,
+                  prev_same_subject_mask: Any,
+                  prev_diff_subject_mask: Any,
                   pairs: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
 
@@ -146,8 +147,8 @@ def blending_logp_no_self_dependency(serialized_component: Any,
                                      hidden_layers_f: Any,
                                      output_layer_f: Any,
                                      activation_function_number_f: ptt.TensorConstant,
-                                     prev_time_diff_subject: ptt.TensorConstant,
-                                     prev_diff_subject_mask: ptt.TensorConstant,
+                                     prev_time_diff_subject: Any,
+                                     prev_diff_subject_mask: Any,
                                      pairs: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
 
@@ -291,8 +292,8 @@ def mixture_logp(serialized_component: Any,
                  activation_function_number_f: ptt.TensorConstant,
                  prev_time_same_subject: ptt.TensorConstant,
                  prev_time_diff_subject: ptt.TensorConstant,
-                 prev_same_subject_mask: ptt.TensorConstant,
-                 prev_diff_subject_mask: ptt.TensorConstant,
+                 prev_same_subject_mask: Any,
+                 prev_diff_subject_mask: Any,
                  pairs: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
 
@@ -330,8 +331,8 @@ def mixture_logp_no_self_dependency(serialized_component: Any,
                                     hidden_layers_f: Any,
                                     output_layer_f: Any,
                                     activation_function_number_f: ptt.TensorConstant,
-                                    prev_time_diff_subject: ptt.TensorConstant,
-                                    prev_diff_subject_mask: ptt.TensorConstant,
+                                    prev_time_diff_subject: Any,
+                                    prev_diff_subject_mask: Any,
                                     pairs: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
 
@@ -529,7 +530,7 @@ class SerializedComponent:
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_params_across_subjects: bool,
                  share_params_across_genders: bool, share_params_across_features: bool, mode: Mode = Mode.BLENDING,
-                 f: Optional[Callable] = None, mean_weights_f: float = 0, sd_weights_f: float = 1):
+                 f: Optional[Callable] = None, mean_weights_f: float = 0, sd_weights_f: float = 1, max_lag: int = 0):
         assert not (share_params_across_subjects and share_params_across_genders)
 
         dim = 1 if share_params_across_features else dim_value
@@ -556,6 +557,7 @@ class SerializedComponent:
         self.share_params_across_features = share_params_across_features
         self.mode = mode
         self.f = f
+        self.max_lag = max_lag
 
         self.parameters = SerializedComponentParameters(mean_mean_a0=mean_mean_a0,
                                                         sd_mean_a0=sd_mean_a0,
@@ -834,7 +836,7 @@ class SerializedComponent:
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
                           num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
-                          dim_hidden_layer_f: int = 0) -> Any:
+                          dim_hidden_layer_f: int = 0, lag: Optional[Any] = None) -> Any:
 
         mean, sd, mean_a0, sd_aa = self._create_random_parameters(subjects, gender_map)
 
@@ -856,9 +858,13 @@ class SerializedComponent:
                 pairs_dict[f"{i}#{j}"] = pair_id
                 pair_id += 1
 
-        # Create one-hot-encode (OHE) vectors for the different pairs
+        # Create one-hot-encode (OHE) vectors for the different pairs. We also store the list of numerical pair ids and
+        # a signal indicating the order of the relationship. We will use these two variables to correct index the lags
+        # later.
         num_time_steps = len(subjects)
-        pairs = np.zeros((len(pairs_dict), num_time_steps))
+        pairs_ohe = np.zeros((len(pairs_dict), num_time_steps))
+        pair_ids = np.zeros(num_time_steps, dtype=int)
+        pair_signals = np.ones(num_time_steps, dtype=int)
         for t in range(num_time_steps):
             if prev_time_diff_subject[t] >= 0:
                 source_subject = subjects[prev_time_diff_subject[t]]
@@ -866,8 +872,42 @@ class SerializedComponent:
                 pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
                 pair_id = pairs_dict[pair_key]
 
+                pair_ids[t] = pair_id
+                if f"{source_subject}#{target_subject}" not in pairs_dict:
+                    pair_signals[t] *= -1
+
                 # Mark the index as 1 to create a OHE representation for that pair at time step t.
-                pairs[pair_id, t] = 1
+                pairs_ohe[pair_id, t] = 1
+
+        if lag is not None:
+            # Create a Lag table
+            lag_table = np.full(shape=(2 * self.max_lag + 1, num_time_steps), fill_value=-1)
+            subject_times = [[t for t, _ in enumerate(subjects) if subjects[t] == s] for s in range(self.num_subjects)]
+            for t in range(num_time_steps):
+                if prev_time_diff_subject[t] >= 0:
+                    # Previous subject different than the current one
+                    prev_diff_subject = subjects[prev_time_diff_subject[t]]
+
+                    # In the array containing all time steps when the previous other subject had observations, find
+                    # the index of the time step associated with prev_time_diff_subject[t]. This will be the index for lag
+                    # zero.
+                    lag_zero_idx = np.searchsorted(subject_times[prev_diff_subject], prev_time_diff_subject[t])
+                    min_local_lag = -min(lag_zero_idx, self.max_lag)
+                    max_local_lag = min(len(subject_times[prev_diff_subject]) - lag_zero_idx - 1, self.max_lag)
+
+                    # The rows range from -K to K, where K is the max lag size. So, to access an element with lag l, we do
+                    # lat_table[K + l, :].
+                    lag_table[min_local_lag + self.max_lag: max_local_lag + self.max_lag + 1, t] = subject_times[
+                                                                                                       prev_diff_subject][
+                                                                                                   lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
+
+            # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
+            # and the direction of their coupling.
+            symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
+
+            prev_time_diff_subject = \
+            ptt.take_along_axis(lag_table, self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag), 0)[0]
+            prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
 
         if self.self_dependent:
             logp_params = (mean,
@@ -877,11 +917,11 @@ class SerializedComponent:
                            hidden_layers_f,
                            output_layer_f,
                            activation_function_number_f,
-                           ptt.constant(prev_time_same_subject),
-                           ptt.constant(prev_time_diff_subject),
-                           ptt.constant(prev_same_subject_mask),
-                           ptt.constant(prev_diff_subject_mask),
-                           ptt.constant(pairs))
+                           prev_time_same_subject,
+                           prev_time_diff_subject,
+                           prev_same_subject_mask,
+                           prev_diff_subject_mask,
+                           pairs_ohe)
             logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
             random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
             serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
@@ -895,9 +935,9 @@ class SerializedComponent:
                            hidden_layers_f,
                            output_layer_f,
                            activation_function_number_f,
-                           ptt.constant(prev_time_diff_subject),
-                           ptt.constant(prev_diff_subject_mask),
-                           ptt.constant(pairs))
+                           prev_same_subject_mask,
+                           prev_diff_subject_mask,
+                           pairs_ohe)
             logp_fn = blending_logp_no_self_dependency if self.mode == Mode.BLENDING else mixture_logp_no_self_dependency
             random_fn = blending_random_no_self_dependency if self.mode == Mode.BLENDING else mixture_random_no_self_dependency
             serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
