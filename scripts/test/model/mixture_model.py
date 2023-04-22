@@ -255,26 +255,26 @@ if __name__ == "__main__":
     # Synthetic data
     evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                    num_subjects=3,
-                                                                   time_steps=np.linspace(0, 4 * np.pi, 60).reshape(20,
+                                                                   time_steps=np.linspace(0, 9 * np.pi, 90).reshape(30,
                                                                                                                     3).T,
                                                                    noise_scale=None,
                                                                    vertical_offset_per_subject=np.array([0, 1, 2]))
     evidence_vertical_shift_normalized = evidence_vertical_shift.normalize_per_subject(inplace=False)
 
-    evidence_vertical_shift_noise = SyntheticSeriesMixture.from_function(fn=np.sin,
+    evidence_vertical_shift_noise = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                          num_subjects=3,
-                                                                         time_steps=np.linspace(0, 4 * np.pi,
-                                                                                                60).reshape(20, 3).T,
+                                                                         time_steps=np.linspace(0, 9 * np.pi,
+                                                                                                90).reshape(30, 3).T,
                                                                          noise_scale=0.5,
                                                                          vertical_offset_per_subject=np.array(
                                                                              [0, 1, 2]))
     evidence_vertical_shift_noise_normalized = evidence_vertical_shift_noise.normalize_per_subject(inplace=False)
 
     # The second person is anti-symmetric with respect to the first and third one
-    evidence_vertical_shift_anti_symmetry = SyntheticSeriesMixture.from_function(fn=np.sin,
+    evidence_vertical_shift_anti_symmetry = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                                  num_subjects=3,
-                                                                                 time_steps=np.linspace(0, 4 * np.pi,
-                                                                                                        60).reshape(20,
+                                                                                 time_steps=np.linspace(0, 9 * np.pi,
+                                                                                                        90).reshape(30,
                                                                                                                     3).T,
                                                                                  noise_scale=None,
                                                                                  vertical_offset_per_subject=np.array(
@@ -286,14 +286,14 @@ if __name__ == "__main__":
 
     evidence_random = SyntheticSeriesMixture.from_function(fn=lambda x: np.random.randn(*x.shape),
                                                            num_subjects=3,
-                                                           time_steps=np.linspace(0, 4 * np.pi, 60).reshape(20, 3).T,
+                                                           time_steps=np.linspace(0, 9 * np.pi, 90).reshape(30, 3).T,
                                                            noise_scale=None)
     evidence_random_normalized = evidence_random.normalize_per_subject(inplace=False)
 
-    evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.sin,
+    evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                        num_subjects=3,
-                                                                       time_steps=np.linspace(0, 4 * np.pi, 60).reshape(
-                                                                           20, 3).T,
+                                                                       time_steps=np.linspace(0, 9 * np.pi, 90).reshape(
+                                                                           30, 3).T,
                                                                        noise_scale=None,
                                                                        vertical_offset_per_subject=np.array([0, 1, 2]),
                                                                        horizontal_offset_per_subject=np.array(
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
-    evidence = evidence_vertical_shift_anti_symmetry_normalized
+    evidence = evidence_vertical_shift_normalized
 
     model = MixtureModel(num_subjects=3,
                          self_dependent=True,
@@ -316,17 +316,24 @@ if __name__ == "__main__":
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
-                         num_hidden_layers_f=2,
-                         dim_hidden_layer_f=8,
-                         activation_function_name_f="tanh")
+                         num_hidden_layers_f=1,
+                         dim_hidden_layer_f=3,
+                         activation_function_name_f="linear")
 
-    posterior_samples, idata_vertical_shift_anti_symmetry_normalized_fit_f = train(model, evidence, burn_in=1500)
+    model.latent_cpn.parameters.weights_f.value = [
+        np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]),
+        np.array([np.concatenate([np.eye(3), np.zeros((1, 3))])]),
+        np.concatenate([np.eye(3), np.zeros((1, 3))])
+    ]
+
+    posterior_samples, idata = train(model, evidence, burn_in=1000, init_method="advi")
 
     # Plot parameter trace
-    plot_parameter_trace(model, idata_vertical_shift_anti_symmetry_normalized_fit_f)
+    plot_parameter_trace(model, idata)
 
     # Plot evidence and coordination side by side
     fig, axs = plt.subplots(1, 2)
 
     evidence.plot(axs[0], marker_size=8)
     posterior_samples.plot(axs[1], show_samples=False, line_width=1)
+    plt.show()

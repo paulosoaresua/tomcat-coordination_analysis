@@ -25,20 +25,22 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
                                       expander_aux_mask_matrix: ptt.TensorConstant,
                                       aggregation_aux_mask_matrix: ptt.TensorVariable):
     C = coordination[None, None, 1:]  # 1 x 1 x t-1
+
+    # previous values from all subjects
     P = mixture_component[..., :-1]  # s x d x t-1
 
     # Log probability due to the initial time step in the component's scale.
     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
                          mixture_component[..., 0]).sum()
 
-    # D contains the previous values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, P, axes=(1, 0))  # s * (s-1) x d x t
-
-    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
+    D = feed_forward_logp_f(input_data=P.reshape((P.shape[0] * P.shape[1], P.shape[2])),
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
+                            activation_function_number_f=activation_function_number_f).reshape(P.shape)
+
+    # D contains the previous values from other individuals for each individual
+    D = ptt.tensordot(expander_aux_mask_matrix, D, axes=(1, 0))  # s * (s-1) x d x t
 
     P_extended = ptt.repeat(P, repeats=(mixture_component.shape[0] - 1), axis=0)
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
@@ -65,20 +67,21 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                                          expander_aux_mask_matrix: ptt.TensorConstant,
                                          aggregation_aux_mask_matrix: ptt.TensorVariable):
     C = coordination[None, None, 1:]  # 1 x 1 x t
+
+    # previous values from all subjects
     P = mixture_component[..., :-1]  # s x d x t
 
     # Log probability due to the initial time step in the component's scale.
     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
                          mixture_component[..., 0]).sum()
 
-    # D contains the previous values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, P, axes=(1, 0))  # s * (s-1) x d x t
-
-    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
+    D = feed_forward_logp_f(input_data=P.reshape((P.shape[0] * P.shape[1], P.shape[2])),
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
+                            activation_function_number_f=activation_function_number_f).reshape(P.shape)
+    # D contains the previous values from other individuals for each individual
+    D = ptt.tensordot(expander_aux_mask_matrix, D, axes=(1, 0))  # s * (s-1) x d x t
 
     # We use a fixed mean instead of the previous value from the same individual
     P_extended = ptt.repeat(initial_mean[:, :, None], repeats=(mixture_component.shape[0] - 1), axis=0)
@@ -395,15 +398,15 @@ class MixtureComponent:
         else:
             observed_weights_f = self.parameters.weights_f.value
 
-        # Features * number of relations (subject * (subject - 1)) + bias term
-        input_layer_dim_in = self.dim_value * self.num_subjects * (self.num_subjects - 1) + 1
+        # Features * number of subjects + bias term
+        input_layer_dim_in = self.dim_value * self.num_subjects + 1
         input_layer_dim_out = dim_hidden_layer
 
         hidden_layer_dim_in = dim_hidden_layer + 1
         hidden_layer_dim_out = dim_hidden_layer
 
         output_layer_dim_in = dim_hidden_layer + 1
-        output_layer_dim_out = self.dim_value * self.num_subjects * (self.num_subjects - 1)
+        output_layer_dim_out = self.dim_value * self.num_subjects
 
         input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
                                 mu=self.parameters.weights_f.prior.mean,
