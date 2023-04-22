@@ -38,7 +38,7 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f)
+                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
 
     P_extended = ptt.repeat(P, repeats=(mixture_component.shape[0] - 1), axis=0)
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
@@ -78,7 +78,7 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f)
+                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
 
     # We use a fixed mean instead of the previous value from the same individual
     P_extended = ptt.repeat(initial_mean[:, :, None], repeats=(mixture_component.shape[0] - 1), axis=0)
@@ -403,7 +403,7 @@ class MixtureComponent:
         hidden_layer_dim_out = dim_hidden_layer
 
         output_layer_dim_in = dim_hidden_layer + 1
-        output_layer_dim_out = self.dim_value
+        output_layer_dim_out = self.dim_value * self.num_subjects * (self.num_subjects - 1)
 
         input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
                                 mu=self.parameters.weights_f.prior.mean,
