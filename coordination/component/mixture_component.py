@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from functools import partial
 import numpy as np
@@ -6,9 +6,11 @@ import pymc as pm
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
+from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, DirichletParameterPrior, \
     NormalParameterPrior
+from coordination.component.utils import feed_forward_logp_f, feed_forward_random_f
 
 
 def mixture_logp_with_self_dependency(mixture_component: Any,
@@ -16,6 +18,10 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
                                       sigma: Any,
                                       mixture_weights: Any,
                                       coordination: Any,
+                                      input_layer_f: Any,
+                                      hidden_layers_f: Any,
+                                      output_layer_f: Any,
+                                      activation_function_number_f: ptt.TensorConstant,
                                       expander_aux_mask_matrix: ptt.TensorConstant,
                                       aggregation_aux_mask_matrix: ptt.TensorVariable):
     C = coordination[None, None, 1:]  # 1 x 1 x t-1
@@ -27,6 +33,13 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
 
     # D contains the previous values from other individuals for each individual
     D = ptt.tensordot(expander_aux_mask_matrix, P, axes=(1, 0))  # s * (s-1) x d x t
+
+    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
+                            input_layer_f=input_layer_f,
+                            hidden_layers_f=hidden_layers_f,
+                            output_layer_f=output_layer_f,
+                            activation_function_number_f=activation_function_number_f)
+
     P_extended = ptt.repeat(P, repeats=(mixture_component.shape[0] - 1), axis=0)
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
 
@@ -45,6 +58,10 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                                          sigma: Any,
                                          mixture_weights: Any,
                                          coordination: Any,
+                                         input_layer_f: Any,
+                                         hidden_layers_f: Any,
+                                         output_layer_f: Any,
+                                         activation_function_number_f: ptt.TensorConstant,
                                          expander_aux_mask_matrix: ptt.TensorConstant,
                                          aggregation_aux_mask_matrix: ptt.TensorVariable):
     C = coordination[None, None, 1:]  # 1 x 1 x t
@@ -56,6 +73,12 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
 
     # D contains the previous values from other individuals for each individual
     D = ptt.tensordot(expander_aux_mask_matrix, P, axes=(1, 0))  # s * (s-1) x d x t
+
+    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
+                            input_layer_f=input_layer_f,
+                            hidden_layers_f=hidden_layers_f,
+                            output_layer_f=output_layer_f,
+                            activation_function_number_f=activation_function_number_f)
 
     # We use a fixed mean instead of the previous value from the same individual
     P_extended = ptt.repeat(initial_mean[:, :, None], repeats=(mixture_component.shape[0] - 1), axis=0)
@@ -75,6 +98,10 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
                                         sigma: np.ndarray,
                                         mixture_weights: np.ndarray,
                                         coordination: np.ndarray,
+                                        input_layer_f: np.ndarray,
+                                        hidden_layers_f: np.ndarray,
+                                        output_layer_f: np.ndarray,
+                                        activation_function_number_f: int,
                                         expander_aux_mask_matrix: np.ndarray,
                                         aggregation_aux_mask_matrix: np.ndarray,
                                         num_subjects: int,
@@ -114,6 +141,10 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
                                            sigma: np.ndarray,
                                            mixture_weights: np.ndarray,
                                            coordination: np.ndarray,
+                                           input_layer_f: np.ndarray,
+                                           hidden_layers_f: np.ndarray,
+                                           output_layer_f: np.ndarray,
+                                           activation_function_number_f: int,
                                            expander_aux_mask_matrix: np.ndarray,
                                            aggregation_aux_mask_matrix: np.ndarray,
                                            num_subjects: int,
@@ -154,15 +185,17 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
 class MixtureComponentParameters:
 
     def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
-                 a_mixture_weights: np.ndarray):
+                 a_mixture_weights: np.ndarray, mean_weights_f: float, sd_weights_f: float):
         self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
         self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
         self.mixture_weights = Parameter(DirichletParameterPrior(a_mixture_weights))
+        self.weights_f = Parameter(NormalParameterPrior(np.array(mean_weights_f), np.array([sd_weights_f])))
 
     def clear_values(self):
         self.mean_a0.value = None
         self.sd_aa.value = None
         self.mixture_weights.value = None
+        self.weights_f.value = None
 
 
 class MixtureComponentSamples:
@@ -182,7 +215,8 @@ class MixtureComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray,
-                 share_params_across_subjects: bool, share_params_across_features: bool):
+                 share_params_across_subjects: bool, share_params_across_features: bool, f: Optional[Callable] = None,
+                 mean_weights_f: float = 0, sd_weights_f: float = 1):
 
         dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
@@ -202,11 +236,14 @@ class MixtureComponent:
         self.self_dependent = self_dependent
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_features = share_params_across_features
+        self.f = f
 
         self.parameters = MixtureComponentParameters(mean_mean_a0=mean_mean_a0,
                                                      sd_mean_a0=sd_mean_a0,
                                                      sd_sd_aa=sd_sd_aa,
-                                                     a_mixture_weights=a_mixture_weights)
+                                                     a_mixture_weights=a_mixture_weights,
+                                                     mean_weights_f=mean_weights_f,
+                                                     sd_weights_f=sd_weights_f)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -227,6 +264,10 @@ class MixtureComponent:
     @property
     def mixture_weights_name(self) -> str:
         return f"mixture_weights_{self.uuid}"
+
+    @property
+    def f_nn_weights_name(self) -> str:
+        return f"f_nn_weights_{self.uuid}"
 
     def draw_samples(self, num_series: int, relative_frequency: float,
                      coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
@@ -284,6 +325,9 @@ class MixtureComponent:
                 P = samples.values[..., t - 1]
                 D = P[:, influencers[..., t]][0]
 
+                if self.f is not None:
+                    D = self.f(D)
+
                 if self.self_dependent:
                     S = P
                 else:
@@ -300,31 +344,115 @@ class MixtureComponent:
 
         return samples
 
-    def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
-                          observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
-                          sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None) -> Any:
-
+    def _create_random_parameters(self, mean_a0: Optional[Any] = None, sd_aa: Optional[Any] = None,
+                                  mixture_weights: Optional[Any] = None):
+        """
+        This function creates the initial mean and standard deviation of the serialized component distribution as
+        random variables.
+        """
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
-                                sigma=self.parameters.mean_a0.prior.sd, size=dim,
-                                observed=self.parameters.mean_a0.value)
-            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=dim, observed=self.parameters.sd_aa.value)
+            if mean_a0 is None:
+                mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                    sigma=self.parameters.mean_a0.prior.sd, size=dim,
+                                    observed=self.parameters.mean_a0.value)
+
+            if sd_aa is None:
+                sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                      size=dim, observed=self.parameters.sd_aa.value)
 
             mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
             sd_aa = sd_aa[None, :].repeat(self.num_subjects, axis=0)
         else:
-            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
-                                sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
-                                observed=self.parameters.mean_a0.value)
-            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
+            if mean_a0 is None:
+                mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                    sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
+                                    observed=self.parameters.mean_a0.value)
+            if sd_aa is None:
+                sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                      size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
 
         if mixture_weights is None:
             mixture_weights = pm.Dirichlet(name=self.mixture_weights_name,
                                            a=self.parameters.mixture_weights.prior.a,
                                            observed=self.parameters.mixture_weights.value)
+
+        return mean_a0, sd_aa, mixture_weights
+
+    def _create_random_weights_f(self, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str):
+        """
+        This function creates the weights used to fit the function f(.) as random variables. Because the mixture
+        component uses a CustomDist, all the arguments of the logp function we pass must be tensors. So, we cannot
+        pass a list of tensors from different sizes, otherwise the program will crash when it tries to convert that
+        to a single tensor. Therefore, the strategy is to have 3 sets of weights, the first one represents the weights
+        in the input layer, the second will be a list of weights with the same dimensions, which represent the weights
+        in the hidden layers, and the last one will be weights in the last (output) layer.
+        """
+
+        # Gather observations from each layer. If some weights are pre-set, we don't need to infer them.
+        if self.parameters.weights_f.value is None:
+            observed_weights_f = [None] * 3
+        else:
+            observed_weights_f = self.parameters.weights_f.value
+
+        # Features * number of relations (subject * (subject - 1)) + bias term
+        input_layer_dim_in = self.dim_value * self.num_subjects * (self.num_subjects - 1) + 1
+        input_layer_dim_out = dim_hidden_layer
+
+        hidden_layer_dim_in = dim_hidden_layer + 1
+        hidden_layer_dim_out = dim_hidden_layer
+
+        output_layer_dim_in = dim_hidden_layer + 1
+        output_layer_dim_out = self.dim_value
+
+        input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
+                                mu=self.parameters.weights_f.prior.mean,
+                                sigma=self.parameters.weights_f.prior.sd,
+                                size=(input_layer_dim_in, input_layer_dim_out),
+                                observed=observed_weights_f[0])
+
+        hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden",
+                                  mu=self.parameters.weights_f.prior.mean,
+                                  sigma=self.parameters.weights_f.prior.sd,
+                                  size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                  observed=observed_weights_f[1])
+
+        # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
+        # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
+        # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
+        # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
+        hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
+            (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+
+        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",
+                                 mu=self.parameters.weights_f.prior.mean,
+                                 sigma=self.parameters.weights_f.prior.sd,
+                                 size=(output_layer_dim_in, output_layer_dim_out),
+                                 observed=observed_weights_f[2])
+
+        # Because we cannot pass a string or a function to CustomDist, we will identify a function by a number and
+        # we will retrieve its implementation in the feed-forward function.
+        activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_name]
+
+        return input_layer, hidden_layers, output_layer, activation_function_number
+
+    def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
+                          observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
+                          sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None,
+                          num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
+                          dim_hidden_layer_f: int = 0) -> Any:
+
+        mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
+
+        if num_hidden_layers_f > 0:
+            input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
+                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=dim_hidden_layer_f,
+                activation_function_name=activation_function_name_f)
+        else:
+            input_layer_f = []
+            hidden_layers_f = []
+            output_layer_f = []
+            activation_function_number_f = 0
 
         # Auxiliary matrices to compute logp in a vectorized manner without having to loop over the individuals.
         expander_aux_mask_matrix = []
@@ -344,7 +472,11 @@ class MixtureComponent:
                            sd_aa,
                            mixture_weights,
                            coordination,
-                           ptt.constant(expander_aux_mask_matrix),
+                           input_layer_f,
+                           hidden_layers_f,
+                           output_layer_f,
+                           activation_function_number_f,
+                           expander_aux_mask_matrix,
                            aggregator_aux_mask_matrix)
             random_fn = partial(mixture_random_with_self_dependency,
                                 num_subjects=self.num_subjects, dim_value=self.dim_value)
@@ -357,7 +489,11 @@ class MixtureComponent:
                            sd_aa,
                            mixture_weights,
                            coordination,
-                           ptt.constant(expander_aux_mask_matrix),
+                           input_layer_f,
+                           hidden_layers_f,
+                           output_layer_f,
+                           activation_function_number_f,
+                           expander_aux_mask_matrix,
                            aggregator_aux_mask_matrix)
 
             random_fn = partial(mixture_random_without_self_dependency,
