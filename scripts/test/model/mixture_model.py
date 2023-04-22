@@ -301,7 +301,7 @@ if __name__ == "__main__":
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
-    evidence = evidence_vertical_shift_normalized
+    evidence = evidence_vertical_shift_noise_normalized
 
     model = MixtureModel(num_subjects=3,
                          self_dependent=True,
@@ -311,7 +311,7 @@ if __name__ == "__main__":
                          sd_mean_a0=np.ones(1),
                          sd_sd_aa=np.ones(1),
                          a_mixture_weights=np.ones((3, 2)),
-                         sd_sd_o=np.ones(1),
+                         sd_sd_o=np.ones(1) * 5,
                          share_params_across_subjects=True,
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
@@ -320,11 +320,11 @@ if __name__ == "__main__":
                          dim_hidden_layer_f=3,
                          activation_function_name_f="linear")
 
-    model.latent_cpn.parameters.weights_f.value = [
-        np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]),
-        np.array([np.concatenate([np.eye(3), np.zeros((1, 3))])]),
-        np.concatenate([np.eye(3), np.zeros((1, 3))])
-    ]
+    # model.latent_cpn.parameters.weights_f.value = [
+    #     np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]),
+    #     np.array([np.concatenate([np.eye(3), np.zeros((1, 3))])]),
+    #     np.concatenate([np.eye(3), np.zeros((1, 3))])
+    # ]
 
     posterior_samples, idata = train(model, evidence, burn_in=1000, init_method="advi")
 
