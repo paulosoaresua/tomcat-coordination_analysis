@@ -173,9 +173,23 @@ class MixtureModel:
 
         return pymc_model, idata
 
+    def prior_predictive(self, evidence: SyntheticSeriesMixture, num_samples: int, seed: Optional[int] = None):
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
+
+        return pymc_model, idata
+
+    def posterior_predictive(self, evidence: SyntheticSeriesMixture, trace: Any, seed: Optional[int] = None):
+        pymc_model = self._define_pymc_model(evidence)
+        with pymc_model:
+            idata = pm.sample_posterior_predictive(trace=trace, random_seed=seed)
+
+        return pymc_model, idata
+
     def _define_pymc_model(self, evidence: SyntheticSeriesMixture):
         coords = {"component_subject": np.arange(self.num_subjects),
-                  "component_feature": np.array([1]),
+                  "component_feature": np.array([0]),
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "component_time": np.arange(evidence.num_time_steps_in_component_scale)}
 
@@ -195,16 +209,16 @@ class MixtureModel:
 
             obs_input = latent_component
             if self.g_nn is not None:
-                # features + subject id (one hot encode) + time step + bias term
+                # features * subject + time step + bias term
                 X = pm.Deterministic("augmented_latent_component",
                                      pm.math.concatenate(
-                                         [latent_component,
-                                          one_hot_encode(evidence.subjects_in_time, self.num_subjects),
+                                         [latent_component.reshape(
+                                             (self.num_subjects * 1, latent_component.shape[-1])),
                                           evidence.time_steps_in_coordination_scale[None, :]]))
                 outputs = self.g_nn.update_pymc_model(input_data=X.transpose(),
                                                       output_dim=latent_component.shape[0])[0]
 
-                obs_input = outputs.transpose()
+                obs_input = outputs.transpose().reshape((self.num_subjects, 1, obs_input.shape[-1]))
 
             self.observation_cpn.update_pymc_model(latent_component=obs_input,
                                                    subject_dimension="component_subject",
@@ -237,7 +251,37 @@ def train(model: Any,
 
     posterior_samples = CoordinationPosteriorSamples.from_inference_data(idata)
 
+    # Plot parameter trace
+    plot_parameter_trace(model, idata)
+
+    # Plot evidence and coordination side by side
+    fig, axs = plt.subplots(1, 2)
+
+    evidence.plot(axs[0], marker_size=8)
+    axs[0].set_title("Normalized Evidence")
+
+    posterior_samples.plot(axs[1], show_samples=False, line_width=1)
+    axs[1].set_title("Coordination")
+
     return posterior_samples, idata
+
+
+def prior_predictive_check(model: Any, evidence: Any, num_samples: int = 1000, seed: int = 0):
+    _, idata = model.prior_predictive(evidence=evidence, num_samples=num_samples, seed=seed)
+    fig, axs = plt.subplots(1, model.num_subjects)
+    plot_prior_predictive(axs.flatten(), idata)
+    plt.tight_layout()
+
+    return idata
+
+
+def posterior_predictive_check(model: Any, evidence: Any, trace: Any, seed: int = 0):
+    _, idata = model.posterior_predictive(evidence=evidence, trace=trace, seed=seed)
+    fig, axs = plt.subplots(1, model.num_subjects)
+    plot_posterior_predictive(axs.flatten(), idata)
+    plt.tight_layout()
+
+    return idata
 
 
 def plot_parameter_trace(model: Any, idata: Any):
@@ -245,6 +289,52 @@ def plot_parameter_trace(model: Any, idata: Any):
     var_names = sorted(list(set(model.parameter_names).intersection(sampled_vars)))
     az.plot_trace(idata, var_names=var_names)
     plt.tight_layout()
+
+
+def plot_predictive_samples(axs: Any, samples: Any, idata: Any):
+    num_time_steps = samples.sizes["component_time"]
+    obs = idata.observed_data["observation_component"].to_numpy()
+
+    for subject in range(model.num_subjects):
+        prior_samples = samples.sel(component_subject=subject, component_feature=0).to_numpy().reshape(-1,
+                                                                                                       num_time_steps)
+        num_samples = prior_samples.shape[0]
+        axs[subject].plot(np.arange(num_time_steps)[:, None].repeat(num_samples, axis=1), prior_samples.T,
+                          color="tab:blue", alpha=0.3)
+        axs[subject].plot(np.arange(num_time_steps), obs[subject, 0], color="white", alpha=1, marker="o", markersize=3)
+        axs[subject].set_title(f"Subject {subject}")
+        axs[subject].set_xlabel(f"Time Step")
+        axs[subject].set_ylabel(f"Value")
+
+
+def plot_prior_predictive(axs: Any, idata: Any):
+    samples = idata.prior_predictive["observation_component"]
+    plot_predictive_samples(axs, samples, idata)
+
+
+def plot_posterior_predictive(axs: Any, idata: Any):
+    samples = idata.posterior_predictive["observation_component"]
+    plot_predictive_samples(axs, samples, idata)
+
+
+def build_convergence_summary(idata: Any) -> pd.DataFrame:
+    header = [
+        "variable",
+        "mean_rhat",
+        "std_rhat"
+    ]
+
+    rhat = az.rhat(idata)
+    data = []
+    for var, values in rhat.data_vars.items():
+        entry = [
+            var,
+            values.to_numpy().mean(),
+            values.to_numpy().std()
+        ]
+        data.append(entry)
+
+    return pd.DataFrame(data, columns=header)
 
 
 if __name__ == "__main__":
@@ -301,7 +391,7 @@ if __name__ == "__main__":
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
-    evidence = evidence_vertical_shift_noise_normalized
+    evidence = evidence_vertical_shift_lag_normalized
 
     model = MixtureModel(num_subjects=3,
                          self_dependent=True,
@@ -311,14 +401,14 @@ if __name__ == "__main__":
                          sd_mean_a0=np.ones(1),
                          sd_sd_aa=np.ones(1),
                          a_mixture_weights=np.ones((3, 2)),
-                         sd_sd_o=np.ones(1) * 5,
+                         sd_sd_o=np.ones(1),
                          share_params_across_subjects=True,
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
-                         num_hidden_layers_f=1,
-                         dim_hidden_layer_f=3,
-                         activation_function_name_f="linear")
+                         num_hidden_layers_g=2,
+                         dim_hidden_layer_g=8,
+                         activation_function_name_g="tanh")
 
     # model.latent_cpn.parameters.weights_f.value = [
     #     np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]),
@@ -326,14 +416,6 @@ if __name__ == "__main__":
     #     np.concatenate([np.eye(3), np.zeros((1, 3))])
     # ]
 
+    prior_predictive_check(model, evidence)
     posterior_samples, idata = train(model, evidence, burn_in=1000, init_method="advi")
-
-    # Plot parameter trace
-    plot_parameter_trace(model, idata)
-
-    # Plot evidence and coordination side by side
-    fig, axs = plt.subplots(1, 2)
-
-    evidence.plot(axs[0], marker_size=8)
-    posterior_samples.plot(axs[1], show_samples=False, line_width=1)
-    plt.show()
+    _ = posterior_predictive_check(model, evidence, idata)
