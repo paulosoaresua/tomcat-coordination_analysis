@@ -10,20 +10,13 @@ from scipy.stats import norm
 
 from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior, \
-    UniformDiscreteParameterPrior
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
+from coordination.component.utils import add_bias
 
 
 class Mode(Enum):
     BLENDING = 0
     MIXTURE = 1
-
-
-def add_bias(X: Any):
-    if isinstance(X, np.ndarray):
-        return np.concatenate([X, np.ones((1, X.shape[-1]))], axis=0)
-    else:
-        return ptt.concatenate([X, ptt.ones((1, X.shape[-1]))], axis=0)
 
 
 def feed_forward_logp_f(input_data: Any,
@@ -723,28 +716,34 @@ class SerializedComponent:
         subjects -= 1
         return subjects
 
-    def _create_random_parameters(self, subjects: np.ndarray, gender_map: Dict[int, int]):
+    def _create_random_parameters(self, subjects: np.ndarray, gender_map: Dict[int, int], mean_a0: Optional[Any] = None,
+                                  sd_aa: Optional[Any] = None):
         """
         This function creates the initial mean and standard deviation of the serialized component distribution as
         random variables.
         """
         dim = 1 if self.share_params_across_features else self.dim_value
         if self.share_params_across_subjects:
-            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
-                                sigma=self.parameters.mean_a0.prior.sd, size=dim,
-                                observed=self.parameters.mean_a0.value)
-            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=dim, observed=self.parameters.sd_aa.value)
+            if mean_a0 is None:
+                mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                    sigma=self.parameters.mean_a0.prior.sd, size=dim,
+                                    observed=self.parameters.mean_a0.value)
+
+            if sd_aa is None:
+                sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                      size=dim, observed=self.parameters.sd_aa.value)
 
             # Resulting dimension: (features, 1). The last dimension will be broadcasted across time.
             mean = mean_a0[:, None]
             sd = sd_aa[:, None]
         elif self.share_params_across_genders:
-            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
-                                sigma=self.parameters.mean_a0.prior.sd, size=(2, dim),
-                                observed=self.parameters.mean_a0.value)
-            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=(2, dim), observed=self.parameters.sd_aa.value)
+            if mean_a0 is None:
+                mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                    sigma=self.parameters.mean_a0.prior.sd, size=(2, dim),
+                                    observed=self.parameters.mean_a0.value)
+            if sd_aa is None:
+                sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                      size=(2, dim), observed=self.parameters.sd_aa.value)
 
             # One mean and sd per time step matching their subjects' genders. The indexing below results in a matrix of
             # dimensions: (features, time)
@@ -752,11 +751,13 @@ class SerializedComponent:
             mean = mean_a0[genders].transpose()
             sd = sd_aa[genders].transpose()
         else:
-            mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
-                                sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
-                                observed=self.parameters.mean_a0.value)
-            sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
-                                  size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
+            if mean_a0 is None:
+                mean_a0 = pm.Normal(name=self.mean_a0_name, mu=self.parameters.mean_a0.prior.mean,
+                                    sigma=self.parameters.mean_a0.prior.sd, size=(self.num_subjects, dim),
+                                    observed=self.parameters.mean_a0.value)
+            if sd_aa is None:
+                sd_aa = pm.HalfNormal(name=self.sd_aa_name, sigma=self.parameters.sd_aa.prior.sd,
+                                      size=(self.num_subjects, dim), observed=self.parameters.sd_aa.value)
 
             # One mean and sd per time step matching their subjects. The indexing below results in a matrix of
             # dimensions: (features, time)
@@ -826,7 +827,7 @@ class SerializedComponent:
                                  observed=observed_weights_f[2])
 
         # Because we cannot pass a string or a function to CustomDist, we will identify a function by a number and
-        # we will retrieve it's implementation in the feed-forward function.
+        # we will retrieve its implementation in the feed-forward function.
         activation_function_number = ActivationFunction.NAME_TO_NUMBER[activation_function_name]
 
         return input_layer, hidden_layers, output_layer, activation_function_number
@@ -835,10 +836,11 @@ class SerializedComponent:
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
                           feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
-                          num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
+                          mean_a0: Optional[Any] = None, sd_aa: Optional[Any] = None, num_hidden_layers_f: int = 0,
+                          activation_function_name_f: str = "linear",
                           dim_hidden_layer_f: int = 0, lag: Optional[Any] = None) -> Any:
 
-        mean, sd, mean_a0, sd_aa = self._create_random_parameters(subjects, gender_map)
+        mean, sd, mean_a0, sd_aa = self._create_random_parameters(subjects, gender_map, mean_a0, sd_aa)
 
         if num_hidden_layers_f > 0:
             input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
@@ -906,7 +908,8 @@ class SerializedComponent:
             symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
 
             prev_time_diff_subject = \
-            ptt.take_along_axis(lag_table, self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag), 0)[0]
+                ptt.take_along_axis(lag_table,
+                                    self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag), 0)[0]
             prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
 
         if self.self_dependent:
