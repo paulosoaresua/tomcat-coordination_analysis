@@ -120,7 +120,10 @@ class MixtureModel:
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
-        self.lag_cpn = Lag("lag", max_lag=max_lag)
+        if max_lag > 0:
+            self.lag_cpn = Lag("lag", max_lag=max_lag)
+        else:
+            self.lag_cpn = None
 
         self.latent_cpn = MixtureComponent(uuid="mixture_component",
                                            num_subjects=num_subjects,
@@ -131,7 +134,8 @@ class MixtureModel:
                                            sd_sd_aa=sd_sd_aa,
                                            a_mixture_weights=a_mixture_weights,
                                            share_params_across_subjects=share_params_across_subjects,
-                                           share_params_across_features=share_params_across_features_latent)
+                                           share_params_across_features=share_params_across_features_latent,
+                                           max_lag=max_lag)
 
         if num_hidden_layers_g > 0:
             self.g_nn = NeuralNetwork(uuid="g",
@@ -196,10 +200,10 @@ class MixtureModel:
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             coordination = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
-            # lag = self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2))
+            lag = self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2)) if self.lag_cpn is not None else None
             latent_component = self.latent_cpn.update_pymc_model(
                 coordination=coordination[evidence.time_steps_in_coordination_scale],
-                # lag=lag,
+                lag=lag,
                 subject_dimension="component_subject",
                 feature_dimension="component_feature",
                 time_dimension="component_time",
@@ -214,7 +218,7 @@ class MixtureModel:
                                      pm.math.concatenate(
                                          [latent_component.reshape(
                                              (self.num_subjects * 1, latent_component.shape[-1])),
-                                          evidence.time_steps_in_coordination_scale[None, :]]))
+                                             evidence.time_steps_in_coordination_scale[None, :]]))
                 outputs = self.g_nn.update_pymc_model(input_data=X.transpose(),
                                                       output_dim=latent_component.shape[0])[0]
 
@@ -382,12 +386,12 @@ if __name__ == "__main__":
 
     evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                        num_subjects=3,
-                                                                       time_steps=np.linspace(0, 9 * np.pi, 90).reshape(
-                                                                           30, 3).T,
+                                                                       time_steps=np.linspace(0, 120 * np.pi / 12,
+                                                                                              120).reshape(40, 3).T,
                                                                        noise_scale=None,
                                                                        vertical_offset_per_subject=np.array([0, 1, 2]),
                                                                        horizontal_offset_per_subject=np.array(
-                                                                           [0, np.pi, np.pi / 2]))
+                                                                           [np.pi, 0, 0]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
@@ -406,9 +410,12 @@ if __name__ == "__main__":
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
-                         num_hidden_layers_g=2,
-                         dim_hidden_layer_g=8,
-                         activation_function_name_g="tanh")
+                         dim_hidden_layer_f=1,
+                         num_hidden_layers_f=1,
+                         activation_function_name_f="tanh",
+                         max_lag=0)
+
+    # model.lag_cpn.parameters.lag.value = np.array([4, 4, 0])
 
     # model.latent_cpn.parameters.weights_f.value = [
     #     np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]),
@@ -417,5 +424,6 @@ if __name__ == "__main__":
     # ]
 
     prior_predictive_check(model, evidence)
-    posterior_samples, idata = train(model, evidence, burn_in=1000, init_method="advi")
-    _ = posterior_predictive_check(model, evidence, idata)
+    # posterior_samples, idata = train(model, evidence, burn_in=1000, num_samples=500, init_method="advi")
+    # _ = posterior_predictive_check(model, evidence, idata)
+    plt.show()
