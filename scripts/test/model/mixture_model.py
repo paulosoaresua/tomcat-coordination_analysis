@@ -345,28 +345,30 @@ if __name__ == "__main__":
     random.seed(SEED)
     np.random.seed(SEED)
 
-    # Synthetic data
+    # Vertical shift
     evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                    num_subjects=3,
-                                                                   time_steps=np.linspace(0, 9 * np.pi, 90).reshape(30,
-                                                                                                                    3).T,
+                                                                   time_steps=np.linspace(0, 90 * np.pi / 12,
+                                                                                          90).reshape(30, 3).T,
                                                                    noise_scale=None,
                                                                    vertical_offset_per_subject=np.array([0, 1, 2]))
     evidence_vertical_shift_normalized = evidence_vertical_shift.normalize_per_subject(inplace=False)
 
+    # Noise
     evidence_vertical_shift_noise = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                          num_subjects=3,
-                                                                         time_steps=np.linspace(0, 9 * np.pi,
+                                                                         time_steps=np.linspace(0, 90 * np.pi / 12,
                                                                                                 90).reshape(30, 3).T,
                                                                          noise_scale=0.5,
                                                                          vertical_offset_per_subject=np.array(
                                                                              [0, 1, 2]))
     evidence_vertical_shift_noise_normalized = evidence_vertical_shift_noise.normalize_per_subject(inplace=False)
 
-    # The second person is anti-symmetric with respect to the first and third one
+    # Anti-Symmetry
     evidence_vertical_shift_anti_symmetry = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                                  num_subjects=3,
-                                                                                 time_steps=np.linspace(0, 9 * np.pi,
+                                                                                 time_steps=np.linspace(0,
+                                                                                                        90 * np.pi / 12,
                                                                                                         90).reshape(30,
                                                                                                                     3).T,
                                                                                  noise_scale=None,
@@ -377,20 +379,23 @@ if __name__ == "__main__":
     evidence_vertical_shift_anti_symmetry_normalized = evidence_vertical_shift_anti_symmetry.normalize_per_subject(
         inplace=False)
 
+    # Random
     evidence_random = SyntheticSeriesMixture.from_function(fn=lambda x: np.random.randn(*x.shape),
                                                            num_subjects=3,
-                                                           time_steps=np.linspace(0, 9 * np.pi, 90).reshape(30, 3).T,
+                                                           time_steps=np.linspace(0, 90 * np.pi / 12, 90).reshape(30,
+                                                                                                                  3).T,
                                                            noise_scale=None)
     evidence_random_normalized = evidence_random.normalize_per_subject(inplace=False)
 
+    # Lag
     evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                        num_subjects=3,
-                                                                       time_steps=np.linspace(0, 120 * np.pi / 12,
-                                                                                              120).reshape(40, 3).T,
+                                                                       time_steps=np.linspace(0, 90 * np.pi / 12,
+                                                                                              90).reshape(30, 3).T,
                                                                        noise_scale=None,
                                                                        vertical_offset_per_subject=np.array([0, 1, 2]),
                                                                        horizontal_offset_per_subject=np.array(
-                                                                           [np.pi, 0, 0]))
+                                                                           [0, np.pi, np.pi / 2]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
@@ -409,10 +414,9 @@ if __name__ == "__main__":
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
-                         dim_hidden_layer_f=0,
-                         num_hidden_layers_f=0,
-                         activation_function_name_f="tanh",
-                         max_lag=0)
+                         num_hidden_layers_f=1,
+                         dim_hidden_layer_f=3,
+                         activation_function_name_f="linear")
 
     # model.lag_cpn.parameters.lag.value = np.array([4, 4, 0])
 

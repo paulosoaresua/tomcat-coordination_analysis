@@ -37,22 +37,22 @@ def apply_lags(lag: Any, data: Any):
         return data[rows, column_indices]
 
 
-def mixture_logp_with_self_dependency(mixture_component: Any,
-                                      initial_mean: Any,
-                                      sigma: Any,
-                                      mixture_weights: Any,
-                                      coordination: Any,
-                                      lag: Any,
-                                      input_layer_f: Any,
-                                      hidden_layers_f: Any,
-                                      output_layer_f: Any,
-                                      activation_function_number_f: ptt.TensorConstant,
-                                      expander_aux_mask_matrix: ptt.TensorConstant,
-                                      aggregation_aux_mask_matrix: ptt.TensorVariable,
-                                      coordination_mask: ptt.TensorConstant):
+def mixture_logp(mixture_component: Any,
+                 initial_mean: Any,
+                 sigma: Any,
+                 mixture_weights: Any,
+                 coordination: Any,
+                 lag: Any,
+                 input_layer_f: Any,
+                 hidden_layers_f: Any,
+                 output_layer_f: Any,
+                 activation_function_number_f: ptt.TensorConstant,
+                 expander_aux_mask_matrix: ptt.TensorConstant,
+                 aggregation_aux_mask_matrix: ptt.TensorVariable,
+                 coordination_mask: ptt.TensorConstant,
+                 self_dependent: ptt.TensorConstant):
     num_subjects = mixture_component.shape[0]
     num_features = mixture_component.shape[1]
-    num_time_steps = mixture_component.shape[2]
 
     # Log probability due to the initial time step in the component's scale.
     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
@@ -66,11 +66,11 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
 
     # Shift data according to the lags for each pair of subjects. We will use D as the previous value from different
     # subjects for every subject in the component.
-    D = apply_lags(lag_extended, D.reshape((D.shape[0] * D.shape[1], num_time_steps))).reshape(
+    D = apply_lags(lag_extended, D.reshape((D.shape[0] * D.shape[1], D.shape[2]))).reshape(
         D.shape)
 
     # Fit a function f(.) over the pairs to correct anti-symmetry.
-    D = feed_forward_logp_f(input_data=D.reshape((num_subjects * num_features, num_time_steps)),
+    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
@@ -79,14 +79,18 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
     # Discard last time step because it is not previous to any other time step.
     D = D[..., :-1]
 
-    # Previous values from every subject
-    P = mixture_component[..., :-1]  # s x d x t-1
-
-    # Previous values from the same subjects
-    S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
-
     # Current values from each subject. We extend S and point such that they match the dimensions of D.
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
+
+    if self_dependent.eval():
+        # Previous values from every subject
+        P = mixture_component[..., :-1]  # s x d x t-1
+
+        # Previous values from the same subjects
+        S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
+    else:
+        # Fixed value given by the initial mean for each subject. No self-dependency.
+        S_extended = ptt.repeat(initial_mean[:, :, None], repeats=(num_subjects - 1), axis=0)
 
     # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
     # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
@@ -103,85 +107,23 @@ def mixture_logp_with_self_dependency(mixture_component: Any,
     return total_logp
 
 
-def mixture_logp_without_self_dependency(mixture_component: Any,
-                                         initial_mean: Any,
-                                         sigma: Any,
-                                         mixture_weights: Any,
-                                         coordination: Any,
-                                         lag: Any,
-                                         input_layer_f: Any,
-                                         hidden_layers_f: Any,
-                                         output_layer_f: Any,
-                                         activation_function_number_f: ptt.TensorConstant,
-                                         expander_aux_mask_matrix: ptt.TensorConstant,
-                                         aggregation_aux_mask_matrix: ptt.TensorVariable,
-                                         coordination_mask: ptt.TensorConstant):
-    num_subjects = mixture_component.shape[0]
-    num_features = mixture_component.shape[1]
-    num_time_steps = mixture_component.shape[2]
-
-    # Log probability due to the initial time step in the component's scale.
-    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
-                         mixture_component[..., 0]).sum()
-
-    # D contains the values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component, axes=(1, 0))  # s * (s-1) x d x t
-
-    # Repeat lag values across features.
-    lag_extended = ptt.repeat(lag, repeats=num_features, axis=0)
-
-    # Shift data according to the lags for each pair of subjects. We will use D as the previous value from different
-    # subjects for every subject in the component.
-    D = apply_lags(lag_extended, D.reshape((D.shape[0] * D.shape[1], num_time_steps))).reshape(
-        D.shape)
-
-    # Fit a function f(.) over the pairs to correct anti-symmetry.
-    D = feed_forward_logp_f(input_data=D.reshape((num_subjects * num_features, num_time_steps)),
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
-
-    # Discard last time step because it is not previous to any other time step.
-    D = D[..., :-1]
-
-    # Fixed value given by the initial mean for each subject. No self-dependency.
-    S_extended = ptt.repeat(initial_mean[:, :, None], repeats=(num_subjects - 1), axis=0)
-
-    # Current values from each subject. We extend S and point such that they match the dimensions of D.
-    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
-
-    # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
-    # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
-    # only infer the next value of the latent value from its previous one on the same subject,
-    C = coordination[None, None, 1:]  # 1 x 1 x t-1
-    mean = (D - S_extended) * C * coordination_mask[..., :-1] + S_extended
-
-    sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
-
-    pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended))
-    # Compute dot product along the second dimension of pdf
-    total_logp += pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))).sum()
-
-    return total_logp
-
-
-def mixture_random_with_self_dependency(initial_mean: np.ndarray,
-                                        sigma: np.ndarray,
-                                        mixture_weights: np.ndarray,
-                                        coordination: np.ndarray,
-                                        lag: np.ndarray,
-                                        input_layer_f: np.ndarray,
-                                        hidden_layers_f: np.ndarray,
-                                        output_layer_f: np.ndarray,
-                                        activation_function_number_f: int,
-                                        expander_aux_mask_matrix: np.ndarray,
-                                        aggregation_aux_mask_matrix: np.ndarray,
-                                        mixture_mask: np.ndarray,
-                                        num_subjects: int,
-                                        dim_value: int,
-                                        rng: Optional[np.random.Generator] = None,
-                                        size: Optional[Tuple[int]] = None) -> np.ndarray:
+def mixture_random(initial_mean: np.ndarray,
+                   sigma: np.ndarray,
+                   mixture_weights: np.ndarray,
+                   coordination: np.ndarray,
+                   lag: np.ndarray,
+                   input_layer_f: np.ndarray,
+                   hidden_layers_f: np.ndarray,
+                   output_layer_f: np.ndarray,
+                   activation_function_number_f: int,
+                   expander_aux_mask_matrix: np.ndarray,
+                   aggregation_aux_mask_matrix: np.ndarray,
+                   coordination_mask: np.ndarray,
+                   self_dependent: bool,
+                   num_subjects: int,
+                   dim_value: int,
+                   rng: Optional[np.random.Generator] = None,
+                   size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
 
     noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
@@ -190,7 +132,9 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
     influencers = []
     for subject in range(num_subjects):
         probs = np.insert(mixture_weights[subject], subject, 0)
-        influencers.append(rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps))
+        influencer = rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps)
+        # We will use the influencer to index a matrix with 6 columns. One for each pair influencer -> influenced
+        influencers.append(subject * (num_subjects - 1) + np.minimum(influencer, num_subjects - 2))
     influencers = np.array(influencers)
 
     sample = np.zeros_like(noise)
@@ -200,70 +144,22 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
     # TODO - Add treatment for lag
     activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
+        D = np.einsum("ij,jlk->ilk", expander_aux_mask_matrix, sample[..., t - 1][..., None])  # s * (s-1) x d x 1
+
         # Previous sample from a different individual
-        D = sample[..., t - 1][influencers[..., t]]
-        D = feed_forward_random_f(input_data=D.flatten()[:, None],
+        D = feed_forward_random_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
                                   input_layer_f=input_layer_f,
                                   hidden_layers_f=hidden_layers_f,
                                   output_layer_f=output_layer_f,
-                                  activation=activation)[:, 0].reshape(D.shape)
+                                  activation=activation).reshape(D.shape)[..., 0]  # s * (s-1) x d x 1
+
+        D = D[influencers[..., t]]  # s x d
 
         # Previous sample from the same individual
-        S = sample[..., t - 1]
-
-        mean = ((D - S) * coordination[t] + S)
-
-        transition_sample = rng.normal(loc=mean, scale=sigma)
-
-        sample[..., t] = transition_sample
-
-    return sample + noise
-
-
-def mixture_random_without_self_dependency(initial_mean: np.ndarray,
-                                           sigma: np.ndarray,
-                                           mixture_weights: np.ndarray,
-                                           coordination: np.ndarray,
-                                           lag: np.ndarray,
-                                           input_layer_f: np.ndarray,
-                                           hidden_layers_f: np.ndarray,
-                                           output_layer_f: np.ndarray,
-                                           activation_function_number_f: int,
-                                           expander_aux_mask_matrix: np.ndarray,
-                                           aggregation_aux_mask_matrix: np.ndarray,
-                                           mixture_mask: np.ndarray,
-                                           num_subjects: int,
-                                           dim_value: int,
-                                           rng: Optional[np.random.Generator] = None,
-                                           size: Optional[Tuple[int]] = None) -> np.ndarray:
-    num_time_steps = coordination.shape[-1]
-
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
-
-    # We sample the influencers in each time step using the mixture weights
-    influencers = []
-    for subject in range(num_subjects):
-        probs = np.insert(mixture_weights[subject], subject, 0)
-        influencers.append(rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps))
-    influencers = np.array(influencers)
-
-    sample = np.zeros_like(noise)
-    prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
-    sample[..., 0] = prior_sample
-
-    # No self-dependency. The transition distribution is a blending between the previous value from another individual,
-    # and a fixed mean.
-    S = initial_mean
-    # TODO - Add treatment for lag
-    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
-    for t in np.arange(1, num_time_steps):
-        # Previous sample from a different individual
-        D = sample[..., t - 1][influencers[..., t]]
-        D = feed_forward_random_f(input_data=D.flatten()[:, None],
-                                  input_layer_f=input_layer_f,
-                                  hidden_layers_f=hidden_layers_f,
-                                  output_layer_f=output_layer_f,
-                                  activation=activation)[:, 0].reshape(D.shape)
+        if self_dependent:
+            S = sample[..., t - 1]
+        else:
+            S = initial_mean
 
         mean = ((D - S) * coordination[t] + S)
 
@@ -489,14 +385,14 @@ class MixtureComponent:
             observed_weights_f = self.parameters.weights_f.value
 
         # Features * number of subjects + bias term
-        input_layer_dim_in = self.dim_value * self.num_subjects + 1
+        input_layer_dim_in = self.dim_value * self.num_subjects * (self.num_subjects - 1) + 1
         input_layer_dim_out = dim_hidden_layer
 
         hidden_layer_dim_in = dim_hidden_layer + 1
         hidden_layer_dim_out = dim_hidden_layer
 
         output_layer_dim_in = dim_hidden_layer + 1
-        output_layer_dim_out = self.dim_value * self.num_subjects
+        output_layer_dim_out = self.dim_value * self.num_subjects * (self.num_subjects - 1)
 
         input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
                                 mu=self.parameters.weights_f.prior.mean,
@@ -628,44 +524,26 @@ class MixtureComponent:
         symmetric_lag = self._create_random_symmetric_lag(lag)
         lag_mask = MixtureComponent._create_lag_mask(coordination.shape[-1].eval(), lag)
 
-        if self.self_dependent:
-            logp_params = (mean_a0,
-                           sd_aa,
-                           mixture_weights,
-                           coordination,
-                           symmetric_lag,
-                           input_layer_f,
-                           hidden_layers_f,
-                           output_layer_f,
-                           activation_function_number_f,
-                           expander_aux_mask_matrix,
-                           aggregator_aux_mask_matrix,
-                           lag_mask)
-            random_fn = partial(mixture_random_with_self_dependency,
-                                num_subjects=self.num_subjects, dim_value=self.dim_value)
-            mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_with_self_dependency,
-                                              random=random_fn,
-                                              dims=[subject_dimension, feature_dimension, time_dimension],
-                                              observed=observed_values)
-        else:
-            logp_params = (mean_a0,
-                           sd_aa,
-                           mixture_weights,
-                           coordination,
-                           symmetric_lag,
-                           input_layer_f,
-                           hidden_layers_f,
-                           output_layer_f,
-                           activation_function_number_f,
-                           expander_aux_mask_matrix,
-                           aggregator_aux_mask_matrix,
-                           lag_mask)
+        logp_params = (mean_a0,
+                       sd_aa,
+                       mixture_weights,
+                       coordination,
+                       symmetric_lag,
+                       input_layer_f,
+                       hidden_layers_f,
+                       output_layer_f,
+                       activation_function_number_f,
+                       expander_aux_mask_matrix,
+                       aggregator_aux_mask_matrix,
+                       lag_mask,
+                       np.array(self.self_dependent))
+        random_fn = partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
+        mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp,
+                                          random=random_fn,
+                                          dims=[subject_dimension, feature_dimension, time_dimension],
+                                          observed=observed_values)
 
-            random_fn = partial(mixture_random_without_self_dependency,
-                                num_subjects=self.num_subjects, dim_value=self.dim_value)
-            mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_without_self_dependency,
-                                              random=random_fn,
-                                              dims=[subject_dimension, feature_dimension, time_dimension],
-                                              observed=observed_values)
+        sample = pm.draw(mixture_component, 1)
+        pm.logp(mixture_component, sample)
 
         return mixture_component, mean_a0, sd_aa, mixture_weights
