@@ -832,6 +832,75 @@ class SerializedComponent:
 
         return input_layer, hidden_layers, output_layer, activation_function_number
 
+    def _create_random_symmetric_lag(self, subjects_in_time: np.ndarray, prev_time_diff_subject: np.ndarray, lag: Any):
+        if lag is None:
+            return None
+
+        # Fill a dictionary with an ID for each pair of subjects.
+        pairs_dict = {}
+        pair_id = 0
+        for i in range(self.num_subjects):
+            for j in range(i + 1, self.num_subjects):
+                pairs_dict[f"{i}#{j}"] = pair_id
+                pair_id += 1
+
+        # Create one-hot-encode (OHE) vectors for the different pairs. We also store the list of numerical pair ids and
+        # a signal indicating the order of the relationship. We will use these two variables to correct index the lags
+        # later.
+        num_time_steps = len(subjects_in_time)
+        pairs_ohe = np.zeros((len(pairs_dict), num_time_steps))
+        pair_ids = np.zeros(num_time_steps, dtype=int)
+        pair_signals = np.ones(num_time_steps, dtype=int)
+        for t in range(num_time_steps):
+            if prev_time_diff_subject[t] >= 0:
+                source_subject = subjects_in_time[prev_time_diff_subject[t]]
+                target_subject = subjects_in_time[t]
+                pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
+                pair_id = pairs_dict[pair_key]
+
+                pair_ids[t] = pair_id
+                if f"{source_subject}#{target_subject}" not in pairs_dict:
+                    pair_signals[t] *= -1
+
+                # Mark the index as 1 to create a OHE representation for that pair at time step t.
+                pairs_ohe[pair_id, t] = 1
+
+        # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
+        # and the direction of their coupling.
+        symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
+
+        return symmetric_lag, pairs_ohe
+
+    def _create_lag_table(self, subjects_in_time: np.ndarray, prev_time_diff_subject: np.ndarray):
+        # A lag table contain time step indices of dependencies on different subjects over time for different
+        # lag values.
+        # For instance, lag_table[k + l, t] gives us the index of the value from a previous subject different than the
+        # subject in time t, considering a lag of l for a maximum lag of k.
+        # We will use this table to dynamically select prev_time_diff_subject for different lag values.
+        num_time_steps = len(subjects_in_time)
+        lag_table = np.full(shape=(2 * self.max_lag + 1, num_time_steps), fill_value=-1)
+        subject_times = [[t for t, _ in enumerate(subjects_in_time) if subjects_in_time[t] == s] for s in
+                         range(self.num_subjects)]
+        for t in range(num_time_steps):
+            if prev_time_diff_subject[t] >= 0:
+                # Previous subject different than the current one
+                prev_diff_subject = subjects_in_time[prev_time_diff_subject[t]]
+
+                # In the array containing all time steps when the previous other subject had observations, find
+                # the index of the time step associated with prev_time_diff_subject[t]. This will be the index for lag
+                # zero.
+                lag_zero_idx = np.searchsorted(subject_times[prev_diff_subject], prev_time_diff_subject[t])
+                min_local_lag = -min(lag_zero_idx, self.max_lag)
+                max_local_lag = min(len(subject_times[prev_diff_subject]) - lag_zero_idx - 1, self.max_lag)
+
+                # The rows range from -K to K, where K is the max lag size. So, to access an element with lag l, we do
+                # lat_table[K + l, :].
+                lag_table[min_local_lag + self.max_lag: max_local_lag + self.max_lag + 1, t] = subject_times[
+                                                                                                   prev_diff_subject][
+                                                                                               lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
+
+        return lag_table
+
     def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
@@ -852,64 +921,15 @@ class SerializedComponent:
             output_layer_f = []
             activation_function_number_f = 0
 
-        # Fill a dictionary with an ID for each pair of subjects.
-        pairs_dict = {}
-        pair_id = 0
-        for i in range(self.num_subjects):
-            for j in range(i + 1, self.num_subjects):
-                pairs_dict[f"{i}#{j}"] = pair_id
-                pair_id += 1
+        symmetric_lag, pairs_ohe = self._create_random_symmetric_lag(subjects, prev_time_diff_subject, lag)
+        if symmetric_lag is not None:
+            lag_table = self._create_lag_table(subjects, prev_time_diff_subject)
+            # We clip because the Metropolis procedure can sometimes generate samples out of boundaries.
+            lag_indices = self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag)
 
-        # Create one-hot-encode (OHE) vectors for the different pairs. We also store the list of numerical pair ids and
-        # a signal indicating the order of the relationship. We will use these two variables to correct index the lags
-        # later.
-        num_time_steps = len(subjects)
-        pairs_ohe = np.zeros((len(pairs_dict), num_time_steps))
-        pair_ids = np.zeros(num_time_steps, dtype=int)
-        pair_signals = np.ones(num_time_steps, dtype=int)
-        for t in range(num_time_steps):
-            if prev_time_diff_subject[t] >= 0:
-                source_subject = subjects[prev_time_diff_subject[t]]
-                target_subject = subjects[t]
-                pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
-                pair_id = pairs_dict[pair_key]
-
-                pair_ids[t] = pair_id
-                if f"{source_subject}#{target_subject}" not in pairs_dict:
-                    pair_signals[t] *= -1
-
-                # Mark the index as 1 to create a OHE representation for that pair at time step t.
-                pairs_ohe[pair_id, t] = 1
-
-        if lag is not None:
-            # Create a Lag table
-            lag_table = np.full(shape=(2 * self.max_lag + 1, num_time_steps), fill_value=-1)
-            subject_times = [[t for t, _ in enumerate(subjects) if subjects[t] == s] for s in range(self.num_subjects)]
-            for t in range(num_time_steps):
-                if prev_time_diff_subject[t] >= 0:
-                    # Previous subject different than the current one
-                    prev_diff_subject = subjects[prev_time_diff_subject[t]]
-
-                    # In the array containing all time steps when the previous other subject had observations, find
-                    # the index of the time step associated with prev_time_diff_subject[t]. This will be the index for lag
-                    # zero.
-                    lag_zero_idx = np.searchsorted(subject_times[prev_diff_subject], prev_time_diff_subject[t])
-                    min_local_lag = -min(lag_zero_idx, self.max_lag)
-                    max_local_lag = min(len(subject_times[prev_diff_subject]) - lag_zero_idx - 1, self.max_lag)
-
-                    # The rows range from -K to K, where K is the max lag size. So, to access an element with lag l, we do
-                    # lat_table[K + l, :].
-                    lag_table[min_local_lag + self.max_lag: max_local_lag + self.max_lag + 1, t] = subject_times[
-                                                                                                       prev_diff_subject][
-                                                                                                   lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
-
-            # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
-            # and the direction of their coupling.
-            symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
-
-            prev_time_diff_subject = \
-                ptt.take_along_axis(lag_table,
-                                    self.max_lag + ptt.clip(symmetric_lag[None, :], -self.max_lag, self.max_lag), 0)[0]
+            # Adjust dependencies on previous influencers (previous subject different than the current one) according
+            # to the sampled lags.
+            prev_time_diff_subject = ptt.take_along_axis(lag_table, lag_indices, 0)[0]
             prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
 
         if self.self_dependent:
