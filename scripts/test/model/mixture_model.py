@@ -134,8 +134,7 @@ class MixtureModel:
                                            sd_sd_aa=sd_sd_aa,
                                            a_mixture_weights=a_mixture_weights,
                                            share_params_across_subjects=share_params_across_subjects,
-                                           share_params_across_features=share_params_across_features_latent,
-                                           max_lag=max_lag)
+                                           share_params_across_features=share_params_across_features_latent)
 
         if num_hidden_layers_g > 0:
             self.g_nn = NeuralNetwork(uuid="g",
@@ -410,8 +409,8 @@ if __name__ == "__main__":
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
-                         dim_hidden_layer_f=1,
-                         num_hidden_layers_f=1,
+                         dim_hidden_layer_f=0,
+                         num_hidden_layers_f=0,
                          activation_function_name_f="tanh",
                          max_lag=0)
 
@@ -423,7 +422,7 @@ if __name__ == "__main__":
     #     np.concatenate([np.eye(3), np.zeros((1, 3))])
     # ]
 
-    prior_predictive_check(model, evidence)
-    # posterior_samples, idata = train(model, evidence, burn_in=1000, num_samples=500, init_method="advi")
+    # prior_predictive_check(model, evidence)
+    posterior_samples, idata = train(model, evidence, burn_in=100, num_samples=100, init_method="advi")
     # _ = posterior_predictive_check(model, evidence, idata)
     plt.show()

@@ -532,7 +532,7 @@ class MixtureComponent:
     def _create_random_symmetric_lag(self, lag: Any):
         if lag is None:
             # Use all mixture data to infer coordination
-            symmetric_lag = np.zeros(math.comb(self.num_subjects, 2))
+            symmetric_lag = np.zeros(self.num_subjects * (self.num_subjects - 1))
         else:
             # We create a matrix to generate symmetric values of the lags per pair. This is because when we shift
             # samples from the pair (a,b) by a lag l, we need to shift the samples of the pair (b,a) by a lag -l.
