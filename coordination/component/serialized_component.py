@@ -833,9 +833,6 @@ class SerializedComponent:
         return input_layer, hidden_layers, output_layer, activation_function_number
 
     def _create_random_symmetric_lag(self, subjects_in_time: np.ndarray, prev_time_diff_subject: np.ndarray, lag: Any):
-        if lag is None:
-            return None
-
         # Fill a dictionary with an ID for each pair of subjects.
         pairs_dict = {}
         pair_id = 0
@@ -865,9 +862,12 @@ class SerializedComponent:
                 # Mark the index as 1 to create a OHE representation for that pair at time step t.
                 pairs_ohe[pair_id, t] = 1
 
-        # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
-        # and the direction of their coupling.
-        symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
+        if lag is None:
+            symmetric_lag = None
+        else:
+            # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
+            # and the direction of their coupling.
+            symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
 
         return symmetric_lag, pairs_ohe
 
