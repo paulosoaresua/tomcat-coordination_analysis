@@ -1,6 +1,8 @@
+import math
 from typing import Any, Callable, List, Optional, Tuple
 
 from functools import partial
+import itertools
 import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
@@ -13,43 +15,89 @@ from coordination.model.parametrization import Parameter, HalfNormalParameterPri
 from coordination.component.utils import feed_forward_logp_f, feed_forward_random_f
 
 
+def apply_lags(lag: Any, data: Any):
+    if isinstance(lag, np.ndarray):
+        rows, column_indices = np.ogrid[:data.shape[0], :data.shape[1]]
+
+        # Use always a negative shift, so that column_indices are valid.
+        # (could also use module operation)
+        r = lag.copy()
+        r[r < 0] += data.shape[1]
+        column_indices = column_indices - r[:, np.newaxis]
+
+        return data[rows, column_indices]
+    else:
+        rows, column_indices = ptt.ogrid[:data.shape[0], :data.shape[1]]
+
+        # Use always a negative shift, so that column_indices are valid.
+        # (could also use module operation)
+        r = ptt.cast(ptt.switch((lag < 0), lag + data.shape[1], lag), "int32")
+        column_indices = column_indices - r[:, np.newaxis]
+
+        return data[rows, column_indices]
+
+
 def mixture_logp_with_self_dependency(mixture_component: Any,
                                       initial_mean: Any,
                                       sigma: Any,
                                       mixture_weights: Any,
                                       coordination: Any,
+                                      lag: Any,
                                       input_layer_f: Any,
                                       hidden_layers_f: Any,
                                       output_layer_f: Any,
                                       activation_function_number_f: ptt.TensorConstant,
                                       expander_aux_mask_matrix: ptt.TensorConstant,
-                                      aggregation_aux_mask_matrix: ptt.TensorVariable):
-    C = coordination[None, None, 1:]  # 1 x 1 x t-1
-
-    # previous values from all subjects
-    P = mixture_component[..., :-1]  # s x d x t-1
+                                      aggregation_aux_mask_matrix: ptt.TensorVariable,
+                                      coordination_mask: ptt.TensorConstant):
+    num_subjects = mixture_component.shape[0]
+    num_features = mixture_component.shape[1]
+    num_time_steps = mixture_component.shape[2]
 
     # Log probability due to the initial time step in the component's scale.
-    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
                          mixture_component[..., 0]).sum()
 
-    D = feed_forward_logp_f(input_data=P.reshape((P.shape[0] * P.shape[1], P.shape[2])),
+    # D contains the values from other individuals for each individual
+    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component, axes=(1, 0))  # s * (s-1) x d x t
+
+    # Repeat lag values across features.
+    lag_extended = ptt.repeat(lag, repeats=num_features, axis=0)
+
+    # Shift data according to the lags for each pair of subjects. We will use D as the previous value from different
+    # subjects for every subject in the component.
+    D = apply_lags(lag_extended, D.reshape((D.shape[0] * D.shape[1], num_time_steps))).reshape(
+        D.shape)
+
+    # Fit a function f(.) over the pairs to correct anti-symmetry.
+    D = feed_forward_logp_f(input_data=D.reshape((num_subjects * num_features, num_time_steps)),
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(P.shape)
+                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
 
-    # D contains the previous values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, D, axes=(1, 0))  # s * (s-1) x d x t
+    # Discard last time step because it is not previous to any other time step.
+    D = D[..., :-1]
 
-    P_extended = ptt.repeat(P, repeats=(mixture_component.shape[0] - 1), axis=0)
-    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
+    # Previous values from every subject
+    P = mixture_component[..., :-1]  # s x d x t-1
 
-    mean = (D - P_extended) * C + P_extended
+    # Previous values from the same subjects
+    S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
 
-    sd = ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None]
+    # Current values from each subject. We extend S and point such that they match the dimensions of D.
+    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
+
+    # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
+    # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
+    # only infer the next value of the latent value from its previous one on the same subject,
+    C = coordination[None, None, 1:]  # 1 x 1 x t-1
+    mean = (D - S_extended) * C * coordination_mask[..., :-1] + S_extended
+
+    sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
 
     pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended))
+    # Compute dot product along the second dimension of pdf
     total_logp += pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))).sum()
 
     return total_logp
@@ -60,38 +108,59 @@ def mixture_logp_without_self_dependency(mixture_component: Any,
                                          sigma: Any,
                                          mixture_weights: Any,
                                          coordination: Any,
+                                         lag: Any,
                                          input_layer_f: Any,
                                          hidden_layers_f: Any,
                                          output_layer_f: Any,
                                          activation_function_number_f: ptt.TensorConstant,
                                          expander_aux_mask_matrix: ptt.TensorConstant,
-                                         aggregation_aux_mask_matrix: ptt.TensorVariable):
-    C = coordination[None, None, 1:]  # 1 x 1 x t
-
-    # previous values from all subjects
-    P = mixture_component[..., :-1]  # s x d x t
+                                         aggregation_aux_mask_matrix: ptt.TensorVariable,
+                                         coordination_mask: ptt.TensorConstant):
+    num_subjects = mixture_component.shape[0]
+    num_features = mixture_component.shape[1]
+    num_time_steps = mixture_component.shape[2]
 
     # Log probability due to the initial time step in the component's scale.
-    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=mixture_component.shape[:-1]),
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
                          mixture_component[..., 0]).sum()
 
-    D = feed_forward_logp_f(input_data=P.reshape((P.shape[0] * P.shape[1], P.shape[2])),
+    # D contains the values from other individuals for each individual
+    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component, axes=(1, 0))  # s * (s-1) x d x t
+
+    # Repeat lag values across features.
+    lag_extended = ptt.repeat(lag, repeats=num_features, axis=0)
+
+    # Shift data according to the lags for each pair of subjects. We will use D as the previous value from different
+    # subjects for every subject in the component.
+    D = apply_lags(lag_extended, D.reshape((D.shape[0] * D.shape[1], num_time_steps))).reshape(
+        D.shape)
+
+    # Fit a function f(.) over the pairs to correct anti-symmetry.
+    D = feed_forward_logp_f(input_data=D.reshape((num_subjects * num_features, num_time_steps)),
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(P.shape)
-    # D contains the previous values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, D, axes=(1, 0))  # s * (s-1) x d x t
+                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
 
-    # We use a fixed mean instead of the previous value from the same individual
-    P_extended = ptt.repeat(initial_mean[:, :, None], repeats=(mixture_component.shape[0] - 1), axis=0)
-    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(mixture_component.shape[0] - 1), axis=0)
+    # Discard last time step because it is not previous to any other time step.
+    D = D[..., :-1]
 
-    mean = (D - P_extended) * C + P_extended
+    # Fixed value given by the initial mean for each subject. No self-dependency.
+    S_extended = ptt.repeat(initial_mean[:, :, None], repeats=(num_subjects - 1), axis=0)
 
-    sd = ptt.repeat(sigma, repeats=(mixture_component.shape[0] - 1), axis=0)[:, :, None]
+    # Current values from each subject. We extend S and point such that they match the dimensions of D.
+    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
+
+    # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
+    # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
+    # only infer the next value of the latent value from its previous one on the same subject,
+    C = coordination[None, None, 1:]  # 1 x 1 x t-1
+    mean = (D - S_extended) * C * coordination_mask[..., :-1] + S_extended
+
+    sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
 
     pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended))
+    # Compute dot product along the second dimension of pdf
     total_logp += pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))).sum()
 
     return total_logp
@@ -101,12 +170,14 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
                                         sigma: np.ndarray,
                                         mixture_weights: np.ndarray,
                                         coordination: np.ndarray,
+                                        lag: np.ndarray,
                                         input_layer_f: np.ndarray,
                                         hidden_layers_f: np.ndarray,
                                         output_layer_f: np.ndarray,
                                         activation_function_number_f: int,
                                         expander_aux_mask_matrix: np.ndarray,
                                         aggregation_aux_mask_matrix: np.ndarray,
+                                        mixture_mask: np.ndarray,
                                         num_subjects: int,
                                         dim_value: int,
                                         rng: Optional[np.random.Generator] = None,
@@ -125,9 +196,18 @@ def mixture_random_with_self_dependency(initial_mean: np.ndarray,
     sample = np.zeros_like(noise)
     prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
     sample[..., 0] = prior_sample
+
+    # TODO - Add treatment for lag
+    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., t - 1][influencers[..., t]]
+        D = feed_forward_random_f(input_data=D.flatten()[:, None],
+                                  input_layer_f=input_layer_f,
+                                  hidden_layers_f=hidden_layers_f,
+                                  output_layer_f=output_layer_f,
+                                  activation=activation)[:, 0].reshape(D.shape)
+
         # Previous sample from the same individual
         S = sample[..., t - 1]
 
@@ -144,12 +224,14 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
                                            sigma: np.ndarray,
                                            mixture_weights: np.ndarray,
                                            coordination: np.ndarray,
+                                           lag: np.ndarray,
                                            input_layer_f: np.ndarray,
                                            hidden_layers_f: np.ndarray,
                                            output_layer_f: np.ndarray,
                                            activation_function_number_f: int,
                                            expander_aux_mask_matrix: np.ndarray,
                                            aggregation_aux_mask_matrix: np.ndarray,
+                                           mixture_mask: np.ndarray,
                                            num_subjects: int,
                                            dim_value: int,
                                            rng: Optional[np.random.Generator] = None,
@@ -172,9 +254,16 @@ def mixture_random_without_self_dependency(initial_mean: np.ndarray,
     # No self-dependency. The transition distribution is a blending between the previous value from another individual,
     # and a fixed mean.
     S = initial_mean
+    # TODO - Add treatment for lag
+    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., t - 1][influencers[..., t]]
+        D = feed_forward_random_f(input_data=D.flatten()[:, None],
+                                  input_layer_f=input_layer_f,
+                                  hidden_layers_f=hidden_layers_f,
+                                  output_layer_f=output_layer_f,
+                                  activation=activation)[:, 0].reshape(D.shape)
 
         mean = ((D - S) * coordination[t] + S)
 
@@ -219,7 +308,7 @@ class MixtureComponent:
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray,
                  share_params_across_subjects: bool, share_params_across_features: bool, f: Optional[Callable] = None,
-                 mean_weights_f: float = 0, sd_weights_f: float = 1):
+                 mean_weights_f: float = 0, sd_weights_f: float = 1, max_lag: int = 0):
 
         dim = 1 if share_params_across_features else dim_value
         if share_params_across_subjects:
@@ -240,6 +329,7 @@ class MixtureComponent:
         self.share_params_across_subjects = share_params_across_subjects
         self.share_params_across_features = share_params_across_features
         self.f = f
+        self.max_lag = max_lag
 
         self.parameters = MixtureComponentParameters(mean_mean_a0=mean_mean_a0,
                                                      sd_mean_a0=sd_mean_a0,
@@ -439,11 +529,76 @@ class MixtureComponent:
 
         return input_layer, hidden_layers, output_layer, activation_function_number
 
+    def _create_random_symmetric_lag(self, lag: Any):
+        if lag is None:
+            # Use all mixture data to infer coordination
+            symmetric_lag = np.zeros(math.comb(self.num_subjects, 2))
+        else:
+            # We create a matrix to generate symmetric values of the lags per pair. This is because when we shift
+            # samples from the pair (a,b) by a lag l, we need to shift the samples of the pair (b,a) by a lag -l.
+            lag_idx_per_pair = {}
+            idx = 1
+            for s1, s2 in itertools.combinations(range(self.num_subjects), 2):
+                lag_idx_per_pair[f"{s2}#{s1}"] = idx
+                lag_idx_per_pair[f"{s1}#{s2}"] = lag_idx_per_pair[f"{s2}#{s1}"] * -1
+                idx += 1
+
+            num_cols = self.num_subjects * (self.num_subjects - 1)
+            num_rows = math.comb(self.num_subjects, 2)
+            lag_symmetry_matrix = np.zeros((num_rows, num_cols), dtype=int)
+            aux_idx = 0
+            for s1 in range(self.num_subjects):
+                for s2 in range(self.num_subjects):
+                    if s1 == s2:
+                        continue
+
+                    # In the logp function, we have matrices that represent values of other subjects (s2) for each
+                    # subject (s1). We want to be sure our lag variables match those matrices.
+                    lag_idx = lag_idx_per_pair[f"{s2}#{s1}"]
+                    lag_symmetry_matrix[abs(lag_idx) - 1, aux_idx] = 1 * np.sign(lag_idx)
+                    aux_idx += 1
+
+            # A symmetric lag will contain one lag per pair. For instance, consider a scenario with 3 subjects.
+            # In this case we have the possible pairs: (1, 0), (2, 0), (0, 1), (2, 1), (0, 2), (1, 2) and lags:
+            # l1, l2, -l1, l3, -l2, -l3.
+            # l1 tells us by how much values from subject 1 need to be shifted to align with subject 0 (same
+            # reasoning for the other lags)
+            symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag",
+                                             ptt.clip(ptt.dot(lag, lag_symmetry_matrix), -self.max_lag,
+                                                      self.max_lag))
+
+        return symmetric_lag
+
+    @staticmethod
+    def _create_lag_mask(num_time_steps: int, lag: Any):
+        # There should be one lag per pair of subjects. After we shift the samples applying the lags, we create a
+        # mask to indicate the portion of the data that intersects. Coordination can only be inferred on that part.
+        #
+        # e.g.    Pair A: |-----------|             Pair A: |-----------| (-2 lag)
+        #         Pair B: |-----------|  after lag  Pair B:       |-----------| (+4 lag)
+        #         Pair C: |-----------|             Pair C:   |-----------|
+        #                                                         |-----| = Intersection. We can only infer
+        #                                                                   coordination on this part.
+        #
+        # The mask will be passed to the logp function to prevent gradient propagation in parts where coordination
+        # should not interfere.
+
+        if lag is None:
+            lag_mask = np.ones((1, 1, num_time_steps))
+        else:
+            lower_idx = pm.math.maximum(0, ptt.max(lag))
+            upper_idx = num_time_steps + pm.math.minimum(0, ptt.min(lag))  # Index not included.
+
+            lag_mask = ptt.zeros((1, 1, num_time_steps))
+            lag_mask = ptt.set_subtensor(lag_mask[..., lower_idx:upper_idx], 1)
+
+        return lag_mask
+
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
                           observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None,
                           num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
-                          dim_hidden_layer_f: int = 0) -> Any:
+                          dim_hidden_layer_f: int = 0, lag: Optional[Any] = None) -> Any:
 
         mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
 
@@ -470,17 +625,22 @@ class MixtureComponent:
         expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
         aggregator_aux_mask_matrix = ptt.concatenate(aggregator_aux_mask_matrix, axis=1)
 
+        symmetric_lag = self._create_random_symmetric_lag(lag)
+        lag_mask = MixtureComponent._create_lag_mask(coordination.shape[-1].eval(), lag)
+
         if self.self_dependent:
             logp_params = (mean_a0,
                            sd_aa,
                            mixture_weights,
                            coordination,
+                           symmetric_lag,
                            input_layer_f,
                            hidden_layers_f,
                            output_layer_f,
                            activation_function_number_f,
                            expander_aux_mask_matrix,
-                           aggregator_aux_mask_matrix)
+                           aggregator_aux_mask_matrix,
+                           lag_mask)
             random_fn = partial(mixture_random_with_self_dependency,
                                 num_subjects=self.num_subjects, dim_value=self.dim_value)
             mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp_with_self_dependency,
@@ -492,12 +652,14 @@ class MixtureComponent:
                            sd_aa,
                            mixture_weights,
                            coordination,
+                           symmetric_lag,
                            input_layer_f,
                            hidden_layers_f,
                            output_layer_f,
                            activation_function_number_f,
                            expander_aux_mask_matrix,
-                           aggregator_aux_mask_matrix)
+                           aggregator_aux_mask_matrix,
+                           lag_mask)
 
             random_fn = partial(mixture_random_without_self_dependency,
                                 num_subjects=self.num_subjects, dim_value=self.dim_value)
