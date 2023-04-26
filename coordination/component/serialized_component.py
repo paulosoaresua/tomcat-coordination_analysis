@@ -4,93 +4,18 @@ from enum import Enum
 import math
 import numpy as np
 import pymc as pm
-import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
-from coordination.component.utils import add_bias
+from coordination.component.utils import feed_forward_logp_f, feed_forward_random_f
 
 
 class Mode(Enum):
     BLENDING = 0
     MIXTURE = 1
-
-
-def feed_forward_logp_f(input_data: Any,
-                        input_layer_f: Any,
-                        hidden_layers_f: Any,
-                        output_layer_f: Any,
-                        activation_function_number_f: ptt.TensorConstant,
-                        pairs: Any):
-    def forward(W, X, act_number):
-        fn = ActivationFunction.from_pytensor_number(act_number.eval())
-        z = pm.math.dot(W.transpose(), add_bias(X))
-        return fn(z)
-
-    if input_layer_f.shape.prod().eval() == 0:
-        # Only transform the input data if a NN was specified
-        return input_data
-
-    hidden_dim = input_layer_f.shape[1]  # == f_nn_output_layer.shape[0]
-
-    # Concatenate the pair IDs over time to the input data with the features over time
-    input_data = ptt.concatenate([input_data, pairs], axis=0)
-
-    # Input layer activations
-    activation = ActivationFunction.from_pytensor_number(activation_function_number_f.eval())
-    a0 = activation(pm.math.dot(input_layer_f.transpose(), add_bias(input_data)))
-
-    # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
-    num_hidden_layers = ptt.cast(hidden_layers_f.shape[0] / (hidden_dim + 1), "int32")
-    hidden_layers_f = hidden_layers_f.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
-
-    # Feed-Forward through the hidden layers
-    res, updates = pt.scan(forward,
-                           outputs_info=a0,
-                           sequences=[hidden_layers_f],
-                           non_sequences=[activation_function_number_f])
-
-    h = res[-1]
-
-    # Final result. We don't apply any activation to the final layer not to squeeze the values.
-    out = pm.math.dot(output_layer_f.transpose(), add_bias(h))
-
-    return out
-
-
-def feed_forward_random_f(input_data: np.ndarray,
-                          input_layer_f: np.ndarray,
-                          hidden_layers_f: np.ndarray,
-                          output_layer_f: np.ndarray,
-                          activation: Callable,
-                          pairs: np.ndarray):
-    if len(input_layer_f) == 0:
-        return input_data
-
-    hidden_dim = input_layer_f.shape[1]  # == f_nn_output_layer.shape[0]
-
-    # Concatenate the pair IDs to the input data with the features.
-    input_data = np.concatenate([input_data, pairs], axis=0)
-
-    # Input layer activations
-    a0 = activation(np.dot(input_layer_f.transpose(), add_bias(input_data)))
-
-    # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
-    num_hidden_layers = int(hidden_layers_f.shape[0] / (hidden_dim + 1))
-    hidden_layers_f = hidden_layers_f.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
-
-    # Feed-Forward through the hidden layers
-    h = a0
-    for W in hidden_layers_f:
-        h = activation(np.dot(W.transpose(), add_bias(h)))
-
-    # Output layer activation.
-    out = activation(np.dot(output_layer_f.transpose(), add_bias(h)))
-
-    return out
 
 
 def blending_logp(serialized_component: Any,
@@ -105,61 +30,35 @@ def blending_logp(serialized_component: Any,
                   prev_time_diff_subject: ptt.TensorConstant,
                   prev_same_subject_mask: Any,
                   prev_diff_subject_mask: Any,
-                  pairs: ptt.TensorConstant):
-    C = coordination[None, :]  # 1 x t
-
-    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
-    # the serialized component is one
-    S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
-    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
-
-    D = feed_forward_logp_f(input_data=D,
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f,
-                            pairs=pairs)
-
-    SM = prev_same_subject_mask[None, :]  # 1 x t
-    DM = prev_diff_subject_mask[None, :]  # 1 x t
-
-    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
-    # If there's no previous observation from the same subject, we use the initial mean.
-    mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
-
-    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
-
-    return total_logp
-
-
-def blending_logp_no_self_dependency(serialized_component: Any,
-                                     initial_mean: Any,
-                                     sigma: Any,
-                                     coordination: Any,
-                                     input_layer_f: Any,
-                                     hidden_layers_f: Any,
-                                     output_layer_f: Any,
-                                     activation_function_number_f: ptt.TensorConstant,
-                                     prev_time_diff_subject: Any,
-                                     prev_diff_subject_mask: Any,
-                                     pairs: ptt.TensorConstant):
-    C = coordination[None, :]  # 1 x t
+                  pairs: ptt.TensorConstant,
+                  self_dependent: ptt.TensorConstant):
 
     # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
     # the serialized component is one
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    D = feed_forward_logp_f(input_data=D,
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f,
-                            pairs=pairs)
+    if input_layer_f.shape.prod().eval() != 0:
+        # Only transform the input data if a NN was specified. There's a similar check inside the feed_forward_logp_f
+        # function, but we duplicate it here because if input_layer_f is empty, we want to use D in its original
+        # form instead of concatenated with the pairs matrix.
+        D = feed_forward_logp_f(input_data=ptt.concatenate([D, pairs], axis=0),
+                                input_layer_f=input_layer_f,
+                                hidden_layers_f=hidden_layers_f,
+                                output_layer_f=output_layer_f,
+                                activation_function_number_f=activation_function_number_f)
 
+    C = coordination[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
-    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
-    mean = D * C * DM + (1 - C * DM) * initial_mean
+    if self_dependent.eval():
+        # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+        # If there's no previous observation from the same subject, we use the initial mean.
+        S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
+        SM = prev_same_subject_mask[None, :]  # 1 x t
+        mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
+    else:
+        # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+        mean = D * C * DM + (1 - C * DM) * initial_mean
 
     total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
 
@@ -178,6 +77,7 @@ def blending_random(initial_mean: np.ndarray,
                     prev_same_subject_mask: np.ndarray,
                     prev_diff_subject_mask: np.ndarray,
                     pairs: np.ndarray,
+                    self_dependent: bool,
                     rng: Optional[np.random.Generator] = None,
                     size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -197,18 +97,22 @@ def blending_random(initial_mean: np.ndarray,
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]  # d-vector
 
-        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
-        D = feed_forward_random_f(input_data=D[:, None],
-                                  input_layer_f=input_layer_f,
-                                  hidden_layers_f=hidden_layers_f,
-                                  output_layer_f=output_layer_f,
-                                  activation=activation,
-                                  pairs=pairs[:, t][:, None])[:, 0]
+        if len(input_layer_f) != 0:
+            # Only transform the input data if a NN was specified. There's a similar check inside the feed_forward_logp_f
+            # function, but we duplicate it here because if input_layer_f is empty, we want to use D in its original
+            # form instead of concatenated with the pairs matrix.
+            D = feed_forward_random_f(input_data=np.concatenate([D[:, None], pairs[:, t][:, None]]),
+                                      input_layer_f=input_layer_f,
+                                      hidden_layers_f=hidden_layers_f,
+                                      output_layer_f=output_layer_f,
+                                      activation=activation)[:, 0]
 
         # Previous sample from the same individual
-        if prev_same_subject_mask[t] == 1:
+        if self_dependent and prev_same_subject_mask[t] == 1:
             S = sample[..., prev_time_same_subject[t]]
         else:
+            # When there's no self-dependency, the transition distribution is a blending between the previous value
+            # from another individual, and a fixed mean.
             if initial_mean.shape[1] == 1:
                 S = initial_mean[..., 0]
             else:
@@ -220,54 +124,6 @@ def blending_random(initial_mean: np.ndarray,
             # Parameter sharing across subjects
             transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
         else:
-            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
-
-        sample[..., t] = transition_sample
-
-    return sample + noise
-
-
-def blending_random_no_self_dependency(initial_mean: np.ndarray,
-                                       sigma: np.ndarray,
-                                       coordination: np.ndarray,
-                                       input_layer_f: np.ndarray,
-                                       hidden_layers_f: np.ndarray,
-                                       output_layer_f: np.ndarray,
-                                       activation_function_number_f: int,
-                                       prev_time_diff_subject: np.ndarray,
-                                       prev_diff_subject_mask: np.ndarray,
-                                       pairs: np.ndarray,
-                                       rng: Optional[np.random.Generator] = None,
-                                       size: Optional[Tuple[int]] = None) -> np.ndarray:
-    num_time_steps = coordination.shape[-1]
-
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
-
-    sample = np.zeros_like(noise)
-
-    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
-    for t in np.arange(1, num_time_steps):
-        # Previous sample from a different individual
-        D = sample[..., prev_time_diff_subject[t]]
-
-        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
-        D = feed_forward_random_f(input_data=D[:, None],
-                                  input_layer_f=input_layer_f,
-                                  hidden_layers_f=hidden_layers_f,
-                                  output_layer_f=output_layer_f,
-                                  activation=activation,
-                                  pairs=pairs[:, t][:, None])[:, 0]
-
-        # No self-dependency. The transition distribution is a blending between the previous value from another individual,
-        # and a fixed mean.
-        if sigma.shape[1] == 1:
-            # Parameter sharing across subjects
-            S = initial_mean[..., 0]
-            mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
-            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
-        else:
-            S = initial_mean[..., t]
-            mean = ((D - S) * coordination[t] * prev_diff_subject_mask[t] + S)
             transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
 
         sample[..., t] = transition_sample
@@ -287,65 +143,36 @@ def mixture_logp(serialized_component: Any,
                  prev_time_diff_subject: ptt.TensorConstant,
                  prev_same_subject_mask: Any,
                  prev_diff_subject_mask: Any,
-                 pairs: ptt.TensorConstant):
-    C = coordination[None, :]  # 1 x t
-
+                 pairs: ptt.TensorConstant,
+                 self_dependent: ptt.TensorConstant):
     # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
     # the serialized component is one
-    S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    D = feed_forward_logp_f(input_data=D,
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f,
-                            pairs=pairs)
-
-    SM = prev_same_subject_mask[None, :]  # 1 x t
-    DM = prev_diff_subject_mask[None, :]  # 1 x t
+    if input_layer_f.shape.prod().eval() != 0:
+        # Only transform the input data if a NN was specified. There's a similar check inside the feed_forward_logp_f
+        # function, but we duplicate it here because if input_layer_f is empty, we want to use D in its original
+        # form instead of concatenated with the pairs matrix.
+        D = feed_forward_logp_f(input_data=ptt.concatenate([D, pairs], axis=0),
+                                input_layer_f=input_layer_f,
+                                hidden_layers_f=hidden_layers_f,
+                                output_layer_f=output_layer_f,
+                                activation_function_number_f=activation_function_number_f)
 
     # Coordination only affects the mean in time steps where there are previous observations from a different subject.
     # If there's no previous observation from the same subject, we use the initial mean.
-    logp_same = pm.logp(pm.Normal.dist(mu=(S * SM + (1 - SM) * initial_mean), sigma=sigma, shape=D.shape),
-                        serialized_component)
+    if self_dependent.eval():
+        S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
+        SM = prev_same_subject_mask[None, :]  # 1 x t
+        logp_same = pm.logp(pm.Normal.dist(mu=(S * SM + (1 - SM) * initial_mean), sigma=sigma, shape=D.shape),
+                            serialized_component)
+    else:
+        logp_same = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=D.shape), serialized_component)
+
     logp_diff = pm.logp(pm.Normal.dist(mu=D, sigma=sigma, shape=D.shape), serialized_component)
 
-    total_logp = pm.math.log(C * DM * pm.math.exp(logp_diff) + (1 - C * DM) * pm.math.exp(logp_same)).sum()
-
-    return total_logp
-
-
-def mixture_logp_no_self_dependency(serialized_component: Any,
-                                    initial_mean: Any,
-                                    sigma: Any,
-                                    coordination: Any,
-                                    input_layer_f: Any,
-                                    hidden_layers_f: Any,
-                                    output_layer_f: Any,
-                                    activation_function_number_f: ptt.TensorConstant,
-                                    prev_time_diff_subject: Any,
-                                    prev_diff_subject_mask: Any,
-                                    pairs: ptt.TensorConstant):
     C = coordination[None, :]  # 1 x t
-
-    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
-    # the serialized component is one
-    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
-
-    D = feed_forward_logp_f(input_data=D,
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f,
-                            pairs=pairs)
-
     DM = prev_diff_subject_mask[None, :]  # 1 x t
-
-    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
-    logp_same = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=D.shape), serialized_component)
-    logp_diff = pm.logp(pm.Normal.dist(mu=D, sigma=sigma, shape=D.shape), serialized_component)
-
     total_logp = pm.math.log(C * DM * pm.math.exp(logp_diff) + (1 - C * DM) * pm.math.exp(logp_same)).sum()
 
     return total_logp
@@ -363,6 +190,7 @@ def mixture_random(initial_mean: np.ndarray,
                    prev_same_subject_mask: np.ndarray,
                    prev_diff_subject_mask: np.ndarray,
                    pairs: np.ndarray,
+                   self_dependent: bool,
                    rng: Optional[np.random.Generator] = None,
                    size: Optional[Tuple[int]] = None) -> np.ndarray:
     num_time_steps = coordination.shape[-1]
@@ -382,77 +210,33 @@ def mixture_random(initial_mean: np.ndarray,
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
 
-        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
-        D = feed_forward_random_f(input_data=D[:, None],
-                                  input_layer_f=input_layer_f,
-                                  hidden_layers_f=hidden_layers_f,
-                                  output_layer_f=output_layer_f,
-                                  activation=activation,
-                                  pairs=pairs[:, t][:, None])[:, 0]
-
-        # Previous sample from the same individual
-        S = sample[..., prev_time_same_subject[t]] * prev_same_subject_mask[t]
-
-        if prev_diff_subject_mask[t] == 1 and np.random.rand() <= coordination[t]:
-            mean = D
-        else:
-            mean = S * prev_same_subject_mask[t] + mean_0 * (1 - prev_same_subject_mask[t])
-
-        if sigma.shape[1] == 1:
-            # Parameter sharing across subjects
-            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
-        else:
-            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
-
-        sample[..., t] = transition_sample
-
-    return sample + noise
-
-
-def mixture_random_no_self_dependency(initial_mean: np.ndarray,
-                                      sigma: np.ndarray,
-                                      coordination: np.ndarray,
-                                      input_layer_f: np.ndarray,
-                                      hidden_layers_f: np.ndarray,
-                                      output_layer_f: np.ndarray,
-                                      activation_function_number_f: int,
-                                      prev_time_diff_subject: np.ndarray,
-                                      prev_diff_subject_mask: np.ndarray,
-                                      pairs: np.ndarray,
-                                      rng: Optional[np.random.Generator] = None,
-                                      size: Optional[Tuple[int]] = None) -> np.ndarray:
-    num_time_steps = coordination.shape[-1]
-
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
-
-    sample = np.zeros_like(noise)
-
-    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
-    for t in np.arange(1, num_time_steps):
-        # Previous sample from a different individual
-        D = sample[..., prev_time_diff_subject[t]]
-
-        # Preserve the time dimension in the input_data and pair passed to the function for correct feed-forward pass
-        D = feed_forward_random_f(input_data=D[:, None],
-                                  input_layer_f=input_layer_f,
-                                  hidden_layers_f=hidden_layers_f,
-                                  output_layer_f=output_layer_f,
-                                  activation=activation,
-                                  pairs=pairs[:, t][:, None])[:, 0]
-
-        if sigma.shape[1] == 1:
-            # Parameter sharing across subjects
-            S = initial_mean[..., 0]
-        else:
-            S = initial_mean[..., t]
+        if len(input_layer_f) != 0:
+            # Only transform the input data if a NN was specified. There's a similar check inside the feed_forward_logp_f
+            # function, but we duplicate it here because if input_layer_f is empty, we want to use D in its original
+            # form instead of concatenated with the pairs matrix.
+            D = feed_forward_random_f(input_data=np.concatenate([D[:, None], pairs[:, t][:, None]]),
+                                      input_layer_f=input_layer_f,
+                                      hidden_layers_f=hidden_layers_f,
+                                      output_layer_f=output_layer_f,
+                                      activation=activation)[:, 0]
 
         if prev_diff_subject_mask[t] == 1 and np.random.rand() <= coordination[t]:
             mean = D
         else:
-            mean = S
+            if self_dependent:
+                # Previous sample from the same individual
+                S = sample[..., prev_time_same_subject[t]] * prev_same_subject_mask[t]
 
-        # No self-dependency. The transition distribution is a blending between the previous value from another individual,
-        # and a fixed mean.
+                # If there's no previous value for the same subject, we just use the initial mean
+                mean = S * prev_same_subject_mask[t] + mean_0 * (1 - prev_same_subject_mask[t])
+            else:
+                # Fixed mean value per subject
+                if sigma.shape[1] == 1:
+                    S = initial_mean[..., 0]
+                else:
+                    S = initial_mean[..., t]
+                mean = S
+
         if sigma.shape[1] == 1:
             # Parameter sharing across subjects
             transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
@@ -932,39 +716,23 @@ class SerializedComponent:
             prev_time_diff_subject = ptt.take_along_axis(lag_table, lag_indices, 0)[0]
             prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
 
-        if self.self_dependent:
-            logp_params = (mean,
-                           sd,
-                           coordination,
-                           input_layer_f,
-                           hidden_layers_f,
-                           output_layer_f,
-                           activation_function_number_f,
-                           prev_time_same_subject,
-                           prev_time_diff_subject,
-                           prev_same_subject_mask,
-                           prev_diff_subject_mask,
-                           pairs_ohe)
-            logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
-            random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
-            serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
-                                                  dims=[feature_dimension, time_dimension],
-                                                  observed=observed_values)
-        else:
-            logp_params = (mean,
-                           sd,
-                           coordination,
-                           input_layer_f,
-                           hidden_layers_f,
-                           output_layer_f,
-                           activation_function_number_f,
-                           prev_same_subject_mask,
-                           prev_diff_subject_mask,
-                           pairs_ohe)
-            logp_fn = blending_logp_no_self_dependency if self.mode == Mode.BLENDING else mixture_logp_no_self_dependency
-            random_fn = blending_random_no_self_dependency if self.mode == Mode.BLENDING else mixture_random_no_self_dependency
-            serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
-                                                  dims=[feature_dimension, time_dimension],
-                                                  observed=observed_values)
+        logp_params = (mean,
+                       sd,
+                       coordination,
+                       input_layer_f,
+                       hidden_layers_f,
+                       output_layer_f,
+                       activation_function_number_f,
+                       prev_time_same_subject,
+                       prev_time_diff_subject,
+                       prev_same_subject_mask,
+                       prev_diff_subject_mask,
+                       pairs_ohe,
+                       np.array(self.self_dependent))
+        logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
+        random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
+        serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
+                                              dims=[feature_dimension, time_dimension],
+                                              observed=observed_values)
 
         return serialized_component, mean_a0, sd_aa, (input_layer_f, hidden_layers_f, output_layer_f)
