@@ -120,11 +120,6 @@ class MixtureModel:
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
-        if max_lag > 0:
-            self.lag_cpn = Lag("lag", max_lag=max_lag)
-        else:
-            self.lag_cpn = None
-
         self.latent_cpn = MixtureComponent(uuid="mixture_component",
                                            num_subjects=num_subjects,
                                            dim_value=1,
@@ -134,7 +129,8 @@ class MixtureModel:
                                            sd_sd_aa=sd_sd_aa,
                                            a_mixture_weights=a_mixture_weights,
                                            share_params_across_subjects=share_params_across_subjects,
-                                           share_params_across_features=share_params_across_features_latent)
+                                           share_params_across_features=share_params_across_features_latent,
+                                           max_lag=max_lag)
 
         if num_hidden_layers_g > 0:
             self.g_nn = NeuralNetwork(uuid="g",
@@ -157,7 +153,6 @@ class MixtureModel:
         names = self.coordination_cpn.parameter_names
         names.extend(self.latent_cpn.parameter_names)
         names.extend(self.observation_cpn.parameter_names)
-        names.extend(self.lag_cpn.parameter_names)
 
         return names
 
@@ -199,10 +194,8 @@ class MixtureModel:
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             coordination = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
-            lag = self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2)) if self.lag_cpn is not None else None
             latent_component = self.latent_cpn.update_pymc_model(
                 coordination=coordination[evidence.time_steps_in_coordination_scale],
-                lag=lag,
                 subject_dimension="component_subject",
                 feature_dimension="component_feature",
                 time_dimension="component_time",
@@ -342,6 +335,10 @@ def build_convergence_summary(idata: Any) -> pd.DataFrame:
 
 if __name__ == "__main__":
     SEED = 0
+    BURN_IN = 100
+    NUM_SAMPLES = 100
+    NUM_CHAINS = 2
+
     random.seed(SEED)
     np.random.seed(SEED)
 
@@ -414,19 +411,14 @@ if __name__ == "__main__":
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
-                         num_hidden_layers_f=1,
-                         dim_hidden_layer_f=3,
-                         activation_function_name_f="linear")
+                         max_lag=5)
 
-    # model.lag_cpn.parameters.lag.value = np.array([4, 4, 0])
-
-    # model.latent_cpn.parameters.weights_f.value = [
-    #     np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]),
-    #     np.array([np.concatenate([np.eye(3), np.zeros((1, 3))])]),
-    #     np.concatenate([np.eye(3), np.zeros((1, 3))])
-    # ]
-
-    # prior_predictive_check(model, evidence)
-    posterior_samples, idata = train(model, evidence, burn_in=100, num_samples=100, init_method="advi")
-    # _ = posterior_predictive_check(model, evidence, idata)
-    plt.show()
+    prior_predictive_check(model, evidence)
+    posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
+                                                                                                                 evidence,
+                                                                                                                 burn_in=BURN_IN,
+                                                                                                                 num_samples=NUM_SAMPLES,
+                                                                                                                 num_chains=NUM_CHAINS,
+                                                                                                                 init_method="advi")
+    _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
+    build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag)
