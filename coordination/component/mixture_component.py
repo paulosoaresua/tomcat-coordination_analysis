@@ -448,23 +448,23 @@ class MixtureComponent:
             # samples from the pair (a,b) by a lag l, we need to shift the samples of the pair (b,a) by a lag -l.
             lag_idx_per_pair = {}
             idx = 1
-            for s1, s2 in itertools.combinations(range(self.num_subjects), 2):
-                lag_idx_per_pair[f"{s2}#{s1}"] = idx
-                lag_idx_per_pair[f"{s1}#{s2}"] = lag_idx_per_pair[f"{s2}#{s1}"] * -1
+            for influencee, influencer in itertools.combinations(range(self.num_subjects), 2):
+                lag_idx_per_pair[f"{influencer}#{influencee}"] = idx
+                lag_idx_per_pair[f"{influencee}#{influencer}"] = idx * -1
                 idx += 1
 
             num_cols = self.num_subjects * (self.num_subjects - 1)
             num_rows = math.comb(self.num_subjects, 2)
             lag_symmetry_matrix = np.zeros((num_rows, num_cols), dtype=int)
             aux_idx = 0
-            for s1 in range(self.num_subjects):
-                for s2 in range(self.num_subjects):
-                    if s1 == s2:
+            for influencee in range(self.num_subjects):
+                for influencer in range(self.num_subjects):
+                    if influencee == influencer:
                         continue
 
                     # In the logp function, we have matrices that represent values of other subjects (s2) for each
                     # subject (s1). We want to be sure our lag variables match those matrices.
-                    lag_idx = lag_idx_per_pair[f"{s2}#{s1}"]
+                    lag_idx = lag_idx_per_pair[f"{influencer}#{influencee}"]
                     lag_symmetry_matrix[abs(lag_idx) - 1, aux_idx] = 1 * np.sign(lag_idx)
                     aux_idx += 1
 

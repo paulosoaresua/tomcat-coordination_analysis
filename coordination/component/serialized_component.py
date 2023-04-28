@@ -1,3 +1,4 @@
+import itertools
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from enum import Enum
@@ -626,45 +627,34 @@ class SerializedComponent:
 
         return input_layer, hidden_layers, output_layer, activation_function_number
 
-    def _create_random_symmetric_lag(self, subjects_in_time: np.ndarray, prev_time_diff_subject: np.ndarray, lag: Any):
-        # Fill a dictionary with an ID for each pair of subjects.
-        pairs_dict = {}
-        pair_id = 0
-        for i in range(self.num_subjects):
-            for j in range(i + 1, self.num_subjects):
-                pairs_dict[f"{i}#{j}"] = pair_id
-                pair_id += 1
+    def _encode_subject_pairs(self, subjects_in_time: np.ndarray, prev_time_diff_subject: np.ndarray):
+        # Creates a series (over time) of pair ids in a one-hot-encode representation. This will be used in f(.) to
+        # identify the influencer and influencee such that the correct transformation can be learned for each distinct
+        # pair interaction.
 
-        # Create one-hot-encode (OHE) vectors for the different pairs. We also store the list of numerical pair ids and
-        # a signal indicating the order of the relationship. We will use these two variables to correct index the lags
-        # later.
+        # First we construct a dictionary to attribute an ID to each distinct pair of subjects.
+        pair_id_to_idx = {}
+        pair_idx = 0
+        for influencee, influencer in itertools.combinations(range(self.num_subjects), 2):
+            pair_id_to_idx[f"{influencer}#{influencee}"] = pair_idx
+            pair_id_to_idx[f"{influencee}#{influencer}"] = pair_idx
+            pair_idx += 1
+
+        # Now for each time step we check influencer and influencee, and use the pair ID to create a one-hot-encoded
+        # vector for the interacting pair of subjects.
+        num_pairs = math.comb(self.num_subjects, 2)
         num_time_steps = len(subjects_in_time)
-        pairs_ohe = np.zeros((len(pairs_dict), num_time_steps))
-        pair_ids = np.zeros(num_time_steps, dtype=int)
-        pair_signals = np.ones(num_time_steps, dtype=int)
+        encoded_pairs = np.zeros((num_pairs, num_time_steps))
         for t in range(num_time_steps):
+            # if prev_time_diff_subject < 0, there's no dependency with another subject at the time step.
             if prev_time_diff_subject[t] >= 0:
-                source_subject = subjects_in_time[prev_time_diff_subject[t]]
-                target_subject = subjects_in_time[t]
-                pair_key = f"{min(source_subject, target_subject)}#{max(source_subject, target_subject)}"
-                pair_id = pairs_dict[pair_key]
+                influencer = subjects_in_time[prev_time_diff_subject[t]]
+                influencee = subjects_in_time[t]
+                pair_id = f"{influencer}#{influencee}"
+                pair_idx = pair_id_to_idx[pair_id]
+                encoded_pairs[pair_idx, t] = 1
 
-                pair_ids[t] = pair_id
-                if f"{source_subject}#{target_subject}" not in pairs_dict:
-                    pair_signals[t] *= -1
-
-                # Mark the index as 1 to create a OHE representation for that pair at time step t.
-                pairs_ohe[pair_id, t] = 1
-
-        if lag is None:
-            symmetric_lag = None
-        else:
-            # Create auxiliary variable by broadcasting lags for all time steps according to the source and target subjects
-            # and the direction of their coupling.
-            # One lag per time step.
-            symmetric_lag = pm.Deterministic(f"{self.uuid}_symmetric_lag", lag[pair_ids] * pair_signals)
-
-        return symmetric_lag, pairs_ohe
+        return encoded_pairs
 
     def _create_lag_table(self, subjects_in_time: np.ndarray, prev_time_diff_subject: np.ndarray):
         # A lag table contain time step indices of dependencies on different subjects over time for different
@@ -679,20 +669,24 @@ class SerializedComponent:
         for t in range(num_time_steps):
             if prev_time_diff_subject[t] >= 0:
                 # Previous subject different than the current one
-                prev_diff_subject = subjects_in_time[prev_time_diff_subject[t]]
+                influencer = subjects_in_time[prev_time_diff_subject[t]]
 
-                # In the array containing all time steps when the previous other subject had observations, find
+                # In the array containing all time steps when the influencer had observations, find
                 # the index of the time step associated with prev_time_diff_subject[t]. This will be the index for lag
                 # zero.
-                lag_zero_idx = np.searchsorted(subject_times[prev_diff_subject], prev_time_diff_subject[t])
+                lag_zero_idx = np.searchsorted(subject_times[influencer], prev_time_diff_subject[t])
+
+                # How much further back we have values for the influencer
                 min_local_lag = -min(lag_zero_idx, self.lag_cpn.max_lag)
-                max_local_lag = min(len(subject_times[prev_diff_subject]) - lag_zero_idx - 1, self.lag_cpn.max_lag)
+
+                # How much further ahead we have values for the influencer
+                max_local_lag = min(len(subject_times[influencer]) - lag_zero_idx - 1, self.lag_cpn.max_lag)
 
                 # The rows range from -K to K, where K is the max lag size. So, to access an element with lag l, we do
                 # lat_table[K + l, :].
                 lb = min_local_lag + self.lag_cpn.max_lag
                 ub = max_local_lag + self.lag_cpn.max_lag + 1
-                entry = subject_times[prev_diff_subject][lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
+                entry = subject_times[influencer][lag_zero_idx + min_local_lag:lag_zero_idx + max_local_lag + 1]
                 lag_table[lb:ub, t] = entry
 
         return lag_table
@@ -716,19 +710,33 @@ class SerializedComponent:
             output_layer_f = []
             activation_function_number_f = 0
 
-        # We fit one lag per pair, so the number of lags is C_s_2, where s is the number of subjects.
-        lag = None if self.lag_cpn is None else self.lag_cpn.update_pymc_model(math.comb(self.num_subjects, 2))
-        symmetric_lag, pairs_ohe = self._create_random_symmetric_lag(subjects, prev_time_diff_subject, lag)
-        if self.lag_cpn is not None:
-            lag_table = self._create_lag_table(subjects, prev_time_diff_subject)
-            # We clip because the Metropolis procedure can sometimes generate samples out of boundaries.
-            lag_indices = self.lag_cpn.max_lag + ptt.clip(symmetric_lag[None, :], -self.lag_cpn.max_lag,
-                                                          self.lag_cpn.max_lag)
+        encoded_pairs = self._encode_subject_pairs(subjects, prev_time_diff_subject)
 
-            # Adjust dependencies on previous influencers (previous subject different than the current one) according
-            # to the sampled lags.
-            prev_time_diff_subject = ptt.take_along_axis(lag_table, lag_indices, 0)[0]
-            prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0)
+        if self.lag_cpn is not None:
+            # We fix the lag of the first subject, and infer the lags of the other subjects relatively to the first
+            # subject
+            lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects-1)
+
+            influencers = subjects[prev_time_diff_subject]
+            influencees = subjects
+
+            # We add a fixed zero lag to the first subject
+            extended_lag = ptt.concatenate([ptt.zeros(1, dtype=int), lag])
+            lag_influencers = extended_lag[influencers]
+            lag_influencees = extended_lag[influencees]
+
+            # We need to clip the lag because invalid samples can be generated by the MCMC procedure on PyMC.
+            dlags = ptt.clip(lag_influencees - lag_influencers, -self.lag_cpn.max_lag, self.lag_cpn.max_lag)
+
+            lag_table = self._create_lag_table(subjects, prev_time_diff_subject)
+            lag_idx = self.lag_cpn.max_lag + dlags
+            prev_time_diff_subject = ptt.take_along_axis(lag_table, lag_idx[None, :], 0)[0]
+
+            # We multiply at mask at lag zero because that's the ground truth for the time steps when we have
+            # dependencies on influencers. This is because -1 is a valid index so, we need to make sure we are not
+            # introducing spurious dependencies when we update the dependencies from the lag table.
+            mask_at_lag_zero = ptt.where(lag_table[self.lag_cpn.max_lag] >= 0, 1, 0)
+            prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0) * mask_at_lag_zero
 
         logp_params = (mean,
                        sd,
@@ -741,7 +749,7 @@ class SerializedComponent:
                        prev_time_diff_subject,
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
-                       pairs_ohe,
+                       encoded_pairs,
                        np.array(self.self_dependent))
         logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
         random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random

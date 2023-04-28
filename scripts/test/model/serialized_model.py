@@ -382,7 +382,7 @@ def build_convergence_summary(idata: Any) -> pd.DataFrame:
 
 if __name__ == "__main__":
     SEED = 0
-    BURN_IN = 1500
+    BURN_IN = 1000
     NUM_SAMPLES = 1000
     NUM_CHAINS = 2
 
@@ -440,30 +440,7 @@ if __name__ == "__main__":
                                                                               [0, np.pi, np.pi / 2]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
-    fig, axs = plt.subplots(2, 5)
-
-    evidence_vertical_shift.plot(axs[0, 0], marker_size=8)
-    evidence_vertical_shift_normalized.plot(axs[1, 0], marker_size=8)
-    axs[0, 0].set_title("Vertical Shift")
-
-    evidence_vertical_shift_noise.plot(axs[0, 1], marker_size=8)
-    evidence_vertical_shift_noise_normalized.plot(axs[1, 1], marker_size=8)
-    axs[0, 1].set_title("Noise")
-
-    evidence_vertical_shift_anti_symmetry.plot(axs[0, 2], marker_size=8)
-    evidence_vertical_shift_anti_symmetry_normalized.plot(axs[1, 2], marker_size=8)
-    axs[0, 2].set_title("Anti-Symmetry")
-
-    evidence_random.plot(axs[0, 3], marker_size=8)
-    evidence_random_normalized.plot(axs[1, 3], marker_size=8)
-    axs[0, 3].set_title("Random")
-
-    evidence_vertical_shift_lag.plot(axs[0, 4], marker_size=8)
-    evidence_vertical_shift_lag_normalized.plot(axs[1, 4], marker_size=8)
-    axs[0, 4].set_title("Lag")
-    plt.tight_layout()
-
-    evidence = evidence_vertical_shift_lag_normalized
+    evidence = evidence_vertical_shift_anti_symmetry_normalized
 
     model = SerializedModel(num_subjects=3,
                             self_dependent=True,
@@ -478,17 +455,21 @@ if __name__ == "__main__":
                             share_params_across_features_observation=False,
                             initial_coordination=None,
                             mode=Mode.BLENDING,
-                            max_lag=5)
+                            max_lag=0,
+                            num_hidden_layers_f=2,
+                            dim_hidden_layer_f=8,
+                            activation_function_name_g="tanh")
 
-    model.latent_cpn.lag_cpn.parameters.lag.value = np.array([-4, -2, 2])
+    # model.latent_cpn.lag_cpn.parameters.lag.value = np.array([-4, -2, 2])
 
     prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=BURN_IN,
+                                                                                                                 burn_in=1500,
                                                                                                                  num_samples=NUM_SAMPLES,
                                                                                                                  num_chains=NUM_CHAINS,
-                                                                                                                 init_method="jitter+adapt_diag")
+                                                                                                                 init_method="advi")
+    # init_method="advi")
     _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
     build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag)
     plt.show()
