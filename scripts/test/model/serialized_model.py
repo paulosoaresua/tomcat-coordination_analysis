@@ -456,16 +456,16 @@ if __name__ == "__main__":
                             initial_coordination=None,
                             mode=Mode.BLENDING,
                             max_lag=0,
-                            num_hidden_layers_f=2,
-                            dim_hidden_layer_f=8,
-                            activation_function_name_g="tanh")
+                            num_hidden_layers_f=1,
+                            dim_hidden_layer_f=5,
+                            activation_function_name_f="relu")
 
     # model.latent_cpn.lag_cpn.parameters.lag.value = np.array([-4, -2, 2])
 
     prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=1500,
+                                                                                                                 burn_in=1000,
                                                                                                                  num_samples=NUM_SAMPLES,
                                                                                                                  num_chains=NUM_CHAINS,
                                                                                                                  init_method="advi")

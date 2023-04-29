@@ -635,7 +635,7 @@ class SerializedComponent:
         # First we construct a dictionary to attribute an ID to each distinct pair of subjects.
         pair_id_to_idx = {}
         pair_idx = 0
-        for influencee, influencer in itertools.combinations(range(self.num_subjects), 2):
+        for influencer, influencee in itertools.combinations(range(self.num_subjects), 2):
             pair_id_to_idx[f"{influencer}#{influencee}"] = pair_idx
             pair_id_to_idx[f"{influencee}#{influencer}"] = pair_idx
             pair_idx += 1
