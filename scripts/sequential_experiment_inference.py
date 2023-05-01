@@ -327,6 +327,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
             save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
             save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
+            save_convergence_summary(f"{results_dir}", idata)
             save_predictive_posterior_plots(f"{results_dir}/plots/predictive_posterior", idata, evidence, model)
 
         # Save inference data
@@ -497,6 +498,28 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
     plt.ylabel(f"Coordination")
 
     fig.savefig(f"{out_dir}/coordination.png", format='png', bbox_inches='tight')
+
+
+def save_convergence_summary(out_dir: str, idata: az.InferenceData):
+    os.makedirs(out_dir, exist_ok=True)
+
+    header = [
+        "variable",
+        "mean_rhat",
+        "std_rhat"
+    ]
+
+    rhat = az.rhat(idata)
+    data = []
+    for var, values in rhat.data_vars.items():
+        entry = [
+            var,
+            values.to_numpy().mean(),
+            values.to_numpy().std()
+        ]
+        data.append(entry)
+
+    pd.DataFrame(data, columns=header).to_csv(f"{out_dir}/convergence_summary.csv")
 
 
 def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
