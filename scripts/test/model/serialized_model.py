@@ -39,30 +39,67 @@ class SyntheticSeriesSerialized:
     def from_function(cls,
                       fn: Callable,
                       num_subjects: int,
-                      time_steps: np.ndarray,
+                      num_time_steps: int,
+                      time_step_size: float,
+                      max_lag: int,
                       noise_scale: Optional[float] = None,
                       vertical_offset_per_subject: Optional[np.ndarray] = None,
                       horizontal_offset_per_subject: Optional[np.ndarray] = None) -> SyntheticSeriesSerialized:
 
         assert vertical_offset_per_subject is None or len(vertical_offset_per_subject) == num_subjects
         assert horizontal_offset_per_subject is None or len(horizontal_offset_per_subject) == num_subjects
+        assert horizontal_offset_per_subject is None or (horizontal_offset_per_subject <= max_lag).all()
 
-        num_time_steps = len(time_steps)
+        max_lag *= num_subjects
 
-        noise = np.random.normal(size=num_time_steps, scale=noise_scale) if noise_scale is not None else 0
+        if horizontal_offset_per_subject is None:
+            horizontal_offset_per_subject = np.zeros(num_subjects, dtype=int)
 
+        extra_time_steps = 2 * max_lag
+
+        values = np.zeros((num_subjects, num_time_steps + extra_time_steps))
+        for t in range(num_time_steps + extra_time_steps):
+            values[:, t] = fn((t - max_lag) * time_step_size) + np.arange(num_subjects)
+
+        # Apply lags
+        for s in range(num_subjects):
+            values[s] = np.roll(values[s], horizontal_offset_per_subject[s] * num_subjects)
+
+        # Remove extra time steps
+        values = values[:, max_lag:(values.shape[-1] - max_lag)]
+
+        # Serialize speakers
         subjects_in_time = np.tile(np.arange(num_subjects), int(np.ceil(num_time_steps / num_subjects)))
         subjects_in_time = subjects_in_time[:num_time_steps]
-
-        if horizontal_offset_per_subject is not None:
-            offsets = np.tile(horizontal_offset_per_subject, int(np.ceil(num_time_steps / num_subjects)))
-            offsets = offsets[:num_time_steps]
-            time_steps += offsets
-
-        values = fn(time_steps) + noise
-
         previous_time_same_subject = np.arange(num_time_steps) - num_subjects
         previous_time_diff_subject = np.arange(num_time_steps) - 1
+
+        for t, s in enumerate(subjects_in_time):
+            values[0, t] = values[s, t]
+
+        values = values[0]
+
+        noise = np.random.normal(size=num_time_steps,   scale=noise_scale) if noise_scale is not None else 0
+
+        values += noise
+
+        #
+        #
+        #
+        #
+        # num_time_steps = len(time_steps)
+        #
+        # noise = np.random.normal(size=num_time_steps, scale=noise_scale) if noise_scale is not None else 0
+        #
+        # subjects_in_time = np.tile(np.arange(num_subjects), int(np.ceil(num_time_steps / num_subjects)))
+        # subjects_in_time = subjects_in_time[:num_time_steps]
+        #
+        # if horizontal_offset_per_subject is not None:
+        #     offsets = np.tile(horizontal_offset_per_subject, int(np.ceil(num_time_steps / num_subjects)))
+        #     offsets = offsets[:num_time_steps]
+        #     time_steps += offsets
+        #
+        # values = fn(time_steps) + noise
 
         if vertical_offset_per_subject is not None:
             offsets = np.tile(vertical_offset_per_subject, int(np.ceil(num_time_steps / num_subjects)))
@@ -392,17 +429,20 @@ if __name__ == "__main__":
     # Vertical shift
     evidence_vertical_shift = SyntheticSeriesSerialized.from_function(fn=np.sin,
                                                                       num_subjects=3,
-                                                                      time_steps=np.linspace(0, 50 * np.pi / 12, 50),
+                                                                      num_time_steps=50,
+                                                                      time_step_size=np.pi / 12,
                                                                       noise_scale=None,
+                                                                      max_lag=5,
                                                                       vertical_offset_per_subject=np.array([0, 1, 2]))
     evidence_vertical_shift_normalized = evidence_vertical_shift.normalize_per_subject(inplace=False)
 
     # Noise
     evidence_vertical_shift_noise = SyntheticSeriesSerialized.from_function(fn=np.sin,
                                                                             num_subjects=3,
-                                                                            time_steps=np.linspace(0, 50 * np.pi / 12,
-                                                                                                   50),
+                                                                            num_time_steps=50,
+                                                                            time_step_size=np.pi / 12,
                                                                             noise_scale=0.5,
+                                                                            max_lag=5,
                                                                             vertical_offset_per_subject=np.array(
                                                                                 [0, 1, 2]))
     evidence_vertical_shift_noise_normalized = evidence_vertical_shift_noise.normalize_per_subject(inplace=False)
@@ -410,37 +450,54 @@ if __name__ == "__main__":
     # Anti-Symmetry
     evidence_vertical_shift_anti_symmetry = SyntheticSeriesSerialized.from_function(fn=np.sin,
                                                                                     num_subjects=3,
-                                                                                    time_steps=np.linspace(0,
-                                                                                                           50 * np.pi / 12,
-                                                                                                           50),
+                                                                                    num_time_steps=50,
+                                                                                    time_step_size=np.pi / 12,
                                                                                     noise_scale=None,
+                                                                                    max_lag=5,
                                                                                     vertical_offset_per_subject=np.array(
                                                                                         [0, 1, 2]),
                                                                                     horizontal_offset_per_subject=np.array(
-                                                                                        [0, np.pi, 0]))
+                                                                                        [0, -4, 0]))
     evidence_vertical_shift_anti_symmetry_normalized = evidence_vertical_shift_anti_symmetry.normalize_per_subject(
         inplace=False)
 
-    # Random
-    evidence_random = SyntheticSeriesSerialized.from_function(fn=lambda x: np.random.randn(*x.shape),
-                                                              num_subjects=3,
-                                                              time_steps=np.linspace(0, 50 * np.pi / 12, 50),
-                                                              noise_scale=None)
-    evidence_random_normalized = evidence_random.normalize_per_subject(inplace=False)
+    # # Random
+    # evidence_random = SyntheticSeriesSerialized.from_function(fn=lambda x: np.random.randn(*x.shape),
+    #                                                           num_subjects=3,
+    #                                                           time_steps=np.linspace(0, 50 * np.pi / 12, 50),
+    #                                                           noise_scale=None)
+    # evidence_random_normalized = evidence_random.normalize_per_subject(inplace=False)
 
     # Lag
     evidence_vertical_shift_lag = SyntheticSeriesSerialized.from_function(fn=np.sin,
                                                                           num_subjects=3,
-                                                                          time_steps=np.linspace(0, 50 * np.pi / 12,
-                                                                                                 50),
+                                                                          num_time_steps=50,
+                                                                          time_step_size=np.pi / 12,
                                                                           noise_scale=None,
+                                                                          max_lag=5,
                                                                           vertical_offset_per_subject=np.array(
                                                                               [0, 1, 2]),
                                                                           horizontal_offset_per_subject=np.array(
-                                                                              [0, np.pi, np.pi / 2]))
+                                                                              [0, -4, -2]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
-    evidence = evidence_vertical_shift_anti_symmetry_normalized
+    # fig, axs = plt.subplots(2, 4)
+    #
+    # evidence_vertical_shift.plot(axs[0, 0], marker_size=8)
+    # evidence_vertical_shift_normalized.plot(axs[1, 0], marker_size=8)
+    #
+    # evidence_vertical_shift_noise.plot(axs[0, 1], marker_size=8)
+    # evidence_vertical_shift_noise_normalized.plot(axs[1, 1], marker_size=8)
+    #
+    # evidence_vertical_shift_anti_symmetry.plot(axs[0, 2], marker_size=8)
+    # evidence_vertical_shift_anti_symmetry_normalized.plot(axs[1, 2], marker_size=8)
+    #
+    # evidence_vertical_shift_lag.plot(axs[0, 3], marker_size=8)
+    # evidence_vertical_shift_lag_normalized.plot(axs[1, 3], marker_size=8)
+    # plt.tight_layout()
+    # plt.show()
+
+    evidence = evidence_vertical_shift_lag_normalized
 
     model = SerializedModel(num_subjects=3,
                             self_dependent=True,
@@ -455,21 +512,21 @@ if __name__ == "__main__":
                             share_params_across_features_observation=False,
                             initial_coordination=None,
                             mode=Mode.BLENDING,
-                            max_lag=0,
-                            num_hidden_layers_f=1,
+                            max_lag=10,
+                            num_hidden_layers_f=0,
                             dim_hidden_layer_f=5,
                             activation_function_name_f="relu")
 
     # model.latent_cpn.lag_cpn.parameters.lag.value = np.array([-4, -2, 2])
 
-    prior_predictive_check(model, evidence)
+    # prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=1000,
-                                                                                                                 num_samples=NUM_SAMPLES,
+                                                                                                                 burn_in=2000,
+                                                                                                                 num_samples=1000,
                                                                                                                  num_chains=NUM_CHAINS,
-                                                                                                                 init_method="advi")
+                                                                                                                 init_method="jitter+adapt_diag")
     # init_method="advi")
-    _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
-    build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag)
+    # _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
+    print(build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag))
     plt.show()

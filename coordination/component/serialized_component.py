@@ -715,13 +715,14 @@ class SerializedComponent:
         if self.lag_cpn is not None:
             # We fix the lag of the first subject, and infer the lags of the other subjects relatively to the first
             # subject
-            lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects-1)
+            # lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects-1)
 
             influencers = subjects[prev_time_diff_subject]
             influencees = subjects
 
             # We add a fixed zero lag to the first subject
-            extended_lag = ptt.concatenate([ptt.zeros(1, dtype=int), lag])
+            # extended_lag = ptt.concatenate([ptt.zeros(1, dtype=int), lag])
+            extended_lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects)
             lag_influencers = extended_lag[influencers]
             lag_influencees = extended_lag[influencees]
 
