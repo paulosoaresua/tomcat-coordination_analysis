@@ -80,7 +80,7 @@ class SyntheticSeriesMixture:
 
     def plot(self, ax: Any, marker_size: int):
         for series in self.values:
-            ax.scatter(self.time_steps_in_coordination_scale, series[0], s=marker_size)
+            ax.plot(self.time_steps_in_coordination_scale, series[0], marker="o")  # s=marker_size)
             ax.set_xlabel("Time Step")
             ax.set_ylabel("Value")
 
@@ -335,12 +335,36 @@ def build_convergence_summary(idata: Any) -> pd.DataFrame:
 
 if __name__ == "__main__":
     SEED = 0
-    BURN_IN = 100
-    NUM_SAMPLES = 100
+    BURN_IN = 1000
+    NUM_SAMPLES = 1000
     NUM_CHAINS = 2
 
     random.seed(SEED)
     np.random.seed(SEED)
+
+    # def entangled_data(xs: np.ndarray):
+    #     f1 = lambda x: np.sin(x)  # lambda x: x ** 3 - x ** 2
+    #     f2 = lambda x: 2 * np.sin(x)
+    #     f3 = lambda x: 3 * np.sin(x)
+    #
+    #     def update(previous_values: np.ndarray, weights: np.ndarray, smoothing_factor: float, delta_self: np.ndarray):
+    #         v1 = weights[0, 0] * previous_values[1] + weights[0, 1] * previous_values[2] + smoothing_factor * \
+    #              delta_self[0]
+    #         v2 = weights[1, 0] * previous_values[0] + weights[1, 1] * previous_values[2] + smoothing_factor * \
+    #              delta_self[1]
+    #         v3 = weights[2, 0] * previous_values[0] + weights[2, 1] * previous_values[1] + smoothing_factor * \
+    #              delta_self[2]
+    #
+    #         return np.array([v1, v2, v3])
+    #
+    #     values = np.zeros((3, len(xs)))
+    #     for i, t in enumerate(xs):
+    #         values[:, i] = [f1(t), f2(t), f3(t)]
+    #         if i > 0:
+    #             delta_self = np.zeros(3) if i == 1 else values[:, i - 1] - values[:, i - 2]
+    #             values[:, i] += update(values[:, i - 1], np.array([[1, 0], [1, 0], [1, 0]]), 0, delta_self)
+    #
+    #     return values
 
     # Vertical shift
     evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.cos,
@@ -387,16 +411,24 @@ if __name__ == "__main__":
     # Lag
     evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                        num_subjects=3,
-                                                                       time_steps=np.linspace(0, 90 * np.pi / 12,
-                                                                                              90).reshape(30, 3).T,
+                                                                       time_steps=np.linspace(0, 120 * np.pi / 12,
+                                                                                              120).reshape(40, 3).T,
+                                                                       # time_steps=np.arange(90).reshape(30, 3).T,
                                                                        noise_scale=None,
                                                                        vertical_offset_per_subject=np.array([0, 1, 2]),
                                                                        horizontal_offset_per_subject=np.array(
-                                                                           [0, np.pi, np.pi / 2]))
+                                                                           [0, np.pi, np.pi/2]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
     evidence = evidence_vertical_shift_lag_normalized
+    # evidence = evidence_vertical_shift_normalized
+
+    fig = plt.figure()
+    evidence_vertical_shift_lag.plot(fig.gca(), marker_size=8)
+    fig = plt.figure()
+    evidence_vertical_shift_lag_normalized.plot(fig.gca(), marker_size=8)
+    plt.show()
 
     model = MixtureModel(num_subjects=3,
                          self_dependent=True,
@@ -404,21 +436,24 @@ if __name__ == "__main__":
                          sd_sd_uc=1,
                          mean_mean_a0=np.zeros(1),
                          sd_mean_a0=np.ones(1),
-                         sd_sd_aa=np.ones(1),
+                         sd_sd_aa=np.ones(1) * 5,
                          a_mixture_weights=np.ones((3, 2)),
-                         sd_sd_o=np.ones(1),
+                         sd_sd_o=np.ones(1) * 5,
                          share_params_across_subjects=True,
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
                          max_lag=5)
 
-    prior_predictive_check(model, evidence)
+    # model.latent_cpn.lag_cpn.parameters.lag.value = np.array([4, 2])
+
+    # prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=BURN_IN,
-                                                                                                                 num_samples=NUM_SAMPLES,
+                                                                                                                 burn_in=1000,
+                                                                                                                 num_samples=500,
                                                                                                                  num_chains=NUM_CHAINS,
                                                                                                                  init_method="advi")
-    _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
-    build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag)
+    # _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
+    print(build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag))
+    plt.show()
