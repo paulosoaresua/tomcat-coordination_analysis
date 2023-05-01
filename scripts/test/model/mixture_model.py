@@ -36,23 +36,40 @@ class SyntheticSeriesMixture:
     def from_function(cls,
                       fn: Callable,
                       num_subjects: int,
-                      time_steps: np.ndarray,  # It must be a matrix with dimensions: num_subjects x time_steps
+                      num_time_steps: int,
+                      time_step_size: float,
+                      spacing: float,
+                      max_lag: int,
                       noise_scale: Optional[float] = None,
                       vertical_offset_per_subject: Optional[np.ndarray] = None,
                       horizontal_offset_per_subject: Optional[np.ndarray] = None) -> SyntheticSeriesMixture:
 
         assert vertical_offset_per_subject is None or len(vertical_offset_per_subject) == num_subjects
         assert horizontal_offset_per_subject is None or len(horizontal_offset_per_subject) == num_subjects
+        assert horizontal_offset_per_subject is None or (horizontal_offset_per_subject <= max_lag).all()
 
-        num_time_steps = time_steps.shape[-1]
+        if horizontal_offset_per_subject is None:
+            horizontal_offset_per_subject = np.zeros(num_subjects, dtype=int)
+
+        extra_time_steps = 2 * max_lag
+
+        values = np.zeros((num_subjects, num_time_steps + extra_time_steps))
+        for t in range(num_time_steps + extra_time_steps):
+            values[:, t] = fn((t - max_lag) * time_step_size) + np.arange(num_subjects) * spacing
+            if t > 0:
+                values[:, t] = np.roll(values[:, t], t % 3)
+
+        # Apply lags
+        for s in range(num_subjects):
+            values[s] = np.roll(values[s], horizontal_offset_per_subject[s])
+
+        # Remove extra time steps
+        values = values[:, max_lag:(values.shape[-1] - max_lag)]
 
         noise = np.random.normal(size=(num_subjects, num_time_steps),
                                  scale=noise_scale) if noise_scale is not None else 0
 
-        if horizontal_offset_per_subject is not None:
-            time_steps += horizontal_offset_per_subject[:, None]
-
-        values = fn(time_steps) + noise
+        values += noise
 
         if vertical_offset_per_subject is not None:
             values += vertical_offset_per_subject[:, None]
@@ -199,6 +216,7 @@ class MixtureModel:
                 subject_dimension="component_subject",
                 feature_dimension="component_feature",
                 time_dimension="component_time",
+                num_time_steps=evidence.num_time_steps_in_component_scale,
                 num_hidden_layers_f=self.num_hidden_layers_f,
                 dim_hidden_layer_f=self.dim_hidden_layer_f,
                 activation_function_name_f=self.activation_function_name_f)[0]
@@ -369,60 +387,36 @@ if __name__ == "__main__":
     # Vertical shift
     evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                    num_subjects=3,
-                                                                   time_steps=np.linspace(0, 90 * np.pi / 12,
-                                                                                          90).reshape(30, 3).T,
+                                                                   num_time_steps=30,
+                                                                   time_step_size=np.pi / 12,
+                                                                   spacing=np.pi / 6,
+                                                                   max_lag=5,
                                                                    noise_scale=None,
                                                                    vertical_offset_per_subject=np.array([0, 1, 2]))
     evidence_vertical_shift_normalized = evidence_vertical_shift.normalize_per_subject(inplace=False)
 
-    # Noise
-    evidence_vertical_shift_noise = SyntheticSeriesMixture.from_function(fn=np.cos,
-                                                                         num_subjects=3,
-                                                                         time_steps=np.linspace(0, 90 * np.pi / 12,
-                                                                                                90).reshape(30, 3).T,
-                                                                         noise_scale=0.5,
-                                                                         vertical_offset_per_subject=np.array(
-                                                                             [0, 1, 2]))
-    evidence_vertical_shift_noise_normalized = evidence_vertical_shift_noise.normalize_per_subject(inplace=False)
-
-    # Anti-Symmetry
-    evidence_vertical_shift_anti_symmetry = SyntheticSeriesMixture.from_function(fn=np.cos,
-                                                                                 num_subjects=3,
-                                                                                 time_steps=np.linspace(0,
-                                                                                                        90 * np.pi / 12,
-                                                                                                        90).reshape(30,
-                                                                                                                    3).T,
-                                                                                 noise_scale=None,
-                                                                                 vertical_offset_per_subject=np.array(
-                                                                                     [0, 1, 2]),
-                                                                                 horizontal_offset_per_subject=np.array(
-                                                                                     [0, np.pi, 0]))
-    evidence_vertical_shift_anti_symmetry_normalized = evidence_vertical_shift_anti_symmetry.normalize_per_subject(
-        inplace=False)
-
-    # Random
-    evidence_random = SyntheticSeriesMixture.from_function(fn=lambda x: np.random.randn(*x.shape),
-                                                           num_subjects=3,
-                                                           time_steps=np.linspace(0, 90 * np.pi / 12, 90).reshape(30,
-                                                                                                                  3).T,
-                                                           noise_scale=None)
-    evidence_random_normalized = evidence_random.normalize_per_subject(inplace=False)
-
     # Lag
     evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                        num_subjects=3,
-                                                                       time_steps=np.linspace(0, 120 * np.pi / 12,
-                                                                                              120).reshape(40, 3).T,
-                                                                       # time_steps=np.arange(90).reshape(30, 3).T,
+                                                                       num_time_steps=30,
+                                                                       time_step_size=np.pi / 12,
+                                                                       spacing=np.pi / 6,
                                                                        noise_scale=None,
+                                                                       max_lag=5,
                                                                        vertical_offset_per_subject=np.array([0, 1, 2]),
                                                                        horizontal_offset_per_subject=np.array(
-                                                                           [0, np.pi, np.pi/2]))
+                                                                           [0, -4, -2]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
     evidence = evidence_vertical_shift_lag_normalized
     # evidence = evidence_vertical_shift_normalized
+
+    fig = plt.figure()
+    evidence_vertical_shift.plot(fig.gca(), marker_size=8)
+    fig = plt.figure()
+    evidence_vertical_shift_normalized.plot(fig.gca(), marker_size=8)
+    plt.show()
 
     fig = plt.figure()
     evidence_vertical_shift_lag.plot(fig.gca(), marker_size=8)
@@ -436,9 +430,9 @@ if __name__ == "__main__":
                          sd_sd_uc=1,
                          mean_mean_a0=np.zeros(1),
                          sd_mean_a0=np.ones(1),
-                         sd_sd_aa=np.ones(1) * 5,
+                         sd_sd_aa=np.ones(1),
                          a_mixture_weights=np.ones((3, 2)),
-                         sd_sd_o=np.ones(1) * 5,
+                         sd_sd_o=np.ones(1),
                          share_params_across_subjects=True,
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,

@@ -439,7 +439,7 @@ class MixtureComponent:
         return ptt.cast(lag_mask, "int32")
 
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
-                          observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
+                          num_time_steps: int, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None,
                           num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
                           dim_hidden_layer_f: int = 0) -> Any:
@@ -471,20 +471,13 @@ class MixtureComponent:
 
         # We fit one lag per pair, so the number of lags is C_s_2, where s is the number of subjects.
         if self.lag_cpn is None:
-            lag_mask = ptt.ones((1, coordination.shape[-1]), dtype=int)
-            prev_time_diff_subject = ptt.arange(coordination.shape[-1])[None, :].repeat(
+            lag_mask = np.ones((1, num_time_steps), dtype=int)
+            prev_time_diff_subject = ptt.arange(num_time_steps)[None, :].repeat(
                 self.num_subjects * (self.num_subjects - 1), axis=0) - 1
         else:
             # We fix a lag zero for the first subject and move the others relative to the fixed one.
-            # lag = pt.printing.Print("Lag")(ptt.concatenate([ptt.zeros(1, dtype=int), self.lag_cpn.update_pymc_model(self.num_subjects - 2), ptt.zeros(1, dtype=int)]))
-            # lag = ptt.concatenate([ptt.zeros(1, dtype=int), self.lag_cpn.update_pymc_model(self.num_subjects - 2),
-            #                        ptt.zeros(1, dtype=int)])
-            lag = ptt.concatenate([ptt.zeros(1, dtype=int), self.lag_cpn.update_pymc_model(self.num_subjects - 1)])
-            # lag = self.lag_cpn.update_pymc_model(self.num_subjects)
-            # lag = self.lag_cpn.update_pymc_model(self.num_subjects)
-            # lag = ptt.constant([0, 4, 2], dtype=int)
-
-            lag_mask = MixtureComponent._create_lag_mask(coordination.shape[-1], lag)
+            # lag = ptt.concatenate([ptt.zeros(1, dtype=int), self.lag_cpn.update_pymc_model(self.num_subjects - 1)])
+            lag = self.lag_cpn.update_pymc_model(self.num_subjects)
 
             # The difference between the influencee and influencer's lags will tell us which time step we need to look
             # at the influencer for each time step in the influencee.
@@ -492,7 +485,9 @@ class MixtureComponent:
             influencee_lag = ptt.repeat(lag, repeats=(self.num_subjects - 1))
             dlag = ptt.cast(influencee_lag - influencer_lag, "int32")
 
-            prev_time_diff_subject = ptt.arange(coordination.shape[-1], dtype=int)[None, :] + dlag[:, None] - 1
+            lag_mask = MixtureComponent._create_lag_mask(num_time_steps, lag)
+
+            prev_time_diff_subject = ptt.arange(num_time_steps, dtype=int)[None, :] + dlag[:, None] - 1
             prev_time_diff_subject *= lag_mask
 
         logp_params = (mean_a0,
@@ -513,49 +508,5 @@ class MixtureComponent:
                                           random=random_fn,
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
-
-        # # D contains the values from other individuals for each individual
-        # obs = ptt.constant(observed_values)
-        # D = ptt.tensordot(expander_aux_mask_matrix, obs, axes=(1, 0))  # s * (s-1) x d x t
-        #
-        # # Fit a function f(.) over the pairs to correct anti-symmetry.
-        # # D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
-        # #                         input_layer_f=input_layer_f,
-        # #                         hidden_layers_f=hidden_layers_f,
-        # #                         output_layer_f=output_layer_f,
-        # #                         activation_function_number_f=activation_function_number_f).reshape(D.shape)
-        #
-        # # Discard last time step because it is not previous to any other time step.
-        # # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
-        # D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
-        #
-        # # Current values from each subject. We extend S and point such that they match the dimensions of D.
-        # point_extended = ptt.repeat(obs[..., 1:], repeats=(self.num_subjects - 1), axis=0)
-        #
-        # if self.self_dependent:
-        #     # Previous values from every subject
-        #     P = obs[..., :-1]  # s x d x t-1
-        #
-        #     # Previous values from the same subjects
-        #     # S_extended = pt.printing.Print("S")(ptt.repeat(P, repeats=(num_subjects - 1), axis=0))
-        #     S_extended = ptt.repeat(P, repeats=(self.num_subjects - 1), axis=0)
-        # else:
-        #     # Fixed value given by the initial mean for each subject. No self-dependency.
-        #     S_extended = ptt.repeat(mean_a0[:, :, None], repeats=(self.num_subjects - 1), axis=0)
-        #
-        # print(D[:, 0, :].eval())
-        # print(S_extended[:, 0, :].eval())
-        # print(point_extended[:, 0, :].eval())
-        # print(lag_mask[:, 0, :].eval())
-        # print(dlag.eval())
-        # print(prev_time_diff_subject.eval())
-
-        # sample = pm.draw(mixture_component, 1)
-        # sample = np.vstack([
-        #     np.arange(0, 90, 3),
-        #     np.arange(90, 180, 3) + 3 * 4,
-        #     np.arange(180, 270, 3) + 3 * 2
-        # ])
-        # pm.logp(mixture_component, sample[:, None, :])
 
         return mixture_component, mean_a0, sd_aa, mixture_weights
