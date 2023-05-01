@@ -31,7 +31,9 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        share_params_across_features_latent: int, share_params_across_features_observation: int,
                        vocalic_mode: str, sd_uc: str, mean_a0_brain: str, sd_aa_brain: str, sd_o_brain: str,
                        mean_a0_body: str, sd_aa_body: str, sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str,
-                       sd_aa_vocalic: str, sd_o_vocalic: str, p_semantic_link: str):
+                       sd_aa_vocalic: str, sd_o_vocalic: str, p_semantic_link: str, num_hidden_layers_f: int,
+                       dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
+                       sd_weights_f: float, max_lag: int):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -85,7 +87,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--do_prior={do_prior} ' \
                                      f'--do_posterior={do_posterior} ' \
                                      f'{initial_coordination_arg} ' \
-                                     f'{sd_uc_arg} '\
+                                     f'{sd_uc_arg} ' \
                                      f'{mean_a0_brain_arg} ' \
                                      f'{sd_aa_brain_arg} ' \
                                      f'{mixture_weights_arg} ' \
@@ -95,7 +97,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'{sd_o_body_arg} ' \
                                      f'{mean_a0_vocalic_arg} ' \
                                      f'{sd_aa_vocalic_arg} ' \
-                                     f'{sd_o_vocalic_arg} '\
+                                     f'{sd_o_vocalic_arg} ' \
                                      f'{p_semantic_link_arg} ' \
                                      f'--num_subjects={num_subjects} ' \
                                      f'--brain_channels="{brain_channels}" ' \
@@ -121,7 +123,13 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--share_params_across_genders={share_params_across_genders} ' \
                                      f'--share_params_across_features_latent={share_params_across_features_latent} ' \
                                      f'--share_params_across_features_observation={share_params_across_features_observation} ' \
-                                     f'--vocalic_mode={vocalic_mode}'
+                                     f'--vocalic_mode={vocalic_mode} ' \
+                                     f'--num_hidden_layers_f={num_hidden_layers_f} ' \
+                                     f'--dim_hidden_layer_f={dim_hidden_layer_f} ' \
+                                     f'--activation_function_name_f="{activation_function_name_f}" ' \
+                                     f'--mean_weights_f={mean_weights_f} ' \
+                                     f'--sd_weights_f={sd_weights_f} ' \
+                                     f'--max_lag={max_lag}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
@@ -267,6 +275,18 @@ if __name__ == "__main__":
                              "depending on how parameters are shared.")
     parser.add_argument("--p_semantic_link", type=str, required=False, default="",
                         help="Fixed value for p_semantic_link.")
+    parser.add_argument("--num_hidden_layers_f", type=int, required=False, default=0,
+                        help="Number of hidden layers in function f(.) if f is to be fitted.")
+    parser.add_argument("--dim_hidden_layer_f", type=int, required=False, default=0,
+                        help="Number of units in the hidden layers of f(.) if f is to be fitted.")
+    parser.add_argument("--activation_function_name_f", type=str, required=False, default="linear",
+                        help="Activation function for f(.) if f is to be fitted.")
+    parser.add_argument("--mean_weights_f", type=float, required=False, default=0,
+                        help="Mean of the weights (prior)for fitting f(.).")
+    parser.add_argument("--sd_weights_f", type=float, required=False, default=1,
+                        help="Standard deviation of the weights (prior) for fitting f(.).")
+    parser.add_argument("--max_lag", type=float, required=False, default=1,
+                        help="Maximum lag to the vocalic component if lags are to be fitted.")
 
     args = parser.parse_args()
 
@@ -319,4 +339,10 @@ if __name__ == "__main__":
                        mean_a0_vocalic=args.mean_a0_vocalic,
                        sd_aa_vocalic=args.sd_aa_vocalic,
                        sd_o_vocalic=args.sd_o_vocalic,
-                       p_semantic_link=args.p_semantic_link)
+                       p_semantic_link=args.p_semantic_link,
+                       num_hidden_layers_f=args.num_hidden_layers_f,
+                       dim_hidden_layer_f=args.dim_hidden_layer_f,
+                       activation_function_name_f=args.activation_function_name_f,
+                       mean_weights_f=args.mean_weights_f,
+                       sd_weights_f=args.sd_weights_f,
+                       max_lag=args.max_lag)
