@@ -341,25 +341,14 @@ class VocalicModel:
         return self.obs_vocalic_cpn.uuid
 
     def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
-                     can_repeat_subject: bool, seed: Optional[int] = None,
-                     apply_g: bool = False) -> VocalicSamples:
+                     can_repeat_subject: bool, seed: Optional[int] = None) -> VocalicSamples:
         coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
         latent_vocalic_samples = self.latent_vocalic_cpn.draw_samples(num_series=num_series,
                                                                       time_scale_density=vocalic_time_scale_density,
                                                                       coordination=coordination_samples.coordination,
                                                                       can_repeat_subject=can_repeat_subject)
 
-        obs_input = latent_vocalic_samples.values
-        if apply_g and self.g_nn is not None:
-            obs_input = []
-            for X in latent_vocalic_samples.values:
-                # features + OHE subject + time step
-                extended_X = np.concatenate([X, one_hot_encode(latent_vocalic_samples.subjects, self.num_subjects),
-                                             latent_vocalic_samples.time_steps_in_coordination_scale])
-                # Transpose to pass time ain dimension 0 to the NN and transpose the predictions back
-                obs_input.append(self.g_nn.predict(extended_X.T).T)
-
-        obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=obs_input,
+        obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
                                                                 subjects=latent_vocalic_samples.subjects,
                                                                 gender_map=latent_vocalic_samples.gender_map)
 
@@ -369,12 +358,13 @@ class VocalicModel:
         return samples
 
     def fit(self, evidence: VocalicSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
+            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
+        pm.Model, az.InferenceData]:
         assert evidence.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
 
         return pymc_model, idata

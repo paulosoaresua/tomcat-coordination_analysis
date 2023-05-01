@@ -53,7 +53,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               mean_a0_vocalic: Optional[np.ndarray], sd_aa_vocalic: Optional[np.ndarray],
               sd_o_vocalic: Optional[np.ndarray], p_semantic_link: Optional[np.ndarray], num_hidden_layers_f: int,
               dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
-              sd_weights_f: float, max_lag: int):
+              sd_weights_f: float, max_lag: int, nuts_init_method: str):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -309,7 +309,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                            num_samples=num_samples,
                                            num_chains=num_chains,
                                            seed=seed,
-                                           num_jobs=num_inference_jobs)
+                                           num_jobs=num_inference_jobs,
+                                           init_method=nuts_init_method)
 
             if idata is None:
                 idata = idata_posterior
@@ -739,6 +740,8 @@ if __name__ == "__main__":
                         help="Standard deviation of the weights (prior) for fitting f(.).")
     parser.add_argument("--max_lag", type=float, required=False, default=0,
                         help="Maximum lag to the vocalic component if lags are to be fitted.")
+    parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
+                        help="NUTS initialization method.")
 
     args = parser.parse_args()
 
@@ -933,4 +936,5 @@ if __name__ == "__main__":
               activation_function_name_f=args.activation_function_name_f,
               mean_weights_f=args.mean_weights_f,
               sd_weights_f=args.sd_weights_f,
-              max_lag=args.max_lag)
+              max_lag=args.max_lag,
+              nuts_init_method=args.nuts_init_method)

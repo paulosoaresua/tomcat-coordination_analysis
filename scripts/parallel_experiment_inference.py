@@ -33,7 +33,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        mean_a0_body: str, sd_aa_body: str, sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str,
                        sd_aa_vocalic: str, sd_o_vocalic: str, p_semantic_link: str, num_hidden_layers_f: int,
                        dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
-                       sd_weights_f: float, max_lag: int):
+                       sd_weights_f: float, max_lag: int, nuts_init_method: str):
     # Parameters passed to this function relevant for post-analysis.
     execution_params = locals().copy()
     del execution_params["out_dir"]
@@ -129,7 +129,8 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--activation_function_name_f="{activation_function_name_f}" ' \
                                      f'--mean_weights_f={mean_weights_f} ' \
                                      f'--sd_weights_f={sd_weights_f} ' \
-                                     f'--max_lag={max_lag}'
+                                     f'--max_lag={max_lag} ' \
+                                     f'--nuts_init_method{nuts_init_method}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
@@ -287,6 +288,8 @@ if __name__ == "__main__":
                         help="Standard deviation of the weights (prior) for fitting f(.).")
     parser.add_argument("--max_lag", type=float, required=False, default=1,
                         help="Maximum lag to the vocalic component if lags are to be fitted.")
+    parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
+                        help="NUTS initialization method.")
 
     args = parser.parse_args()
 
@@ -345,4 +348,5 @@ if __name__ == "__main__":
                        activation_function_name_f=args.activation_function_name_f,
                        mean_weights_f=args.mean_weights_f,
                        sd_weights_f=args.sd_weights_f,
-                       max_lag=args.max_lag)
+                       max_lag=args.max_lag,
+                       nuts_init_method=args.nuts_init_method)
