@@ -41,16 +41,16 @@ def mixture_logp(mixture_component: Any,
     # D contains the values from other individuals for each individual
     D = ptt.tensordot(expander_aux_mask_matrix, mixture_component, axes=(1, 0))  # s * (s-1) x d x t
 
+    # Discard last time step because it is not previous to any other time step.
+    # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
+    D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
+
     # Fit a function f(.) over the pairs to correct anti-symmetry.
     D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
                             input_layer_f=input_layer_f,
                             hidden_layers_f=hidden_layers_f,
                             output_layer_f=output_layer_f,
                             activation_function_number_f=activation_function_number_f).reshape(D.shape)
-
-    # Discard last time step because it is not previous to any other time step.
-    # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
-    D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
 
     # Current values from each subject. We extend S and point such that they match the dimensions of D.
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
@@ -85,14 +85,14 @@ def mixture_random(initial_mean: np.ndarray,
                    sigma: np.ndarray,
                    mixture_weights: np.ndarray,
                    coordination: np.ndarray,
-                   lag: np.ndarray,
                    input_layer_f: np.ndarray,
                    hidden_layers_f: np.ndarray,
                    output_layer_f: np.ndarray,
                    activation_function_number_f: int,
                    expander_aux_mask_matrix: np.ndarray,
                    aggregation_aux_mask_matrix: np.ndarray,
-                   coordination_mask: np.ndarray,
+                   prev_time_diff_subject: Any,
+                   prev_diff_subject_mask: Any,
                    self_dependent: bool,
                    num_subjects: int,
                    dim_value: int,
