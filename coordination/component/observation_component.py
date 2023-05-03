@@ -26,19 +26,24 @@ class ObservationComponentSamples:
 class ObservationComponent:
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray,
-                 share_params_across_subjects: bool, share_params_across_features: bool):
+                 share_sd_o_across_subjects: bool, share_sd_o_across_features: bool):
 
-        dim = 1 if share_params_across_features else dim_value
-        if share_params_across_subjects:
-            assert (dim,) == sd_sd_o.shape
+        # Check dimensionality of the parameters priors
+        if share_sd_o_across_features:
+            dim_sd_o_features = 1
         else:
-            assert (num_subjects, dim) == sd_sd_o.shape
+            dim_sd_o_features = dim_value
+
+        if share_sd_o_across_subjects:
+            assert (dim_sd_o_features,) == sd_sd_o.shape
+        else:
+            assert (num_subjects, dim_sd_o_features) == sd_sd_o.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
-        self.share_params_across_subjects = share_params_across_subjects
-        self.share_params_across_features = share_params_across_features
+        self.share_sd_o_across_subjects = share_sd_o_across_subjects
+        self.share_sd_o_across_features = share_sd_o_across_features
 
         self.parameters = ObservationComponentParameters(sd_sd_o)
 
@@ -53,47 +58,69 @@ class ObservationComponent:
         return f"sd_o_{self.uuid}"
 
     def draw_samples(self, latent_component: np.ndarray, seed: Optional[int] = None) -> ObservationComponentSamples:
-        dim = 1 if self.share_params_across_features else self.dim_value
-        if self.share_params_across_subjects:
-            assert (dim,) == self.parameters.sd_o.value.shape
+        # Check dimensionality of the parameters
+        if self.share_sd_o_across_features:
+            dim_sd_o_features = 1
         else:
-            assert (self.num_subjects, dim) == self.parameters.sd_o.value.shape
+            dim_sd_o_features = self.dim_value
+
+        if self.share_sd_o_across_subjects:
+            assert (dim_sd_o_features,) == self.parameters.sd_o.value.shape
+        else:
+            assert (self.num_subjects, dim_sd_o_features) == self.parameters.sd_o.value.shape
 
         set_random_seed(seed)
 
         samples = ObservationComponentSamples()
 
-        # Dimension: (samples, subjects, features, time)
-        if self.share_params_across_subjects:
-            # Broadcasted across samples, subjects and time
+        # Dimension: (sample, subject, feature, time)
+        if self.share_sd_o_across_subjects:
+            # Broadcast across samples, subjects and time
             sd = self.parameters.sd_o.value[None, None, :, None]
         else:
-            # Broadcasted across samples and time
+            # Broadcast across samples and time
             sd = self.parameters.sd_o.value[None, :, :, None]
 
         samples.values = norm(loc=latent_component, scale=sd).rvs(size=latent_component.shape)
 
         return samples
 
-    def update_pymc_model(self, latent_component: Any, subject_dimension: str, feature_dimension: str,
-                          time_dimension: str, observed_values: Any) -> Any:
-        dim = 1 if self.share_params_across_features else self.dim_value
-        if self.share_params_across_subjects:
-            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                                 size=dim, observed=self.parameters.sd_o.value)
+    def _create_random_parameters(self, sd_o: Optional[Any] = None):
+        """
+        This function creates the standard deviation of the observation component distribution as a random variable.
+        """
 
-            # Broadcasted across subject and time
-            sd = sd_o[None, :, None]
+        # Adjust feature dimensionality according to sharing options
+        if self.share_sd_o_across_features:
+            dim_sd_o_features = 1
         else:
-            sd_o = pm.HalfNormal(name=self.sd_o_name, sigma=self.parameters.sd_o.prior.sd,
-                                 size=(self.num_subjects, dim), observed=self.parameters.sd_o.value)
+            dim_sd_o_features = self.dim_value
 
-            # Broadcasted across time
-            sd = sd_o[:, :, None]
+        # Initialize sd_o parameter if it hasn't been defined previously
+        if sd_o is None:
+            if self.share_sd_o_across_subjects:
+                sd_o = pm.HalfNormal(name=self.sd_o_name,
+                                     sigma=self.parameters.sd_o.prior.sd,
+                                     size=dim_sd_o_features,
+                                     observed=self.parameters.sd_o.value)
+                sd_o = sd_o[None, :, None]  # subject x feature x time (broadcast across subject and time)
+            else:
+                sd_o = pm.HalfNormal(name=self.sd_o_name,
+                                     sigma=self.parameters.sd_o.prior.sd,
+                                     size=(self.num_subjects, dim_sd_o_features),
+                                     observed=self.parameters.sd_o.value)
+                sd_o = sd_o[:, :, None]  # subject x feature x time (broadcast across time)
+
+        return sd_o
+
+    def update_pymc_model(self, latent_component: Any, subject_dimension: str, feature_dimension: str,
+                          time_dimension: str, observed_values: Any, sd_o: Optional[Any] = None) -> Any:
+
+        sd_o = self._create_random_parameters(sd_o)
 
         observation_component = pm.Normal(name=self.uuid,
                                           mu=latent_component,
-                                          sigma=sd,
+                                          sigma=sd_o,
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
 
@@ -202,9 +229,8 @@ class SerializedObservationComponent:
 
         return sd_o
 
-    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, gender_map: Dict[int, int],
-                          feature_dimension: str, time_dimension: str, observed_values: Any,
-                          sd_o: Optional[Any] = None) -> Any:
+    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
+                          time_dimension: str, observed_values: Any, sd_o: Optional[Any] = None) -> Any:
 
         sd_o = self._create_random_parameters(subjects=subjects, sd_o=sd_o)
 

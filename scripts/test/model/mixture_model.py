@@ -156,6 +156,8 @@ class MixtureModel:
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool,
                  share_sd_aa_across_features: bool,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None,
                  num_hidden_layers_f: int = 0,
                  dim_hidden_layer_f: int = 0,
@@ -203,8 +205,8 @@ class MixtureModel:
                                                     num_subjects=num_subjects,
                                                     dim_value=1,
                                                     sd_sd_o=sd_sd_o,
-                                                    share_params_across_subjects=True,
-                                                    share_params_across_features=False)
+                                                    share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                    share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -519,8 +521,10 @@ if __name__ == "__main__":
                          share_mean_a0_across_features=False,
                          share_sd_aa_across_subjects=True,
                          share_sd_aa_across_features=False,
+                         share_sd_o_across_subjects=True,
+                         share_sd_o_across_features=False,
                          initial_coordination=None,
-                         num_hidden_layers_f=1,
+                         num_hidden_layers_f=0,
                          dim_hidden_layer_f=6,
                          activation_function_name_f="linear",
                          max_lag=0)
