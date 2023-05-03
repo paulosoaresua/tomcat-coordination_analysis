@@ -74,9 +74,9 @@ def mixture_logp(mixture_component: Any,
 
     sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
 
-    pdf = pm.math.exp(pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended))
-    # Compute dot product along the second dimension of pdf
-    total_logp += pm.math.log(ptt.tensordot(aggregation_aux_mask_matrix, pdf, axes=(1, 0))).sum()
+    logp_extended = pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended)
+    logp_tmp = logp_extended.reshape((num_subjects, num_subjects - 1, num_features, logp_extended.shape[-1]))
+    total_logp += pm.math.logsumexp(logp_tmp + pm.math.log(mixture_weights[:, :, None, None]), axis=1).sum()
 
     return total_logp
 
@@ -217,7 +217,10 @@ class MixtureComponent:
         names = [
             self.mean_a0_name,
             self.sd_aa_name,
-            self.mixture_weights_name
+            self.mixture_weights_name,
+            f"{self.f_nn_weights_name}_in",
+            f"{self.f_nn_weights_name}_hidden",
+            f"{self.f_nn_weights_name}_out"
         ]
         if self.lag_cpn is not None:
             names.append(self.lag_cpn.uuid)

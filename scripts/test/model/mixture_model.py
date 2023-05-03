@@ -62,7 +62,7 @@ class SyntheticSeriesMixture:
         for t in range(num_time_steps + extra_time_steps):
             values[:, t] = fn((t - max_lag) * time_step_size) + np.arange(num_subjects) * spacing
             if t > 0:
-                values[:, t] = np.roll(values[:, t], t % 3)
+                values[:, t] = np.roll(values[:, t], t % num_subjects)
 
         # Apply lags
         for s in range(num_subjects):
@@ -83,6 +83,34 @@ class SyntheticSeriesMixture:
         for s in range(num_subjects):
             if flip[s]:
                 values[s, :] *= -1
+
+        return cls(values=values[:, None, :],  # Subject x feature x time
+                   num_time_steps_in_coordination_scale=num_time_steps,
+                   time_steps_in_coordination_scale=np.arange(num_time_steps))
+
+    @classmethod
+    def from_function2(cls,
+                       fn: Callable,
+                       num_subjects: int,
+                       time_steps: np.ndarray,  # It must be a matrix with dimensions: num_subjects x time_steps
+                       noise_scale: Optional[float] = None,
+                       vertical_offset_per_subject: Optional[np.ndarray] = None,
+                       horizontal_offset_per_subject: Optional[np.ndarray] = None) -> SyntheticSeriesMixture:
+
+        assert vertical_offset_per_subject is None or len(vertical_offset_per_subject) == num_subjects
+        assert horizontal_offset_per_subject is None or len(horizontal_offset_per_subject) == num_subjects
+
+        num_time_steps = time_steps.shape[-1]
+
+        noise = np.random.normal(size=num_time_steps, scale=noise_scale)[None, :] if noise_scale is not None else 0
+
+        if horizontal_offset_per_subject is not None:
+            time_steps += horizontal_offset_per_subject[:, None]
+
+        values = fn(time_steps) + noise
+
+        if vertical_offset_per_subject is not None:
+            values += vertical_offset_per_subject[:, None]
 
         return cls(values=values[:, None, :],  # Subject x feature x time
                    num_time_steps_in_coordination_scale=num_time_steps,
@@ -371,9 +399,9 @@ if __name__ == "__main__":
     np.random.seed(SEED)
 
     # Vertical shift
-    evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.sin,
+    evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.sin,  # Replace with cos
                                                                    num_subjects=3,
-                                                                   num_time_steps=50,
+                                                                   num_time_steps=50,  # Set to 30
                                                                    time_step_size=np.pi / 12,
                                                                    noise_scale=None,
                                                                    spacing=np.pi / 6,
@@ -394,12 +422,12 @@ if __name__ == "__main__":
     evidence_vertical_shift_noise_normalized = evidence_vertical_shift_noise.normalize_per_subject(inplace=False)
 
     # Anti-Symmetry
-    evidence_vertical_shift_anti_symmetry = SyntheticSeriesMixture.from_function(fn=np.sin,
+    evidence_vertical_shift_anti_symmetry = SyntheticSeriesMixture.from_function(fn=np.cos,
                                                                                  num_subjects=3,
-                                                                                 num_time_steps=50,
+                                                                                 num_time_steps=30,
                                                                                  time_step_size=np.pi / 12,
                                                                                  noise_scale=None,
-                                                                                 spacing=np.pi / 6,
+                                                                                 spacing=np.pi / 12,
                                                                                  max_lag=5,
                                                                                  flip=[False, True, False],
                                                                                  vertical_offset_per_subject=np.array(
@@ -420,6 +448,20 @@ if __name__ == "__main__":
                                                                        horizontal_offset_per_subject=np.array(
                                                                            [0, -4, -2]))
     evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
+
+    evidence_vertical_shift_anti_symmetry2 = SyntheticSeriesMixture.from_function2(fn=np.cos,
+                                                                                   num_subjects=3,
+                                                                                   time_steps=np.linspace(0, 9 * np.pi,
+                                                                                                          90).reshape(
+                                                                                       30,
+                                                                                       3).T,
+                                                                                   noise_scale=None,
+                                                                                   vertical_offset_per_subject=np.array(
+                                                                                       [0, 1, 2]),
+                                                                                   horizontal_offset_per_subject=np.array(
+                                                                                       [0, np.pi, 0]))
+    evidence_vertical_shift_anti_symmetry_normalized2 = evidence_vertical_shift_anti_symmetry2.normalize_per_subject(
+        inplace=False)
     #
     # # Vertical shift
     # evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.cos,
@@ -449,11 +491,11 @@ if __name__ == "__main__":
     evidence = evidence_vertical_shift_anti_symmetry_normalized
     # evidence = evidence_vertical_shift_normalized
 
-    # fig = plt.figure()
-    # evidence_vertical_shift.plot(fig.gca(), marker_size=8)
-    # fig = plt.figure()
-    # evidence_vertical_shift_normalized.plot(fig.gca(), marker_size=8)
-    # plt.show()
+    fig = plt.figure()
+    evidence_vertical_shift_anti_symmetry.plot(fig.gca(), marker_size=8)
+    fig = plt.figure()
+    evidence_vertical_shift_anti_symmetry_normalized.plot(fig.gca(), marker_size=8)
+    plt.show()
     #
     # fig = plt.figure()
     # evidence_vertical_shift_lag.plot(fig.gca(), marker_size=8)
@@ -465,26 +507,25 @@ if __name__ == "__main__":
                          self_dependent=True,
                          sd_mean_uc0=5,
                          sd_sd_uc=1,
-                         mean_mean_a0=np.zeros(1),
-                         sd_mean_a0=np.ones(1),
-                         sd_sd_aa=np.ones(1),
+                         mean_mean_a0=np.zeros((3, 1)),
+                         sd_mean_a0=np.ones((3, 1)),
+                         sd_sd_aa=np.ones((3, 1)),
                          a_mixture_weights=np.ones((3, 2)),
-                         sd_sd_o=np.ones(1),
-                         share_params_across_subjects=True,
+                         sd_sd_o=np.ones((3, 1)),
+                         share_params_across_subjects=False,
                          share_params_across_features_latent=False,
                          share_params_across_features_observation=False,
                          initial_coordination=None,
                          num_hidden_layers_f=1,
                          dim_hidden_layer_f=6,
-                         activation_function_name_f="linear",
+                         activation_function_name_f="relu",
                          max_lag=0)
 
-    # model.latent_cpn.lag_cpn.parameters.lag.value = np.array([4, 2])
     # model.latent_cpn.parameters.weights_f.value = [
     #     np.array([[-1, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0], [0, 0, -1, 0, 0, 0], [0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 1, 0],
     #               [0, 0, 0, 0, 0, -1], [0, 0, 0, 0, 0, 0]]),
     #     np.array([[[1, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 1, 0],
-    #               [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0]]]),
+    #                [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0]]]),
     #     np.array([[1, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 1, 0],
     #               [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0]]),
     # ]
@@ -492,8 +533,8 @@ if __name__ == "__main__":
     # prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=200,
-                                                                                                                 num_samples=200,
+                                                                                                                 burn_in=2000,
+                                                                                                                 num_samples=1000,
                                                                                                                  num_chains=NUM_CHAINS,
                                                                                                                  init_method="jitter+adapt_diag")
     # _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)

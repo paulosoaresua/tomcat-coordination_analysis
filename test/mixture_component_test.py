@@ -30,7 +30,7 @@ class TestMixtureComponent(unittest.TestCase):
         expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
         aggregator_aux_mask_matrix = ptt.concatenate(aggregator_aux_mask_matrix, axis=1)
 
-        # We add a bias of 1 in the first layer. The hidden and output layers do nothing.
+        # We add a bias of 0 in the first layer. The hidden and output layers do nothing.
         input_layer_f = ptt.constant(
             np.vstack([
                 np.eye(3 * (3 - 1) * 2),  # s * (s-1) * d
@@ -63,7 +63,6 @@ class TestMixtureComponent(unittest.TestCase):
                                       sigma=sigma,
                                       mixture_weights=mixture_weights,
                                       coordination=coordination,
-                                      lag=ptt.zeros(6),
                                       input_layer_f=input_layer_f,
                                       hidden_layers_f=hidden_layers_f,
                                       output_layer_f=output_layer_f,
@@ -71,7 +70,8 @@ class TestMixtureComponent(unittest.TestCase):
                                       expander_aux_mask_matrix=ptt.constant(
                                           expander_aux_mask_matrix),
                                       aggregation_aux_mask_matrix=aggregator_aux_mask_matrix,
-                                      coordination_mask=ptt.ones((1, 1, 2)),
+                                      prev_time_diff_subject=ptt.repeat((ptt.arange(2) - 1)[None, :], 6, axis=0),
+                                      prev_diff_subject_mask=ptt.constant(np.array([[0, 1]]).repeat(6, axis=0)),
                                       self_dependent=ptt.constant(np.array(True)))
         real_logp = -5.081544319609303e+02
 
@@ -131,7 +131,6 @@ class TestMixtureComponent(unittest.TestCase):
                                       sigma=sigma,
                                       mixture_weights=mixture_weights,
                                       coordination=coordination,
-                                      lag=ptt.zeros(6),
                                       input_layer_f=input_layer_f,
                                       hidden_layers_f=hidden_layers_f,
                                       output_layer_f=output_layer_f,
@@ -139,7 +138,8 @@ class TestMixtureComponent(unittest.TestCase):
                                       expander_aux_mask_matrix=ptt.constant(
                                           expander_aux_mask_matrix),
                                       aggregation_aux_mask_matrix=aggregator_aux_mask_matrix,
-                                      coordination_mask=ptt.ones((1, 1, 2)),
+                                      prev_time_diff_subject=ptt.repeat((ptt.arange(2) - 1)[None, :], 6, axis=0),
+                                      prev_diff_subject_mask=ptt.constant(np.array([[0, 1]]).repeat(6, axis=0)),
                                       self_dependent=ptt.constant(np.array(False)))
         real_logp = -4.257365244151745e+02
 
