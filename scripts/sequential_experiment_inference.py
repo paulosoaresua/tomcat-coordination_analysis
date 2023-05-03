@@ -51,7 +51,9 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
               sd_aa_brain: Optional[np.ndarray], sd_o_brain: Optional[np.ndarray], mean_a0_body: Optional[np.ndarray],
               sd_aa_body: Optional[np.ndarray], sd_o_body: Optional[np.ndarray], mixture_weights: Optional[np.ndarray],
               mean_a0_vocalic: Optional[np.ndarray], sd_aa_vocalic: Optional[np.ndarray],
-              sd_o_vocalic: Optional[np.ndarray], p_semantic_link: Optional[np.ndarray]):
+              sd_o_vocalic: Optional[np.ndarray], p_semantic_link: Optional[np.ndarray], num_hidden_layers_f: int,
+              dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
+              sd_weights_f: float, max_lag: int, nuts_init_method: str):
     if not do_prior and not do_posterior:
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
@@ -249,7 +251,12 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                  share_params_across_genders=share_params_across_genders,
                                  share_params_across_features_latent=share_params_across_features_latent,
                                  share_params_across_features_observation=share_params_across_features_observation,
-                                 mode=vocalic_mode)
+                                 mode=vocalic_mode,
+                                 num_hidden_layers_f=num_hidden_layers_f,
+                                 dim_hidden_layer_f=dim_hidden_layer_f,
+                                 activation_function_name_f=activation_function_name_f, mean_weights_f=mean_weights_f,
+                                 sd_weights_f=sd_weights_f,
+                                 max_vocalic_lag=max_lag)
 
             model.coordination_cpn.parameters.sd_uc.value = sd_uc
             model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
@@ -302,7 +309,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
                                            num_samples=num_samples,
                                            num_chains=num_chains,
                                            seed=seed,
-                                           num_jobs=num_inference_jobs)
+                                           num_jobs=num_inference_jobs,
+                                           init_method=nuts_init_method)
 
             if idata is None:
                 idata = idata_posterior
@@ -320,6 +328,7 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
 
             save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
             save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
+            save_convergence_summary(f"{results_dir}", idata)
             save_predictive_posterior_plots(f"{results_dir}/plots/predictive_posterior", idata, evidence, model)
 
         # Save inference data
@@ -490,6 +499,28 @@ def save_coordination_plots(out_dir: str, idata: az.InferenceData, evidence: Any
     plt.ylabel(f"Coordination")
 
     fig.savefig(f"{out_dir}/coordination.png", format='png', bbox_inches='tight')
+
+
+def save_convergence_summary(out_dir: str, idata: az.InferenceData):
+    os.makedirs(out_dir, exist_ok=True)
+
+    header = [
+        "variable",
+        "mean_rhat",
+        "std_rhat"
+    ]
+
+    rhat = az.rhat(idata)
+    data = []
+    for var, values in rhat.data_vars.items():
+        entry = [
+            var,
+            values.to_numpy().mean(),
+            values.to_numpy().std()
+        ]
+        data.append(entry)
+
+    pd.DataFrame(data, columns=header).to_csv(f"{out_dir}/convergence_summary.csv")
 
 
 def save_parameters_plot(out_dir: str, idata: az.InferenceData, model: Any):
@@ -697,6 +728,20 @@ if __name__ == "__main__":
                              "depending on how parameters are shared.")
     parser.add_argument("--p_semantic_link", type=float, required=False,
                         help="Fixed value for p_semantic_link.")
+    parser.add_argument("--num_hidden_layers_f", type=int, required=False, default=0,
+                        help="Number of hidden layers in function f(.) if f is to be fitted.")
+    parser.add_argument("--dim_hidden_layer_f", type=int, required=False, default=0,
+                        help="Number of units in the hidden layers of f(.) if f is to be fitted.")
+    parser.add_argument("--activation_function_name_f", type=str, required=False, default="linear",
+                        help="Activation function for f(.) if f is to be fitted.")
+    parser.add_argument("--mean_weights_f", type=float, required=False, default=0,
+                        help="Mean of the weights (prior)for fitting f(.).")
+    parser.add_argument("--sd_weights_f", type=float, required=False, default=1,
+                        help="Standard deviation of the weights (prior) for fitting f(.).")
+    parser.add_argument("--max_lag", type=float, required=False, default=0,
+                        help="Maximum lag to the vocalic component if lags are to be fitted.")
+    parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
+                        help="NUTS initialization method.")
 
     args = parser.parse_args()
 
@@ -885,4 +930,11 @@ if __name__ == "__main__":
               mean_a0_vocalic=arg_mean_a0_vocalic,
               sd_aa_vocalic=arg_sd_aa_vocalic,
               sd_o_vocalic=arg_sd_o_vocalic,
-              p_semantic_link=arg_p_semantic_link)
+              p_semantic_link=arg_p_semantic_link,
+              num_hidden_layers_f=args.num_hidden_layers_f,
+              dim_hidden_layer_f=args.dim_hidden_layer_f,
+              activation_function_name_f=args.activation_function_name_f,
+              mean_weights_f=args.mean_weights_f,
+              sd_weights_f=args.sd_weights_f,
+              max_lag=args.max_lag,
+              nuts_init_method=args.nuts_init_method)

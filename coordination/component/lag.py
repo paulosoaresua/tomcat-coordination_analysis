@@ -27,6 +27,7 @@ class Lag:
 
     def __init__(self, uuid: str, max_lag: int):
         self.uuid = uuid
+        self.max_lag = max_lag
 
         self.parameters = LagParameters(max_lag=max_lag)
 

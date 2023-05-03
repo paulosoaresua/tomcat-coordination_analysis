@@ -4,6 +4,7 @@ from datetime import datetime
 import random
 
 import numpy as np
+import pytensor.tensor as ptt
 
 
 def json_serial(obj):
@@ -39,8 +40,12 @@ def sigmoid(x: Union[np.ndarray, float]) -> Union[np.ndarray, float, Any]:
     return np.exp(x) / (1 + np.exp(x))
 
 
-def one_hot_encode(x: np.array, num_categories: int):
-    b = np.zeros((num_categories, x.size))
-    b[x, np.arange(x.size)] = 1
+def one_hot_encode(x: Any, num_categories: int):
+    if isinstance(x, np.ndarray):
+        b = np.zeros((num_categories, x.size))
+        b[x, np.arange(x.size)] = 1
+    else:
+        b = ptt.zeros((num_categories, x.size))
+        b[x, ptt.arange(x.shape[0])] = 1
 
     return b
