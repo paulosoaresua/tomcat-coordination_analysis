@@ -533,8 +533,8 @@ if __name__ == "__main__":
     # prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=2000,
-                                                                                                                 num_samples=1000,
+                                                                                                                 burn_in=200,
+                                                                                                                 num_samples=200,
                                                                                                                  num_chains=NUM_CHAINS,
                                                                                                                  init_method="jitter+adapt_diag")
     # _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)

@@ -27,7 +27,6 @@ def mixture_logp(mixture_component: Any,
                  output_layer_f: Any,
                  activation_function_number_f: ptt.TensorConstant,
                  expander_aux_mask_matrix: ptt.TensorConstant,
-                 aggregation_aux_mask_matrix: ptt.TensorVariable,
                  prev_time_diff_subject: Any,
                  prev_diff_subject_mask: Any,
                  self_dependent: ptt.TensorConstant):
@@ -90,7 +89,6 @@ def mixture_random(initial_mean: np.ndarray,
                    output_layer_f: np.ndarray,
                    activation_function_number_f: int,
                    expander_aux_mask_matrix: np.ndarray,
-                   aggregation_aux_mask_matrix: np.ndarray,
                    prev_time_diff_subject: Any,
                    prev_diff_subject_mask: Any,
                    self_dependent: bool,
@@ -459,18 +457,16 @@ class MixtureComponent:
             output_layer_f = []
             activation_function_number_f = 0
 
-        # Auxiliary matrices to compute logp in a vectorized manner without having to loop over the individuals.
+        # Auxiliary matricx to compute logp in a vectorized manner without having to loop over the individuals.
+        # The expander matrix transforms a s x f x t tensor to a s * (s-1) x f x t tensor where the rows contain
+        # values of other subjects for each subject in the set.
         expander_aux_mask_matrix = []
-        aggregator_aux_mask_matrix = []
         for subject in range(self.num_subjects):
             expander_aux_mask_matrix.append(np.delete(np.eye(self.num_subjects), subject, axis=0))
             aux = np.zeros((self.num_subjects, self.num_subjects - 1))
             aux[subject] = 1
-            aux = aux * mixture_weights[subject][None, :]
-            aggregator_aux_mask_matrix.append(aux)
 
         expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
-        aggregator_aux_mask_matrix = ptt.concatenate(aggregator_aux_mask_matrix, axis=1)
 
         # We fit one lag per pair, so the number of lags is C_s_2, where s is the number of subjects.
         if self.lag_cpn is None:
@@ -502,7 +498,6 @@ class MixtureComponent:
                        output_layer_f,
                        activation_function_number_f,
                        expander_aux_mask_matrix,
-                       aggregator_aux_mask_matrix,
                        prev_time_diff_subject,
                        lag_mask,
                        np.array(self.self_dependent))
