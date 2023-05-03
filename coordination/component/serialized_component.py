@@ -284,9 +284,6 @@ class SerializedComponentSamples:
         # For each time step in the component's scale, it contains the time step in the coordination scale
         self.time_steps_in_coordination_scale: List[np.ndarray] = []
 
-        # Map between subjects and their genders
-        self.gender_map: Dict[int, int] = {}
-
     @property
     def num_time_steps(self):
         if len(self.values) == 0:
@@ -428,9 +425,6 @@ class SerializedComponent:
             samples.subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
             samples.time_steps_in_coordination_scale.append(
                 np.array([t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int))
-
-            # Make it simple for gender. Even subjects are Male and odd Female.
-            samples.gender_map = {idx: idx % 2 for idx in range(self.num_subjects)}
 
             num_time_steps_in_cpn_scale = len(samples.time_steps_in_coordination_scale[s])
 
@@ -720,9 +714,9 @@ class SerializedComponent:
 
     def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
-                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, gender_map: Dict[int, int],
-                          feature_dimension: str, time_dimension: str, observed_values: Optional[Any] = None,
-                          mean_a0: Optional[Any] = None, sd_aa: Optional[Any] = None, num_hidden_layers_f: int = 0,
+                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, feature_dimension: str,
+                          time_dimension: str, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
+                          sd_aa: Optional[Any] = None, num_hidden_layers_f: int = 0,
                           activation_function_name_f: str = "linear", dim_hidden_layer_f: int = 0) -> Any:
 
         mean_a0, sd_aa = self._create_random_parameters(subjects, mean_a0, sd_aa)
