@@ -180,6 +180,8 @@ class SerializedModel:
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool,
                  share_sd_aa_across_features: bool,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None,
                  mode: Mode = Mode.BLENDING,
                  num_hidden_layers_f: int = 0,
@@ -228,9 +230,8 @@ class SerializedModel:
                                                               num_subjects=num_subjects,
                                                               dim_value=1,
                                                               sd_sd_o=sd_sd_o,
-                                                              share_params_across_subjects=True,
-                                                              share_params_across_genders=False,
-                                                              share_params_across_features=True)
+                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                              share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -507,16 +508,18 @@ if __name__ == "__main__":
                             sd_sd_uc=1,
                             mean_mean_a0=np.zeros((3, 1)),
                             sd_mean_a0=np.ones((3, 1)),
-                            sd_sd_aa=np.ones(1) * 5,
+                            sd_sd_aa=np.ones(1),
                             sd_sd_o=np.ones(1),
                             share_mean_a0_across_subjects=False,
                             share_mean_a0_across_features=False,
                             share_sd_aa_across_subjects=True,
                             share_sd_aa_across_features=False,
+                            share_sd_o_across_subjects=True,
+                            share_sd_o_across_features=False,
                             initial_coordination=None,
                             mode=Mode.BLENDING,
                             max_lag=0,
-                            num_hidden_layers_f=1,
+                            num_hidden_layers_f=0,
                             dim_hidden_layer_f=5,
                             activation_function_name_f="relu")
 
