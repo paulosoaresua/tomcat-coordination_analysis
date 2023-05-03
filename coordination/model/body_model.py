@@ -167,11 +167,11 @@ class BodyModel:
 
     def __init__(self, subjects: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray,
-                 sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
-                 share_params_across_features_latent: bool, share_params_across_features_observation: bool,
+                 sd_sd_o: np.ndarray, a_mixture_weights: np.ndarray, share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool, share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool, share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None):
         self.subjects = subjects
-        self.share_params_across_subjects = share_params_across_subjects
 
         # Single number representing quantity of movement per time step.
         self.num_body_features = 1
@@ -189,14 +189,16 @@ class BodyModel:
                                                 sd_mean_a0=sd_mean_a0,
                                                 sd_sd_aa=sd_sd_aa,
                                                 a_mixture_weights=a_mixture_weights,
-                                                share_params_across_subjects=share_params_across_subjects,
-                                                share_params_across_features=share_params_across_features_latent)
+                                                share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                                share_mean_a0_across_features=share_mean_a0_across_features,
+                                                share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                                share_sd_aa_across_features=share_sd_aa_across_features)
         self.obs_body_cpn = ObservationComponent(uuid="obs_body",
                                                  num_subjects=len(subjects),
                                                  dim_value=self.num_body_features,
                                                  sd_sd_o=sd_sd_o,
-                                                 share_params_across_subjects=share_params_across_subjects,
-                                                 share_params_across_features=share_params_across_features_observation)
+                                                 share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                 share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -247,7 +249,8 @@ class BodyModel:
                 coordination=coordination[evidence.time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="body_time",
-                feature_dimension="body_feature")
+                feature_dimension="body_feature",
+                num_time_steps=evidence.num_time_steps_in_body_scale)
             self.obs_body_cpn.update_pymc_model(latent_component=latent_body,
                                                 subject_dimension="subject",
                                                 feature_dimension="body_feature",

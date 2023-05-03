@@ -3,20 +3,17 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
-import math
 import numpy as np
 import pandas as pd
 import pymc as pm
 import xarray
 
-from coordination.common.functions import logit, one_hot_encode
+from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples, BetaGaussianCoordinationComponent
-from coordination.component.neural_network import NeuralNetwork
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
-from coordination.component.lag import Lag, LagSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 VOCALIC_FEATURES = [
@@ -273,20 +270,17 @@ class VocalicModel:
     def __init__(self, num_subjects: int, vocalic_features: List[str],
                  self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray,
                  sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
-                 share_params_across_subjects: bool, share_params_across_genders: bool,
-                 share_params_across_features_latent: bool, share_params_across_features_observation: bool,
-                 initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
-                 mode: Mode = Mode.BLENDING, f: Optional[Callable] = None, num_hidden_layers_f: int = 0,
-                 dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear", mean_weights_f: float = 0,
-                 sd_weights_f: float = 1, max_vocalic_lag: int = 0):
+                 share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
+                 num_hidden_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
+                 mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
 
         # Either one or the other
-        assert not (share_params_across_genders and share_params_across_subjects)
 
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.share_params_across_subjects = share_params_across_subjects
-        self.share_params_across_genders = share_params_across_genders
         self.num_hidden_layers_f = num_hidden_layers_f
         self.dim_hidden_layer_f = dim_hidden_layer_f
         self.activation_function_name_f = activation_function_name_f
@@ -311,9 +305,10 @@ class VocalicModel:
                                                       mean_mean_a0=mean_mean_a0_vocalic,
                                                       sd_mean_a0=sd_mean_a0_vocalic,
                                                       sd_sd_aa=sd_sd_aa_vocalic,
-                                                      share_params_across_subjects=share_params_across_subjects,
-                                                      share_params_across_genders=share_params_across_genders,
-                                                      share_params_across_features=share_params_across_features_latent,
+                                                      share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                                      share_mean_a0_across_features=share_mean_a0_across_features,
+                                                      share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                                      share_sd_aa_across_features=share_sd_aa_across_features,
                                                       mode=mode,
                                                       f=f,
                                                       mean_weights_f=mean_weights_f,
@@ -324,9 +319,8 @@ class VocalicModel:
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
-                                                              share_params_across_subjects=share_params_across_subjects,
-                                                              share_params_across_genders=share_params_across_genders,
-                                                              share_params_across_features=share_params_across_features_observation)
+                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                              share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -374,11 +368,6 @@ class VocalicModel:
                   "coordination_time": np.arange(evidence.num_time_steps_in_coordination_scale),
                   "vocalic_time": np.arange(evidence.num_time_steps_in_vocalic_scale)}
 
-        if self.share_params_across_genders:
-            subjects_in_time = np.array([evidence.gender_map[subject] for subject in evidence.subjects_in_time])
-        else:
-            subjects_in_time = evidence.subjects_in_time
-
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             coordination = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
@@ -388,7 +377,7 @@ class VocalicModel:
                 prev_time_diff_subject=evidence.previous_time_diff_subject,
                 prev_same_subject_mask=evidence.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic_prev_diff_subject_mask,
-                subjects=subjects_in_time,
+                subjects=evidence.subjects_in_time,
                 gender_map=evidence.gender_map,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature",
@@ -399,8 +388,7 @@ class VocalicModel:
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
-                                                   subjects=subjects_in_time,
-                                                   gender_map=evidence.gender_map,
+                                                   subjects=evidence.subjects_in_time,
                                                    observed_values=evidence.observation)
 
         return pymc_model
