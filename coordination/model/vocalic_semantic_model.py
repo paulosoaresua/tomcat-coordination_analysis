@@ -95,14 +95,12 @@ class VocalicSemanticModel:
     def __init__(self, num_subjects: int, vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float,
                  sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
                  sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
-                 b_p_semantic_link: float, share_params_across_subjects: bool, share_params_across_genders: bool,
-                 share_params_across_features_latent: bool, share_params_across_features_observation: bool,
-                 initial_coordination: Optional[float] = None, sd_sd_c: Optional[float] = None,
-                 mode: Mode = Mode.BLENDING):
+                 b_p_semantic_link: float, share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.share_params_across_subjects = share_params_across_subjects
-        self.share_params_across_genders = share_params_across_genders
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -124,9 +122,10 @@ class VocalicSemanticModel:
                                                       mean_mean_a0=mean_mean_a0_vocalic,
                                                       sd_mean_a0=sd_mean_a0_vocalic,
                                                       sd_sd_aa=sd_sd_aa_vocalic,
-                                                      share_params_across_subjects=share_params_across_subjects,
-                                                      share_params_across_genders=share_params_across_genders,
-                                                      share_params_across_features=share_params_across_features_latent,
+                                                      share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                                      share_mean_a0_across_features=share_mean_a0_across_features,
+                                                      share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                                      share_sd_aa_across_features=share_sd_aa_across_features,
                                                       mode=mode)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
@@ -135,9 +134,8 @@ class VocalicSemanticModel:
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
-                                                              share_params_across_subjects=share_params_across_subjects,
-                                                              share_params_across_genders=share_params_across_genders,
-                                                              share_params_across_features=share_params_across_features_observation)
+                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                              share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -215,7 +213,6 @@ class VocalicSemanticModel:
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
                                                    subjects=evidence.vocalic.subjects_in_time,
-                                                   gender_map=evidence.vocalic.gender_map,
                                                    feature_dimension="vocalic_feature",
                                                    time_dimension="vocalic_time",
                                                    observed_values=evidence.vocalic.observation)

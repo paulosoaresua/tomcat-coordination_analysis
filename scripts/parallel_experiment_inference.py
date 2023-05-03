@@ -27,11 +27,12 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
                        sd_sd_o_body: str, a_mixture_weights: str, mean_mean_a0_vocalic: str, sd_mean_a0_vocalic: str,
                        sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
-                       ignore_bad_channels: int, share_params_across_subjects: int, share_params_across_genders: int,
-                       share_params_across_features_latent: int, share_params_across_features_observation: int,
-                       vocalic_mode: str, sd_uc: str, mean_a0_brain: str, sd_aa_brain: str, sd_o_brain: str,
-                       mean_a0_body: str, sd_aa_body: str, sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str,
-                       sd_aa_vocalic: str, sd_o_vocalic: str, p_semantic_link: str, num_hidden_layers_f: int,
+                       ignore_bad_channels: int, share_mean_a0_across_subjects: int, share_mean_a0_across_features: int,
+                       share_sd_aa_across_subjects: int, share_sd_aa_across_features: int,
+                       share_sd_o_across_subjects: int, share_sd_o_across_features: int, vocalic_mode: str, sd_uc: str,
+                       mean_a0_brain: str, sd_aa_brain: str, sd_o_brain: str, mean_a0_body: str, sd_aa_body: str,
+                       sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str, sd_aa_vocalic: str,
+                       sd_o_vocalic: str, p_semantic_link: str, num_hidden_layers_f: int,
                        dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
                        sd_weights_f: float, max_lag: int, nuts_init_method: str):
     # Parameters passed to this function relevant for post-analysis.
@@ -119,10 +120,12 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--a_p_semantic_link={a_p_semantic_link} ' \
                                      f'--b_p_semantic_link={b_p_semantic_link} ' \
                                      f'--ignore_bad_channels={ignore_bad_channels} ' \
-                                     f'--share_params_across_subjects={share_params_across_subjects} ' \
-                                     f'--share_params_across_genders={share_params_across_genders} ' \
-                                     f'--share_params_across_features_latent={share_params_across_features_latent} ' \
-                                     f'--share_params_across_features_observation={share_params_across_features_observation} ' \
+                                     f'--share_mean_a0_across_subjects={share_mean_a0_across_subjects} ' \
+                                     f'--share_mean_a0_across_features={share_mean_a0_across_features} ' \
+                                     f'--share_sd_aa_across_subjects={share_sd_aa_across_subjects} ' \
+                                     f'--share_sd_aa_across_features={share_sd_aa_across_features} ' \
+                                     f'--share_sd_o_across_subjects={share_sd_o_across_subjects} ' \
+                                     f'--share_sd_o_across_features={share_sd_o_across_features} ' \
                                      f'--vocalic_mode={vocalic_mode} ' \
                                      f'--num_hidden_layers_f={num_hidden_layers_f} ' \
                                      f'--dim_hidden_layer_f={dim_hidden_layer_f} ' \
@@ -230,15 +233,18 @@ if __name__ == "__main__":
                         help="Parameter `b` of the prior distribution of p_link")
     parser.add_argument("--ignore_bad_channels", type=int, required=False, default=0,
                         help="Whether to remove bad brain channels from the observations.")
-    parser.add_argument("--share_params_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one parameter for all subjects.")
-    parser.add_argument("--share_params_across_genders", type=int, required=False, default=0,
-                        help="Whether to fit one parameter per subject's gender. If all subjects have the same gender, "
-                             "only the parameters of that gender will be estimated.")
-    parser.add_argument("--share_params_across_features_latent", type=int, required=False, default=0,
-                        help="Whether to fit one parameter per feature in the latent component.")
-    parser.add_argument("--share_params_across_features_observation", type=int, required=False, default=0,
-                        help="Whether to fit one parameter per feature in the observation component.")
+    parser.add_argument("--share_mean_a0_across_subjects", type=int, required=False, default=0,
+                        help="Whether to fit one mean_a0 for all subjects.")
+    parser.add_argument("--share_mean_a0_across_features", type=int, required=False, default=0,
+                        help="Whether to fit one mean_a0 for all features.")
+    parser.add_argument("--share_sd_aa_across_subjects", type=int, required=False, default=0,
+                        help="Whether to fit one sd_aa for all subjects.")
+    parser.add_argument("--share_sd_aa_across_features", type=int, required=False, default=0,
+                        help="Whether to fit one sd_aa for all features.")
+    parser.add_argument("--share_sd_o_across_subjects", type=int, required=False, default=0,
+                        help="Whether to fit one sd_o for all subjects.")
+    parser.add_argument("--share_sd_o_across_features", type=int, required=False, default=0,
+                        help="Whether to fit one sd_o for all features.")
     parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
                         help="How coordination controls vocalics from different individuals.")
     parser.add_argument("--sd_uc", type=str, required=False, default="",
@@ -326,10 +332,12 @@ if __name__ == "__main__":
                        a_p_semantic_link=args.a_p_semantic_link,
                        b_p_semantic_link=args.b_p_semantic_link,
                        ignore_bad_channels=args.ignore_bad_channels,
-                       share_params_across_subjects=args.share_params_across_subjects,
-                       share_params_across_genders=args.share_params_across_genders,
-                       share_params_across_features_latent=args.share_params_across_features_latent,
-                       share_params_across_features_observation=args.share_params_across_features_observation,
+                       share_mean_a0_across_subjects=bool(args.share_mean_a0_across_subjects),
+                       share_mean_a0_across_features=bool(args.share_mean_a0_across_features),
+                       share_sd_aa_across_subjects=bool(args.share_sd_aa_across_subjects),
+                       share_sd_aa_across_features=bool(args.share_sd_aa_across_features),
+                       share_sd_o_across_subjects=bool(args.share_sd_o_across_subjects),
+                       share_sd_o_across_features=bool(args.share_sd_o_across_features),
                        vocalic_mode=args.vocalic_mode,
                        sd_uc=args.sd_uc,
                        mean_a0_brain=args.mean_a0_brain,

@@ -79,7 +79,7 @@ class SyntheticSeriesSerialized:
 
         values = values[0]
 
-        noise = np.random.normal(size=num_time_steps,   scale=noise_scale) if noise_scale is not None else 0
+        noise = np.random.normal(size=num_time_steps, scale=noise_scale) if noise_scale is not None else 0
 
         values += noise
 
@@ -176,9 +176,12 @@ class SerializedModel:
                  sd_mean_a0: np.ndarray,
                  sd_sd_aa: np.ndarray,
                  sd_sd_o: np.ndarray,
-                 share_params_across_subjects: bool,
-                 share_params_across_features_latent: bool,
-                 share_params_across_features_observation: bool,
+                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_features: bool,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None,
                  mode: Mode = Mode.BLENDING,
                  num_hidden_layers_f: int = 0,
@@ -207,9 +210,10 @@ class SerializedModel:
                                               mean_mean_a0=mean_mean_a0,
                                               sd_mean_a0=sd_mean_a0,
                                               sd_sd_aa=sd_sd_aa,
-                                              share_params_across_subjects=share_params_across_subjects,
-                                              share_params_across_genders=False,
-                                              share_params_across_features=share_params_across_features_latent,
+                                              share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                              share_mean_a0_across_features=share_mean_a0_across_features,
+                                              share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                              share_sd_aa_across_features=share_sd_aa_across_features,
                                               mode=mode,
                                               max_lag=max_lag)
 
@@ -226,9 +230,8 @@ class SerializedModel:
                                                               num_subjects=num_subjects,
                                                               dim_value=1,
                                                               sd_sd_o=sd_sd_o,
-                                                              share_params_across_subjects=share_params_across_subjects,
-                                                              share_params_across_genders=False,
-                                                              share_params_across_features=share_params_across_features_observation)
+                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                              share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -497,22 +500,25 @@ if __name__ == "__main__":
     # plt.tight_layout()
     # plt.show()
 
-    evidence = evidence_vertical_shift_lag_normalized
+    evidence = evidence_vertical_shift
 
     model = SerializedModel(num_subjects=3,
                             self_dependent=True,
                             sd_mean_uc0=5,
                             sd_sd_uc=1,
-                            mean_mean_a0=np.zeros(1),
-                            sd_mean_a0=np.ones(1),
+                            mean_mean_a0=np.zeros((3, 1)),
+                            sd_mean_a0=np.ones((3, 1)),
                             sd_sd_aa=np.ones(1),
                             sd_sd_o=np.ones(1),
-                            share_params_across_subjects=True,
-                            share_params_across_features_latent=False,
-                            share_params_across_features_observation=False,
+                            share_mean_a0_across_subjects=False,
+                            share_mean_a0_across_features=False,
+                            share_sd_aa_across_subjects=True,
+                            share_sd_aa_across_features=False,
+                            share_sd_o_across_subjects=True,
+                            share_sd_o_across_features=False,
                             initial_coordination=None,
                             mode=Mode.BLENDING,
-                            max_lag=10,
+                            max_lag=0,
                             num_hidden_layers_f=0,
                             dim_hidden_layer_f=5,
                             activation_function_name_f="relu")
@@ -522,7 +528,7 @@ if __name__ == "__main__":
     # prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=2000,
+                                                                                                                 burn_in=1000,
                                                                                                                  num_samples=1000,
                                                                                                                  num_chains=NUM_CHAINS,
                                                                                                                  init_method="jitter+adapt_diag")

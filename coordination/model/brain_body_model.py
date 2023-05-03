@@ -97,13 +97,16 @@ class BrainBodyModel:
                  sd_sd_uc: float, mean_mean_a0_brain: np.ndarray, sd_mean_a0_brain: np.ndarray,
                  sd_sd_aa_brain: np.ndarray, sd_sd_o_brain: np.ndarray, mean_mean_a0_body: np.ndarray,
                  sd_mean_a0_body: np.ndarray, sd_sd_aa_body: np.ndarray, sd_sd_o_body: np.ndarray,
-                 a_mixture_weights: np.ndarray, share_params_across_subjects: bool,
-                 share_params_across_features_latent: bool, share_params_across_features_observation: bool,
-                 initial_coordination: Optional[float] = None):
+                 a_mixture_weights: np.ndarray, share_mean_a0_brain_across_subjects: bool,
+                 share_mean_a0_brain_across_features: bool, share_sd_aa_brain_across_subjects: bool,
+                 share_sd_aa_brain_across_features: bool, share_sd_o_brain_across_subjects: bool,
+                 share_sd_o_brain_across_features: bool, share_mean_a0_body_across_subjects: bool,
+                 share_mean_a0_body_across_features: bool, share_sd_aa_body_across_subjects: bool,
+                 share_sd_aa_body_across_features: bool, share_sd_o_body_across_subjects: bool,
+                 share_sd_o_body_across_features: bool, initial_coordination: Optional[float] = None):
         self.subjects = subjects
         self.brain_channels = brain_channels
         self.num_body_features = 1
-        self.share_params_across_subjects = share_params_across_subjects
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -118,8 +121,10 @@ class BrainBodyModel:
                                                  sd_mean_a0=sd_mean_a0_brain,
                                                  sd_sd_aa=sd_sd_aa_brain,
                                                  a_mixture_weights=a_mixture_weights,
-                                                 share_params_across_subjects=share_params_across_subjects,
-                                                 share_params_across_features=share_params_across_features_latent)
+                                                 share_mean_a0_across_subjects=share_mean_a0_brain_across_subjects,
+                                                 share_mean_a0_across_features=share_mean_a0_brain_across_features,
+                                                 share_sd_aa_across_subjects=share_sd_aa_brain_across_subjects,
+                                                 share_sd_aa_across_features=share_sd_aa_brain_across_features)
         self.latent_body_cpn = MixtureComponent(uuid="latent_body",
                                                 num_subjects=len(subjects),
                                                 dim_value=self.num_body_features,
@@ -128,20 +133,22 @@ class BrainBodyModel:
                                                 sd_mean_a0=sd_mean_a0_body,
                                                 sd_sd_aa=sd_sd_aa_body,
                                                 a_mixture_weights=a_mixture_weights,
-                                                share_params_across_subjects=share_params_across_subjects,
-                                                share_params_across_features=share_params_across_features_latent)
+                                                share_mean_a0_across_subjects=share_mean_a0_body_across_subjects,
+                                                share_mean_a0_across_features=share_mean_a0_body_across_features,
+                                                share_sd_aa_across_subjects=share_sd_aa_body_across_subjects,
+                                                share_sd_aa_across_features=share_sd_aa_body_across_features)
         self.obs_brain_cpn = ObservationComponent(uuid="obs_brain",
                                                   num_subjects=len(subjects),
                                                   dim_value=len(brain_channels),
                                                   sd_sd_o=sd_sd_o_brain,
-                                                  share_params_across_subjects=share_params_across_subjects,
-                                                  share_params_across_features=share_params_across_features_observation)
+                                                  share_sd_o_across_subjects=share_sd_o_brain_across_subjects,
+                                                  share_sd_o_across_features=share_sd_o_brain_across_features)
         self.obs_body_cpn = ObservationComponent(uuid="obs_body",
                                                  num_subjects=len(subjects),
                                                  dim_value=self.num_body_features,
                                                  sd_sd_o=sd_sd_o_body,
-                                                 share_params_across_subjects=share_params_across_subjects,
-                                                 share_params_across_features=share_params_across_features_observation)
+                                                 share_sd_o_across_subjects=share_sd_o_body_across_subjects,
+                                                 share_sd_o_across_features=share_sd_o_body_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -209,7 +216,8 @@ class BrainBodyModel:
                 coordination=coordination[evidence.brain.time_steps_in_coordination_scale],
                 subject_dimension="subject",
                 time_dimension="brain_time",
-                feature_dimension="brain_channel")
+                feature_dimension="brain_channel",
+                num_time_steps=evidence.brain.num_time_steps_in_brain_scale)
             # We share the mixture weights between the brain and body components as we assume they should reflect
             # degrees of influences across components.
             latent_body, _, _, _ = self.latent_body_cpn.update_pymc_model(
@@ -217,7 +225,8 @@ class BrainBodyModel:
                 subject_dimension="subject",
                 time_dimension="body_time",
                 feature_dimension="body_feature",
-                mixture_weights=mixture_weights)
+                mixture_weights=mixture_weights,
+                num_time_steps=evidence.body.num_time_steps_in_body_scale)
             self.obs_brain_cpn.update_pymc_model(latent_component=latent_brain,
                                                  subject_dimension="subject",
                                                  feature_dimension="brain_channel",

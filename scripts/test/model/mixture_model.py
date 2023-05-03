@@ -152,9 +152,12 @@ class MixtureModel:
                  sd_sd_aa: np.ndarray,
                  a_mixture_weights: np.ndarray,
                  sd_sd_o: np.ndarray,
-                 share_params_across_subjects: bool,
-                 share_params_across_features_latent: bool,
-                 share_params_across_features_observation: bool,
+                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_features: bool,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None,
                  num_hidden_layers_f: int = 0,
                  dim_hidden_layer_f: int = 0,
@@ -183,8 +186,10 @@ class MixtureModel:
                                            sd_mean_a0=sd_mean_a0,
                                            sd_sd_aa=sd_sd_aa,
                                            a_mixture_weights=a_mixture_weights,
-                                           share_params_across_subjects=share_params_across_subjects,
-                                           share_params_across_features=share_params_across_features_latent,
+                                           share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                           share_mean_a0_across_features=share_mean_a0_across_features,
+                                           share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                           share_sd_aa_across_features=share_sd_aa_across_features,
                                            max_lag=max_lag)
 
         if num_hidden_layers_g > 0:
@@ -200,8 +205,8 @@ class MixtureModel:
                                                     num_subjects=num_subjects,
                                                     dim_value=1,
                                                     sd_sd_o=sd_sd_o,
-                                                    share_params_across_subjects=share_params_across_subjects,
-                                                    share_params_across_features=share_params_across_features_observation)
+                                                    share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                    share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -401,7 +406,7 @@ if __name__ == "__main__":
     # Vertical shift
     evidence_vertical_shift = SyntheticSeriesMixture.from_function(fn=np.sin,  # Replace with cos
                                                                    num_subjects=3,
-                                                                   num_time_steps=50,  # Set to 30
+                                                                   num_time_steps=30,  # Set to 30
                                                                    time_step_size=np.pi / 12,
                                                                    noise_scale=None,
                                                                    spacing=np.pi / 6,
@@ -412,7 +417,7 @@ if __name__ == "__main__":
     # Noise
     evidence_vertical_shift_noise = SyntheticSeriesMixture.from_function(fn=np.sin,
                                                                          num_subjects=3,
-                                                                         num_time_steps=50,
+                                                                         num_time_steps=30,
                                                                          time_step_size=np.pi / 12,
                                                                          noise_scale=0.5,
                                                                          spacing=np.pi / 6,
@@ -438,7 +443,7 @@ if __name__ == "__main__":
     # Lag
     evidence_vertical_shift_lag = SyntheticSeriesMixture.from_function(fn=np.sin,
                                                                        num_subjects=3,
-                                                                       num_time_steps=50,
+                                                                       num_time_steps=30,
                                                                        time_step_size=np.pi / 12,
                                                                        noise_scale=None,
                                                                        spacing=np.pi / 6,
@@ -488,14 +493,14 @@ if __name__ == "__main__":
     # evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
-    evidence = evidence_vertical_shift_anti_symmetry_normalized
+    evidence = evidence_vertical_shift_normalized
     # evidence = evidence_vertical_shift_normalized
 
-    fig = plt.figure()
-    evidence_vertical_shift_anti_symmetry.plot(fig.gca(), marker_size=8)
-    fig = plt.figure()
-    evidence_vertical_shift_anti_symmetry_normalized.plot(fig.gca(), marker_size=8)
-    plt.show()
+    # fig = plt.figure()
+    # evidence_vertical_shift_anti_symmetry.plot(fig.gca(), marker_size=8)
+    # fig = plt.figure()
+    # evidence_vertical_shift_anti_symmetry_normalized.plot(fig.gca(), marker_size=8)
+    # plt.show()
     #
     # fig = plt.figure()
     # evidence_vertical_shift_lag.plot(fig.gca(), marker_size=8)
@@ -509,16 +514,19 @@ if __name__ == "__main__":
                          sd_sd_uc=1,
                          mean_mean_a0=np.zeros((3, 1)),
                          sd_mean_a0=np.ones((3, 1)),
-                         sd_sd_aa=np.ones((3, 1)),
+                         sd_sd_aa=np.ones(1),
                          a_mixture_weights=np.ones((3, 2)),
-                         sd_sd_o=np.ones((3, 1)),
-                         share_params_across_subjects=False,
-                         share_params_across_features_latent=False,
-                         share_params_across_features_observation=False,
+                         sd_sd_o=np.ones(1),
+                         share_mean_a0_across_subjects=False,
+                         share_mean_a0_across_features=False,
+                         share_sd_aa_across_subjects=True,
+                         share_sd_aa_across_features=False,
+                         share_sd_o_across_subjects=True,
+                         share_sd_o_across_features=False,
                          initial_coordination=None,
-                         num_hidden_layers_f=1,
+                         num_hidden_layers_f=0,
                          dim_hidden_layer_f=6,
-                         activation_function_name_f="relu",
+                         activation_function_name_f="linear",
                          max_lag=0)
 
     # model.latent_cpn.parameters.weights_f.value = [
@@ -533,10 +541,10 @@ if __name__ == "__main__":
     # prior_predictive_check(model, evidence)
     posterior_samples_vertical_shift_lag_normalized_fit_lag, idata_vertical_shift_lag_normalized_fit_lag = train(model,
                                                                                                                  evidence,
-                                                                                                                 burn_in=200,
-                                                                                                                 num_samples=200,
+                                                                                                                 burn_in=1000,
+                                                                                                                 num_samples=1000,
                                                                                                                  num_chains=NUM_CHAINS,
-                                                                                                                 init_method="jitter+adapt_diag")
+                                                                                                                 init_method="advi")
     # _ = posterior_predictive_check(model, evidence, idata_vertical_shift_lag_normalized_fit_lag)
     print(build_convergence_summary(idata_vertical_shift_lag_normalized_fit_lag))
     plt.show()
