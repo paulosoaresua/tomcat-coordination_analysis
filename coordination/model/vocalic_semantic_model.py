@@ -37,14 +37,6 @@ class VocalicSemanticSeries:
         self.vocalic = vocalic_series
         self.semantic_link_time_steps_in_coordination_scale = semantic_link_time_steps_in_coordination_scale
 
-    @property
-    def num_genders(self) -> int:
-        return self.vocalic.num_genders
-
-    @property
-    def gender_map(self) -> Dict[int, int]:
-        return self.vocalic.gender_map
-
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame, vocalic_features: List[str]):
         vocalic_series = VocalicSeries.from_data_frame(evidence_df=evidence_df, vocalic_features=vocalic_features)
@@ -59,9 +51,6 @@ class VocalicSemanticSeries:
 
     def standardize(self):
         self.vocalic.standardize()
-
-    def normalize_per_gender(self):
-        self.vocalic.normalize_per_gender()
 
     def normalize_per_subject(self):
         self.vocalic.normalize_per_subject()
@@ -166,8 +155,7 @@ class VocalicSemanticModel:
                                                                     time_scale_density=semantic_link_time_scale_density,
                                                                     coordination=coordination_samples.coordination)
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
-                                                                subjects=latent_vocalic_samples.subjects,
-                                                                gender_map=latent_vocalic_samples.gender_map)
+                                                                subjects=latent_vocalic_samples.subjects)
 
         samples = VocalicSemanticSamples(coordination=coordination_samples, latent_vocalic=latent_vocalic_samples,
                                          semantic_link=semantic_link_samples,
@@ -202,7 +190,6 @@ class VocalicSemanticModel:
                 prev_same_subject_mask=evidence.vocalic.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic.vocalic_prev_diff_subject_mask,
                 subjects=evidence.vocalic.subjects_in_time,
-                gender_map=evidence.vocalic.gender_map,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature")[0]
 
