@@ -133,7 +133,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--mean_weights_f={mean_weights_f} ' \
                                      f'--sd_weights_f={sd_weights_f} ' \
                                      f'--max_lag={max_lag} ' \
-                                     f'--nuts_init_method{nuts_init_method}'
+                                     f'--nuts_init_method={nuts_init_method}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
