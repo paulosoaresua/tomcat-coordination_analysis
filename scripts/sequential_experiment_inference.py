@@ -719,7 +719,7 @@ if __name__ == "__main__":
                         help="Mean of the weights (prior)for fitting f(.).")
     parser.add_argument("--sd_weights_f", type=float, required=False, default=1,
                         help="Standard deviation of the weights (prior) for fitting f(.).")
-    parser.add_argument("--max_lag", type=float, required=False, default=0,
+    parser.add_argument("--max_lag", type=int, required=False, default=0,
                         help="Maximum lag to the vocalic component if lags are to be fitted.")
     parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
                         help="NUTS initialization method.")
