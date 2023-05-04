@@ -164,12 +164,13 @@ class VocalicSemanticModel:
         return samples
 
     def fit(self, evidence: VocalicSemanticSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
+            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
+        pm.Model, az.InferenceData]:
         assert evidence.vocalic.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
 
         return pymc_model, idata
