@@ -159,7 +159,7 @@ class MixtureModel:
                  share_sd_o_across_subjects: bool,
                  share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None,
-                 num_hidden_layers_f: int = 0,
+                 num_layers_f: int = 0,
                  dim_hidden_layer_f: int = 0,
                  activation_function_name_f="linear",
                  num_hidden_layers_g: int = 0,
@@ -168,7 +168,7 @@ class MixtureModel:
                  max_lag: int = 0):
 
         self.num_subjects = num_subjects
-        self.num_hidden_layers_f = num_hidden_layers_f
+        self.num_layers_f = num_layers_f
         self.dim_hidden_layer_f = dim_hidden_layer_f
         self.activation_function_name_f = activation_function_name_f
 
@@ -260,7 +260,7 @@ class MixtureModel:
                 feature_dimension="component_feature",
                 time_dimension="component_time",
                 num_time_steps=evidence.num_time_steps_in_component_scale,
-                num_hidden_layers_f=self.num_hidden_layers_f,
+                num_layers_f=self.num_layers_f,
                 dim_hidden_layer_f=self.dim_hidden_layer_f,
                 activation_function_name_f=self.activation_function_name_f)[0]
 
@@ -493,7 +493,7 @@ if __name__ == "__main__":
     # evidence_vertical_shift_lag_normalized = evidence_vertical_shift_lag.normalize_per_subject(inplace=False)
 
     # Model to test
-    evidence = evidence_vertical_shift_normalized
+    evidence = evidence_vertical_shift_anti_symmetry_normalized
     # evidence = evidence_vertical_shift_normalized
 
     # fig = plt.figure()
@@ -524,8 +524,8 @@ if __name__ == "__main__":
                          share_sd_o_across_subjects=True,
                          share_sd_o_across_features=False,
                          initial_coordination=None,
-                         num_hidden_layers_f=0,
-                         dim_hidden_layer_f=6,
+                         num_layers_f=1,
+                         dim_hidden_layer_f=3,
                          activation_function_name_f="linear",
                          max_lag=0)
 
