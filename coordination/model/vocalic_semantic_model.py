@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
@@ -87,9 +87,14 @@ class VocalicSemanticModel:
                  b_p_semantic_link: float, share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
                  share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
+                 num_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
+                 mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
+        self.num_layers_f = num_layers_f
+        self.dim_hidden_layer_f = dim_hidden_layer_f
+        self.activation_function_name_f = activation_function_name_f
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -115,7 +120,11 @@ class VocalicSemanticModel:
                                                       share_mean_a0_across_features=share_mean_a0_across_features,
                                                       share_sd_aa_across_subjects=share_sd_aa_across_subjects,
                                                       share_sd_aa_across_features=share_sd_aa_across_features,
-                                                      mode=mode)
+                                                      mode=mode,
+                                                      f=f,
+                                                      mean_weights_f=mean_weights_f,
+                                                      sd_weights_f=sd_weights_f,
+                                                      max_lag=max_vocalic_lag)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
                                                b_p=b_p_semantic_link)
@@ -192,7 +201,10 @@ class VocalicSemanticModel:
                 prev_diff_subject_mask=evidence.vocalic.vocalic_prev_diff_subject_mask,
                 subjects=evidence.vocalic.subjects_in_time,
                 time_dimension="vocalic_time",
-                feature_dimension="vocalic_feature")[0]
+                feature_dimension="vocalic_feature",
+                num_layers_f=self.num_layers_f,
+                dim_hidden_layer_f=self.dim_hidden_layer_f,
+                activation_function_name_f=self.activation_function_name_f)[0]
 
             self.semantic_link_cpn.update_pymc_model(
                 coordination=coordination[evidence.num_time_steps_in_semantic_link_scale],

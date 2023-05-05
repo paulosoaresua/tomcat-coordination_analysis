@@ -72,15 +72,21 @@ def feed_forward_random_f(input_data: np.ndarray,
     a0 = activation(np.dot(input_layer_f.transpose(), add_bias(input_data)))
 
     # Reconstruct hidden layers as a 3 dimensional tensor, where the first dimension represents the number of layers.
-    num_hidden_layers = int(hidden_layers_f.shape[0] / (hidden_dim + 1))
-    hidden_layers_f = hidden_layers_f.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
+    if len(hidden_layers_f) != 0:
+        num_hidden_layers = int(hidden_layers_f.shape[0] / (hidden_dim + 1))
+        hidden_layers_f = hidden_layers_f.reshape((num_hidden_layers, hidden_dim + 1, hidden_dim))
 
-    # Feed-Forward through the hidden layers
-    h = a0
-    for W in hidden_layers_f:
-        h = activation(np.dot(W.transpose(), add_bias(h)))
+        # Feed-Forward through the hidden layers
+        h = a0
+        for W in hidden_layers_f:
+            h = activation(np.dot(W.transpose(), add_bias(h)))
+    else:
+        h = a0
 
     # Output layer activation.
-    out = activation(np.dot(output_layer_f.transpose(), add_bias(h)))
+    if len(output_layer_f) != 0:
+        out = activation(np.dot(output_layer_f.transpose(), add_bias(h)))
+    else:
+        out = h
 
     return out

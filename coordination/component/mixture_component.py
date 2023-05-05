@@ -401,7 +401,7 @@ class MixtureComponent:
 
         return mean_a0, sd_aa, mixture_weights
 
-    def _create_random_weights_f(self, num_layers_f: int, dim_hidden_layer: int, activation_function_name: str):
+    def _create_random_weights_f(self, num_layers: int, dim_hidden_layer: int, activation_function_name: str):
         """
         This function creates the weights used to fit the function f(.) as random variables. Because the mixture
         component uses a CustomDist, all the arguments of the logp function we pass must be tensors. So, we cannot
@@ -411,7 +411,7 @@ class MixtureComponent:
         in the hidden layers, and the last one will be weights in the last (output) layer.
         """
 
-        if num_layers_f == 0:
+        if num_layers == 0:
             return [], [], [], 0
 
         # Gather observations from each layer. If some weights are pre-set, we don't need to infer them.
@@ -422,7 +422,7 @@ class MixtureComponent:
 
         # Features * number of subjects + bias term
         input_layer_dim_in = self.dim_value * self.num_subjects + 1
-        input_layer_dim_out = dim_hidden_layer if num_layers_f > 1 else self.dim_value * self.num_subjects
+        input_layer_dim_out = dim_hidden_layer if num_layers > 1 else self.dim_value * self.num_subjects
 
         input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
                                 mu=self.parameters.weights_f.prior.mean,
@@ -431,7 +431,7 @@ class MixtureComponent:
                                 observed=observed_weights_f[0])
 
         # Input and Output layers count as 2. The remaining is hidden.
-        num_hidden_layers = num_layers_f - 2
+        num_hidden_layers = num_layers - 2
         if num_hidden_layers > 0:
             hidden_layer_dim_in = dim_hidden_layer + 1
             hidden_layer_dim_out = dim_hidden_layer
@@ -450,7 +450,7 @@ class MixtureComponent:
         else:
             hidden_layers = []
 
-        if num_layers_f > 1:
+        if num_layers > 1:
             output_layer_dim_in = dim_hidden_layer + 1
             output_layer_dim_out = self.dim_value * self.num_subjects
             output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",

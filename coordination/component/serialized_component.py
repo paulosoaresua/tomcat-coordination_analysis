@@ -586,7 +586,7 @@ class SerializedComponent:
 
         return mean_a0, sd_aa
 
-    def _create_random_weights_f(self, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str):
+    def _create_random_weights_f(self, num_layers: int, dim_hidden_layer: int, activation_function_name: str):
         """
         This function creates the weights used to fit the function f(.) as random variables. Because the serialized
         component uses a CustomDist, all the arguments of the logp function we pass must be tensors. So, we cannot
@@ -595,6 +595,9 @@ class SerializedComponent:
         in the input layer, the second will be a list of weights with the same dimensions, which represent the weights
         in the hidden layers, and the last one will be weights in the last (output) layer.
         """
+
+        if num_layers == 0:
+            return [], [], [], 0
 
         # Gather observations from each layer. If some weights are pre-set, we don't need to infer them.
         if self.parameters.weights_f.value is None:
@@ -609,13 +612,7 @@ class SerializedComponent:
 
         # Features + subject pair ID + bias term
         input_layer_dim_in = self.dim_value + one_hot_encode_size + 1
-        input_layer_dim_out = dim_hidden_layer
-
-        hidden_layer_dim_in = dim_hidden_layer + 1
-        hidden_layer_dim_out = dim_hidden_layer
-
-        output_layer_dim_in = dim_hidden_layer + 1
-        output_layer_dim_out = self.dim_value
+        input_layer_dim_out = dim_hidden_layer if num_layers > 1 else self.dim_value
 
         input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
                                 mu=self.parameters.weights_f.prior.mean,
@@ -623,24 +620,36 @@ class SerializedComponent:
                                 size=(input_layer_dim_in, input_layer_dim_out),
                                 observed=observed_weights_f[0])
 
-        hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden",
-                                  mu=self.parameters.weights_f.prior.mean,
-                                  sigma=self.parameters.weights_f.prior.sd,
-                                  size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
-                                  observed=observed_weights_f[1])
+        # Input and Output layers count as 2. The remaining is hidden.
+        num_hidden_layers = num_layers - 2
+        if num_hidden_layers > 0:
+            hidden_layer_dim_in = dim_hidden_layer + 1
+            hidden_layer_dim_out = dim_hidden_layer
+            hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden",
+                                      mu=self.parameters.weights_f.prior.mean,
+                                      sigma=self.parameters.weights_f.prior.sd,
+                                      size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                      observed=observed_weights_f[1])
 
-        # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
-        # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
-        # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
-        # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
-        hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
-            (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+            # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
+            # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
+            # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
+            # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
+            hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
+                (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+        else:
+            hidden_layers = []
 
-        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",
-                                 mu=self.parameters.weights_f.prior.mean,
-                                 sigma=self.parameters.weights_f.prior.sd,
-                                 size=(output_layer_dim_in, output_layer_dim_out),
-                                 observed=observed_weights_f[2])
+        if num_layers > 1:
+            output_layer_dim_in = dim_hidden_layer + 1
+            output_layer_dim_out = self.dim_value
+            output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",
+                                     mu=self.parameters.weights_f.prior.mean,
+                                     sigma=self.parameters.weights_f.prior.sd,
+                                     size=(output_layer_dim_in, output_layer_dim_out),
+                                     observed=observed_weights_f[2])
+        else:
+            output_layer = []
 
         # Because we cannot pass a string or a function to CustomDist, we will identify a function by a number and
         # we will retrieve its implementation in the feed-forward function.
@@ -716,36 +725,24 @@ class SerializedComponent:
                           prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
                           prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, feature_dimension: str,
                           time_dimension: str, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
-                          sd_aa: Optional[Any] = None, num_hidden_layers_f: int = 0,
+                          sd_aa: Optional[Any] = None, num_layers_f: int = 0,
                           activation_function_name_f: str = "linear", dim_hidden_layer_f: int = 0) -> Any:
 
         mean_a0, sd_aa = self._create_random_parameters(subjects, mean_a0, sd_aa)
 
-        if num_hidden_layers_f > 0:
-            input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=dim_hidden_layer_f,
-                activation_function_name=activation_function_name_f)
-        else:
-            input_layer_f = []
-            hidden_layers_f = []
-            output_layer_f = []
-            activation_function_number_f = 0
+        input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
+            num_layers=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
+            activation_function_name=activation_function_name_f)
 
         encoded_pairs = self._encode_subject_pairs(subjects, prev_time_diff_subject)
 
         if self.lag_cpn is not None:
-            # We fix the lag of the first subject, and infer the lags of the other subjects relatively to the first
-            # subject
-            # lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects-1)
-
             influencers = subjects[prev_time_diff_subject]
             influencees = subjects
 
-            # We add a fixed zero lag to the first subject
-            # extended_lag = ptt.concatenate([ptt.zeros(1, dtype=int), lag])
-            extended_lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects)
-            lag_influencers = extended_lag[influencers]
-            lag_influencees = extended_lag[influencees]
+            lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects)
+            lag_influencers = lag[influencers]
+            lag_influencees = lag[influencees]
 
             # We need to clip the lag because invalid samples can be generated by the MCMC procedure on PyMC.
             dlags = ptt.clip(lag_influencees - lag_influencers, -self.lag_cpn.max_lag, self.lag_cpn.max_lag)

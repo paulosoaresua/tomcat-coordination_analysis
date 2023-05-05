@@ -244,14 +244,14 @@ class VocalicModel:
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
                  share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
                  sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
-                 num_hidden_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
+                 num_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
                  mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
 
         # Either one or the other
 
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.num_hidden_layers_f = num_hidden_layers_f
+        self.num_layers_f = num_layers_f
         self.dim_hidden_layer_f = dim_hidden_layer_f
         self.activation_function_name_f = activation_function_name_f
 
@@ -349,7 +349,7 @@ class VocalicModel:
                 subjects=evidence.subjects_in_time,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature",
-                num_hidden_layers_f=self.num_hidden_layers_f,
+                num_layers_f=self.num_layers_f,
                 dim_hidden_layer_f=self.dim_hidden_layer_f,
                 activation_function_name_f=self.activation_function_name_f)[0]
 
