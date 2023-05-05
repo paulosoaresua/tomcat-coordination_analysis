@@ -502,7 +502,7 @@ class MixtureComponent:
         mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
 
         input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-            num_layers_f=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
+            num_layers=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
             activation_function_name=activation_function_name_f)
 
         # Auxiliary matricx to compute logp in a vectorized manner without having to loop over the individuals.
