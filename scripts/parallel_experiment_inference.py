@@ -32,7 +32,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        share_sd_o_across_subjects: int, share_sd_o_across_features: int, vocalic_mode: str, sd_uc: str,
                        mean_a0_brain: str, sd_aa_brain: str, sd_o_brain: str, mean_a0_body: str, sd_aa_body: str,
                        sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str, sd_aa_vocalic: str,
-                       sd_o_vocalic: str, p_semantic_link: str, num_hidden_layers_f: int,
+                       sd_o_vocalic: str, p_semantic_link: str, num_layers_f: int,
                        dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
                        sd_weights_f: float, max_lag: int, nuts_init_method: str):
     # Parameters passed to this function relevant for post-analysis.
@@ -127,7 +127,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--share_sd_o_across_subjects={share_sd_o_across_subjects} ' \
                                      f'--share_sd_o_across_features={share_sd_o_across_features} ' \
                                      f'--vocalic_mode={vocalic_mode} ' \
-                                     f'--num_hidden_layers_f={num_hidden_layers_f} ' \
+                                     f'--num_layers_f={num_layers_f} ' \
                                      f'--dim_hidden_layer_f={dim_hidden_layer_f} ' \
                                      f'--activation_function_name_f="{activation_function_name_f}" ' \
                                      f'--mean_weights_f={mean_weights_f} ' \
@@ -282,7 +282,7 @@ if __name__ == "__main__":
                              "depending on how parameters are shared.")
     parser.add_argument("--p_semantic_link", type=str, required=False, default="",
                         help="Fixed value for p_semantic_link.")
-    parser.add_argument("--num_hidden_layers_f", type=int, required=False, default=0,
+    parser.add_argument("--num_layers_f", type=int, required=False, default=0,
                         help="Number of hidden layers in function f(.) if f is to be fitted.")
     parser.add_argument("--dim_hidden_layer_f", type=int, required=False, default=0,
                         help="Number of units in the hidden layers of f(.) if f is to be fitted.")
@@ -351,7 +351,7 @@ if __name__ == "__main__":
                        sd_aa_vocalic=args.sd_aa_vocalic,
                        sd_o_vocalic=args.sd_o_vocalic,
                        p_semantic_link=args.p_semantic_link,
-                       num_hidden_layers_f=args.num_hidden_layers_f,
+                       num_layers_f=args.num_layers_f,
                        dim_hidden_layer_f=args.dim_hidden_layer_f,
                        activation_function_name_f=args.activation_function_name_f,
                        mean_weights_f=args.mean_weights_f,
