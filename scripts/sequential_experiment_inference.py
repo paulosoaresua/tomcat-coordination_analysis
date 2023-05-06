@@ -82,7 +82,8 @@ def inference(out_dir: str, experiment_ids: List[str], evidence_filepath: str, m
         logger.setLevel(logging.INFO)
 
         print("")
-        logger.info(f"Processing {experiment_id}")
+        print(f"Processing {experiment_id}")
+        print("")
 
         row_df = evidence_df[evidence_df["experiment_id"] == experiment_id]
 
