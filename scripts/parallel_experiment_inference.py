@@ -43,6 +43,10 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
     results_folder = f"{out_dir}/{model}/{execution_time}"
     os.makedirs(results_folder, exist_ok=True)
 
+    print("")
+    print(f"Inferences will be saved in {results_folder}")
+    print("")
+
     # Save arguments passed to the function
 
     with open(f"{results_folder}/execution_params.json", "w") as f:
