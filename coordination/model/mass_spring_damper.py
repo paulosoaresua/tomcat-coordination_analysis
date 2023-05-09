@@ -40,7 +40,7 @@ def mixture_logp(mixture_component: Any,
 
     # Computes the movement backwards according to the system dynamics, this will make the model learn a latent
     # representation that respects the system dynamics.
-    mixture_component_previous_time = mixture_component#ptt.tensordot(F_inv, mixture_component, axes=(1, 1)).swapaxes(0, 1)
+    mixture_component_previous_time = mixture_component  # ptt.tensordot(F_inv, mixture_component, axes=(1, 1)).swapaxes(0, 1)
 
     # Fit a function f(.) to correct anti-symmetry.
     X = feed_forward_logp_f(input_data=mixture_component_previous_time.reshape(
@@ -210,26 +210,44 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
                                    sampled_influencers: np.ndarray, mean_a0: np.ndarray,
                                    sd_aa: np.ndarray) -> np.ndarray:
-
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
-        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
 
-        for t in range(num_time_steps):
-            if t == 0:
-                values[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs(
+        if self.lag_cpn is not None:
+            max_lag = self.lag_cpn.max_lag
+            extra_time_steps = 2 * self.lag_cpn.max_lag
+        else:
+            max_lag = 0
+            extra_time_steps = 0
+
+        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps + extra_time_steps))
+
+        for t in range(max_lag, -1, -1):
+            if t == max_lag:
+                values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                C = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None]
+                # Backwards dynamics. This is to guarantee when we apply the lag to each subject, we have mean_a0 as
+                # the initial value
+                mean = np.einsum("ij,klj->kli", self.F_inv, values[..., t + 1])
+                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
+
+        for t in range(max_lag + 1, num_time_steps + extra_time_steps):
+            if t >= num_time_steps + extra_time_steps - max_lag:
+                # There's no coordination for these time steps. They are extra and we use them to fill in the gaps
+                # when we roll the samples by each subject's lag in the end.
+                mean = np.einsum("ij,klj->kli", self.F, values[..., t - 1])
+            else:
+                C = sampled_coordination[:, time_steps_in_coordination_scale[t - max_lag]][:, None]
 
                 P = values[..., t - 1]
 
                 if self.f is not None:
-                    D = self.f(values[..., t - 1], sampled_influencers[..., t])
+                    D = self.f(values[..., t - 1], sampled_influencers[..., t - max_lag])
                 else:
                     D = P
 
-                D = D[:, sampled_influencers[..., t]][0]
+                D = D[:, sampled_influencers[..., t - max_lag]][0]
 
                 if self.self_dependent:
                     S = P
@@ -240,7 +258,17 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
 
                 mean = np.einsum("ij,klj->kli", self.F, blended_state)
 
-                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
+            # Add some noise
+            values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
+
+        # Apply lags if any
+        if self.lag_cpn is not None:
+            truncated_values_per_subject = []
+            for subject in range(self.num_subjects):
+                lag = -self.lag_cpn.parameters.lag.value[subject] # lag contains the correction, so we use -lag
+                truncated_values_per_subject.append(values[:, subject, :, (max_lag + lag):(num_time_steps + max_lag + lag)][:, None, :, :])
+
+            values = np.concatenate(truncated_values_per_subject, axis=1)
 
         return values
 
@@ -300,9 +328,9 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
                        sd_aa,
                        mixture_weights,
                        coordination,
-                       ptt.constant(input_layer_f),
-                       ptt.constant(hidden_layers_f),
-                       ptt.constant(output_layer_f),
+                       input_layer_f,
+                       hidden_layers_f,
+                       output_layer_f,
                        activation_function_number_f,
                        expander_aux_mask_matrix,
                        prev_time_diff_subject,
@@ -337,7 +365,8 @@ if __name__ == "__main__":
                                                          share_mean_a0_across_subjects=False,
                                                          share_sd_aa_across_subjects=True,
                                                          share_mean_a0_across_features=False,
-                                                         share_sd_aa_across_features=True)#,
+                                                         share_sd_aa_across_features=True,
+                                                         max_lag=0)
                                                          # f=lambda x, i: np.where((i == 1) | (i == 3), -1, 1)[
                                                          #                    ..., None] * x)
     observations = ObservationComponent(uuid="observation",
@@ -354,11 +383,13 @@ if __name__ == "__main__":
 
     # For 4 subjects
     state_space.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0], [15, 0]])
-    state_space.parameters.sd_aa.value = np.ones(1) * 0.1
+    state_space.parameters.sd_aa.value = np.ones(1) * 0.01
     state_space.parameters.mixture_weights.value = np.array([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]])
-    observations.parameters.sd_o.value = np.ones(1) * 1
+    # state_space.lag_cpn.parameters.lag.value = np.array([0, -4, -2, 0])
+    observations.parameters.sd_o.value = np.ones(1) * 0.01
 
-    state_samples = state_space.draw_samples(num_series=1, relative_frequency=1, coordination=np.ones((1, 50)) * 1,
+    C = 0.5
+    state_samples = state_space.draw_samples(num_series=1, relative_frequency=1, coordination=np.ones((1, 50)) * C,
                                              seed=0)
     observation_samples = observations.draw_samples(state_samples.values)
 
@@ -368,6 +399,7 @@ if __name__ == "__main__":
     for s in range(state_space.num_subjects):
         plt.scatter(state_samples.time_steps_in_coordination_scale, observation_samples.values[0, s, 0],
                     label=f"Position subject {s + 1}")
+        plt.title(f"Coordination = {C}")
     plt.legend()
     plt.show()
 
@@ -379,15 +411,17 @@ if __name__ == "__main__":
 
     pymc_model = pm.Model(coords=coords)
     with pymc_model:
-        # state_space.parameters.clear_values()
-        # observations.parameters.clear_values()
-        coordination.parameters.sd_uc.value = np.array([0.1])
+        state_space.clear_parameter_values()
+        observations.parameters.clear_values()
+        # coordination.parameters.sd_uc.value = np.array([0.1])
 
         coordination_dist = coordination.update_pymc_model(time_dimension="coordination_time")[1]
         state_space_dist = state_space.update_pymc_model(coordination=coordination_dist,
                                                          subject_dimension="subject",
                                                          feature_dimension="feature",
                                                          time_dimension="component_time",
+                                                         num_layers_f=0,
+                                                         activation_function_name_f="linear",
                                                          num_time_steps=50)[0]
         # observed_values=state_samples.values[0])[0]
         observations.update_pymc_model(latent_component=state_space_dist,
@@ -399,7 +433,9 @@ if __name__ == "__main__":
         idata = pm.sample(1000, init="jitter+adapt_diag", tune=1000, chains=2, random_seed=0, cores=2)
 
         sampled_vars = set(idata.posterior.data_vars)
-        var_names = sorted(list(set(coordination.parameter_names + state_space.parameter_names + observations.parameter_names).intersection(sampled_vars)))
+        var_names = sorted(list(
+            set(coordination.parameter_names + state_space.parameter_names + observations.parameter_names).intersection(
+                sampled_vars)))
         if len(var_names) > 0:
             az.plot_trace(idata, var_names=var_names)
             plt.tight_layout()

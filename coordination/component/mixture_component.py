@@ -255,6 +255,11 @@ class MixtureComponent:
     def f_nn_weights_name(self) -> str:
         return f"f_nn_weights_{self.uuid}"
 
+    def clear_parameter_values(self):
+        self.parameters.clear_values()
+        if self.lag_cpn is not None:
+            self.lag_cpn.clear_parameter_values()
+
     def draw_samples(self, num_series: int, relative_frequency: float,
                      coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
         # TODO - add support to generate samples with lag. Currently, this has to be done after the samples are

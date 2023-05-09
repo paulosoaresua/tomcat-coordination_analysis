@@ -1,10 +1,7 @@
-from typing import Any, List, Optional
+from typing import Any, List
 
-import numpy as np
 import pymc as pm
-import pytensor as pt
 
-from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, UniformDiscreteParameterPrior
 
 
@@ -15,12 +12,6 @@ class LagParameters:
 
     def clear_values(self):
         self.lag.value = None
-
-
-class LagSamples:
-
-    def __init__(self):
-        self.values = np.array([])
 
 
 class Lag:
@@ -41,15 +32,8 @@ class Lag:
     def lag_name(self) -> str:
         return self.uuid
 
-    def draw_samples(self, num_series: int, num_lags: int, seed: Optional[int] = None) -> LagSamples:
-        set_random_seed(seed)
-
-        samples = LagSamples()
-        samples.values = np.random.randint(low=self.parameters.lag.prior.lower,
-                                           high=self.parameters.lag.prior.upper,
-                                           size=(num_series, num_lags))
-
-        return samples
+    def clear_parameter_values(self):
+        self.parameters.clear_values()
 
     def update_pymc_model(self, num_lags) -> Any:
         lag = pm.DiscreteUniform(self.lag_name,
