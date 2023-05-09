@@ -167,8 +167,7 @@ class SerializedObservationComponent:
     def sd_o_name(self) -> str:
         return f"sd_o_{self.uuid}"
 
-    def draw_samples(self, latent_component: List[np.ndarray],
-                     subjects: List[np.ndarray], gender_map: Dict[int, int],
+    def draw_samples(self, latent_component: List[np.ndarray], subjects: List[np.ndarray],
                      seed: Optional[int] = None) -> SerializedObservationComponentSamples:
 
         # Check dimensionality of the parameters

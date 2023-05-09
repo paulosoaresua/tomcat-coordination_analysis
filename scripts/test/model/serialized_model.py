@@ -184,7 +184,7 @@ class SerializedModel:
                  share_sd_o_across_features: bool,
                  initial_coordination: Optional[float] = None,
                  mode: Mode = Mode.BLENDING,
-                 num_hidden_layers_f: int = 0,
+                 num_layers_f: int = 0,
                  dim_hidden_layer_f: int = 0,
                  activation_function_name_f="linear",
                  num_hidden_layers_g: int = 0,
@@ -193,7 +193,7 @@ class SerializedModel:
                  max_lag: int = 0):
 
         self.num_subjects = num_subjects
-        self.num_hidden_layers_f = num_hidden_layers_f
+        self.num_layers_f = num_layers_f
         self.dim_hidden_layer_f = dim_hidden_layer_f
         self.activation_function_name_f = activation_function_name_f
 
@@ -285,10 +285,9 @@ class SerializedModel:
                 prev_same_subject_mask=evidence.prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.prev_diff_subject_mask,
                 subjects=evidence.subjects_in_time,
-                gender_map={},
                 time_dimension="component_time",
                 feature_dimension="component_feature",
-                num_hidden_layers_f=self.num_hidden_layers_f,
+                num_layers_f=self.num_layers_f,
                 dim_hidden_layer_f=self.dim_hidden_layer_f,
                 activation_function_name_f=self.activation_function_name_f)[0]
 
@@ -309,7 +308,6 @@ class SerializedModel:
                                                    feature_dimension="component_feature",
                                                    time_dimension="component_time",
                                                    subjects=evidence.subjects_in_time,
-                                                   gender_map={},
                                                    observed_values=evidence.values)
 
         return pymc_model
@@ -500,7 +498,7 @@ if __name__ == "__main__":
     # plt.tight_layout()
     # plt.show()
 
-    evidence = evidence_vertical_shift
+    evidence = evidence_vertical_shift_normalized
 
     model = SerializedModel(num_subjects=3,
                             self_dependent=True,
@@ -519,7 +517,7 @@ if __name__ == "__main__":
                             initial_coordination=None,
                             mode=Mode.BLENDING,
                             max_lag=0,
-                            num_hidden_layers_f=0,
+                            num_layers_f=0,
                             dim_hidden_layer_f=5,
                             activation_function_name_f="relu")
 

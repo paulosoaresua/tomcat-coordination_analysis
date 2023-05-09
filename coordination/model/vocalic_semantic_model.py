@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
@@ -37,14 +37,6 @@ class VocalicSemanticSeries:
         self.vocalic = vocalic_series
         self.semantic_link_time_steps_in_coordination_scale = semantic_link_time_steps_in_coordination_scale
 
-    @property
-    def num_genders(self) -> int:
-        return self.vocalic.num_genders
-
-    @property
-    def gender_map(self) -> Dict[int, int]:
-        return self.vocalic.gender_map
-
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame, vocalic_features: List[str]):
         vocalic_series = VocalicSeries.from_data_frame(evidence_df=evidence_df, vocalic_features=vocalic_features)
@@ -59,9 +51,6 @@ class VocalicSemanticSeries:
 
     def standardize(self):
         self.vocalic.standardize()
-
-    def normalize_per_gender(self):
-        self.vocalic.normalize_per_gender()
 
     def normalize_per_subject(self):
         self.vocalic.normalize_per_subject()
@@ -98,9 +87,14 @@ class VocalicSemanticModel:
                  b_p_semantic_link: float, share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
                  share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
+                 num_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
+                 mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
+        self.num_layers_f = num_layers_f
+        self.dim_hidden_layer_f = dim_hidden_layer_f
+        self.activation_function_name_f = activation_function_name_f
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -126,7 +120,11 @@ class VocalicSemanticModel:
                                                       share_mean_a0_across_features=share_mean_a0_across_features,
                                                       share_sd_aa_across_subjects=share_sd_aa_across_subjects,
                                                       share_sd_aa_across_features=share_sd_aa_across_features,
-                                                      mode=mode)
+                                                      mode=mode,
+                                                      f=f,
+                                                      mean_weights_f=mean_weights_f,
+                                                      sd_weights_f=sd_weights_f,
+                                                      max_lag=max_vocalic_lag)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
                                                b_p=b_p_semantic_link)
@@ -166,8 +164,7 @@ class VocalicSemanticModel:
                                                                     time_scale_density=semantic_link_time_scale_density,
                                                                     coordination=coordination_samples.coordination)
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
-                                                                subjects=latent_vocalic_samples.subjects,
-                                                                gender_map=latent_vocalic_samples.gender_map)
+                                                                subjects=latent_vocalic_samples.subjects)
 
         samples = VocalicSemanticSamples(coordination=coordination_samples, latent_vocalic=latent_vocalic_samples,
                                          semantic_link=semantic_link_samples,
@@ -176,12 +173,13 @@ class VocalicSemanticModel:
         return samples
 
     def fit(self, evidence: VocalicSemanticSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1) -> Tuple[pm.Model, az.InferenceData]:
+            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
+        pm.Model, az.InferenceData]:
         assert evidence.vocalic.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init="jitter+adapt_diag", tune=burn_in, chains=num_chains, random_seed=seed,
+            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
 
         return pymc_model, idata
@@ -202,9 +200,11 @@ class VocalicSemanticModel:
                 prev_same_subject_mask=evidence.vocalic.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic.vocalic_prev_diff_subject_mask,
                 subjects=evidence.vocalic.subjects_in_time,
-                gender_map=evidence.vocalic.gender_map,
                 time_dimension="vocalic_time",
-                feature_dimension="vocalic_feature")[0]
+                feature_dimension="vocalic_feature",
+                num_layers_f=self.num_layers_f,
+                dim_hidden_layer_f=self.dim_hidden_layer_f,
+                activation_function_name_f=self.activation_function_name_f)[0]
 
             self.semantic_link_cpn.update_pymc_model(
                 coordination=coordination[evidence.num_time_steps_in_semantic_link_scale],

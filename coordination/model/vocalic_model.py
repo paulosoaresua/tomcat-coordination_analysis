@@ -37,8 +37,7 @@ class VocalicSeries:
 
     def __init__(self, uuid: str, features: List[str], num_time_steps_in_coordination_scale: int,
                  subjects_in_time: np.ndarray, observation: np.ndarray, previous_time_same_subject: np.ndarray,
-                 previous_time_diff_subject: np.ndarray, time_steps_in_coordination_scale: np.ndarray,
-                 gender_map: Dict[int, int]):
+                 previous_time_diff_subject: np.ndarray, time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
         self.features = features
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
@@ -47,11 +46,6 @@ class VocalicSeries:
         self.previous_time_same_subject = previous_time_same_subject
         self.previous_time_diff_subject = previous_time_diff_subject
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
-        self.gender_map = gender_map
-
-    @property
-    def num_genders(self) -> int:
-        return len(set(list(self.gender_map.values())))
 
     def chop(self, min_time_step: int, max_time_step: int):
         """
@@ -98,19 +92,6 @@ class VocalicSeries:
             mean = obs_per_subject.mean(axis=1)[:, None]
             std = obs_per_subject.std(axis=1)[:, None]
             self.observation[:, self.subjects_in_time == subject] = (obs_per_subject - mean) / std
-
-    def normalize_per_gender(self):
-        """
-        Make sure measurements have mean 0 and standard deviation 1 per gender and feature.
-        """
-
-        genders_in_time = np.array([self.gender_map[s] for s in self.subjects_in_time])
-
-        for gender in [0, 1]:  # Male and Female
-            obs_per_gender = self.observation[:, genders_in_time == gender]
-            mean = obs_per_gender.mean(axis=1)[:, None]
-            std = obs_per_gender.std(axis=1)[:, None]
-            self.observation[:, genders_in_time == gender] = (obs_per_gender - mean) / std
 
     def normalize_across_subject(self):
         """
@@ -205,16 +186,6 @@ class VocalicSeries:
         # Swap axes such that the first dimension represents the different subjects and the second the vocalic features
         obs_vocalic = np.array(obs_vocalic)
 
-        gender_map = {}
-        gender_cols = ["red_gender", "green_gender", "blue_gender"]
-        for i, gender in enumerate(evidence_df[gender_cols].values[0]):
-            if gender == "M":
-                gender_map[i] = 0
-            elif gender == "F":
-                gender_map[i] = 1
-            else:
-                gender_map[i] = np.random.choice([0, 1])
-
         return cls(
             uuid=evidence_df["experiment_id"].values[0],
             features=vocalic_features,
@@ -226,8 +197,7 @@ class VocalicSeries:
             previous_time_diff_subject=np.array(
                 literal_eval(evidence_df["vocalic_previous_time_diff_subject"].values[0]), dtype=int),
             time_steps_in_coordination_scale=np.array(
-                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0]), dtype=int),
-            gender_map=gender_map
+                literal_eval(evidence_df["vocalic_time_steps_in_coordination_scale"].values[0]), dtype=int)
         )
 
     @property
@@ -274,14 +244,14 @@ class VocalicModel:
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
                  share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
                  sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
-                 num_hidden_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
+                 num_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
                  mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
 
         # Either one or the other
 
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.num_hidden_layers_f = num_hidden_layers_f
+        self.num_layers_f = num_layers_f
         self.dim_hidden_layer_f = dim_hidden_layer_f
         self.activation_function_name_f = activation_function_name_f
 
@@ -343,8 +313,7 @@ class VocalicModel:
                                                                       can_repeat_subject=can_repeat_subject)
 
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
-                                                                subjects=latent_vocalic_samples.subjects,
-                                                                gender_map=latent_vocalic_samples.gender_map)
+                                                                subjects=latent_vocalic_samples.subjects)
 
         samples = VocalicSamples(coordination=coordination_samples, latent_vocalic=latent_vocalic_samples,
                                  obs_vocalic=obs_vocalic_samples)
@@ -378,10 +347,9 @@ class VocalicModel:
                 prev_same_subject_mask=evidence.vocalic_prev_same_subject_mask,
                 prev_diff_subject_mask=evidence.vocalic_prev_diff_subject_mask,
                 subjects=evidence.subjects_in_time,
-                gender_map=evidence.gender_map,
                 time_dimension="vocalic_time",
                 feature_dimension="vocalic_feature",
-                num_hidden_layers_f=self.num_hidden_layers_f,
+                num_layers_f=self.num_layers_f,
                 dim_hidden_layer_f=self.dim_hidden_layer_f,
                 activation_function_name_f=self.activation_function_name_f)[0]
 

@@ -23,7 +23,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        num_parallel_processes: int, model: str, burn_in: int, num_samples: int, num_chains: int,
                        seed: int, num_inference_jobs: int, do_prior: int, do_posterior: int,
                        initial_coordination: str, num_subjects: int, brain_channels: str, vocalic_features: str,
-                       self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_brain: str,
+                       self_dependent: int, sd_mean_uc0: float, sd_sd_uc: float, sd_mean_a0_brain: str,
                        sd_sd_aa_brain: str, sd_sd_o_brain: str, sd_mean_a0_body: str, sd_sd_aa_body: str,
                        sd_sd_o_body: str, a_mixture_weights: str, mean_mean_a0_vocalic: str, sd_mean_a0_vocalic: str,
                        sd_sd_aa_vocalic: str, sd_sd_o_vocalic: str, a_p_semantic_link: float, b_p_semantic_link: float,
@@ -32,7 +32,7 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                        share_sd_o_across_subjects: int, share_sd_o_across_features: int, vocalic_mode: str, sd_uc: str,
                        mean_a0_brain: str, sd_aa_brain: str, sd_o_brain: str, mean_a0_body: str, sd_aa_body: str,
                        sd_o_body: str, mixture_weights: str, mean_a0_vocalic: str, sd_aa_vocalic: str,
-                       sd_o_vocalic: str, p_semantic_link: str, num_hidden_layers_f: int,
+                       sd_o_vocalic: str, p_semantic_link: str, num_layers_f: int,
                        dim_hidden_layer_f: int, activation_function_name_f: str, mean_weights_f: float,
                        sd_weights_f: float, max_lag: int, nuts_init_method: str):
     # Parameters passed to this function relevant for post-analysis.
@@ -42,6 +42,10 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
     execution_time = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
     results_folder = f"{out_dir}/{model}/{execution_time}"
     os.makedirs(results_folder, exist_ok=True)
+
+    print("")
+    print(f"Inferences will be saved in {results_folder}")
+    print("")
 
     # Save arguments passed to the function
 
@@ -127,13 +131,13 @@ def parallel_inference(out_dir: str, evidence_filepath: str, tmux_session_name: 
                                      f'--share_sd_o_across_subjects={share_sd_o_across_subjects} ' \
                                      f'--share_sd_o_across_features={share_sd_o_across_features} ' \
                                      f'--vocalic_mode={vocalic_mode} ' \
-                                     f'--num_hidden_layers_f={num_hidden_layers_f} ' \
+                                     f'--num_layers_f={num_layers_f} ' \
                                      f'--dim_hidden_layer_f={dim_hidden_layer_f} ' \
                                      f'--activation_function_name_f="{activation_function_name_f}" ' \
                                      f'--mean_weights_f={mean_weights_f} ' \
                                      f'--sd_weights_f={sd_weights_f} ' \
                                      f'--max_lag={max_lag} ' \
-                                     f'--nuts_init_method{nuts_init_method}'
+                                     f'--nuts_init_method={nuts_init_method}'
 
         tmux.create_window(tmux_window_name)
         # The user has to make sure tmux initializes conda when a new session or window is created.
@@ -282,7 +286,7 @@ if __name__ == "__main__":
                              "depending on how parameters are shared.")
     parser.add_argument("--p_semantic_link", type=str, required=False, default="",
                         help="Fixed value for p_semantic_link.")
-    parser.add_argument("--num_hidden_layers_f", type=int, required=False, default=0,
+    parser.add_argument("--num_layers_f", type=int, required=False, default=0,
                         help="Number of hidden layers in function f(.) if f is to be fitted.")
     parser.add_argument("--dim_hidden_layer_f", type=int, required=False, default=0,
                         help="Number of units in the hidden layers of f(.) if f is to be fitted.")
@@ -292,7 +296,7 @@ if __name__ == "__main__":
                         help="Mean of the weights (prior)for fitting f(.).")
     parser.add_argument("--sd_weights_f", type=float, required=False, default=1,
                         help="Standard deviation of the weights (prior) for fitting f(.).")
-    parser.add_argument("--max_lag", type=float, required=False, default=1,
+    parser.add_argument("--max_lag", type=int, required=False, default=0,
                         help="Maximum lag to the vocalic component if lags are to be fitted.")
     parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
                         help="NUTS initialization method.")
@@ -332,12 +336,12 @@ if __name__ == "__main__":
                        a_p_semantic_link=args.a_p_semantic_link,
                        b_p_semantic_link=args.b_p_semantic_link,
                        ignore_bad_channels=args.ignore_bad_channels,
-                       share_mean_a0_across_subjects=bool(args.share_mean_a0_across_subjects),
-                       share_mean_a0_across_features=bool(args.share_mean_a0_across_features),
-                       share_sd_aa_across_subjects=bool(args.share_sd_aa_across_subjects),
-                       share_sd_aa_across_features=bool(args.share_sd_aa_across_features),
-                       share_sd_o_across_subjects=bool(args.share_sd_o_across_subjects),
-                       share_sd_o_across_features=bool(args.share_sd_o_across_features),
+                       share_mean_a0_across_subjects=args.share_mean_a0_across_subjects,
+                       share_mean_a0_across_features=args.share_mean_a0_across_features,
+                       share_sd_aa_across_subjects=args.share_sd_aa_across_subjects,
+                       share_sd_aa_across_features=args.share_sd_aa_across_features,
+                       share_sd_o_across_subjects=args.share_sd_o_across_subjects,
+                       share_sd_o_across_features=args.share_sd_o_across_features,
                        vocalic_mode=args.vocalic_mode,
                        sd_uc=args.sd_uc,
                        mean_a0_brain=args.mean_a0_brain,
@@ -351,7 +355,7 @@ if __name__ == "__main__":
                        sd_aa_vocalic=args.sd_aa_vocalic,
                        sd_o_vocalic=args.sd_o_vocalic,
                        p_semantic_link=args.p_semantic_link,
-                       num_hidden_layers_f=args.num_hidden_layers_f,
+                       num_layers_f=args.num_layers_f,
                        dim_hidden_layer_f=args.dim_hidden_layer_f,
                        activation_function_name_f=args.activation_function_name_f,
                        mean_weights_f=args.mean_weights_f,

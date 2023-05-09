@@ -37,19 +37,20 @@ def mixture_logp(mixture_component: Any,
     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
                          mixture_component[..., 0]).sum()
 
+    # Fit a function f(.) to correct anti-symmetry.
+    X = feed_forward_logp_f(input_data=mixture_component.reshape(
+        (mixture_component.shape[0] * mixture_component.shape[1], mixture_component.shape[2])),
+        input_layer_f=input_layer_f,
+        hidden_layers_f=hidden_layers_f,
+        output_layer_f=output_layer_f,
+        activation_function_number_f=activation_function_number_f).reshape(mixture_component.shape)
+
     # D contains the values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component, axes=(1, 0))  # s * (s-1) x d x t
+    D = ptt.tensordot(expander_aux_mask_matrix, X, axes=(1, 0))  # s * (s-1) x d x t
 
     # Discard last time step because it is not previous to any other time step.
     # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
     D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
-
-    # Fit a function f(.) over the pairs to correct anti-symmetry.
-    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
 
     # Current values from each subject. We extend S and point such that they match the dimensions of D.
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
@@ -400,7 +401,7 @@ class MixtureComponent:
 
         return mean_a0, sd_aa, mixture_weights
 
-    def _create_random_weights_f(self, num_hidden_layers: int, dim_hidden_layer: int, activation_function_name: str):
+    def _create_random_weights_f(self, num_layers: int, dim_hidden_layer: int, activation_function_name: str):
         """
         This function creates the weights used to fit the function f(.) as random variables. Because the mixture
         component uses a CustomDist, all the arguments of the logp function we pass must be tensors. So, we cannot
@@ -410,6 +411,9 @@ class MixtureComponent:
         in the hidden layers, and the last one will be weights in the last (output) layer.
         """
 
+        if num_layers == 0:
+            return [], [], [], 0
+
         # Gather observations from each layer. If some weights are pre-set, we don't need to infer them.
         if self.parameters.weights_f.value is None:
             observed_weights_f = [None] * 3
@@ -417,14 +421,8 @@ class MixtureComponent:
             observed_weights_f = self.parameters.weights_f.value
 
         # Features * number of subjects + bias term
-        input_layer_dim_in = self.dim_value * self.num_subjects * (self.num_subjects - 1) + 1
-        input_layer_dim_out = dim_hidden_layer
-
-        hidden_layer_dim_in = dim_hidden_layer + 1
-        hidden_layer_dim_out = dim_hidden_layer
-
-        output_layer_dim_in = dim_hidden_layer + 1
-        output_layer_dim_out = self.dim_value * self.num_subjects * (self.num_subjects - 1)
+        input_layer_dim_in = self.dim_value * self.num_subjects + 1
+        input_layer_dim_out = dim_hidden_layer if num_layers > 1 else self.dim_value * self.num_subjects
 
         input_layer = pm.Normal(f"{self.f_nn_weights_name}_in",
                                 mu=self.parameters.weights_f.prior.mean,
@@ -432,24 +430,36 @@ class MixtureComponent:
                                 size=(input_layer_dim_in, input_layer_dim_out),
                                 observed=observed_weights_f[0])
 
-        hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden",
-                                  mu=self.parameters.weights_f.prior.mean,
-                                  sigma=self.parameters.weights_f.prior.sd,
-                                  size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
-                                  observed=observed_weights_f[1])
+        # Input and Output layers count as 2. The remaining is hidden.
+        num_hidden_layers = num_layers - 2
+        if num_hidden_layers > 0:
+            hidden_layer_dim_in = dim_hidden_layer + 1
+            hidden_layer_dim_out = dim_hidden_layer
+            hidden_layers = pm.Normal(f"{self.f_nn_weights_name}_hidden",
+                                      mu=self.parameters.weights_f.prior.mean,
+                                      sigma=self.parameters.weights_f.prior.sd,
+                                      size=(num_hidden_layers, hidden_layer_dim_in, hidden_layer_dim_out),
+                                      observed=observed_weights_f[1])
 
-        # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
-        # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
-        # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
-        # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
-        hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
-            (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+            # There's a bug in PyMC 5.0.2 that we cannot pass an argument with more dimensions than the
+            # dimension of CustomDist. To work around it, I will join the layer dimension with the input dimension for
+            # the hidden layers. Inside the logp function, I will reshape the layers back to their original 3 dimensions:
+            # num_layers x in_dim x out_dim, so we can perform the feed-forward step.
+            hidden_layers = pm.Deterministic(f"{self.f_nn_weights_name}_hidden_reshaped", hidden_layers.reshape(
+                (num_hidden_layers * hidden_layer_dim_in, hidden_layer_dim_out)))
+        else:
+            hidden_layers = []
 
-        output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",
-                                 mu=self.parameters.weights_f.prior.mean,
-                                 sigma=self.parameters.weights_f.prior.sd,
-                                 size=(output_layer_dim_in, output_layer_dim_out),
-                                 observed=observed_weights_f[2])
+        if num_layers > 1:
+            output_layer_dim_in = dim_hidden_layer + 1
+            output_layer_dim_out = self.dim_value * self.num_subjects
+            output_layer = pm.Normal(f"{self.f_nn_weights_name}_out",
+                                     mu=self.parameters.weights_f.prior.mean,
+                                     sigma=self.parameters.weights_f.prior.sd,
+                                     size=(output_layer_dim_in, output_layer_dim_out),
+                                     observed=observed_weights_f[2])
+        else:
+            output_layer = []
 
         # Because we cannot pass a string or a function to CustomDist, we will identify a function by a number and
         # we will retrieve its implementation in the feed-forward function.
@@ -486,20 +496,14 @@ class MixtureComponent:
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
                           num_time_steps: int, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None,
-                          num_hidden_layers_f: int = 0, activation_function_name_f: str = "linear",
+                          num_layers_f: int = 0, activation_function_name_f: str = "linear",
                           dim_hidden_layer_f: int = 0) -> Any:
 
         mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
 
-        if num_hidden_layers_f > 0:
-            input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=dim_hidden_layer_f,
-                activation_function_name=activation_function_name_f)
-        else:
-            input_layer_f = []
-            hidden_layers_f = []
-            output_layer_f = []
-            activation_function_number_f = 0
+        input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
+            num_layers=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
+            activation_function_name=activation_function_name_f)
 
         # Auxiliary matricx to compute logp in a vectorized manner without having to loop over the individuals.
         # The expander matrix transforms a s x f x t tensor to a s * (s-1) x f x t tensor where the rows contain
