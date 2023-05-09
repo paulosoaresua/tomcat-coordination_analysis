@@ -2,6 +2,7 @@ from typing import Any, Callable, Optional
 
 from functools import partial
 
+import arviz as az
 import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
@@ -10,6 +11,9 @@ from scipy.stats import norm
 
 from coordination.component.lag import Lag
 from coordination.component.mixture_component import MixtureComponent
+from coordination.component.observation_component import ObservationComponent
+from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 from coordination.component.utils import feed_forward_logp_f, feed_forward_random_f
 
 
@@ -25,7 +29,8 @@ def mixture_logp(mixture_component: Any,
                  expander_aux_mask_matrix: ptt.TensorConstant,
                  prev_time_diff_subject: Any,
                  prev_diff_subject_mask: Any,
-                 self_dependent: ptt.TensorConstant):
+                 self_dependent: ptt.TensorConstant,
+                 F_inv: ptt.TensorConstant):
     num_subjects = mixture_component.shape[0]
     num_features = mixture_component.shape[1]
 
@@ -33,30 +38,39 @@ def mixture_logp(mixture_component: Any,
     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
                          mixture_component[..., 0]).sum()
 
+    # Computes the movement backwards according to the system dynamics, this will make the model learn a latent
+    # representation that respects the system dynamics.
+    mixture_component_previous_time = mixture_component#ptt.tensordot(F_inv, mixture_component, axes=(1, 1)).swapaxes(0, 1)
+
+    # Fit a function f(.) to correct anti-symmetry.
+    X = feed_forward_logp_f(input_data=mixture_component_previous_time.reshape(
+        (mixture_component_previous_time.shape[0] * mixture_component_previous_time.shape[1],
+         mixture_component_previous_time.shape[2])),
+        input_layer_f=input_layer_f,
+        hidden_layers_f=hidden_layers_f,
+        output_layer_f=output_layer_f,
+        activation_function_number_f=activation_function_number_f).reshape(mixture_component_previous_time.shape)
+
     # D contains the values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component, axes=(1, 0))  # s * (s-1) x d x t
+    D = ptt.tensordot(expander_aux_mask_matrix, X, axes=(1, 0))  # s * (s-1) x d x t
 
     # Discard last time step because it is not previous to any other time step.
     # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
     D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
 
-    # Fit a function f(.) over the pairs to correct anti-symmetry.
-    D = feed_forward_logp_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
-                            input_layer_f=input_layer_f,
-                            hidden_layers_f=hidden_layers_f,
-                            output_layer_f=output_layer_f,
-                            activation_function_number_f=activation_function_number_f).reshape(D.shape)
+    D = ptt.tensordot(F_inv, D, axes=(1, 1)).swapaxes(0, 1)
 
     # Current values from each subject. We extend S and point such that they match the dimensions of D.
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
 
     if self_dependent.eval():
         # Previous values from every subject
-        P = mixture_component[..., :-1]  # s x d x t-1
+        P = ptt.tensordot(F_inv, mixture_component[..., :-1], axes=(1, 1)).swapaxes(0, 1)  # s x d x t-1
 
         # Previous values from the same subjects
         # S_extended = pt.printing.Print("S")(ptt.repeat(P, repeats=(num_subjects - 1), axis=0))
         S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
+
     else:
         # Fixed value given by the initial mean for each subject. No self-dependency.
         S_extended = ptt.repeat(initial_mean[:, :, None], repeats=(num_subjects - 1), axis=0)
@@ -76,66 +90,66 @@ def mixture_logp(mixture_component: Any,
     return total_logp
 
 
-def mixture_random(initial_mean: np.ndarray,
-                   sigma: np.ndarray,
-                   mixture_weights: np.ndarray,
-                   coordination: np.ndarray,
-                   input_layer_f: np.ndarray,
-                   hidden_layers_f: np.ndarray,
-                   output_layer_f: np.ndarray,
-                   activation_function_number_f: int,
-                   expander_aux_mask_matrix: np.ndarray,
-                   prev_time_diff_subject: Any,
-                   prev_diff_subject_mask: Any,
-                   self_dependent: bool,
-                   num_subjects: int,
-                   dim_value: int,
-                   rng: Optional[np.random.Generator] = None,
-                   size: Optional[Tuple[int]] = None) -> np.ndarray:
-    num_time_steps = coordination.shape[-1]
-
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
-
-    # We sample the influencers in each time step using the mixture weights
-    influencers = []
-    for subject in range(num_subjects):
-        probs = np.insert(mixture_weights[subject], subject, 0)
-        influencer = rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps)
-        # We will use the influencer to index a matrix with 6 columns. One for each pair influencer -> influenced
-        influencers.append(subject * (num_subjects - 1) + np.minimum(influencer, num_subjects - 2))
-    influencers = np.array(influencers)
-
-    sample = np.zeros_like(noise)
-    prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
-    sample[..., 0] = prior_sample
-
-    # TODO - Add treatment for lag
-    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
-    for t in np.arange(1, num_time_steps):
-        D = np.einsum("ij,jlk->ilk", expander_aux_mask_matrix, sample[..., t - 1][..., None])  # s * (s-1) x d x 1
-
-        # Previous sample from a different individual
-        D = feed_forward_random_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
-                                  input_layer_f=input_layer_f,
-                                  hidden_layers_f=hidden_layers_f,
-                                  output_layer_f=output_layer_f,
-                                  activation=activation).reshape(D.shape)[..., 0]  # s * (s-1) x d x 1
-
-        D = D[influencers[..., t]]  # s x d
-
-        # Previous sample from the same individual
-        if self_dependent:
-            S = sample[..., t - 1]
-        else:
-            S = initial_mean
-
-        mean = ((D - S) * coordination[t] + S)
-
-        transition_sample = rng.normal(loc=mean, scale=sigma)
-
-        sample[..., t] = transition_sample
-
-    return sample + noise
+# def mixture_random(initial_mean: np.ndarray,
+#                    sigma: np.ndarray,
+#                    mixture_weights: np.ndarray,
+#                    coordination: np.ndarray,
+#                    input_layer_f: np.ndarray,
+#                    hidden_layers_f: np.ndarray,
+#                    output_layer_f: np.ndarray,
+#                    activation_function_number_f: int,
+#                    expander_aux_mask_matrix: np.ndarray,
+#                    prev_time_diff_subject: Any,
+#                    prev_diff_subject_mask: Any,
+#                    self_dependent: bool,
+#                    num_subjects: int,
+#                    dim_value: int,
+#                    rng: Optional[np.random.Generator] = None,
+#                    size: Optional[Tuple[int]] = None) -> np.ndarray:
+#     num_time_steps = coordination.shape[-1]
+#
+#     noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
+#
+#     # We sample the influencers in each time step using the mixture weights
+#     influencers = []
+#     for subject in range(num_subjects):
+#         probs = np.insert(mixture_weights[subject], subject, 0)
+#         influencer = rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps)
+#         # We will use the influencer to index a matrix with 6 columns. One for each pair influencer -> influenced
+#         influencers.append(subject * (num_subjects - 1) + np.minimum(influencer, num_subjects - 2))
+#     influencers = np.array(influencers)
+#
+#     sample = np.zeros_like(noise)
+#     prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
+#     sample[..., 0] = prior_sample
+#
+#     # TODO - Add treatment for lag
+#     activation = ActivationFunction.from_numpy_number(activation_function_number_f)
+#     for t in np.arange(1, num_time_steps):
+#         D = np.einsum("ij,jlk->ilk", expander_aux_mask_matrix, sample[..., t - 1][..., None])  # s * (s-1) x d x 1
+#
+#         # Previous sample from a different individual
+#         D = feed_forward_random_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
+#                                   input_layer_f=input_layer_f,
+#                                   hidden_layers_f=hidden_layers_f,
+#                                   output_layer_f=output_layer_f,
+#                                   activation=activation).reshape(D.shape)[..., 0]  # s * (s-1) x d x 1
+#
+#         D = D[influencers[..., t]]  # s x d
+#
+#         # Previous sample from the same individual
+#         if self_dependent:
+#             S = sample[..., t - 1]
+#         else:
+#             S = initial_mean
+#
+#         mean = ((D - S) * coordination[t] + S)
+#
+#         transition_sample = rng.normal(loc=mean, scale=sigma)
+#
+#         sample[..., t] = transition_sample
+#
+#     return sample + noise
 
 
 class MassSpringDamperLatentMixtureComponent(MixtureComponent):
@@ -185,6 +199,14 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
         self.damping_coefficient = damping_coefficient
         self.dt = dt  # size of the time step
 
+        # Systems dynamics matrix
+        A = np.array([
+            [0, 1],
+            [-self.spring_constant / self.mass, -self.damping_coefficient / self.mass]
+        ])
+        self.F = expm(A * self.dt)  # Fundamental matrix
+        self.F_inv = expm(-A * self.dt)  # Fundamental matrix inverse to estimate backward dynamics
+
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
                                    sampled_influencers: np.ndarray, mean_a0: np.ndarray,
                                    sd_aa: np.ndarray) -> np.ndarray:
@@ -192,13 +214,6 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
-
-        # Systems dynamics matrix
-        A = np.array([
-            [0, 1],
-            [-self.spring_constant / self.mass, -self.damping_coefficient / self.mass]
-        ])
-        F = expm(A * self.dt)  # Fundamental matrix
 
         for t in range(num_time_steps):
             if t == 0:
@@ -223,7 +238,7 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
 
                 blended_state = (D - S) * C + S
 
-                mean = np.einsum("ij,klj->kli", F, blended_state)
+                mean = np.einsum("ij,klj->kli", self.F, blended_state)
 
                 values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
 
@@ -239,21 +254,15 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
                           mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None,
                           mixture_weights: Optional[Any] = None,
-                          num_hidden_layers_f: int = 0,
+                          num_layers_f: int = 0,
                           activation_function_name_f: str = "linear",
                           dim_hidden_layer_f: int = 0) -> Any:
 
         mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
 
-        if num_hidden_layers_f > 0:
-            input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-                num_hidden_layers=num_hidden_layers_f, dim_hidden_layer=dim_hidden_layer_f,
-                activation_function_name=activation_function_name_f)
-        else:
-            input_layer_f = []
-            hidden_layers_f = []
-            output_layer_f = []
-            activation_function_number_f = 0
+        input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
+            num_layers=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
+            activation_function_name=activation_function_name_f)
 
         # Auxiliary matricx to compute logp in a vectorized manner without having to loop over the individuals.
         # The expander matrix transforms a s x f x t tensor to a s * (s-1) x f x t tensor where the rows contain
@@ -291,40 +300,52 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
                        sd_aa,
                        mixture_weights,
                        coordination,
-                       input_layer_f,
-                       hidden_layers_f,
-                       output_layer_f,
+                       ptt.constant(input_layer_f),
+                       ptt.constant(hidden_layers_f),
+                       ptt.constant(output_layer_f),
                        activation_function_number_f,
                        expander_aux_mask_matrix,
                        prev_time_diff_subject,
                        lag_mask,
-                       np.array(self.self_dependent))
-        random_fn = partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
+                       np.array(self.self_dependent),
+                       self.F_inv)
+        # random_fn = partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
         mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp,
-                                          random=random_fn,
+                                          # random=random_fn,
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
+
+        # mixture_logp(observed_values, *logp_params)
 
         return mixture_component, mean_a0, sd_aa, mixture_weights
 
 
 if __name__ == "__main__":
-    system = MassSpringDamperLatentMixtureComponent(uuid="spring_test",
-                                                    num_subjects=4,
-                                                    spring_constant=5,
-                                                    mass=10,
-                                                    damping_coefficient=0,
-                                                    dt=0.2,
-                                                    self_dependent=True,
-                                                    mean_mean_a0=np.zeros((4, 2)),
-                                                    sd_mean_a0=np.ones((4, 2)),
-                                                    sd_sd_aa=np.ones((4, 2)),
-                                                    a_mixture_weights=np.ones((4, 3)),
-                                                    share_mean_a0_across_subjects=False,
-                                                    share_sd_aa_across_subjects=False,
-                                                    share_mean_a0_across_features=False,
-                                                    share_sd_aa_across_features=False,
-                                                    f=lambda x, i: np.where((i == 1) | (i == 3), -1, 1)[..., None] * x)
+    coordination = SigmoidGaussianCoordinationComponent(sd_mean_uc0=1,
+                                                        sd_sd_uc=1)
+    state_space = MassSpringDamperLatentMixtureComponent(uuid="model_state",
+                                                         num_subjects=4,
+                                                         spring_constant=5,
+                                                         mass=10,
+                                                         damping_coefficient=0,
+                                                         dt=0.2,
+                                                         self_dependent=True,
+                                                         mean_mean_a0=np.zeros((4, 2)),
+                                                         sd_mean_a0=np.ones((4, 2)) * 20,
+                                                         sd_sd_aa=np.ones(1),
+                                                         a_mixture_weights=np.ones((4, 3)),
+                                                         share_mean_a0_across_subjects=False,
+                                                         share_sd_aa_across_subjects=True,
+                                                         share_mean_a0_across_features=False,
+                                                         share_sd_aa_across_features=True)#,
+                                                         # f=lambda x, i: np.where((i == 1) | (i == 3), -1, 1)[
+                                                         #                    ..., None] * x)
+    observations = ObservationComponent(uuid="observation",
+                                        num_subjects=state_space.num_subjects,
+                                        dim_value=2,
+                                        sd_sd_o=np.ones(1),
+                                        share_sd_o_across_subjects=True,
+                                        share_sd_o_across_features=True)
 
     # For 3 subjects
     # system.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0]])
@@ -332,18 +353,66 @@ if __name__ == "__main__":
     # system.parameters.mixture_weights.value = np.array([[1, 0], [0, 1], [0, 1]])
 
     # For 4 subjects
-    system.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0], [15, 0]])
-    system.parameters.sd_aa.value = np.ones((4, 2)) * 0.1
-    system.parameters.mixture_weights.value = np.array([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]])
+    state_space.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0], [15, 0]])
+    state_space.parameters.sd_aa.value = np.ones(1) * 0.1
+    state_space.parameters.mixture_weights.value = np.array([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]])
+    observations.parameters.sd_o.value = np.ones(1) * 1
 
-    samples = system.draw_samples(num_series=1, relative_frequency=1, coordination=np.ones((1, 50)) * 1, seed=0)
+    state_samples = state_space.draw_samples(num_series=1, relative_frequency=1, coordination=np.ones((1, 50)) * 1,
+                                             seed=0)
+    observation_samples = observations.draw_samples(state_samples.values)
 
     import matplotlib.pyplot as plt
 
     plt.figure()
-    for s in range(system.num_subjects):
-        plt.scatter(samples.time_steps_in_coordination_scale, samples.values[0, s, 0],
+    for s in range(state_space.num_subjects):
+        plt.scatter(state_samples.time_steps_in_coordination_scale, observation_samples.values[0, s, 0],
                     label=f"Position subject {s + 1}")
     plt.legend()
-
     plt.show()
+
+    # Inference
+    coords = {"feature": ["position", "velocity"],
+              "coordination_time": np.arange(50),
+              "subject": np.arange(state_space.num_subjects),
+              "component_time": np.arange(50)}
+
+    pymc_model = pm.Model(coords=coords)
+    with pymc_model:
+        # state_space.parameters.clear_values()
+        # observations.parameters.clear_values()
+        coordination.parameters.sd_uc.value = np.array([0.1])
+
+        coordination_dist = coordination.update_pymc_model(time_dimension="coordination_time")[1]
+        state_space_dist = state_space.update_pymc_model(coordination=coordination_dist,
+                                                         subject_dimension="subject",
+                                                         feature_dimension="feature",
+                                                         time_dimension="component_time",
+                                                         num_time_steps=50)[0]
+        # observed_values=state_samples.values[0])[0]
+        observations.update_pymc_model(latent_component=state_space_dist,
+                                       subject_dimension="subject",
+                                       feature_dimension="feature",
+                                       time_dimension="component_time",
+                                       observed_values=observation_samples.values[0])
+
+        idata = pm.sample(1000, init="jitter+adapt_diag", tune=1000, chains=2, random_seed=0, cores=2)
+
+        sampled_vars = set(idata.posterior.data_vars)
+        var_names = sorted(list(set(coordination.parameter_names + state_space.parameter_names + observations.parameter_names).intersection(sampled_vars)))
+        if len(var_names) > 0:
+            az.plot_trace(idata, var_names=var_names)
+            plt.tight_layout()
+            plt.show()
+
+        coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
+        coordination_posterior.plot(plt.figure().gca(), show_samples=False)
+
+        plt.figure()
+        for s in range(state_space.num_subjects):
+            plt.scatter(state_samples.time_steps_in_coordination_scale,
+                        idata.posterior["model_state"].sel(subject=s, feature="position").mean(dim=["draw", "chain"]),
+                        label=f"Mean Position Subject {s + 1}")
+
+        plt.legend()
+        plt.show()
