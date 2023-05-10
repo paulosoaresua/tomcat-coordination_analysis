@@ -439,8 +439,8 @@ class SerializedComponent:
             samples.prev_time_diff_subject.append(
                 np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
 
+            # Fill dependencies
             prev_time_per_subject = {}
-
             for t in range(num_time_steps_in_cpn_scale):
                 samples.prev_time_same_subject[s][t] = prev_time_per_subject.get(samples.subjects[s][t], -1)
 
@@ -454,54 +454,66 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
-                subject_idx_mean_a0 = samples.subjects[s][t]
-                subject_idx_sd_aa = samples.subjects[s][t]
-                if self.share_mean_a0_across_subjects:
-                    subject_idx_mean_a0 = 0
-                if self.share_sd_aa_across_subjects:
-                    subject_idx_sd_aa = 0
-
-                if samples.prev_time_same_subject[s][t] < 0:
-                    # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
-                    # t_0 is the initial utterance of one of the subjects only.
-
-                    mean = mean_a0[subject_idx_mean_a0]
-                    sd = sd_aa[subject_idx_sd_aa]
-
-                    samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
-                else:
-                    C = coordination[s, samples.time_steps_in_coordination_scale[s][t]]
-
-                    if self.self_dependent:
-                        # When there's self dependency, the component either depends on the previous value of another subject,
-                        # or the previous value of the same subject.
-                        S = samples.values[s][..., samples.prev_time_same_subject[s][t]]
-                    else:
-                        # When there's no self dependency, the component either depends on the previous value of another subject,
-                        # or it is samples around a fixed mean.
-                        S = mean_a0[subject_idx_mean_a0]
-
-                    prev_diff_mask = (samples.prev_time_diff_subject[s][t] != -1).astype(int)
-                    D = samples.values[s][..., samples.prev_time_diff_subject[s][t]]
-
-                    if self.f is not None:
-                        source_subject = samples.subjects[s][samples.prev_time_diff_subject[s][t]]
-                        target_subject = samples.subjects[s][t]
-
-                        D = self.f(D, source_subject, target_subject)
-
-                    if self.mode == Mode.BLENDING:
-                        mean = (D - S) * C * prev_diff_mask + S
-                    else:
-                        if prev_diff_mask == 1 and np.random.rand() <= C:
-                            mean = D
-                        else:
-                            mean = S
-                    sd = sd_aa[subject_idx_sd_aa]
-
-                    samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
-
         return samples
+
+    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
+                                   subjects_in_time: np.ndarray, prev_time_same_subject: np.ndarray,
+                                   prev_time_diff_subject: np.ndarray, mean_a0: np.ndarray,
+                                   sd_aa: np.ndarray) -> np.ndarray:
+
+        num_time_steps = len(time_steps_in_coordination_scale)
+        values = np.zeros((self.dim_value, num_time_steps))
+
+        for t in range(num_time_steps):
+            if self.share_mean_a0_across_subjects:
+                subject_idx_mean_a0 = 0
+            else:
+                subject_idx_mean_a0 = subjects_in_time[t]
+
+            if self.share_sd_aa_across_subjects:
+                subject_idx_sd_aa = 0
+            else:
+                subject_idx_sd_aa = subjects_in_time[t]
+
+            if prev_time_same_subject[t] < 0:
+                # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
+                # t_0 is the initial utterance of one of the subjects only.
+
+                mean = mean_a0[subject_idx_mean_a0]
+                sd = sd_aa[subject_idx_sd_aa]
+
+                values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
+            else:
+                C = sampled_coordination[time_steps_in_coordination_scale[t]]
+
+                if self.self_dependent:
+                    # When there's self dependency, the component either depends on the previous value of another subject,
+                    # or the previous value of the same subject.
+                    S = values[..., prev_time_same_subject[t]]
+                else:
+                    # When there's no self dependency, the component either depends on the previous value of another subject,
+                    # or it is samples around a fixed mean.
+                    S = mean_a0[subject_idx_mean_a0]
+
+                prev_diff_mask = (prev_time_diff_subject[t] != -1).astype(int)
+                D = values[..., prev_time_diff_subject[t]]
+
+                if self.f is not None:
+                    source_subject = samples.subjects[s][samples.prev_time_diff_subject[s][t]]
+                    target_subject = samples.subjects[s][t]
+
+                    D = self.f(D, source_subject, target_subject)
+
+                if self.mode == Mode.BLENDING:
+                    mean = (D - S) * C * prev_diff_mask + S
+                else:
+                    if prev_diff_mask == 1 and np.random.rand() <= C:
+                        mean = D
+                    else:
+                        mean = S
+                sd = sd_aa[subject_idx_sd_aa]
+
+                samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
 
     def _draw_random_subjects(self, num_series: int, num_time_steps: int, time_scale_density: float,
                               can_repeat_subject: bool) -> np.ndarray:

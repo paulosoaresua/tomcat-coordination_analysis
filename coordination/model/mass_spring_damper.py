@@ -58,14 +58,18 @@ def mixture_logp(mixture_component: Any,
     # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
     D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
 
-    D = ptt.tensordot(F_inv, D, axes=(1, 1)).swapaxes(0, 1)
+    F_inv_extended = ptt.tensordot(expander_aux_mask_matrix, F_inv, axes=(1, 0))  # s * (s-1) x d x d
+
+    # D = ptt.tensordot(F_extended, D, axes=(1, 1)).swapaxes(0, 1)
+    D = ptt.batched_tensordot(F_inv_extended, D, axes=[(1,), (1,)])
 
     # Current values from each subject. We extend S and point such that they match the dimensions of D.
     point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
 
     if self_dependent.eval():
         # Previous values from every subject
-        P = ptt.tensordot(F_inv, mixture_component[..., :-1], axes=(1, 1)).swapaxes(0, 1)  # s x d x t-1
+        # P = ptt.tensordot(F_inv, mixture_component[..., :-1], axes=([0, 1], [0, 1])).swapaxes(0, 1)  # s x d x t-1
+        P = ptt.batched_tensordot(F_inv, mixture_component[..., :-1], axes=[(1,), (1,)])
 
         # Previous values from the same subjects
         # S_extended = pt.printing.Print("S")(ptt.repeat(P, repeats=(num_subjects - 1), axis=0))
@@ -156,7 +160,7 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
 
     def __init__(self, uuid: str,
                  num_subjects: int,
-                 spring_constant: float,
+                 spring_constant: np.ndarray,
                  mass: float,
                  damping_coefficient: float,
                  dt: float,
@@ -194,18 +198,27 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
                          sd_weights_f=sd_weights_f,
                          max_lag=max_lag)
 
+        # We assume the spring_constants are known but this can be changed to have them as latent variables if needed.
+        assert spring_constant.ndim == 1 and len(spring_constant) == self.num_subjects
+
         self.spring_constant = spring_constant
         self.mass = mass
         self.damping_coefficient = damping_coefficient
         self.dt = dt  # size of the time step
 
         # Systems dynamics matrix
-        A = np.array([
-            [0, 1],
-            [-self.spring_constant / self.mass, -self.damping_coefficient / self.mass]
-        ])
-        self.F = expm(A * self.dt)  # Fundamental matrix
-        self.F_inv = expm(-A * self.dt)  # Fundamental matrix inverse to estimate backward dynamics
+        F = []
+        F_inv = []
+        for subject in range(self.num_subjects):
+            A = np.array([
+                [0, 1],
+                [-self.spring_constant[subject] / self.mass, -self.damping_coefficient / self.mass]
+            ])
+            F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
+            F_inv.append(expm(-A * self.dt)[None, ...])  # Fundamental matrix inverse to estimate backward dynamics
+
+        self.F = np.concatenate(F, axis=0)
+        self.F_inv = np.concatenate(F_inv, axis=0)
 
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
                                    sampled_influencers: np.ndarray, mean_a0: np.ndarray,
@@ -229,14 +242,14 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
             else:
                 # Backwards dynamics. This is to guarantee when we apply the lag to each subject, we have mean_a0 as
                 # the initial value
-                mean = np.einsum("ij,klj->kli", self.F_inv, values[..., t + 1])
+                mean = np.einsum("ijk,lij->lik", self.F_inv, values[..., t + 1])
                 values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
 
         for t in range(max_lag + 1, num_time_steps + extra_time_steps):
             if t >= num_time_steps + extra_time_steps - max_lag:
                 # There's no coordination for these time steps. They are extra and we use them to fill in the gaps
                 # when we roll the samples by each subject's lag in the end.
-                mean = np.einsum("ij,klj->kli", self.F, values[..., t - 1])
+                mean = np.einsum("ijk,lij->lik", self.F, values[..., t - 1])
             else:
                 C = sampled_coordination[:, time_steps_in_coordination_scale[t - max_lag]][:, None]
 
@@ -256,7 +269,7 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
 
                 blended_state = (D - S) * C + S
 
-                mean = np.einsum("ij,klj->kli", self.F, blended_state)
+                mean = np.einsum("ijk,lij->lik", self.F, blended_state)
 
             # Add some noise
             values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
@@ -265,8 +278,9 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
         if self.lag_cpn is not None:
             truncated_values_per_subject = []
             for subject in range(self.num_subjects):
-                lag = -self.lag_cpn.parameters.lag.value[subject] # lag contains the correction, so we use -lag
-                truncated_values_per_subject.append(values[:, subject, :, (max_lag + lag):(num_time_steps + max_lag + lag)][:, None, :, :])
+                lag = -self.lag_cpn.parameters.lag.value[subject]  # lag contains the correction, so we use -lag
+                truncated_values_per_subject.append(
+                    values[:, subject, :, (max_lag + lag):(num_time_steps + max_lag + lag)][:, None, :, :])
 
             values = np.concatenate(truncated_values_per_subject, axis=1)
 
@@ -343,7 +357,7 @@ class MassSpringDamperLatentMixtureComponent(MixtureComponent):
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
 
-        # mixture_logp(observed_values, *logp_params)
+        # mixture_logp(ptt.constant(observed_values), *logp_params)
 
         return mixture_component, mean_a0, sd_aa, mixture_weights
 
@@ -353,7 +367,7 @@ if __name__ == "__main__":
                                                         sd_sd_uc=1)
     state_space = MassSpringDamperLatentMixtureComponent(uuid="model_state",
                                                          num_subjects=4,
-                                                         spring_constant=5,
+                                                         spring_constant=np.array([16, 8, 4, 2]),
                                                          mass=10,
                                                          damping_coefficient=0,
                                                          dt=0.2,
@@ -367,8 +381,8 @@ if __name__ == "__main__":
                                                          share_mean_a0_across_features=False,
                                                          share_sd_aa_across_features=True,
                                                          max_lag=0)
-                                                         # f=lambda x, i: np.where((i == 1) | (i == 3), -1, 1)[
-                                                         #                    ..., None] * x)
+    # f=lambda x, i: np.where((i == 1) | (i == 3), -1, 1)[
+    #                    ..., None] * x)
     observations = ObservationComponent(uuid="observation",
                                         num_subjects=state_space.num_subjects,
                                         dim_value=2,
