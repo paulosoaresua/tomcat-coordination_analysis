@@ -135,7 +135,7 @@ class SerialCLOModel:
 
         return samples
 
-    def fit(self, evidence: CLOSeries, burn_in: int, num_samples: int, num_chains: int,
+    def fit(self, evidence: SerialCLOSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
         pm.Model, az.InferenceData]:
         assert evidence.observation.shape[0] == self.state_space_cpn.dim_value
@@ -147,7 +147,7 @@ class SerialCLOModel:
 
         return pymc_model, idata
 
-    def _define_pymc_model(self, evidence: CLOSeries):
+    def _define_pymc_model(self, evidence: SerialCLOSeries):
         coords = {"feature": ["position", "velocity"],
                   "coordination_time": np.arange(evidence.observation.shape[-1]),
                   "subject_time": np.arange(evidence.observation.shape[-1])}
