@@ -7,29 +7,28 @@ import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
 
-from coordination.component.utils import feed_forward_logp_f, feed_forward_random_f
-from coordination.component.lag import Lag
-from coordination.component.observation_component import SerializedObservationComponent
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent
-from coordination.model.coordination_model import CoordinationPosteriorSamples
+from coordination.component.observation_component import SerializedObservationComponent
 from coordination.component.serialized_component import SerializedComponent
+from coordination.component.utils import feed_forward_logp_f
+from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
-def blending_logp(serialized_component: Any,
-                  initial_mean: Any,
-                  sigma: Any,
-                  coordination: Any,
-                  input_layer_f: Any,
-                  hidden_layers_f: Any,
-                  output_layer_f: Any,
-                  activation_function_number_f: ptt.TensorConstant,
-                  prev_time_same_subject: ptt.TensorConstant,
-                  prev_time_diff_subject: ptt.TensorConstant,
-                  prev_same_subject_mask: Any,
-                  prev_diff_subject_mask: Any,
-                  pairs: ptt.TensorConstant,
-                  self_dependent: ptt.TensorConstant,
-                  F_inv: ptt.TensorConstant):
+def logp(serialized_component: Any,
+         initial_mean: Any,
+         sigma: Any,
+         coordination: Any,
+         input_layer_f: Any,
+         hidden_layers_f: Any,
+         output_layer_f: Any,
+         activation_function_number_f: ptt.TensorConstant,
+         prev_time_same_subject: ptt.TensorConstant,
+         prev_time_diff_subject: ptt.TensorConstant,
+         prev_same_subject_mask: Any,
+         prev_diff_subject_mask: Any,
+         pairs: ptt.TensorConstant,
+         self_dependent: ptt.TensorConstant,
+         F_inv: ptt.TensorConstant):
     # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
     # the serialized component is one
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
@@ -76,18 +75,18 @@ def blending_logp(serialized_component: Any,
 class SerializedMassSpringDamperComponent(SerializedComponent):
 
     def __init__(self, uuid: str,
-                 num_subjects: int,
-                 spring_constant: np.ndarray,  # one per subject
-                 mass: np.ndarray,  # one per subject
-                 damping_coefficient: np.ndarray,  # one per subject
+                 num_springs: int,
+                 spring_constant: np.ndarray,  # one per spring
+                 mass: np.ndarray,  # one per spring
+                 damping_coefficient: np.ndarray,  # one per spring
                  dt: float,
                  self_dependent: bool,
                  mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray,
                  sd_sd_aa: np.ndarray,
-                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_springs: bool,
                  share_mean_a0_across_features: bool,
-                 share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_springs: bool,
                  share_sd_aa_across_features: bool,
                  f: Optional[Callable] = None,
                  mean_weights_f: float = 0,
@@ -98,15 +97,15 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
         not consider external force in this implementation but it can be easily added if necessary.
         """
         super().__init__(uuid=uuid,
-                         num_subjects=num_subjects,
+                         num_subjects=num_springs,
                          dim_value=2,  # 2 dimensions: position and velocity
                          self_dependent=self_dependent,
                          mean_mean_a0=mean_mean_a0,
                          sd_mean_a0=sd_mean_a0,
                          sd_sd_aa=sd_sd_aa,
-                         share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                         share_mean_a0_across_subjects=share_mean_a0_across_springs,
                          share_mean_a0_across_features=share_mean_a0_across_features,
-                         share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                         share_sd_aa_across_subjects=share_sd_aa_across_springs,
                          share_sd_aa_across_features=share_sd_aa_across_features,
                          f=f,
                          mean_weights_f=mean_weights_f,
@@ -114,7 +113,7 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
                          max_lag=max_lag)
 
         # We assume the spring_constants are known but this can be changed to have them as latent variables if needed.
-        assert spring_constant.ndim == 1 and len(spring_constant) == self.num_subjects
+        assert spring_constant.ndim == 1 and len(spring_constant) == num_springs
 
         self.spring_constant = spring_constant
         self.mass = mass
@@ -124,11 +123,11 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
         # Systems dynamics matrix
         F = []
         F_inv = []
-        for subject in range(self.num_subjects):
+        for spring in range(num_springs):
             A = np.array([
                 [0, 1],
-                [-self.spring_constant[subject] / self.mass[subject],
-                 -self.damping_coefficient[subject] / self.mass[subject]]
+                [-self.spring_constant[spring] / self.mass[spring],
+                 -self.damping_coefficient[spring] / self.mass[spring]]
             ])
             F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
             F_inv.append(expm(-A * self.dt)[None, ...])  # Fundamental matrix inverse to estimate backward dynamics
@@ -192,63 +191,16 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
 
         return values
 
-    def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
-                          prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
-                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, feature_dimension: str,
-                          time_dimension: str, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
-                          sd_aa: Optional[Any] = None, num_layers_f: int = 0,
-                          activation_function_name_f: str = "linear", dim_hidden_layer_f: int = 0) -> Any:
+    def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
+        F_inv_reshaped = self.F_inv[subjects_in_time].reshape((len(subjects_in_time), 4))
+        return F_inv_reshaped,
 
-        mean_a0, sd_aa = self._create_random_parameters(subjects, mean_a0, sd_aa)
+    def _get_logp_fn(self):
+        return logp
 
-        input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-            num_layers=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
-            activation_function_name=activation_function_name_f)
-
-        encoded_pairs = self._encode_subject_pairs(subjects, prev_time_diff_subject)
-
-        if self.lag_cpn is not None:
-            influencers = subjects[prev_time_diff_subject]
-            influencees = subjects
-
-            lag = self.lag_cpn.update_pymc_model(num_lags=self.num_subjects)
-            lag_influencers = lag[influencers]
-            lag_influencees = lag[influencees]
-
-            # We need to clip the lag because invalid samples can be generated by the MCMC procedure on PyMC.
-            dlags = ptt.clip(lag_influencees - lag_influencers, -self.lag_cpn.max_lag, self.lag_cpn.max_lag)
-
-            lag_table = self._create_lag_table(subjects, prev_time_diff_subject)
-            lag_idx = self.lag_cpn.max_lag + dlags
-            prev_time_diff_subject = ptt.take_along_axis(lag_table, lag_idx[None, :], 0)[0]
-
-            # We multiply at mask at lag zero because that's the ground truth for the time steps when we have
-            # dependencies on influencers. This is because -1 is a valid index so, we need to make sure we are not
-            # introducing spurious dependencies when we update the dependencies from the lag table.
-            mask_at_lag_zero = ptt.where(lag_table[self.lag_cpn.max_lag] >= 0, 1, 0)
-            prev_diff_subject_mask = ptt.where(prev_time_diff_subject >= 0, 1, 0) * mask_at_lag_zero
-
-        F_inv_reshaped = self.F_inv[subjects].reshape((len(subjects), 4))
-
-        logp_params = (mean_a0,
-                       sd_aa,
-                       coordination,
-                       input_layer_f,
-                       hidden_layers_f,
-                       output_layer_f,
-                       activation_function_number_f,
-                       prev_time_same_subject,
-                       prev_time_diff_subject,
-                       prev_same_subject_mask,
-                       prev_diff_subject_mask,
-                       encoded_pairs,
-                       np.array(self.self_dependent),
-                       F_inv_reshaped)
-        serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=blending_logp,  # random=random_fn,
-                                              dims=[feature_dimension, time_dimension],
-                                              observed=observed_values)
-
-        return serialized_component, mean_a0, sd_aa, (input_layer_f, hidden_layers_f, output_layer_f)
+    def _get_random_fn(self):
+        # TODO - implement this for prior predictive checks.
+        return None
 
 
 if __name__ == "__main__":

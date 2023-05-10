@@ -83,75 +83,13 @@ def logp(mixture_component: Any,
     return total_logp
 
 
-# def draw_sample(initial_mean: np.ndarray,
-#                    sigma: np.ndarray,
-#                    mixture_weights: np.ndarray,
-#                    coordination: np.ndarray,
-#                    input_layer_f: np.ndarray,
-#                    hidden_layers_f: np.ndarray,
-#                    output_layer_f: np.ndarray,
-#                    activation_function_number_f: int,
-#                    expander_aux_mask_matrix: np.ndarray,
-#                    prev_time_diff_subject: Any,
-#                    prev_diff_subject_mask: Any,
-#                    self_dependent: bool,
-#                    num_subjects: int,
-#                    dim_value: int,
-#                    rng: Optional[np.random.Generator] = None,
-#                    size: Optional[Tuple[int]] = None) -> np.ndarray:
-#     num_time_steps = coordination.shape[-1]
-#
-#     noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
-#
-#     # We sample the influencers in each time step using the mixture weights
-#     influencers = []
-#     for subject in range(num_subjects):
-#         probs = np.insert(mixture_weights[subject], subject, 0)
-#         influencer = rng.choice(a=np.arange(num_subjects), p=probs, size=num_time_steps)
-#         # We will use the influencer to index a matrix with 6 columns. One for each pair influencer -> influenced
-#         influencers.append(subject * (num_subjects - 1) + np.minimum(influencer, num_subjects - 2))
-#     influencers = np.array(influencers)
-#
-#     sample = np.zeros_like(noise)
-#     prior_sample = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
-#     sample[..., 0] = prior_sample
-#
-#     # TODO - Add treatment for lag
-#     activation = ActivationFunction.from_numpy_number(activation_function_number_f)
-#     for t in np.arange(1, num_time_steps):
-#         D = np.einsum("ij,jlk->ilk", expander_aux_mask_matrix, sample[..., t - 1][..., None])  # s * (s-1) x d x 1
-#
-#         # Previous sample from a different individual
-#         D = feed_forward_random_f(input_data=D.reshape((D.shape[0] * D.shape[1], D.shape[2])),
-#                                   input_layer_f=input_layer_f,
-#                                   hidden_layers_f=hidden_layers_f,
-#                                   output_layer_f=output_layer_f,
-#                                   activation=activation).reshape(D.shape)[..., 0]  # s * (s-1) x d x 1
-#
-#         D = D[influencers[..., t]]  # s x d
-#
-#         # Previous sample from the same individual
-#         if self_dependent:
-#             S = sample[..., t - 1]
-#         else:
-#             S = initial_mean
-#
-#         mean = ((D - S) * coordination[t] + S)
-#
-#         transition_sample = rng.normal(loc=mean, scale=sigma)
-#
-#         sample[..., t] = transition_sample
-#
-#     return sample + noise
-
-
 class MixtureMassSpringDamperComponent(MixtureComponent):
 
     def __init__(self, uuid: str,
                  num_springs: int,
-                 spring_constant: np.ndarray,
-                 mass: np.ndarray,
-                 damping_coefficient: np.ndarray,
+                 spring_constant: np.ndarray,  # one per spring
+                 mass: np.ndarray,  # one per spring
+                 damping_coefficient: np.ndarray,  # one per spring
                  dt: float,
                  self_dependent: bool,
                  mean_mean_a0: np.ndarray,
@@ -188,7 +126,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                          max_lag=max_lag)
 
         # We assume the spring_constants are known but this can be changed to have them as latent variables if needed.
-        assert spring_constant.ndim == 1 and len(spring_constant) == self.num_subjects
+        assert spring_constant.ndim == 1 and len(spring_constant) == num_springs
 
         self.spring_constant = spring_constant
         self.mass = mass
@@ -198,7 +136,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
         # Systems dynamics matrix
         F = []
         F_inv = []
-        for spring in range(self.num_subjects):
+        for spring in range(num_springs):
             A = np.array([
                 [0, 1],
                 [-self.spring_constant[spring] / self.mass[spring],
@@ -275,79 +213,6 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
             values = np.concatenate(truncated_values_per_subject, axis=1)
 
         return values
-
-    # def update_pymc_model(self,
-    #                       coordination: Any,
-    #                       subject_dimension: str,
-    #                       feature_dimension: str,
-    #                       time_dimension: str,
-    #                       num_time_steps: int,
-    #                       observed_values: Optional[Any] = None,
-    #                       mean_a0: Optional[Any] = None,
-    #                       sd_aa: Optional[Any] = None,
-    #                       mixture_weights: Optional[Any] = None,
-    #                       num_layers_f: int = 0,
-    #                       activation_function_name_f: str = "linear",
-    #                       dim_hidden_layer_f: int = 0) -> Any:
-    #
-    #     mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
-    #
-    #     input_layer_f, hidden_layers_f, output_layer_f, activation_function_number_f = self._create_random_weights_f(
-    #         num_layers=num_layers_f, dim_hidden_layer=dim_hidden_layer_f,
-    #         activation_function_name=activation_function_name_f)
-    #
-    #     # Auxiliary matricx to compute logp in a vectorized manner without having to loop over the individuals.
-    #     # The expander matrix transforms a s x f x t tensor to a s * (s-1) x f x t tensor where the rows contain
-    #     # values of other subjects for each subject in the set.
-    #     expander_aux_mask_matrix = []
-    #     for subject in range(self.num_subjects):
-    #         expander_aux_mask_matrix.append(np.delete(np.eye(self.num_subjects), subject, axis=0))
-    #         aux = np.zeros((self.num_subjects, self.num_subjects - 1))
-    #         aux[subject] = 1
-    #
-    #     expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
-    #
-    #     # We fit one lag per pair, so the number of lags is C_s_2, where s is the number of subjects.
-    #     if self.lag_cpn is None:
-    #         lag_mask = np.ones((1, num_time_steps), dtype=int)
-    #         prev_time_diff_subject = ptt.arange(num_time_steps)[None, :].repeat(
-    #             self.num_subjects * (self.num_subjects - 1), axis=0) - 1
-    #     else:
-    #         # We fix a lag zero for the first subject and move the others relative to the fixed one.
-    #         # lag = ptt.concatenate([ptt.zeros(1, dtype=int), self.lag_cpn.update_pymc_model(self.num_subjects - 1)])
-    #         lag = self.lag_cpn.update_pymc_model(self.num_subjects)
-    #
-    #         # The difference between the influencee and influencer's lags will tell us which time step we need to look
-    #         # at the influencer for each time step in the influencee.
-    #         influencer_lag = ptt.dot(expander_aux_mask_matrix, lag)
-    #         influencee_lag = ptt.repeat(lag, repeats=(self.num_subjects - 1))
-    #         dlag = ptt.cast(influencee_lag - influencer_lag, "int32")
-    #
-    #         lag_mask = MixtureComponent._create_lag_mask(num_time_steps, lag)
-    #
-    #         prev_time_diff_subject = ptt.arange(num_time_steps, dtype=int)[None, :] + dlag[:, None] - 1
-    #         prev_time_diff_subject *= lag_mask
-    #
-    #     logp_params = (mean_a0,
-    #                    sd_aa,
-    #                    mixture_weights,
-    #                    coordination,
-    #                    input_layer_f,
-    #                    hidden_layers_f,
-    #                    output_layer_f,
-    #                    activation_function_number_f,
-    #                    expander_aux_mask_matrix,
-    #                    prev_time_diff_subject,
-    #                    lag_mask,
-    #                    np.array(self.self_dependent),
-    #                    self.F_inv)
-    #     # random_fn = partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
-    #     mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp,
-    #                                       # random=random_fn,
-    #                                       dims=[subject_dimension, feature_dimension, time_dimension],
-    #                                       observed=observed_values)
-    #
-    #     return mixture_component, mean_a0, sd_aa, mixture_weights
 
     def _get_extra_logp_params(self):
         return self.F_inv,

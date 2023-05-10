@@ -798,11 +798,27 @@ class SerializedComponent:
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
                        encoded_pairs,
-                       np.array(self.self_dependent))
-        logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
-        random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
-        serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
+                       np.array(self.self_dependent),
+                       *self._get_extra_logp_params(subjects)
+                       )
+        logp_fn = self._get_logp_fn()
+        random_fn = self._get_random_fn()
+        serialized_component = pm.DensityDist(self.uuid, *logp_params,
+                                              logp=logp_fn,
+                                              random=random_fn,
                                               dims=[feature_dimension, time_dimension],
                                               observed=observed_values)
 
         return serialized_component, mean_a0, sd_aa, (input_layer_f, hidden_layers_f, output_layer_f)
+
+    def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
+        """
+        Child classes can pass extra parameters to the logp and random functions
+        """
+        return ()
+
+    def _get_logp_fn(self):
+        return blending_logp if self.mode == Mode.BLENDING else mixture_logp
+
+    def _get_random_fn(self):
+        return blending_random if self.mode == Mode.BLENDING else mixture_random

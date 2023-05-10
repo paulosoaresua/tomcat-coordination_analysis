@@ -218,7 +218,8 @@ if __name__ == "__main__":
     for s in range(model.num_springs):
         mean = idata.posterior["state_space"].sel(spring=s, feature="position").mean(dim=["draw", "chain"]).to_numpy()
         plt.scatter(samples.state.time_steps_in_coordination_scale, mean, label=f"Spring {s + 1}", s=15, c=colors[s])
-
+    plt.xlabel("Time Step")
+    plt.ylabel("Position")
     plt.legend()
     plt.show()
 
