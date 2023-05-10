@@ -566,11 +566,27 @@ class MixtureComponent:
                        expander_aux_mask_matrix,
                        prev_time_diff_subject,
                        lag_mask,
-                       np.array(self.self_dependent))
-        random_fn = partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
-        mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp,
+                       np.array(self.self_dependent),
+                       *self._get_extra_logp_params()
+                       )
+        logp_fn =  self._get_logp_fn()
+        random_fn = self._get_random_fn()
+        mixture_component = pm.CustomDist(self.uuid, *logp_params,
+                                          logp=logp_fn,
                                           random=random_fn,
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
 
         return mixture_component, mean_a0, sd_aa, mixture_weights
+
+    def _get_extra_logp_params(self):
+        """
+        Child classes can pass extra parameters to the logp and random functions
+        """
+        return ()
+
+    def _get_logp_fn(self):
+        return mixture_logp
+
+    def _get_random_fn(self):
+        return partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)

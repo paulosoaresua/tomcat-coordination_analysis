@@ -77,9 +77,9 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
 
     def __init__(self, uuid: str,
                  num_subjects: int,
-                 spring_constant: np.ndarray,
-                 mass: float,
-                 damping_coefficient: np.ndarray,
+                 spring_constant: np.ndarray,  # one per subject
+                 mass: np.ndarray,  # one per subject
+                 damping_coefficient: np.ndarray,  # one per subject
                  dt: float,
                  self_dependent: bool,
                  mean_mean_a0: np.ndarray,
@@ -127,7 +127,8 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
         for subject in range(self.num_subjects):
             A = np.array([
                 [0, 1],
-                [-self.spring_constant[subject] / self.mass, -self.damping_coefficient[subject] / self.mass]
+                [-self.spring_constant[subject] / self.mass[subject],
+                 -self.damping_coefficient[subject] / self.mass[subject]]
             ])
             F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
             F_inv.append(expm(-A * self.dt)[None, ...])  # Fundamental matrix inverse to estimate backward dynamics
