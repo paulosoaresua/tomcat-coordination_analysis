@@ -44,9 +44,6 @@ def blending_logp(serialized_component: Any,
                                 output_layer_f=output_layer_f,
                                 activation_function_number_f=activation_function_number_f)
 
-    F_inv_reshaped = F_inv.reshape((F_inv.shape[0], 2, 2))
-    D = ptt.batched_tensordot(F_inv_reshaped, D.T, axes=[(1,), (1,)]).T
-
     C = coordination[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
@@ -54,7 +51,6 @@ def blending_logp(serialized_component: Any,
         # Coordination only affects the mean in time steps where there are previous observations from a different subject.
         # If there's no previous observation from the same subject, we use the initial mean.
         S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
-        S = ptt.batched_tensordot(F_inv_reshaped, S.T, axes=[(1,), (1,)]).T
 
         SM = prev_same_subject_mask[None, :]  # 1 x t
         mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
@@ -62,7 +58,17 @@ def blending_logp(serialized_component: Any,
         # Coordination only affects the mean in time steps where there are previous observations from a different subject.
         mean = D * C * DM + (1 - C * DM) * initial_mean
 
-    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component).sum()
+    # This function can only receive tensors up to 2 dimensions because serialized_component has 2 dimensions.
+    # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
+    # it back to it's original 3 dimensions.
+    F_inv_reshaped = F_inv.reshape((F_inv.shape[0], 2, 2))
+
+    # We transform points using the system dynamics so that samples that follow such dynamics are accepted
+    # with higher probability. The batch dimension will be time, that's why we transpose serialized_component.
+    serialized_component_transformed = ptt.batched_tensordot(F_inv_reshaped, serialized_component.T,
+                                                             axes=[(1,), (1,)]).T
+
+    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component_transformed).sum()
 
     return total_logp
 
@@ -73,7 +79,7 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
                  num_subjects: int,
                  spring_constant: np.ndarray,
                  mass: float,
-                 damping_coefficient: float,
+                 damping_coefficient: np.ndarray,
                  dt: float,
                  self_dependent: bool,
                  mean_mean_a0: np.ndarray,
@@ -121,7 +127,7 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
         for subject in range(self.num_subjects):
             A = np.array([
                 [0, 1],
-                [-self.spring_constant[subject] / self.mass, -self.damping_coefficient / self.mass]
+                [-self.spring_constant[subject] / self.mass, -self.damping_coefficient[subject] / self.mass]
             ])
             F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
             F_inv.append(expm(-A * self.dt)[None, ...])  # Fundamental matrix inverse to estimate backward dynamics
@@ -249,10 +255,10 @@ if __name__ == "__main__":
                                                         sd_sd_uc=1)
     state_space = SerializedMassSpringDamperComponent(uuid="model_state",
                                                       num_subjects=2,
-                                                      spring_constant=np.array([8, 4]),
-                                                      mass=10,
-                                                      damping_coefficient=4,
-                                                      dt=0.5,
+                                                      spring_constant=np.array([0.8, 0.2]),
+                                                      mass=1,
+                                                      damping_coefficient=np.array([0, 0.5]),
+                                                      dt=0.2,
                                                       self_dependent=True,
                                                       mean_mean_a0=np.zeros((2, 2)),
                                                       sd_mean_a0=np.ones((2, 2)) * 10,
@@ -277,13 +283,14 @@ if __name__ == "__main__":
     # system.parameters.mixture_weights.value = np.array([[1, 0], [0, 1], [0, 1]])
 
     # For 4 subjects
-    state_space.parameters.mean_a0.value = np.array([[1, 0], [3, 0]])
+    state_space.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
     state_space.parameters.sd_aa.value = np.ones(1) * 0.01
     # state_space.lag_cpn.parameters.lag.value = np.array([0, -4, -2, 0])
     observations.parameters.sd_o.value = np.ones(1) * 0.01
 
-    C = 1
-    state_samples = state_space.draw_samples(num_series=1, time_scale_density=1, coordination=np.ones((1, 50)) * C,
+    C = 0.99
+    T = 100
+    state_samples = state_space.draw_samples(num_series=1, time_scale_density=1, coordination=np.ones((1, T)) * C,
                                              seed=0, can_repeat_subject=False)
     observation_samples = observations.draw_samples(state_samples.values, subjects=state_samples.subjects)
 
@@ -293,15 +300,15 @@ if __name__ == "__main__":
     for s in range(state_space.num_subjects):
         tt = [t for t, subject in enumerate(state_samples.subjects[0]) if s == subject]
         plt.scatter(tt, observation_samples.values[0][0, tt],
-                    label=f"Position subject {s + 1}")
+                    label=f"Position subject {s + 1}", s=15)
         plt.title(f"Coordination = {C}")
     plt.legend()
     plt.show()
 
     # Inference
     coords = {"feature": ["position", "velocity"],
-              "coordination_time": np.arange(50),
-              "component_time": np.arange(50)}
+              "coordination_time": np.arange(T),
+              "component_time": np.arange(T)}
 
     pymc_model = pm.Model(coords=coords)
     with pymc_model:
@@ -345,9 +352,10 @@ if __name__ == "__main__":
 
         plt.figure()
         for s in range(state_space.num_subjects):
-            plt.scatter(state_samples.time_steps_in_coordination_scale,
-                        idata.posterior["model_state"].sel(feature="position").mean(dim=["draw", "chain"]),
-                        label=f"Mean Position Subject {s + 1}")
+            tt = [t for t, subject in enumerate(state_samples.subjects[0]) if s == subject]
+            plt.scatter(tt,
+                        idata.posterior["model_state"].sel(feature="position").mean(dim=["draw", "chain"])[tt],
+                        label=f"Mean Position Subject {s + 1}", s=15)
 
         plt.legend()
         plt.show()
