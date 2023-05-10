@@ -1,10 +1,26 @@
+import itertools
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from enum import Enum
+import math
+import numpy as np
+import pymc as pm
+import pytensor.tensor as ptt
+from scipy.linalg import expm
+from scipy.stats import norm
+
+from coordination.common.activation_function import ActivationFunction
+from coordination.common.utils import set_random_seed
+from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
+from coordination.component.utils import feed_forward_logp_f, feed_forward_random_f
+from coordination.component.lag import Lag
 
 from coordination.component.serialized_component import SerializedComponent
 
 
-class SerializedMassSpringDamperComponent(MixtureComponent):
+class SerializedMassSpringDamperComponent(SerializedComponent):
 
-    def __init__(self, uuid: str,
+    def __init__(self,uuid: str,
                  num_subjects: int,
                  spring_constant: float,
                  mass: float,
@@ -14,7 +30,6 @@ class SerializedMassSpringDamperComponent(MixtureComponent):
                  mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray,
                  sd_sd_aa: np.ndarray,
-                 a_mixture_weights: np.ndarray,
                  share_mean_a0_across_subjects: bool,
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool,
@@ -34,7 +49,6 @@ class SerializedMassSpringDamperComponent(MixtureComponent):
                          mean_mean_a0=mean_mean_a0,
                          sd_mean_a0=sd_mean_a0,
                          sd_sd_aa=sd_sd_aa,
-                         a_mixture_weights=a_mixture_weights,
                          share_mean_a0_across_subjects=share_mean_a0_across_subjects,
                          share_mean_a0_across_features=share_mean_a0_across_features,
                          share_sd_aa_across_subjects=share_sd_aa_across_subjects,
@@ -58,67 +72,58 @@ class SerializedMassSpringDamperComponent(MixtureComponent):
         self.F_inv = expm(-A * self.dt)  # Fundamental matrix inverse to estimate backward dynamics
 
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
-                                   sampled_influencers: np.ndarray, mean_a0: np.ndarray,
+                                   subjects_in_time: np.ndarray, prev_time_same_subject: np.ndarray,
+                                   prev_time_diff_subject: np.ndarray, mean_a0: np.ndarray,
                                    sd_aa: np.ndarray) -> np.ndarray:
-        num_series = sampled_coordination.shape[0]
+
         num_time_steps = len(time_steps_in_coordination_scale)
+        values = np.zeros((self.dim_value, num_time_steps))
 
-        if self.lag_cpn is not None:
-            max_lag = self.lag_cpn.max_lag
-            extra_time_steps = 2 * self.lag_cpn.max_lag
-        else:
-            max_lag = 0
-            extra_time_steps = 0
-
-        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps + extra_time_steps))
-
-        for t in range(max_lag, -1, -1):
-            if t == max_lag:
-                values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
-                    size=(num_series, self.num_subjects, self.dim_value))
+        for t in range(num_time_steps):
+            if self.share_mean_a0_across_subjects:
+                subject_idx_mean_a0 = 0
             else:
-                # Backwards dynamics. This is to guarantee when we apply the lag to each subject, we have mean_a0 as
-                # the initial value
-                mean = np.einsum("ij,klj->kli", self.F_inv, values[..., t + 1])
-                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
+                subject_idx_mean_a0 = subjects_in_time[t]
 
-        for t in range(max_lag + 1, num_time_steps + extra_time_steps):
-            if t >= num_time_steps + extra_time_steps - max_lag:
-                # There's no coordination for these time steps. They are extra and we use them to fill in the gaps
-                # when we roll the samples by each subject's lag in the end.
-                mean = np.einsum("ij,klj->kli", self.F, values[..., t - 1])
+            if self.share_sd_aa_across_subjects:
+                subject_idx_sd_aa = 0
             else:
-                C = sampled_coordination[:, time_steps_in_coordination_scale[t - max_lag]][:, None]
+                subject_idx_sd_aa = subjects_in_time[t]
 
-                P = values[..., t - 1]
+            sd = sd_aa[subject_idx_sd_aa]
 
-                if self.f is not None:
-                    D = self.f(values[..., t - 1], sampled_influencers[..., t - max_lag])
-                else:
-                    D = P
+            if prev_time_same_subject[t] < 0:
+                # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
+                # t_0 is the initial utterance of one of the subjects only.
+                mean = mean_a0[subject_idx_mean_a0]
 
-                D = D[:, sampled_influencers[..., t - max_lag]][0]
+                values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
+            else:
+                C = sampled_coordination[time_steps_in_coordination_scale[t]]
 
                 if self.self_dependent:
-                    S = P
+                    # When there's self dependency, the component either depends on the previous value of another subject,
+                    # or the previous value of the same subject.
+                    S = values[..., prev_time_same_subject[t]]
                 else:
-                    S = mean_a0
+                    # When there's no self dependency, the component either depends on the previous value of another subject,
+                    # or it is samples around a fixed mean.
+                    S = mean_a0[subject_idx_mean_a0]
 
-                blended_state = (D - S) * C + S
+                prev_diff_mask = (prev_time_diff_subject[t] != -1).astype(int)
+                D = values[..., prev_time_diff_subject[t]]
 
-                mean = np.einsum("ij,klj->kli", self.F, blended_state)
+                if self.f is not None:
+                    source_subject = subjects_in_time[prev_time_diff_subject[t]]
+                    target_subject = subjects_in_time[t]
 
-            # Add some noise
-            values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
+                    D = self.f(D, source_subject, target_subject)
 
-        # Apply lags if any
-        if self.lag_cpn is not None:
-            truncated_values_per_subject = []
-            for subject in range(self.num_subjects):
-                lag = -self.lag_cpn.parameters.lag.value[subject] # lag contains the correction, so we use -lag
-                truncated_values_per_subject.append(values[:, subject, :, (max_lag + lag):(num_time_steps + max_lag + lag)][:, None, :, :])
+                blended_state = (D - S) * C * prev_diff_mask + S
 
-            values = np.concatenate(truncated_values_per_subject, axis=1)
+                mean = np.dot(self.F[subjects_in_time[t]], blended_state[:, None])
+
+                values[:, t] = norm(loc=mean, scale=sd).rvs()
 
         return values
 

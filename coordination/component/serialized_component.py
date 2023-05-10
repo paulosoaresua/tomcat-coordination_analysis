@@ -454,6 +454,16 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
+            values = self._draw_from_system_dynamics(
+                time_steps_in_coordination_scale=samples.time_steps_in_coordination_scale[s],
+                sampled_coordination=coordination[s],
+                subjects_in_time=samples.subjects[s],
+                prev_time_same_subject=samples.prev_time_same_subject[s],
+                prev_time_diff_subject=samples.prev_time_diff_subject[s],
+                mean_a0=mean_a0,
+                sd_aa=sd_aa)
+            samples.values.append(values)
+
         return samples
 
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
@@ -499,8 +509,8 @@ class SerializedComponent:
                 D = values[..., prev_time_diff_subject[t]]
 
                 if self.f is not None:
-                    source_subject = samples.subjects[s][samples.prev_time_diff_subject[s][t]]
-                    target_subject = samples.subjects[s][t]
+                    source_subject = subjects_in_time[prev_time_diff_subject[t]]
+                    target_subject = subjects_in_time[t]
 
                     D = self.f(D, source_subject, target_subject)
 
@@ -513,7 +523,9 @@ class SerializedComponent:
                         mean = S
                 sd = sd_aa[subject_idx_sd_aa]
 
-                samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
+                values[:, t] = norm(loc=mean, scale=sd).rvs()
+
+        return values
 
     def _draw_random_subjects(self, num_series: int, num_time_steps: int, time_scale_density: float,
                               can_repeat_subject: bool) -> np.ndarray:
