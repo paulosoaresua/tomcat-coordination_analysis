@@ -54,25 +54,15 @@ def mixture_logp(mixture_component: Any,
     # D contains the values from other individuals for each individual
     D = ptt.tensordot(expander_aux_mask_matrix, X, axes=(1, 0))  # s * (s-1) x d x t
 
-    # Discard last time step because it is not previous to any other time step.
-    # D = pt.printing.Print("D")(ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:])
+    # Get previous values for each time step according to an index matrix. Discard the first time step as
+    # there's no previous values in the first time step.
     D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
-
-    F_inv_extended = ptt.tensordot(expander_aux_mask_matrix, F_inv, axes=(1, 0))  # s * (s-1) x d x d
-
-    # D = ptt.tensordot(F_extended, D, axes=(1, 1)).swapaxes(0, 1)
-    D = ptt.batched_tensordot(F_inv_extended, D, axes=[(1,), (1,)])
-
-    # Current values from each subject. We extend S and point such that they match the dimensions of D.
-    point_extended = ptt.repeat(mixture_component[..., 1:], repeats=(num_subjects - 1), axis=0)
 
     if self_dependent.eval():
         # Previous values from every subject
-        # P = ptt.tensordot(F_inv, mixture_component[..., :-1], axes=([0, 1], [0, 1])).swapaxes(0, 1)  # s x d x t-1
-        P = ptt.batched_tensordot(F_inv, mixture_component[..., :-1], axes=[(1,), (1,)])
+        P = mixture_component[..., :-1]
 
         # Previous values from the same subjects
-        # S_extended = pt.printing.Print("S")(ptt.repeat(P, repeats=(num_subjects - 1), axis=0))
         S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
 
     else:
@@ -86,6 +76,12 @@ def mixture_logp(mixture_component: Any,
     mean = (D - S_extended) * C * prev_diff_subject_mask[:, None, 1:] + S_extended
 
     sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
+
+    # We transform points using the system dynamics so that samples that follow such dynamics are accepted
+    # with higher probability.
+    mixture_component_transformed = ptt.batched_tensordot(F_inv, mixture_component, axes=[(1,), (1,)])
+    # Current values from each subject. We extend S and point such that they match the dimensions of D and S.
+    point_extended = ptt.repeat(mixture_component_transformed[..., 1:], repeats=(num_subjects - 1), axis=0)
 
     logp_extended = pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended)
     logp_tmp = logp_extended.reshape((num_subjects, num_subjects - 1, num_features, logp_extended.shape[-1]))
@@ -400,10 +396,11 @@ if __name__ == "__main__":
     state_space.parameters.sd_aa.value = np.ones(1) * 0.01
     state_space.parameters.mixture_weights.value = np.array([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]])
     # state_space.lag_cpn.parameters.lag.value = np.array([0, -4, -2, 0])
-    observations.parameters.sd_o.value = np.ones(1) * 0.01
+    observations.parameters.sd_o.value = np.ones(1) * 1
 
-    C = 0.5
-    state_samples = state_space.draw_samples(num_series=1, relative_frequency=1, coordination=np.ones((1, 50)) * C,
+    C = 1
+    T = 50
+    state_samples = state_space.draw_samples(num_series=1, relative_frequency=1, coordination=np.ones((1, T)) * C,
                                              seed=0)
     observation_samples = observations.draw_samples(state_samples.values)
 
@@ -412,16 +409,16 @@ if __name__ == "__main__":
     plt.figure()
     for s in range(state_space.num_subjects):
         plt.scatter(state_samples.time_steps_in_coordination_scale, observation_samples.values[0, s, 0],
-                    label=f"Position subject {s + 1}")
+                    label=f"Position subject {s + 1}", s=15)
         plt.title(f"Coordination = {C}")
     plt.legend()
     plt.show()
 
     # Inference
     coords = {"feature": ["position", "velocity"],
-              "coordination_time": np.arange(50),
+              "coordination_time": np.arange(T),
               "subject": np.arange(state_space.num_subjects),
-              "component_time": np.arange(50)}
+              "component_time": np.arange(T)}
 
     pymc_model = pm.Model(coords=coords)
     with pymc_model:
@@ -444,7 +441,7 @@ if __name__ == "__main__":
                                        time_dimension="component_time",
                                        observed_values=observation_samples.values[0])
 
-        idata = pm.sample(1000, init="jitter+adapt_diag", tune=1000, chains=2, random_seed=0, cores=2)
+        idata = pm.sample(200, init="jitter+adapt_diag", tune=200, chains=2, random_seed=0, cores=2)
 
         sampled_vars = set(idata.posterior.data_vars)
         var_names = sorted(list(
@@ -455,14 +452,15 @@ if __name__ == "__main__":
             plt.tight_layout()
             plt.show()
 
-        coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
-        coordination_posterior.plot(plt.figure().gca(), show_samples=False)
-
         plt.figure()
         for s in range(state_space.num_subjects):
             plt.scatter(state_samples.time_steps_in_coordination_scale,
                         idata.posterior["model_state"].sel(subject=s, feature="position").mean(dim=["draw", "chain"]),
-                        label=f"Mean Position Subject {s + 1}")
+                        label=f"Mean Position Subject {s + 1}", s=15)
 
         plt.legend()
+        plt.show()
+
+        coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
+        coordination_posterior.plot(plt.figure().gca(), show_samples=False)
         plt.show()

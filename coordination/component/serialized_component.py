@@ -424,6 +424,7 @@ class SerializedComponent:
         set_random_seed(seed)
 
         samples = SerializedComponentSamples()
+        samples.values = []
         for s in range(num_series):
             sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
                                                          can_repeat_subject)
@@ -433,7 +434,6 @@ class SerializedComponent:
 
             num_time_steps_in_cpn_scale = len(samples.time_steps_in_coordination_scale[s])
 
-            samples.values.append(np.zeros((self.dim_value, num_time_steps_in_cpn_scale)))
             samples.prev_time_same_subject.append(
                 np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
             samples.prev_time_diff_subject.append(
