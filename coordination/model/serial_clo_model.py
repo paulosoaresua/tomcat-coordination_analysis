@@ -13,14 +13,13 @@ from coordination.component.observation_component import SerializedObservationCo
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
-class CLOSeries:
+class SerialCLOSeries:
 
     def __init__(self,
                  subjects_in_time: np.ndarray,
                  prev_time_same_subject: np.ndarray,
                  prev_time_diff_subject: np.ndarray,
                  observation: np.ndarray):
-
         self.subjects_in_time = subjects_in_time
         self.observation = observation
         self.prev_time_same_subject = prev_time_same_subject
@@ -139,7 +138,6 @@ class SerialCLOModel:
     def fit(self, evidence: CLOSeries, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
         pm.Model, az.InferenceData]:
-
         assert evidence.observation.shape[0] == self.state_space_cpn.dim_value
 
         pymc_model = self._define_pymc_model(evidence)
@@ -209,7 +207,7 @@ if __name__ == "__main__":
     plt.figure()
     for s in range(model.num_subjects):
         tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
-        plt.scatter(tt, samples.observation. values[0][0, tt],
+        plt.scatter(tt, samples.observation.values[0][0, tt],
                     label=f"Subject {s + 1}", s=15)
         plt.title(f"Coordination = {C}")
     plt.xlabel("Time Step")
@@ -217,10 +215,10 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
 
-    evidence = CLOSeries(subjects_in_time=samples.state.subjects[0],
-                         prev_time_same_subject=samples.state.prev_time_same_subject[0],
-                         prev_time_diff_subject=samples.state.prev_time_diff_subject[0],
-                         observation=samples.observation.values[0])
+    evidence = SerialCLOSeries(subjects_in_time=samples.state.subjects[0],
+                               prev_time_same_subject=samples.state.prev_time_same_subject[0],
+                               prev_time_diff_subject=samples.state.prev_time_diff_subject[0],
+                               observation=samples.observation.values[0])
 
     # Inference
     model.clear_parameter_values()
