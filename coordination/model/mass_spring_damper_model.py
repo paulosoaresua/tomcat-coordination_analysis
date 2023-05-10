@@ -114,24 +114,24 @@ class MassSpringDamperModel:
 
         return samples
 
-    def fit(self, observations: np.ndarray, burn_in: int, num_samples: int, num_chains: int,
+    def fit(self, evidence: np.ndarray, burn_in: int, num_samples: int, num_chains: int,
             seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
         pm.Model, az.InferenceData]:
-        assert observations.shape[0] == self.state_space_cpn.num_subjects
-        assert observations.shape[1] == self.state_space_cpn.dim_value
+        assert evidence.shape[0] == self.state_space_cpn.num_subjects
+        assert evidence.shape[1] == self.state_space_cpn.dim_value
 
-        pymc_model = self._define_pymc_model(observations)
+        pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
             idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
                               cores=num_jobs)
 
         return pymc_model, idata
 
-    def _define_pymc_model(self, observations: np.ndarray):
+    def _define_pymc_model(self, evidence: np.ndarray):
         coords = {"feature": ["position", "velocity"],
-                  "coordination_time": np.arange(observations.shape[-1]),
+                  "coordination_time": np.arange(evidence.shape[-1]),
                   "spring": np.arange(self.num_springs),
-                  "spring_time": np.arange(observations.shape[-1])}
+                  "spring_time": np.arange(evidence.shape[-1])}
 
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
@@ -143,12 +143,12 @@ class MassSpringDamperModel:
                                                                       num_layers_f=self.num_layers_f,
                                                                       dim_hidden_layer_f=self.dim_hidden_layer_f,
                                                                       activation_function_name_f=self.activation_function_name_f,
-                                                                      num_time_steps=observations.shape[-1])[0]
+                                                                      num_time_steps=evidence.shape[-1])[0]
             self.observation_cpn.update_pymc_model(latent_component=state_space_dist,
                                                    subject_dimension="spring",
                                                    feature_dimension="feature",
                                                    time_dimension="spring_time",
-                                                   observed_values=observations)
+                                                   observed_values=evidence)
 
         return pymc_model
 
