@@ -121,11 +121,13 @@ class SerialCLOModel:
                      seed: Optional[int] = None, can_repeat_subject: bool = False) -> SerialCLOSamples:
         if coordination_samples is None:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
+            seed = None
 
         state_samples = self.state_space_cpn.draw_samples(num_series,
                                                           time_scale_density=1,  # Same scale as coordination
                                                           can_repeat_subject=can_repeat_subject,
-                                                          coordination=coordination_samples)
+                                                          coordination=coordination_samples,
+                                                          seed=seed)
         observation_samples = self.observation_cpn.draw_samples(latent_component=state_samples.values,
                                                                 subjects=state_samples.subjects)
 
@@ -185,7 +187,7 @@ if __name__ == "__main__":
                            sd_mean_uc0=1,
                            sd_sd_uc=1,
                            mean_mean_a0=np.zeros((2, 2)),
-                           sd_mean_a0=np.ones((2, 2)) * 10,
+                           sd_mean_a0=np.ones((2, 2)),
                            sd_sd_aa=np.ones(1),
                            sd_sd_o=np.ones(1),
                            share_sd_aa_across_subjects=True,
@@ -195,11 +197,12 @@ if __name__ == "__main__":
                            max_lag=0)
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
-    model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.01
-    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.01
+    model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
+    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 1
 
-    C = 0.99
-    T = 50
+    C = 0.5
+    T = 100
+    PRX = "sd_sd_aa = 1, sd_aa = 0.1, sd_o = 0.5"
     samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
 
     import matplotlib.pyplot as plt
@@ -224,8 +227,8 @@ if __name__ == "__main__":
     model.clear_parameter_values()
     _, idata = model.fit(
         evidence=evidence,
-        burn_in=200,
-        num_samples=200,
+        burn_in=1000,
+        num_samples=1000,
         num_chains=2,
         seed=0,
         num_jobs=2,
@@ -238,18 +241,20 @@ if __name__ == "__main__":
         az.plot_trace(idata, var_names=var_names)
         plt.tight_layout()
         plt.show()
-
-    plt.figure()
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
-    for s in range(model.num_subjects):
-        tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
-        mean = idata.posterior["state_space"].sel(feature="position").mean(dim=["draw", "chain"]).to_numpy()[tt]
-        plt.scatter(tt, mean, label=f"Subject {s + 1}", s=15, c=colors[s])
-    plt.xlabel("Time Step")
-    plt.ylabel("CLO Value")
-    plt.legend()
-    plt.show()
+    #
+    # plt.figure()
+    # colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+    # for s in range(model.num_subjects):
+    #     tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
+    #     mean = idata.posterior["state_space"].sel(feature="position").mean(dim=["draw", "chain"]).to_numpy()[tt]
+    #     plt.scatter(tt, mean, label=f"Subject {s + 1}", s=15, c=colors[s])
+    # plt.xlabel("Time Step")
+    # plt.ylabel("CLO Value")
+    # plt.title(PRX)
+    # plt.legend()
+    # plt.show()
 
     coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
     coordination_posterior.plot(plt.figure().gca(), show_samples=False)
+    plt.title(PRX)
     plt.show()
