@@ -150,22 +150,25 @@ class MassSpringDamperModel:
                                                    time_dimension="spring_time",
                                                    observed_values=evidence)
 
+            # obs = pm.draw(pm.Normal.dist(mu=0, sigma=1, size=[self.num_springs, 2, evidence.shape[-1]]), 1)
+            # pm.logp(state_space_dist, pm.math.constant(obs))
+
         return pymc_model
 
 
 if __name__ == "__main__":
-    model = MassSpringDamperModel(num_springs=4,
-                                  spring_constant=np.array([16, 8, 4, 2]),
-                                  mass=np.ones(4) * 10,
-                                  damping_coefficient=np.ones(4) * 0,
+    model = MassSpringDamperModel(num_springs=3,
+                                  spring_constant=np.array([16, 8, 4]),
+                                  mass=np.ones(3) * 10,
+                                  damping_coefficient=np.ones(3) * 0,
                                   dt=0.2,
                                   self_dependent=True,
                                   sd_mean_uc0=1,
                                   sd_sd_uc=1,
-                                  mean_mean_a0=np.zeros((4, 2)),
-                                  sd_mean_a0=np.ones((4, 2)) * 20,
+                                  mean_mean_a0=np.zeros((3, 2)),
+                                  sd_mean_a0=np.ones((3, 2)) * 20,
                                   sd_sd_aa=np.ones(1),
-                                  a_mixture_weights=np.ones((4, 3)),
+                                  a_mixture_weights=np.ones((3, 2)),
                                   sd_sd_o=np.ones(1),
                                   share_sd_aa_across_springs=True,
                                   share_sd_aa_across_features=True,
@@ -173,13 +176,13 @@ if __name__ == "__main__":
                                   share_sd_o_across_features=True,
                                   max_lag=0)
 
-    model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0], [15, 0]])
-    model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.01
-    model.state_space_cpn.parameters.mixture_weights.value = np.array([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]])
+    model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0]])
+    model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
+    model.state_space_cpn.parameters.mixture_weights.value = np.array([[1, 0], [1, 0], [0, 1]])
     model.observation_cpn.parameters.sd_o.value = np.ones(1) * 1
 
     C = 1
-    T = 50
+    T = 10000
     samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
 
     import matplotlib.pyplot as plt
@@ -197,7 +200,7 @@ if __name__ == "__main__":
     # Inference
     model.clear_parameter_values()
     _, idata = model.fit(
-        observations=samples.observation.values[0],
+        evidence=samples.observation.values[0],
         burn_in=200,
         num_samples=200,
         num_chains=2,
