@@ -102,10 +102,12 @@ class MassSpringDamperModel:
                      seed: Optional[int] = None) -> MassSpringDamperSamples:
         if coordination_samples is None:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
+            seed = None
 
         state_samples = self.state_space_cpn.draw_samples(num_series,
                                                           relative_frequency=1,  # Same scale as coordination
-                                                          coordination=coordination_samples)
+                                                          coordination=coordination_samples,
+                                                          seed=seed)
         observation_samples = self.observation_cpn.draw_samples(latent_component=state_samples.values)
 
         samples = MassSpringDamperSamples(coordination=coordination_samples,
@@ -161,7 +163,7 @@ if __name__ == "__main__":
                                   spring_constant=np.array([16, 8, 4]),
                                   mass=np.ones(3) * 10,
                                   damping_coefficient=np.ones(3) * 0,
-                                  dt=0.2,
+                                  dt=0.5,
                                   self_dependent=True,
                                   sd_mean_uc0=1,
                                   sd_sd_uc=1,
@@ -181,8 +183,8 @@ if __name__ == "__main__":
     model.state_space_cpn.parameters.mixture_weights.value = np.array([[1, 0], [1, 0], [0, 1]])
     model.observation_cpn.parameters.sd_o.value = np.ones(1) * 1
 
-    C = 1
-    T = 10000
+    C = 2/3
+    T = 100
     samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
 
     import matplotlib.pyplot as plt

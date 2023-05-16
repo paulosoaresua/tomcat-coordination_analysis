@@ -1,17 +1,13 @@
 from typing import Any, Callable, Optional
 
-import arviz as az
 import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
 
-from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent
-from coordination.component.observation_component import SerializedObservationComponent
 from coordination.component.serialized_component import SerializedComponent
 from coordination.component.utils import feed_forward_logp_f
-from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 def logp(serialized_component: Any,
@@ -33,29 +29,15 @@ def logp(serialized_component: Any,
     # the serialized component is one
     D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
 
-    if input_layer_f.shape.prod().eval() != 0:
-        # Only transform the input data if a NN was specified. There's a similar check inside the feed_forward_logp_f
-        # function, but we duplicate it here because if input_layer_f is empty, we want to use D in its original
-        # form instead of concatenated with the pairs matrix.
-        D = feed_forward_logp_f(input_data=ptt.concatenate([D, pairs], axis=0),
-                                input_layer_f=input_layer_f,
-                                hidden_layers_f=hidden_layers_f,
-                                output_layer_f=output_layer_f,
-                                activation_function_number_f=activation_function_number_f)
-
     C = coordination[None, :]  # 1 x t
     DM = prev_diff_subject_mask[None, :]  # 1 x t
 
-    if self_dependent.eval():
-        # Coordination only affects the mean in time steps where there are previous observations from a different subject.
-        # If there's no previous observation from the same subject, we use the initial mean.
-        S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
+    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
+    # If there's no previous observation from the same subject, we use the initial mean.
+    S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
 
-        SM = prev_same_subject_mask[None, :]  # 1 x t
-        mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
-    else:
-        # Coordination only affects the mean in time steps where there are previous observations from a different subject.
-        mean = D * C * DM + (1 - C * DM) * initial_mean
+    SM = prev_same_subject_mask[None, :]  # 1 x t
+    mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
 
     # This function can only receive tensors up to 2 dimensions because serialized_component has 2 dimensions.
     # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
@@ -65,7 +47,9 @@ def logp(serialized_component: Any,
     # We transform points using the system dynamics so that samples that follow such dynamics are accepted
     # with higher probability. The batch dimension will be time, that's why we transpose serialized_component.
     serialized_component_transformed = ptt.batched_tensordot(F_inv_reshaped, serialized_component.T,
-                                                             axes=[(1,), (1,)]).T
+                                                             axes=[(2,), (1,)]).T * SM + serialized_component * (1 - SM)
+
+    # serialized_component_transformed = serialized_component
 
     total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component_transformed).sum()
 
@@ -186,6 +170,7 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
                 blended_state = (D - S) * C * prev_diff_mask + S
 
                 mean = np.dot(self.F[subjects_in_time[t]], blended_state[:, None]).T
+                # mean = blended_state
 
                 values[:, t] = norm(loc=mean, scale=sd).rvs()
 
@@ -201,114 +186,3 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
     def _get_random_fn(self):
         # TODO - implement this for prior predictive checks.
         return None
-
-
-if __name__ == "__main__":
-    coordination = SigmoidGaussianCoordinationComponent(sd_mean_uc0=1,
-                                                        sd_sd_uc=1)
-    state_space = SerializedMassSpringDamperComponent(uuid="model_state",
-                                                      num_subjects=2,
-                                                      spring_constant=np.array([0.8, 0.2]),
-                                                      mass=1,
-                                                      damping_coefficient=np.array([0, 0.5]),
-                                                      dt=0.2,
-                                                      self_dependent=True,
-                                                      mean_mean_a0=np.zeros((2, 2)),
-                                                      sd_mean_a0=np.ones((2, 2)) * 10,
-                                                      sd_sd_aa=np.ones(1),
-                                                      share_mean_a0_across_subjects=False,
-                                                      share_sd_aa_across_subjects=True,
-                                                      share_mean_a0_across_features=False,
-                                                      share_sd_aa_across_features=True,
-                                                      max_lag=0)
-    # f=lambda x, i: np.where((i == 1) | (i == 3), -1, 1)[
-    #                    ..., None] * x)
-    observations = SerializedObservationComponent(uuid="observation",
-                                                  num_subjects=state_space.num_subjects,
-                                                  dim_value=2,
-                                                  sd_sd_o=np.ones(1),
-                                                  share_sd_o_across_subjects=True,
-                                                  share_sd_o_across_features=True)
-
-    # For 3 subjects
-    # system.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0]])
-    # system.parameters.sd_aa.value = np.ones((3, 2)) * 0.1
-    # system.parameters.mixture_weights.value = np.array([[1, 0], [0, 1], [0, 1]])
-
-    # For 4 subjects
-    state_space.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
-    state_space.parameters.sd_aa.value = np.ones(1) * 0.01
-    # state_space.lag_cpn.parameters.lag.value = np.array([0, -4, -2, 0])
-    observations.parameters.sd_o.value = np.ones(1) * 0.01
-
-    C = 0.99
-    T = 100
-    state_samples = state_space.draw_samples(num_series=1, time_scale_density=1, coordination=np.ones((1, T)) * C,
-                                             seed=0, can_repeat_subject=False)
-    observation_samples = observations.draw_samples(state_samples.values, subjects=state_samples.subjects)
-
-    import matplotlib.pyplot as plt
-
-    plt.figure()
-    for s in range(state_space.num_subjects):
-        tt = [t for t, subject in enumerate(state_samples.subjects[0]) if s == subject]
-        plt.scatter(tt, observation_samples.values[0][0, tt],
-                    label=f"Position subject {s + 1}", s=15)
-        plt.title(f"Coordination = {C}")
-    plt.legend()
-    plt.show()
-
-    # Inference
-    coords = {"feature": ["position", "velocity"],
-              "coordination_time": np.arange(T),
-              "component_time": np.arange(T)}
-
-    pymc_model = pm.Model(coords=coords)
-    with pymc_model:
-        state_space.clear_parameter_values()
-        observations.parameters.clear_values()
-        # coordination.parameters.sd_uc.value = np.array([0.1])
-
-        coordination_dist = coordination.update_pymc_model(time_dimension="coordination_time")[1]
-        state_space_dist = state_space.update_pymc_model(coordination=coordination_dist,
-                                                         feature_dimension="feature",
-                                                         time_dimension="component_time",
-                                                         num_layers_f=0,
-                                                         activation_function_name_f="linear",
-                                                         subjects=state_samples.subjects[0],
-                                                         prev_time_same_subject=state_samples.prev_time_same_subject[0],
-                                                         prev_time_diff_subject=state_samples.prev_time_diff_subject[0],
-                                                         prev_same_subject_mask=np.where(
-                                                             state_samples.prev_time_same_subject[0] < 0, 0, 1),
-                                                         prev_diff_subject_mask=np.where(
-                                                             state_samples.prev_time_diff_subject[0] < 0, 0, 1))[0]
-        # observed_values=state_samples.values[0])[0]
-        observations.update_pymc_model(latent_component=state_space_dist,
-                                       subjects=state_samples.subjects[0],
-                                       feature_dimension="feature",
-                                       time_dimension="component_time",
-                                       observed_values=observation_samples.values[0])
-
-        idata = pm.sample(1000, init="jitter+adapt_diag", tune=1000, chains=2, random_seed=0, cores=2)
-
-        sampled_vars = set(idata.posterior.data_vars)
-        var_names = sorted(list(
-            set(coordination.parameter_names + state_space.parameter_names + observations.parameter_names).intersection(
-                sampled_vars)))
-        if len(var_names) > 0:
-            az.plot_trace(idata, var_names=var_names)
-            plt.tight_layout()
-            plt.show()
-
-        coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
-        coordination_posterior.plot(plt.figure().gca(), show_samples=False)
-
-        plt.figure()
-        for s in range(state_space.num_subjects):
-            tt = [t for t, subject in enumerate(state_samples.subjects[0]) if s == subject]
-            plt.scatter(tt,
-                        idata.posterior["model_state"].sel(feature="position").mean(dim=["draw", "chain"])[tt],
-                        label=f"Mean Position Subject {s + 1}", s=15)
-
-        plt.legend()
-        plt.show()
