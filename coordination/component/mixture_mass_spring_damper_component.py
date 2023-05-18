@@ -9,64 +9,97 @@ from scipy.stats import norm
 from coordination.component.mixture_component import MixtureComponent
 
 
-def logp(mixture_component: Any,
+def logp(sample: Any,
          initial_mean: Any,
          sigma: Any,
-         mixture_weights: Any,
          coordination: Any,
-         expander_aux_mask_matrix: ptt.TensorConstant,
          self_dependent: ptt.TensorConstant,
-         F_inv: ptt.TensorConstant,
-         aggregation_aux_mask_matrix: ptt.TensorConstant):
-    num_subjects = mixture_component.shape[0]
-    num_features = mixture_component.shape[1]
+         F_inv: ptt.TensorConstant):
+    """
+    This function computes the log-probability of a non-serial mass-spring-damper component. We use the following
+    definition in the comments below:
 
-    # Log probability due to the initial time step in the component's scale.
-    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(num_subjects, num_features)),
-                         mixture_component[..., 0]).sum()
+    s: number of subjects
+    d: number of dimensions/features of the component
+    T: number of time steps in the component's scale
+    """
 
-    # Computes the movement backwards according to the system dynamics, this will make the model learn a latent
-    # representation that respects the system dynamics.
-    mixture_component_previous_time = mixture_component
+    N = sample.shape[0]
+    D = sample.shape[1]
 
-    # D contains the values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component_previous_time, axes=(1, 0))[..., :-1]  # s * (s-1) x d x t
-    #
-    # # Get previous values for each time step according to an index matrix. Discard the first time step as
-    # # there's no previous values in the first time step.
-    # D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
+    # logp at the initial time step
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)), sample[..., 0]).sum()
 
+    # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
+    # We discard the last value as that is not a previous value of any other.
+    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+    prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]
 
-    # Previous values from every subject
-    P = mixture_component[..., :-1]
+    # The component's value for a subject depends on its previous value for the same subject.
+    prev_same = sample[..., :-1]
 
-    # Previous values from the same subjects
-    S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
+    # Coordination does not affect the component in the first time step because the subjects have no previous
+    # dependencies at that time.
+    c = coordination[None, None, 1:]  # 1 x 1 x t-1
 
+    blended_mean = (prev_others - prev_same) * c + prev_same
 
-    # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
-    # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
-    # only infer the next value of the latent value from its previous one on the same subject,
-    C = coordination[None, None, 1:]  # 1 x 1 x t-1
-    D = ptt.tensordot(aggregation_aux_mask_matrix, D / (num_subjects - 1), axes=(1, 0))
-    mean = (D - P) * C + P
-
-    # We transform points using the system dynamics so that samples that follow such dynamics are accepted
-    # with higher probability.
-    mixture_component_transformed = ptt.batched_tensordot(F_inv, mixture_component, axes=[(1,), (1,)])
-    # Current values from each subject. We extend S and point such that they match the dimensions of D and S.
-    # point_extended = ptt.repeat(mixture_component_transformed[..., 1:], repeats=(num_subjects - 1), axis=0)
-
-    # sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
+    # Match the dimensions of the standard deviation with that of the blended mean
     sd = sigma[:, :, None]
 
-    # blended_mean = ptt.tensordot(aggregation_aux_mask_matrix, mean, axes=(1, 0))
-    total_logp += pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=mean.shape),
-                          mixture_component_transformed[..., 1:]).sum()
+    # We transform the sample using backward dynamics so that we learn to generate samples with the underlying system
+    # dynamics. If we just compare a sample with the blended_mean, we are assuming the samples follow a random gaussian
+    # walk. Since we know the system dynamics, we can add that to the logp such that the samples are effectively
+    # coming from the component's posterior.
+    sample_transformed = ptt.batched_tensordot(F_inv, sample, axes=[(1,), (1,)])
 
-    # logp_extended = pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended)
-    # logp_tmp = logp_extended.reshape((num_subjects, num_subjects - 1, num_features, logp_extended.shape[-1]))
-    # total_logp += pm.math.logsumexp(logp_tmp + pm.math.log(mixture_weights[:, :, None, None]), axis=1).sum()
+    # Index samples starting from the second index (i = 1) so that we can effectively compare current values against
+    # previous ones (prev_others and prev_same).
+    total_logp += pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
+                          sample_transformed[..., 1:]).sum()
+    #
+    # # Computes the movement backwards according to the system dynamics, this will make the model learn a latent
+    # # representation that respects the system dynamics.
+    # mixture_component_previous_time = mixture_component
+    #
+    # # D contains the values from other individuals for each individual
+    # D = ptt.tensordot(expander_aux_mask_matrix, mixture_component_previous_time, axes=(1, 0))[..., :-1]  # s * (s-1) x d x t
+    # #
+    # # # Get previous values for each time step according to an index matrix. Discard the first time step as
+    # # # there's no previous values in the first time step.
+    # # D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
+    #
+    #
+    # # Previous values from every subject
+    # P = mixture_component[..., :-1]
+    #
+    # # Previous values from the same subjects
+    # S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
+    #
+    #
+    # # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
+    # # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
+    # # only infer the next value of the latent value from its previous one on the same subject,
+    # C = coordination[None, None, 1:]  # 1 x 1 x t-1
+    # D = ptt.tensordot(aggregation_aux_mask_matrix, D / (num_subjects - 1), axes=(1, 0))
+    # mean = (D - P) * C + P
+    #
+    # # We transform points using the system dynamics so that samples that follow such dynamics are accepted
+    # # with higher probability.
+    # mixture_component_transformed = ptt.batched_tensordot(F_inv, mixture_component, axes=[(1,), (1,)])
+    # # Current values from each subject. We extend S and point such that they match the dimensions of D and S.
+    # # point_extended = ptt.repeat(mixture_component_transformed[..., 1:], repeats=(num_subjects - 1), axis=0)
+    #
+    # # sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
+    # sd = sigma[:, :, None]
+    #
+    # # blended_mean = ptt.tensordot(aggregation_aux_mask_matrix, mean, axes=(1, 0))
+    # total_logp += pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=mean.shape),
+    #                       mixture_component_transformed[..., 1:]).sum()
+    #
+    # # logp_extended = pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended)
+    # # logp_tmp = logp_extended.reshape((num_subjects, num_subjects - 1, num_features, logp_extended.shape[-1]))
+    # # total_logp += pm.math.logsumexp(logp_tmp + pm.math.log(mixture_weights[:, :, None, None]), axis=1).sum()
 
     return total_logp
 
@@ -129,8 +162,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
         self.F_inv = np.concatenate(F_inv, axis=0)
 
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
-                                   sampled_influencers: np.ndarray, mean_a0: np.ndarray,
-                                   sd_aa: np.ndarray) -> np.ndarray:
+                                   mean_a0: np.ndarray, sd_aa: np.ndarray) -> np.ndarray:
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
 
@@ -166,15 +198,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
         return values
 
     def _get_extra_logp_params(self):
-        aggregator_aux_mask_matrix = []
-        for subject in range(self.num_subjects):
-            aux = np.zeros((self.num_subjects, self.num_subjects - 1))
-            aux[subject] = 1
-            aggregator_aux_mask_matrix.append(aux)
-
-        aggregator_aux_mask_matrix = ptt.concatenate(aggregator_aux_mask_matrix, axis=1)
-
-        return self.F_inv, aggregator_aux_mask_matrix
+        return self.F_inv,
 
     def _get_logp_fn(self):
         return logp

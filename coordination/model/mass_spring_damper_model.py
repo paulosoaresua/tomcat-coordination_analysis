@@ -88,8 +88,7 @@ class MassSpringDamperModel:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
             seed = None
 
-        state_samples = self.state_space_cpn.draw_samples(num_series,
-                                                          relative_frequency=1,  # Same scale as coordination
+        state_samples = self.state_space_cpn.draw_samples(relative_frequency=1,  # Same scale as coordination
                                                           coordination=coordination_samples,
                                                           seed=seed)
         observation_samples = self.observation_cpn.draw_samples(latent_component=state_samples.values)
@@ -125,8 +124,7 @@ class MassSpringDamperModel:
             state_space_dist = self.state_space_cpn.update_pymc_model(coordination=coordination_dist,
                                                                       subject_dimension="spring",
                                                                       feature_dimension="feature",
-                                                                      time_dimension="spring_time",
-                                                                      num_time_steps=evidence.shape[-1])[0]
+                                                                      time_dimension="spring_time")[0]
             self.observation_cpn.update_pymc_model(latent_component=state_space_dist,
                                                    subject_dimension="spring",
                                                    feature_dimension="feature",
@@ -157,8 +155,7 @@ if __name__ == "__main__":
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [3, 0], [5, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
-    model.state_space_cpn.parameters.mixture_weights.value = np.array([[1, 0], [1, 0], [0, 1]])
-    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.5
+    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.1
 
     C = 2/3
     T = 100
@@ -180,8 +177,8 @@ if __name__ == "__main__":
     model.clear_parameter_values()
     _, idata = model.fit(
         evidence=samples.observation.values[0],
-        burn_in=200,
-        num_samples=200,
+        burn_in=1000,
+        num_samples=1000,
         num_chains=2,
         seed=0,
         num_jobs=2,

@@ -219,7 +219,6 @@ class MixtureComponent:
             assert (self.num_subjects, dim_sd_aa_features) == self.parameters.sd_aa.value.shape
 
         assert relative_frequency >= 1
-        assert (self.num_subjects, self.num_subjects - 1) == self.parameters.mixture_weights.value.shape
 
         # Adjust dimensions according to parameter sharing specification
         if self.share_mean_a0_across_subjects:
