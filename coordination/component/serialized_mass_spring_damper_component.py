@@ -9,7 +9,7 @@ from scipy.stats import norm
 from coordination.component.serialized_component import SerializedComponent
 
 
-def logp(serialized_component: Any,
+def logp(sample: Any,
          initial_mean: Any,
          sigma: Any,
          coordination: Any,
@@ -19,33 +19,49 @@ def logp(serialized_component: Any,
          prev_diff_subject_mask: Any,
          self_dependent: ptt.TensorConstant,
          F_inv: ptt.TensorConstant):
-    # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
-    # the serialized component is one
-    D = serialized_component[..., prev_time_diff_subject].reshape(serialized_component.shape)  # d x t
+    """
+    This function computes the log-probability of a serial component. We use the following definition in the
+    comments below:
 
-    C = coordination[None, :]  # 1 x t
-    DM = prev_diff_subject_mask[None, :]  # 1 x t
+    d: number of dimensions/features of the component
+    T: number of time steps in the component's scale
+    """
 
-    # Coordination only affects the mean in time steps where there are previous observations from a different subject.
-    # If there's no previous observation from the same subject, we use the initial mean.
-    S = serialized_component[..., prev_time_same_subject].reshape(serialized_component.shape)  # d x t
+    # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects in each time
+    # step. We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
+    # the sample component is one.
+    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # d x T
 
-    SM = prev_same_subject_mask[None, :]  # 1 x t
-    mean = D * C * DM + (1 - C * DM) * (S * SM + (1 - SM) * initial_mean)
+    # We use this binary mask to zero out entries with no observations from partners.
+    mask_other = prev_diff_subject_mask[None, :]  # 1 x T
 
-    # This function can only receive tensors up to 2 dimensions because serialized_component has 2 dimensions.
+    c = coordination[None, :]  # 1 x T
+
+    # The component's value for a subject depends on its previous value for the same subject.
+    prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # d x T
+
+    # We use this binary mask to zero out entries with no previous observations from the subjects. We use this
+    # to determine the time steps that belong to the initial values of the component. Each subject will have their
+    # initial value in a different time step hence we cannot just use t=0.
+    mask_same = prev_same_subject_mask[None, :]  # 1 x t
+
+    blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
+            prev_same * mask_same + (1 - mask_same) * initial_mean)
+
+    # This function can only receive tensors up to 2 dimensions because 'sample' has 2 dimensions.
     # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
-    # it back to it's original 3 dimensions.
+    # it back to its original 3 dimensions.
     F_inv_reshaped = F_inv.reshape((F_inv.shape[0], 2, 2))
 
-    # We transform points using the system dynamics so that samples that follow such dynamics are accepted
-    # with higher probability. The batch dimension will be time, that's why we transpose serialized_component.
-    serialized_component_transformed = ptt.batched_tensordot(F_inv_reshaped, serialized_component.T,
-                                                             axes=[(2,), (1,)]).T * SM + serialized_component * (1 - SM)
+    # We transform the sample using backward dynamics so that we learn to generate samples with the underlying system
+    # dynamics. If we just compare a sample with the blended_mean, we are assuming the samples follow a random gaussian
+    # walk. Since we know the system dynamics, we can add that to the logp such that the samples are effectively
+    # coming from the component's posterior.
+    sample_transformed = ptt.batched_tensordot(F_inv_reshaped, sample.T,
+                                               axes=[(2,), (1,)]).T * mask_same + sample * (1 - mask_same)
 
-    # serialized_component_transformed = serialized_component
-
-    total_logp = pm.logp(pm.Normal.dist(mu=mean, sigma=sigma, shape=D.shape), serialized_component_transformed).sum()
+    total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
+                         sample_transformed).sum()
 
     return total_logp
 
@@ -127,32 +143,31 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
             sd = sd_aa[subject_idx_sd_aa]
 
             if prev_time_same_subject[t] < 0:
-                # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
-                # t_0 is the initial utterance of one of the subjects only.
+                # Sample from prior. It is not only when t=0 because the first utterance of a speaker can be later in
+                # the future. t=0 is the initial state of one of the subjects only.
                 mean = mean_a0[subject_idx_mean_a0]
-
                 values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
             else:
-                C = sampled_coordination[time_steps_in_coordination_scale[t]]
+                c = sampled_coordination[time_steps_in_coordination_scale[t]]
 
                 if self.self_dependent:
                     # When there's self dependency, the component either depends on the previous value of another subject,
                     # or the previous value of the same subject.
-                    S = values[..., prev_time_same_subject[t]]
+                    prev_same = values[..., prev_time_same_subject[t]]
                 else:
                     # When there's no self dependency, the component either depends on the previous value of another subject,
                     # or it is samples around a fixed mean.
-                    S = mean_a0[subject_idx_mean_a0]
+                    prev_same = mean_a0[subject_idx_mean_a0]
 
-                prev_diff_mask = (prev_time_diff_subject[t] != -1).astype(int)
-                D = values[..., prev_time_diff_subject[t]]
+                mask_other = (prev_time_diff_subject[t] != -1).astype(int)
+                prev_other = values[..., prev_time_diff_subject[t]]
 
-                blended_state = (D - S) * C * prev_diff_mask + S
+                blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
 
-                mean = np.dot(self.F[subjects_in_time[t]], blended_state[:, None]).T
-                # mean = blended_state
+                # Use the fundamental matrix to generate samples from a Hookean spring system.
+                blended_mean_transformed = np.dot(self.F[subject_idx_mean_a0], blended_mean[:, None]).T
 
-                values[:, t] = norm(loc=mean, scale=sd).rvs()
+                values[:, t] = norm(loc=blended_mean_transformed, scale=sd).rvs()
 
         return values
 
