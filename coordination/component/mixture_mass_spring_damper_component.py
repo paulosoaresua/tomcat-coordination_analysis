@@ -140,12 +140,12 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                 values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1 x 1
 
-                prev_others = np.einsum("jk,ikl->ijl", sum_matrix_others, values[..., t - 1])  # s x d
-                prev_same = values[..., t - 1]  # s x d
+                prev_others = np.einsum("jk,ikl->ijl", sum_matrix_others, values[..., t - 1])  # n x s x d
+                prev_same = values[..., t - 1]  # n x s x d
 
-                blended_mean = (prev_others - prev_same) * c + prev_same  # s x d
+                blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 
                 # Use the fundamental matrix to generate samples from a Hookean spring system.
                 blended_mean_transformed = np.einsum("ijk,lij->lik", self.F, blended_mean)

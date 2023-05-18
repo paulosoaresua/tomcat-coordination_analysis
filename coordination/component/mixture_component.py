@@ -277,16 +277,16 @@ class MixtureComponent:
                 values[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1 x 1
 
-                prev_others = np.dot(sum_matrix_others, values[..., t - 1])  # s x d
+                prev_others = np.dot(sum_matrix_others, values[..., t - 1])  # n x s x d
 
                 if self.self_dependent:
-                    prev_same = values[..., t - 1]  # s x d
+                    prev_same = values[..., t - 1]  # n x s x d
                 else:
-                    prev_same = mean_a0  # s x d
+                    prev_same = mean_a0  # n x s x d
 
-                blended_mean = (prev_others - prev_same) * c + prev_same  # s x d
+                blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 
                 values[..., t] = norm(loc=blended_mean, scale=sd_aa).rvs()
 
