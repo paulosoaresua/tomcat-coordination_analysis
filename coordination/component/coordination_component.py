@@ -28,6 +28,9 @@ class SigmoidGaussianCoordinationComponentParameters:
 
 
 class SigmoidGaussianCoordinationComponent:
+    """
+    This class models a time series of continuous unbounded coordination and its bounded values (\tilde{C}).
+    """
 
     def __init__(self, sd_mean_uc0: float, sd_sd_uc: float):
         self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_mean_uc0, sd_sd_uc)
@@ -52,15 +55,18 @@ class SigmoidGaussianCoordinationComponent:
         set_random_seed(seed)
 
         samples = CoordinationComponentSamples()
+
+        # Initialization
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))
         samples.coordination = np.zeros((num_series, num_time_steps))
 
-        # Gaussian random walk via reparametrization trick
+        # Gaussian random wal via reparametrization trick
         samples.unbounded_coordination = norm(loc=0, scale=1).rvs(
             size=(num_series, num_time_steps)) * self.parameters.sd_uc.value
         samples.unbounded_coordination[:, 0] += self.parameters.mean_uc0.value
         samples.unbounded_coordination = samples.unbounded_coordination.cumsum(axis=1)
 
+        # \tilde{C} is a bounded version of coordination to the range [0,1]
         samples.coordination = sigmoid(samples.unbounded_coordination)
 
         return samples

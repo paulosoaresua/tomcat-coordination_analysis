@@ -33,6 +33,9 @@ class LinkComponentSamples:
 
 
 class LinkComponent:
+    """
+    This class models semantic links or any kind of binary observations with similar distribution.
+    """
 
     def __init__(self, uuid: str, a_p: float, b_p: float):
         self.uuid = uuid
@@ -55,13 +58,16 @@ class LinkComponent:
 
         samples = LinkComponentSamples()
 
-        density_mask = bernoulli(p=time_scale_density).rvs(
-            coordination.shape)
+        # Randomly sample candidate time steps in which we observe a link
+        density_mask = bernoulli(p=time_scale_density).rvs(coordination.shape)
+
+        # Effectively observe links according to the values of coordination
         links = bernoulli(p=coordination * self.parameters.p.value).rvs(coordination.shape)
 
         links *= density_mask
 
         for s in range(num_series):
+            # We don't have numerical values but time steps when links are observed
             samples.time_steps_in_coordination_scale.append(np.array([t for t, l in enumerate(links[s]) if l == 1]))
 
         return samples
