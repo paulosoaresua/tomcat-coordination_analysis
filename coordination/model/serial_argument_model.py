@@ -62,20 +62,8 @@ class SerialArgumentModel:
                  share_sd_aa_across_subjects: bool = False,
                  share_sd_aa_across_features: bool = False,
                  share_sd_o_across_subjects: bool = False,
-                 share_sd_o_across_features: bool = False,
-                 f: Optional[Callable] = None,
-                 num_layers_f: int = 0,
-                 dim_hidden_layer_f: int = 0,
-                 activation_function_name_f: str = "linear",
-                 mean_weights_f: float = 0,
-                 sd_weights_f: float = 1,
-                 max_lag: int = 0):
+                 share_sd_o_across_features: bool = False):
         self.num_subjects = num_subjects
-
-        # We use this later when defining the PyMC model
-        self.num_layers_f = num_layers_f
-        self.dim_hidden_layer_f = dim_hidden_layer_f
-        self.activation_function_name_f = activation_function_name_f
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -92,11 +80,7 @@ class SerialArgumentModel:
                                                                    share_mean_a0_across_springs=share_mean_a0_across_subjects,
                                                                    share_sd_aa_across_springs=share_sd_aa_across_subjects,
                                                                    share_mean_a0_across_features=share_mean_a0_across_features,
-                                                                   share_sd_aa_across_features=share_sd_aa_across_features,
-                                                                   f=f,
-                                                                   mean_weights_f=mean_weights_f,
-                                                                   sd_weights_f=sd_weights_f,
-                                                                   max_lag=max_lag)
+                                                                   share_sd_aa_across_features=share_sd_aa_across_features)
         self.observation_cpn = SerializedObservationComponent(uuid="observation",
                                                               num_subjects=num_subjects,
                                                               dim_value=self.state_space_cpn.dim_value,
@@ -164,10 +148,7 @@ class SerialArgumentModel:
                                                                       prev_time_same_subject=evidence.prev_time_same_subject,
                                                                       prev_time_diff_subject=evidence.prev_time_diff_subject,
                                                                       prev_same_subject_mask=evidence.prev_same_subject_mask,
-                                                                      prev_diff_subject_mask=evidence.prev_diff_subject_mask,
-                                                                      num_layers_f=self.num_layers_f,
-                                                                      dim_hidden_layer_f=self.dim_hidden_layer_f,
-                                                                      activation_function_name_f=self.activation_function_name_f)[
+                                                                      prev_diff_subject_mask=evidence.prev_diff_subject_mask)[
                 0]
             self.observation_cpn.update_pymc_model(latent_component=state_space_dist,
                                                    feature_dimension="feature",
@@ -193,8 +174,7 @@ if __name__ == "__main__":
                                 share_sd_aa_across_subjects=True,
                                 share_sd_aa_across_features=True,
                                 share_sd_o_across_subjects=True,
-                                share_sd_o_across_features=True,
-                                max_lag=0)
+                                share_sd_o_across_features=True)
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1

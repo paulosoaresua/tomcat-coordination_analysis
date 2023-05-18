@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any
 
 import numpy as np
 import pymc as pm
@@ -7,22 +7,16 @@ from scipy.linalg import expm
 from scipy.stats import norm
 
 from coordination.component.serialized_component import SerializedComponent
-from coordination.component.utils import feed_forward_logp_f
 
 
 def logp(serialized_component: Any,
          initial_mean: Any,
          sigma: Any,
          coordination: Any,
-         input_layer_f: Any,
-         hidden_layers_f: Any,
-         output_layer_f: Any,
-         activation_function_number_f: ptt.TensorConstant,
          prev_time_same_subject: ptt.TensorConstant,
          prev_time_diff_subject: ptt.TensorConstant,
          prev_same_subject_mask: Any,
          prev_diff_subject_mask: Any,
-         pairs: ptt.TensorConstant,
          self_dependent: ptt.TensorConstant,
          F_inv: ptt.TensorConstant):
     # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
@@ -71,11 +65,7 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
                  share_mean_a0_across_springs: bool,
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_springs: bool,
-                 share_sd_aa_across_features: bool,
-                 f: Optional[Callable] = None,
-                 mean_weights_f: float = 0,
-                 sd_weights_f: float = 1,
-                 max_lag: int = 0):
+                 share_sd_aa_across_features: bool):
         """
         Generates a time series of latent states formed by position and velocity in a mass-spring-damper system. We do
         not consider external force in this implementation but it can be easily added if necessary.
@@ -90,11 +80,7 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
                          share_mean_a0_across_subjects=share_mean_a0_across_springs,
                          share_mean_a0_across_features=share_mean_a0_across_features,
                          share_sd_aa_across_subjects=share_sd_aa_across_springs,
-                         share_sd_aa_across_features=share_sd_aa_across_features,
-                         f=f,
-                         mean_weights_f=mean_weights_f,
-                         sd_weights_f=sd_weights_f,
-                         max_lag=max_lag)
+                         share_sd_aa_across_features=share_sd_aa_across_features)
 
         # We assume the spring_constants are known but this can be changed to have them as latent variables if needed.
         assert spring_constant.ndim == 1 and len(spring_constant) == num_springs
@@ -160,12 +146,6 @@ class SerializedMassSpringDamperComponent(SerializedComponent):
 
                 prev_diff_mask = (prev_time_diff_subject[t] != -1).astype(int)
                 D = values[..., prev_time_diff_subject[t]]
-
-                if self.f is not None:
-                    source_subject = subjects_in_time[prev_time_diff_subject[t]]
-                    target_subject = subjects_in_time[t]
-
-                    D = self.f(D, source_subject, target_subject)
 
                 blended_state = (D - S) * C * prev_diff_mask + S
 
