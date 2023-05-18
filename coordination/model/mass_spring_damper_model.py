@@ -42,20 +42,8 @@ class MassSpringDamperModel:
                  share_sd_aa_across_springs: bool = False,
                  share_sd_aa_across_features: bool = False,
                  share_sd_o_across_springs: bool = False,
-                 share_sd_o_across_features: bool = False,
-                 f: Optional[Callable] = None,
-                 num_layers_f: int = 0,
-                 dim_hidden_layer_f: int = 0,
-                 activation_function_name_f: str = "linear",
-                 mean_weights_f: float = 0,
-                 sd_weights_f: float = 1,
-                 max_lag: int = 0):
+                 share_sd_o_across_features: bool = False):
         self.num_springs = num_springs
-
-        # We use this later when defining the PyMC model
-        self.num_layers_f = num_layers_f
-        self.dim_hidden_layer_f = dim_hidden_layer_f
-        self.activation_function_name_f = activation_function_name_f
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
@@ -73,11 +61,7 @@ class MassSpringDamperModel:
                                                                 share_mean_a0_across_springs=share_mean_a0_across_springs,
                                                                 share_sd_aa_across_springs=share_sd_aa_across_springs,
                                                                 share_mean_a0_across_features=share_mean_a0_across_features,
-                                                                share_sd_aa_across_features=share_sd_aa_across_features,
-                                                                f=f,
-                                                                mean_weights_f=mean_weights_f,
-                                                                sd_weights_f=sd_weights_f,
-                                                                max_lag=max_lag)
+                                                                share_sd_aa_across_features=share_sd_aa_across_features)
         self.observation_cpn = ObservationComponent(uuid="observation",
                                                     num_subjects=num_springs,
                                                     dim_value=self.state_space_cpn.dim_value,
@@ -142,18 +126,12 @@ class MassSpringDamperModel:
                                                                       subject_dimension="spring",
                                                                       feature_dimension="feature",
                                                                       time_dimension="spring_time",
-                                                                      num_layers_f=self.num_layers_f,
-                                                                      dim_hidden_layer_f=self.dim_hidden_layer_f,
-                                                                      activation_function_name_f=self.activation_function_name_f,
                                                                       num_time_steps=evidence.shape[-1])[0]
             self.observation_cpn.update_pymc_model(latent_component=state_space_dist,
                                                    subject_dimension="spring",
                                                    feature_dimension="feature",
                                                    time_dimension="spring_time",
                                                    observed_values=evidence)
-
-            # obs = pm.draw(pm.Normal.dist(mu=0, sigma=1, size=[self.num_springs, 2, evidence.shape[-1]]), 1)
-            # pm.logp(state_space_dist, pm.math.constant(obs))
 
         return pymc_model
 
@@ -175,8 +153,7 @@ if __name__ == "__main__":
                                   share_sd_aa_across_springs=True,
                                   share_sd_aa_across_features=True,
                                   share_sd_o_across_springs=True,
-                                  share_sd_o_across_features=True,
-                                  max_lag=0)
+                                  share_sd_o_across_features=True)
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [3, 0], [5, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1

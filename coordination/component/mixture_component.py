@@ -367,9 +367,7 @@ class MixtureComponent:
 
     def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
                           num_time_steps: int, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
-                          sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None,
-                          num_layers_f: int = 0, activation_function_name_f: str = "linear",
-                          dim_hidden_layer_f: int = 0) -> Any:
+                          sd_aa: Optional[Any] = None, mixture_weights: Optional[Any] = None) -> Any:
 
         mean_a0, sd_aa, mixture_weights = self._create_random_parameters(mean_a0, sd_aa, mixture_weights)
 
