@@ -181,7 +181,7 @@ class SerialArgumentModel:
 if __name__ == "__main__":
     model = SerialArgumentModel(num_subjects=2,
                                 frequency=np.array([0.8, 0.2]),
-                                damping_coefficient=np.array([0, 0.5]),
+                                damping_coefficient=np.array([0, 0]),
                                 dt=0.2,
                                 self_dependent=True,
                                 sd_mean_uc0=1,
@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
-    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 1
+    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.01
 
     C = 0.5
     T = 100

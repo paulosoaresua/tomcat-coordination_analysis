@@ -178,12 +178,12 @@ if __name__ == "__main__":
                                   share_sd_o_across_features=True,
                                   max_lag=0)
 
-    model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [5, 0], [10, 0]])
+    model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [3, 0], [5, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
     model.state_space_cpn.parameters.mixture_weights.value = np.array([[1, 0], [1, 0], [0, 1]])
-    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 1
+    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.5
 
-    C = 2/3
+    C = 0
     T = 100
     samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
 
