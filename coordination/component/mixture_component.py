@@ -1,11 +1,8 @@
-import math
 from typing import Any, Callable, List, Optional, Tuple
 
 from functools import partial
-import itertools
 import numpy as np
 import pymc as pm
-import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
@@ -258,6 +255,11 @@ class MixtureComponent:
     def f_nn_weights_name(self) -> str:
         return f"f_nn_weights_{self.uuid}"
 
+    def clear_parameter_values(self):
+        self.parameters.clear_values()
+        if self.lag_cpn is not None:
+            self.lag_cpn.clear_parameter_values()
+
     def draw_samples(self, num_series: int, relative_frequency: float,
                      coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
         # TODO - add support to generate samples with lag. Currently, this has to be done after the samples are
@@ -293,9 +295,8 @@ class MixtureComponent:
 
         # Number of time steps in the component's scale
         num_time_steps_in_cpn_scale = int(coordination.shape[-1] / relative_frequency)
-        samples.values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps_in_cpn_scale))
-        samples.time_steps_in_coordination_scale = np.full((num_series, num_time_steps_in_cpn_scale), fill_value=-1,
-                                                           dtype=int)
+        samples.time_steps_in_coordination_scale = (np.arange(num_time_steps_in_cpn_scale) * relative_frequency).astype(
+            int)
 
         # Sample influencers in each time step
         influencers = []
@@ -316,22 +317,40 @@ class MixtureComponent:
         else:
             sd_aa = self.parameters.sd_aa.value[None, :]
 
-        for t in range(num_time_steps_in_cpn_scale):
+        # draw values from the system dynamics. The default model generates samples by following a Gaussian random walk
+        # with blended values from different subjects according to the coordination levels over time. Child classes
+        # can implement their own dynamics, like spring-mass-damping systems for instance.
+        samples.values = self._draw_from_system_dynamics(
+            time_steps_in_coordination_scale=samples.time_steps_in_coordination_scale,
+            sampled_coordination=coordination,
+            sampled_influencers=influencers,
+            mean_a0=mean_a0,
+            sd_aa=sd_aa)
+
+        return samples
+
+    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
+                                   sampled_influencers: np.ndarray, mean_a0: np.ndarray,
+                                   sd_aa: np.ndarray) -> np.ndarray:
+
+        num_series = sampled_coordination.shape[0]
+        num_time_steps = len(time_steps_in_coordination_scale)
+        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
+
+        for t in range(num_time_steps):
             if t == 0:
-                samples.values[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs(
+                values[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                time_in_coord_scale = relative_frequency * t
-
-                C = coordination[:, time_in_coord_scale][:, None]
-                P = samples.values[..., t - 1]
+                C = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None]
+                P = values[..., t - 1]
 
                 if self.f is not None:
-                    D = self.f(samples.values[..., t - 1], influencers[..., t])
+                    D = self.f(values[..., t - 1], sampled_influencers[..., t])
                 else:
                     D = P
 
-                D = D[:, influencers[..., t]][0]
+                D = D[:, sampled_influencers[..., t]][0]
 
                 if self.self_dependent:
                     S = P
@@ -340,10 +359,9 @@ class MixtureComponent:
 
                 mean = (D - S) * C + S
 
-                samples.values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
-                samples.time_steps_in_coordination_scale[..., t] = time_in_coord_scale
+                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
 
-        return samples
+        return values
 
     def _create_random_parameters(self, mean_a0: Optional[Any] = None, sd_aa: Optional[Any] = None,
                                   mixture_weights: Optional[Any] = None):
@@ -548,11 +566,27 @@ class MixtureComponent:
                        expander_aux_mask_matrix,
                        prev_time_diff_subject,
                        lag_mask,
-                       np.array(self.self_dependent))
-        random_fn = partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
-        mixture_component = pm.CustomDist(self.uuid, *logp_params, logp=mixture_logp,
+                       np.array(self.self_dependent),
+                       *self._get_extra_logp_params()
+                       )
+        logp_fn =  self._get_logp_fn()
+        random_fn = self._get_random_fn()
+        mixture_component = pm.CustomDist(self.uuid, *logp_params,
+                                          logp=logp_fn,
                                           random=random_fn,
                                           dims=[subject_dimension, feature_dimension, time_dimension],
                                           observed=observed_values)
 
         return mixture_component, mean_a0, sd_aa, mixture_weights
+
+    def _get_extra_logp_params(self):
+        """
+        Child classes can pass extra parameters to the logp and random functions
+        """
+        return ()
+
+    def _get_logp_fn(self):
+        return mixture_logp
+
+    def _get_random_fn(self):
+        return partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)

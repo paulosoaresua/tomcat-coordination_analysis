@@ -376,6 +376,11 @@ class SerializedComponent:
     def f_nn_weights_name(self) -> str:
         return f"f_nn_weights_{self.uuid}"
 
+    def clear_parameter_values(self):
+        self.parameters.clear_values()
+        if self.lag_cpn is not None:
+            self.lag_cpn.clear_parameter_values()
+
     def draw_samples(self, num_series: int, time_scale_density: float,
                      coordination: np.ndarray, can_repeat_subject: bool,
                      seed: Optional[int] = None) -> SerializedComponentSamples:
@@ -419,6 +424,7 @@ class SerializedComponent:
         set_random_seed(seed)
 
         samples = SerializedComponentSamples()
+        samples.values = []
         for s in range(num_series):
             sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
                                                          can_repeat_subject)
@@ -428,14 +434,13 @@ class SerializedComponent:
 
             num_time_steps_in_cpn_scale = len(samples.time_steps_in_coordination_scale[s])
 
-            samples.values.append(np.zeros((self.dim_value, num_time_steps_in_cpn_scale)))
             samples.prev_time_same_subject.append(
                 np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
             samples.prev_time_diff_subject.append(
                 np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
 
+            # Fill dependencies
             prev_time_per_subject = {}
-
             for t in range(num_time_steps_in_cpn_scale):
                 samples.prev_time_same_subject[s][t] = prev_time_per_subject.get(samples.subjects[s][t], -1)
 
@@ -449,54 +454,78 @@ class SerializedComponent:
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
 
-                subject_idx_mean_a0 = samples.subjects[s][t]
-                subject_idx_sd_aa = samples.subjects[s][t]
-                if self.share_mean_a0_across_subjects:
-                    subject_idx_mean_a0 = 0
-                if self.share_sd_aa_across_subjects:
-                    subject_idx_sd_aa = 0
-
-                if samples.prev_time_same_subject[s][t] < 0:
-                    # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
-                    # t_0 is the initial utterance of one of the subjects only.
-
-                    mean = mean_a0[subject_idx_mean_a0]
-                    sd = sd_aa[subject_idx_sd_aa]
-
-                    samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
-                else:
-                    C = coordination[s, samples.time_steps_in_coordination_scale[s][t]]
-
-                    if self.self_dependent:
-                        # When there's self dependency, the component either depends on the previous value of another subject,
-                        # or the previous value of the same subject.
-                        S = samples.values[s][..., samples.prev_time_same_subject[s][t]]
-                    else:
-                        # When there's no self dependency, the component either depends on the previous value of another subject,
-                        # or it is samples around a fixed mean.
-                        S = mean_a0[subject_idx_mean_a0]
-
-                    prev_diff_mask = (samples.prev_time_diff_subject[s][t] != -1).astype(int)
-                    D = samples.values[s][..., samples.prev_time_diff_subject[s][t]]
-
-                    if self.f is not None:
-                        source_subject = samples.subjects[s][samples.prev_time_diff_subject[s][t]]
-                        target_subject = samples.subjects[s][t]
-
-                        D = self.f(D, source_subject, target_subject)
-
-                    if self.mode == Mode.BLENDING:
-                        mean = (D - S) * C * prev_diff_mask + S
-                    else:
-                        if prev_diff_mask == 1 and np.random.rand() <= C:
-                            mean = D
-                        else:
-                            mean = S
-                    sd = sd_aa[subject_idx_sd_aa]
-
-                    samples.values[s][:, t] = norm(loc=mean, scale=sd).rvs()
+            values = self._draw_from_system_dynamics(
+                time_steps_in_coordination_scale=samples.time_steps_in_coordination_scale[s],
+                sampled_coordination=coordination[s],
+                subjects_in_time=samples.subjects[s],
+                prev_time_same_subject=samples.prev_time_same_subject[s],
+                prev_time_diff_subject=samples.prev_time_diff_subject[s],
+                mean_a0=mean_a0,
+                sd_aa=sd_aa)
+            samples.values.append(values)
 
         return samples
+
+    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
+                                   subjects_in_time: np.ndarray, prev_time_same_subject: np.ndarray,
+                                   prev_time_diff_subject: np.ndarray, mean_a0: np.ndarray,
+                                   sd_aa: np.ndarray) -> np.ndarray:
+
+        num_time_steps = len(time_steps_in_coordination_scale)
+        values = np.zeros((self.dim_value, num_time_steps))
+
+        for t in range(num_time_steps):
+            if self.share_mean_a0_across_subjects:
+                subject_idx_mean_a0 = 0
+            else:
+                subject_idx_mean_a0 = subjects_in_time[t]
+
+            if self.share_sd_aa_across_subjects:
+                subject_idx_sd_aa = 0
+            else:
+                subject_idx_sd_aa = subjects_in_time[t]
+
+            if prev_time_same_subject[t] < 0:
+                # It is not only when t == 0 because the first utterance of a speaker can be later in the future.
+                # t_0 is the initial utterance of one of the subjects only.
+
+                mean = mean_a0[subject_idx_mean_a0]
+                sd = sd_aa[subject_idx_sd_aa]
+
+                values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
+            else:
+                C = sampled_coordination[time_steps_in_coordination_scale[t]]
+
+                if self.self_dependent:
+                    # When there's self dependency, the component either depends on the previous value of another subject,
+                    # or the previous value of the same subject.
+                    S = values[..., prev_time_same_subject[t]]
+                else:
+                    # When there's no self dependency, the component either depends on the previous value of another subject,
+                    # or it is samples around a fixed mean.
+                    S = mean_a0[subject_idx_mean_a0]
+
+                prev_diff_mask = (prev_time_diff_subject[t] != -1).astype(int)
+                D = values[..., prev_time_diff_subject[t]]
+
+                if self.f is not None:
+                    source_subject = subjects_in_time[prev_time_diff_subject[t]]
+                    target_subject = subjects_in_time[t]
+
+                    D = self.f(D, source_subject, target_subject)
+
+                if self.mode == Mode.BLENDING:
+                    mean = (D - S) * C * prev_diff_mask + S
+                else:
+                    if prev_diff_mask == 1 and np.random.rand() <= C:
+                        mean = D
+                    else:
+                        mean = S
+                sd = sd_aa[subject_idx_sd_aa]
+
+                values[:, t] = norm(loc=mean, scale=sd).rvs()
+
+        return values
 
     def _draw_random_subjects(self, num_series: int, num_time_steps: int, time_scale_density: float,
                               can_repeat_subject: bool) -> np.ndarray:
@@ -769,11 +798,27 @@ class SerializedComponent:
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
                        encoded_pairs,
-                       np.array(self.self_dependent))
-        logp_fn = blending_logp if self.mode == Mode.BLENDING else mixture_logp
-        random_fn = blending_random if self.mode == Mode.BLENDING else mixture_random
-        serialized_component = pm.DensityDist(self.uuid, *logp_params, logp=logp_fn, random=random_fn,
+                       np.array(self.self_dependent),
+                       *self._get_extra_logp_params(subjects)
+                       )
+        logp_fn = self._get_logp_fn()
+        random_fn = self._get_random_fn()
+        serialized_component = pm.DensityDist(self.uuid, *logp_params,
+                                              logp=logp_fn,
+                                              random=random_fn,
                                               dims=[feature_dimension, time_dimension],
                                               observed=observed_values)
 
         return serialized_component, mean_a0, sd_aa, (input_layer_f, hidden_layers_f, output_layer_f)
+
+    def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
+        """
+        Child classes can pass extra parameters to the logp and random functions
+        """
+        return ()
+
+    def _get_logp_fn(self):
+        return blending_logp if self.mode == Mode.BLENDING else mixture_logp
+
+    def _get_random_fn(self):
+        return blending_random if self.mode == Mode.BLENDING else mixture_random
