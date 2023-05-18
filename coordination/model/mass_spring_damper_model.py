@@ -160,7 +160,7 @@ if __name__ == "__main__":
     model.state_space_cpn.parameters.mixture_weights.value = np.array([[1, 0], [1, 0], [0, 1]])
     model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.5
 
-    C = 0
+    C = 2/3
     T = 100
     samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
 

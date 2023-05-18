@@ -117,7 +117,6 @@ class MixtureComponentParameters:
         self.mean_a0.value = None
         self.sd_aa.value = None
         self.mixture_weights.value = None
-        self.weights_f.value = None
 
 
 class MixtureComponentSamples:
@@ -201,14 +200,8 @@ class MixtureComponent:
     def mixture_weights_name(self) -> str:
         return f"mixture_weights_{self.uuid}"
 
-    @property
-    def f_nn_weights_name(self) -> str:
-        return f"f_nn_weights_{self.uuid}"
-
     def clear_parameter_values(self):
         self.parameters.clear_values()
-        if self.lag_cpn is not None:
-            self.lag_cpn.clear_parameter_values()
 
     def draw_samples(self, num_series: int, relative_frequency: float,
                      coordination: np.ndarray, seed: Optional[int] = None) -> MixtureComponentSamples:
@@ -382,15 +375,11 @@ class MixtureComponent:
 
         expander_aux_mask_matrix = np.concatenate(expander_aux_mask_matrix, axis=0)
 
-        prev_time_diff_subject = ptt.arange(num_time_steps)[None, :].repeat(
-            self.num_subjects * (self.num_subjects - 1), axis=0) - 1
-
         logp_params = (mean_a0,
                        sd_aa,
                        mixture_weights,
                        coordination,
                        expander_aux_mask_matrix,
-                       prev_time_diff_subject,
                        np.array(self.self_dependent),
                        *self._get_extra_logp_params()
                        )
