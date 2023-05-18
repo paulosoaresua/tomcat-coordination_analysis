@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
@@ -70,17 +70,6 @@ class VocalicSeries:
         self.time_steps_in_coordination_scale = self.time_steps_in_coordination_scale[
                                                 t_min_vocalic:t_max_vocalic] - min_time_step
 
-    def standardize(self):
-        """
-        Make sure measurements are between 0 and 1 and per feature. Don't normalize per subject otherwise we lose
-        proximity relativity (how close measurements from different subjects are) which is important for the
-        coordination model.
-        """
-
-        max_value = self.observation.max(axis=-1, initial=0)[:, None]
-        min_value = self.observation.min(axis=-1, initial=0)[:, None]
-        self.observation = (self.observation - min_value) / (max_value - min_value)
-
     def normalize_per_subject(self):
         """
         Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
@@ -93,17 +82,7 @@ class VocalicSeries:
             std = obs_per_subject.std(axis=1)[:, None]
             self.observation[:, self.subjects_in_time == subject] = (obs_per_subject - mean) / std
 
-    def normalize_across_subject(self):
-        """
-        Make sure measurements have mean 0 and standard deviation 1 per feature.
-        """
-
-        mean = self.observation.mean(axis=1)[:, None]
-        std = self.observation.std(axis=1)[:, None]
-        self.observation = (self.observation - mean) / std
-
     def plot_observations(self, axs: List[Any]):
-        # One plot per channel
         all_subjects = set(self.subjects_in_time)
 
         for vocalic_feature_idx in range(min(self.num_vocalic_features, len(axs))):
@@ -120,61 +99,6 @@ class VocalicSeries:
             ax.set_title(self.features[vocalic_feature_idx])
             ax.set_xlabel("Time Step")
             ax.set_ylabel("Observed Value")
-            ax.set_xlim([-0.5, self.num_time_steps_in_coordination_scale + 0.5])
-            ax.legend()
-
-    def plot_observation_differences(self, axs: List[Any], self_dependent: bool):
-        # Plot the difference between the current subject's vocalic and their previous vocalic and a different
-        # subject's previous vocalic
-
-        for vocalic_feature_idx in range(min(self.num_vocalic_features, len(axs))):
-            ax = axs[vocalic_feature_idx]
-
-            xs_same = []
-            ys_same = []
-            xs_diff = []
-            ys_diff = []
-
-            fixed_means = {}
-            if not self_dependent:
-                # Approximated fixed mean is the first observation of a subject
-                all_subjects = set(self.subjects_in_time)
-                for subject in all_subjects:
-                    t0 = np.where(self.subjects_in_time == subject)[0][0]
-                    fixed_means[subject] = self.observation[vocalic_feature_idx, t0]
-
-            for t in range(self.num_time_steps_in_vocalic_scale):
-                if self_dependent:
-                    if self.previous_time_same_subject[t] >= 0:
-                        t_p = self.previous_time_same_subject[t]
-                        xs_same.append(self.time_steps_in_coordination_scale[t])
-                        ys_same.append(
-                            np.abs(
-                                self.observation[vocalic_feature_idx, t] - self.observation[vocalic_feature_idx, t_p]))
-                else:
-                    subject = self.subjects_in_time[t]
-                    xs_same.append(self.time_steps_in_coordination_scale[t])
-                    ys_same.append(np.abs(self.observation[vocalic_feature_idx, t] - fixed_means[subject]))
-
-                if self.previous_time_diff_subject[t] >= 0:
-                    t_p = self.previous_time_diff_subject[t]
-                    xs_diff.append(self.time_steps_in_coordination_scale[t])
-                    ys_diff.append(
-                        np.abs(self.observation[vocalic_feature_idx, t] - self.observation[vocalic_feature_idx, t_p]))
-
-            if len(xs_same) == 1:
-                ax.scatter(xs_same, ys_same, label="Same Subject")
-            else:
-                ax.plot(xs_same, ys_same, label="Same Subject", marker="o")
-
-            if len(xs_same) == 1:
-                ax.scatter(xs_diff, ys_diff, label="Different Subject")
-            else:
-                ax.plot(xs_diff, ys_diff, label="Different Subject", marker="o")
-
-            ax.set_title(self.features[vocalic_feature_idx])
-            ax.set_xlabel("Time Step")
-            ax.set_ylabel("Difference btw Observed Values")
             ax.set_xlim([-0.5, self.num_time_steps_in_coordination_scale + 0.5])
             ax.legend()
 
@@ -243,17 +167,12 @@ class VocalicModel:
                  share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
                  share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
-                 num_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
-                 mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
+                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
 
         # Either one or the other
 
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.num_layers_f = num_layers_f
-        self.dim_hidden_layer_f = dim_hidden_layer_f
-        self.activation_function_name_f = activation_function_name_f
 
         if sd_sd_c is None:
             # Coordination is a deterministic transformation of its unbounded estimate
@@ -279,11 +198,7 @@ class VocalicModel:
                                                       share_mean_a0_across_features=share_mean_a0_across_features,
                                                       share_sd_aa_across_subjects=share_sd_aa_across_subjects,
                                                       share_sd_aa_across_features=share_sd_aa_across_features,
-                                                      mode=mode,
-                                                      f=f,
-                                                      mean_weights_f=mean_weights_f,
-                                                      sd_weights_f=sd_weights_f,
-                                                      max_lag=max_vocalic_lag)
+                                                      mode=mode)
 
         self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
@@ -348,10 +263,7 @@ class VocalicModel:
                 prev_diff_subject_mask=evidence.vocalic_prev_diff_subject_mask,
                 subjects=evidence.subjects_in_time,
                 time_dimension="vocalic_time",
-                feature_dimension="vocalic_feature",
-                num_layers_f=self.num_layers_f,
-                dim_hidden_layer_f=self.dim_hidden_layer_f,
-                activation_function_name_f=self.activation_function_name_f)[0]
+                feature_dimension="vocalic_feature")[0]
 
             self.obs_vocalic_cpn.update_pymc_model(latent_component=latent_vocalic,
                                                    feature_dimension="vocalic_feature",
