@@ -6,7 +6,6 @@ import pymc as pm
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
-from coordination.common.activation_function import ActivationFunction
 from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 
@@ -101,15 +100,10 @@ def mixture_logp(serialized_component: Any,
                  initial_mean: Any,
                  sigma: Any,
                  coordination: Any,
-                 input_layer_f: Any,
-                 hidden_layers_f: Any,
-                 output_layer_f: Any,
-                 activation_function_number_f: ptt.TensorConstant,
                  prev_time_same_subject: ptt.TensorConstant,
                  prev_time_diff_subject: ptt.TensorConstant,
                  prev_same_subject_mask: Any,
                  prev_diff_subject_mask: Any,
-                 pairs: ptt.TensorConstant,
                  self_dependent: ptt.TensorConstant):
     # We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
     # the serialized component is one
@@ -137,15 +131,10 @@ def mixture_logp(serialized_component: Any,
 def mixture_random(initial_mean: np.ndarray,
                    sigma: np.ndarray,
                    coordination: np.ndarray,
-                   input_layer_f: np.ndarray,
-                   hidden_layers_f: np.ndarray,
-                   output_layer_f: np.ndarray,
-                   activation_function_number_f: int,
                    prev_time_same_subject: np.ndarray,
                    prev_time_diff_subject: np.ndarray,
                    prev_same_subject_mask: np.ndarray,
                    prev_diff_subject_mask: np.ndarray,
-                   pairs: np.ndarray,
                    self_dependent: bool,
                    rng: Optional[np.random.Generator] = None,
                    size: Optional[Tuple[int]] = None) -> np.ndarray:
@@ -161,7 +150,6 @@ def mixture_random(initial_mean: np.ndarray,
     prior_sample = rng.normal(loc=mean_0, scale=sd_0)
     sample[..., 0] = prior_sample
 
-    activation = ActivationFunction.from_numpy_number(activation_function_number_f)
     for t in np.arange(1, num_time_steps):
         # Previous sample from a different individual
         D = sample[..., prev_time_diff_subject[t]]
