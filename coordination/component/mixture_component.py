@@ -130,6 +130,10 @@ class MixtureComponentSamples:
 
 
 class MixtureComponent:
+    """
+    This class models a non-serial latent component which individual subject's dynamics influence that of the other
+    subjects as controlled by coordination.
+    """
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray,
@@ -253,29 +257,36 @@ class MixtureComponent:
 
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
                                    mean_a0: np.ndarray, sd_aa: np.ndarray) -> np.ndarray:
+        """
+        In this function we use the following notation in the comments:
+
+        n: number of series/samples (first dimension of coordination)
+        s: number of subjects
+        d: number of features
+        """
 
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
 
         N = self.num_subjects
-        sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
 
         for t in range(num_time_steps):
             if t == 0:
                 values[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None]
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1
 
                 prev_others = np.dot(sum_matrix_others, values[..., t - 1])  # s x d
 
                 if self.self_dependent:
-                    prev_same = values[..., t - 1]
+                    prev_same = values[..., t - 1]  # s x d
                 else:
-                    prev_same = mean_a0
+                    prev_same = mean_a0  # s x d
 
-                blended_mean = (prev_others - prev_same) * c + prev_same
+                blended_mean = (prev_others - prev_same) * c + prev_same  # s x d
 
                 values[..., t] = norm(loc=blended_mean, scale=sd_aa).rvs()
 

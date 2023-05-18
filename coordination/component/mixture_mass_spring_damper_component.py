@@ -57,54 +57,15 @@ def logp(sample: Any,
     # previous ones (prev_others and prev_same).
     total_logp += pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
                           sample_transformed[..., 1:]).sum()
-    #
-    # # Computes the movement backwards according to the system dynamics, this will make the model learn a latent
-    # # representation that respects the system dynamics.
-    # mixture_component_previous_time = mixture_component
-    #
-    # # D contains the values from other individuals for each individual
-    # D = ptt.tensordot(expander_aux_mask_matrix, mixture_component_previous_time, axes=(1, 0))[..., :-1]  # s * (s-1) x d x t
-    # #
-    # # # Get previous values for each time step according to an index matrix. Discard the first time step as
-    # # # there's no previous values in the first time step.
-    # # D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
-    #
-    #
-    # # Previous values from every subject
-    # P = mixture_component[..., :-1]
-    #
-    # # Previous values from the same subjects
-    # S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
-    #
-    #
-    # # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
-    # # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
-    # # only infer the next value of the latent value from its previous one on the same subject,
-    # C = coordination[None, None, 1:]  # 1 x 1 x t-1
-    # D = ptt.tensordot(aggregation_aux_mask_matrix, D / (num_subjects - 1), axes=(1, 0))
-    # mean = (D - P) * C + P
-    #
-    # # We transform points using the system dynamics so that samples that follow such dynamics are accepted
-    # # with higher probability.
-    # mixture_component_transformed = ptt.batched_tensordot(F_inv, mixture_component, axes=[(1,), (1,)])
-    # # Current values from each subject. We extend S and point such that they match the dimensions of D and S.
-    # # point_extended = ptt.repeat(mixture_component_transformed[..., 1:], repeats=(num_subjects - 1), axis=0)
-    #
-    # # sd = ptt.repeat(sigma, repeats=(num_subjects - 1), axis=0)[:, :, None]
-    # sd = sigma[:, :, None]
-    #
-    # # blended_mean = ptt.tensordot(aggregation_aux_mask_matrix, mean, axes=(1, 0))
-    # total_logp += pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=mean.shape),
-    #                       mixture_component_transformed[..., 1:]).sum()
-    #
-    # # logp_extended = pm.logp(pm.Normal.dist(mu=mean, sigma=sd, shape=D.shape), point_extended)
-    # # logp_tmp = logp_extended.reshape((num_subjects, num_subjects - 1, num_features, logp_extended.shape[-1]))
-    # # total_logp += pm.math.logsumexp(logp_tmp + pm.math.log(mixture_weights[:, :, None, None]), axis=1).sum()
 
     return total_logp
 
 
 class MixtureMassSpringDamperComponent(MixtureComponent):
+    """
+    This class models a non-serial latent mass-spring-damper component which individual spring's dynamics influence
+    that of the other springs as controlled by coordination.
+    """
 
     def __init__(self, uuid: str,
                  num_springs: int,
@@ -121,10 +82,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_springs: bool,
                  share_sd_aa_across_features: bool):
-        """
-        Generates a time series of latent states formed by position and velocity in a mass-spring-damper system. We do
-        not consider external force in this implementation but it can be easily added if necessary.
-        """
+
         super().__init__(uuid=uuid,
                          num_subjects=num_springs,
                          dim_value=2,  # 2 dimensions: position and velocity
@@ -163,37 +121,36 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
 
     def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
                                    mean_a0: np.ndarray, sd_aa: np.ndarray) -> np.ndarray:
+        """
+        In this function we use the following notation in the comments:
+
+        n: number of series/samples (first dimension of coordination)
+        s: number of subjects
+        d: number of features
+        """
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
-
-        SUM = np.ones((self.num_subjects, self.num_subjects)) - np.eye(self.num_subjects)
-
         values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
+
+        N = self.num_subjects
+        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
 
         for t in range(num_time_steps):
             if t == 0:
                 values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                C = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None]
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1
 
-                P = values[..., t - 1]
+                prev_others = np.einsum("jk,ikl->ijl", sum_matrix_others, values[..., t - 1])  # s x d
+                prev_same = values[..., t - 1]  # s x d
 
-                D = P
+                blended_mean = (prev_others - prev_same) * c + prev_same  # s x d
 
-                D = np.einsum("ij,kjl->kil", SUM, D)
+                # Use the fundamental matrix to generate samples from a Hookean spring system.
+                blended_mean_transformed = np.einsum("ijk,lij->lik", self.F, blended_mean)
 
-                if self.self_dependent:
-                    S = P
-                else:
-                    S = mean_a0
-
-                blended_state = (1 - C) * S + (D / (self.num_subjects - 1)) * C
-
-                mean = np.einsum("ijk,lij->lik", self.F, blended_state)
-
-                # Add some noise
-                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
+                values[..., t] = norm(loc=blended_mean_transformed, scale=sd_aa).rvs()
 
         return values
 
