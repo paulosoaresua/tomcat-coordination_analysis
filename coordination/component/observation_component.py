@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import pymc as pm
@@ -24,11 +24,14 @@ class ObservationComponentSamples:
 
 
 class ObservationComponent:
+    """
+    This class models observations from a latent non-serial component.
+    """
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray,
                  share_sd_o_across_subjects: bool, share_sd_o_across_features: bool):
 
-        # Check dimensionality of the parameters priors
+        # Check dimensionality of the hyper-prior parameters
         if share_sd_o_across_features:
             dim_sd_o_features = 1
         else:
@@ -69,11 +72,7 @@ class ObservationComponent:
         else:
             assert (self.num_subjects, dim_sd_o_features) == self.parameters.sd_o.value.shape
 
-        set_random_seed(seed)
-
-        samples = ObservationComponentSamples()
-
-        # Dimension: (sample, subject, feature, time)
+        # Adjust dimensions according to parameter sharing specification
         if self.share_sd_o_across_subjects:
             # Broadcast across samples, subjects and time
             sd = self.parameters.sd_o.value[None, None, :, None]
@@ -81,6 +80,10 @@ class ObservationComponent:
             # Broadcast across samples and time
             sd = self.parameters.sd_o.value[None, :, :, None]
 
+        # Generate samples
+        set_random_seed(seed)
+
+        samples = ObservationComponentSamples()
         samples.values = norm(loc=latent_component, scale=sd).rvs(size=latent_component.shape)
 
         return samples
