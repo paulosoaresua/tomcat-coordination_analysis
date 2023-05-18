@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any
 
 import numpy as np
 import pymc as pm
@@ -7,7 +7,6 @@ from scipy.linalg import expm
 from scipy.stats import norm
 
 from coordination.component.mixture_component import MixtureComponent
-from coordination.component.utils import feed_forward_logp_f
 
 
 def logp(mixture_component: Any,
@@ -15,13 +14,7 @@ def logp(mixture_component: Any,
          sigma: Any,
          mixture_weights: Any,
          coordination: Any,
-         input_layer_f: Any,
-         hidden_layers_f: Any,
-         output_layer_f: Any,
-         activation_function_number_f: ptt.TensorConstant,
          expander_aux_mask_matrix: ptt.TensorConstant,
-         prev_time_diff_subject: Any,
-         prev_diff_subject_mask: Any,
          self_dependent: ptt.TensorConstant,
          F_inv: ptt.TensorConstant,
          aggregation_aux_mask_matrix: ptt.TensorConstant):
@@ -36,39 +29,27 @@ def logp(mixture_component: Any,
     # representation that respects the system dynamics.
     mixture_component_previous_time = mixture_component
 
-    # Fit a function f(.) to correct anti-symmetry.
-    X = feed_forward_logp_f(input_data=mixture_component_previous_time.reshape(
-        (mixture_component_previous_time.shape[0] * mixture_component_previous_time.shape[1],
-         mixture_component_previous_time.shape[2])),
-        input_layer_f=input_layer_f,
-        hidden_layers_f=hidden_layers_f,
-        output_layer_f=output_layer_f,
-        activation_function_number_f=activation_function_number_f).reshape(mixture_component_previous_time.shape)
-
     # D contains the values from other individuals for each individual
-    D = ptt.tensordot(expander_aux_mask_matrix, X, axes=(1, 0))  # s * (s-1) x d x t
+    D = ptt.tensordot(expander_aux_mask_matrix, mixture_component_previous_time, axes=(1, 0))[..., :-1]  # s * (s-1) x d x t
+    #
+    # # Get previous values for each time step according to an index matrix. Discard the first time step as
+    # # there's no previous values in the first time step.
+    # D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
 
-    # Get previous values for each time step according to an index matrix. Discard the first time step as
-    # there's no previous values in the first time step.
-    D = ptt.take_along_axis(D, prev_time_diff_subject[:, None, :], axis=2)[..., 1:]
 
-    if self_dependent.eval():
-        # Previous values from every subject
-        P = mixture_component[..., :-1]
+    # Previous values from every subject
+    P = mixture_component[..., :-1]
 
-        # Previous values from the same subjects
-        S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
-    else:
-        # Fixed value given by the initial mean for each subject. No self-dependency.
-        P = initial_mean[:, :, None]
-        S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
+    # Previous values from the same subjects
+    S_extended = ptt.repeat(P, repeats=(num_subjects - 1), axis=0)
+
 
     # The mask will zero out dependencies on D if we have shifts caused by latent lags. In that case, we cannot infer
     # coordination if the values do not exist on all the subjects because of gaps introduced by the shift. So we can
     # only infer the next value of the latent value from its previous one on the same subject,
     C = coordination[None, None, 1:]  # 1 x 1 x t-1
     D = ptt.tensordot(aggregation_aux_mask_matrix, D / (num_subjects - 1), axes=(1, 0))
-    mean = (D - P) * C * prev_diff_subject_mask[:, None, 1:] + P
+    mean = (D - P) * C + P
 
     # We transform points using the system dynamics so that samples that follow such dynamics are accepted
     # with higher probability.
@@ -106,11 +87,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                  share_mean_a0_across_springs: bool,
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_springs: bool,
-                 share_sd_aa_across_features: bool,
-                 f: Optional[Callable] = None,
-                 mean_weights_f: float = 0,
-                 sd_weights_f: float = 1,
-                 max_lag: int = 0):
+                 share_sd_aa_across_features: bool):
         """
         Generates a time series of latent states formed by position and velocity in a mass-spring-damper system. We do
         not consider external force in this implementation but it can be easily added if necessary.
@@ -126,11 +103,7 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                          share_mean_a0_across_subjects=share_mean_a0_across_springs,
                          share_mean_a0_across_features=share_mean_a0_across_features,
                          share_sd_aa_across_subjects=share_sd_aa_across_springs,
-                         share_sd_aa_across_features=share_sd_aa_across_features,
-                         f=f,
-                         mean_weights_f=mean_weights_f,
-                         sd_weights_f=sd_weights_f,
-                         max_lag=max_lag)
+                         share_sd_aa_across_features=share_sd_aa_across_features)
 
         # We assume the spring_constants are known but this can be changed to have them as latent variables if needed.
         assert spring_constant.ndim == 1 and len(spring_constant) == num_springs
@@ -163,40 +136,18 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
 
         SUM = np.ones((self.num_subjects, self.num_subjects)) - np.eye(self.num_subjects)
 
-        if self.lag_cpn is not None:
-            max_lag = self.lag_cpn.max_lag
-            extra_time_steps = 2 * self.lag_cpn.max_lag
-        else:
-            max_lag = 0
-            extra_time_steps = 0
+        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
 
-        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps + extra_time_steps))
-
-        for t in range(max_lag, -1, -1):
-            if t == max_lag:
+        for t in range(num_time_steps):
+            if t == 0:
                 values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                # Backwards dynamics. This is to guarantee when we apply the lag to each subject, we have mean_a0 as
-                # the initial value
-                mean = np.einsum("ijk,lij->lik", self.F_inv, values[..., t + 1])
-                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
-
-        for t in range(max_lag + 1, num_time_steps + extra_time_steps):
-            if t >= num_time_steps + extra_time_steps - max_lag:
-                # There's no coordination for these time steps. They are extra and we use them to fill in the gaps
-                # when we roll the samples by each subject's lag in the end.
-                mean = np.einsum("ijk,lij->lik", self.F, values[..., t - 1])
-            else:
-                C = sampled_coordination[:, time_steps_in_coordination_scale[t - max_lag]][:, None]
+                C = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None]
 
                 P = values[..., t - 1]
 
-                if self.f is not None:
-                    # Broken. Remove f and lag from these models.
-                    D = self.f(values[..., t - 1], sampled_influencers[..., t - max_lag])
-                else:
-                    D = P
+                D = P
 
                 D = np.einsum("ij,kjl->kil", SUM, D)
 
@@ -209,18 +160,8 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
 
                 mean = np.einsum("ijk,lij->lik", self.F, blended_state)
 
-            # Add some noise
-            values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
-
-        # Apply lags if any
-        if self.lag_cpn is not None:
-            truncated_values_per_subject = []
-            for subject in range(self.num_subjects):
-                lag = -self.lag_cpn.parameters.lag.value[subject]  # lag contains the correction, so we use -lag
-                truncated_values_per_subject.append(
-                    values[:, subject, :, (max_lag + lag):(num_time_steps + max_lag + lag)][:, None, :, :])
-
-            values = np.concatenate(truncated_values_per_subject, axis=1)
+                # Add some noise
+                values[..., t] = norm(loc=mean, scale=sd_aa).rvs()
 
         return values
 
@@ -239,5 +180,4 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
         return logp
 
     def _get_random_fn(self):
-        # TODO - implement this for prior predictive checks.
         return None
