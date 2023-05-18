@@ -10,7 +10,7 @@ import xarray
 
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    CoordinationComponentSamples, BetaGaussianCoordinationComponent
+    CoordinationComponentSamples
 from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
 from coordination.component.observation_component import SerializedObservationComponent, \
     SerializedObservationComponentSamples
@@ -166,23 +166,16 @@ class VocalicModel:
                  sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
                  share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
-                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING):
+                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None, mode: Mode = Mode.BLENDING):
 
         # Either one or the other
 
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
 
-        if sd_sd_c is None:
-            # Coordination is a deterministic transformation of its unbounded estimate
-            self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                         sd_sd_uc=sd_sd_uc)
-        else:
-            # Coordination is a latent variable centered around its unbounded estimate
-            self.coordination_cpn = BetaGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                      sd_sd_uc=sd_sd_uc,
-                                                                      sd_sd_c=sd_sd_c)
+        # Coordination is a deterministic transformation of its unbounded estimate
+        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
+                                                                     sd_sd_uc=sd_sd_uc)
 
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
