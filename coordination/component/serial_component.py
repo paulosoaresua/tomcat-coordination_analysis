@@ -112,7 +112,7 @@ def random(initial_mean: np.ndarray,
     return sample + noise
 
 
-class SerializedComponentParameters:
+class SerialComponentParameters:
 
     def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
         self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
@@ -123,7 +123,7 @@ class SerializedComponentParameters:
         self.sd_aa.value = None
 
 
-class SerializedComponentSamples:
+class SerialComponentSamples:
 
     def __init__(self):
         """
@@ -161,7 +161,7 @@ class SerializedComponentSamples:
         return [np.where(x >= 0, 1, 0) for x in self.prev_time_diff_subject]
 
 
-class SerializedComponent:
+class SerialComponent:
     """
     This class models a serial latent component which individual subject's dynamics influence that of the other
     subjects as controlled by coordination.
@@ -204,9 +204,9 @@ class SerializedComponent:
         self.share_sd_aa_across_subjects = share_sd_aa_across_subjects
         self.share_sd_aa_across_features = share_sd_aa_across_features
 
-        self.parameters = SerializedComponentParameters(mean_mean_a0=mean_mean_a0,
-                                                        sd_mean_a0=sd_mean_a0,
-                                                        sd_sd_aa=sd_sd_aa)
+        self.parameters = SerialComponentParameters(mean_mean_a0=mean_mean_a0,
+                                                    sd_mean_a0=sd_mean_a0,
+                                                    sd_sd_aa=sd_sd_aa)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -230,7 +230,7 @@ class SerializedComponent:
 
     def draw_samples(self, num_series: int, time_scale_density: float,
                      coordination: np.ndarray, can_repeat_subject: bool,
-                     seed: Optional[int] = None) -> SerializedComponentSamples:
+                     seed: Optional[int] = None) -> SerialComponentSamples:
 
         # Check dimensionality of the parameters
         if self.share_mean_a0_across_features:
@@ -269,7 +269,7 @@ class SerializedComponent:
         # Generate samples
         set_random_seed(seed)
 
-        samples = SerializedComponentSamples()
+        samples = SerialComponentSamples()
         samples.values = []
         for s in range(num_series):
             sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
@@ -398,7 +398,7 @@ class SerializedComponent:
     def _create_random_parameters(self, subjects: np.ndarray, mean_a0: Optional[Any] = None,
                                   sd_aa: Optional[Any] = None):
         """
-        This function creates the initial mean and standard deviation of the serialized component distribution as
+        This function creates the initial mean and standard deviation of the serial component distribution as
         random variables.
         """
 
@@ -473,13 +473,13 @@ class SerializedComponent:
                        )
         logp_fn = self._get_logp_fn()
         random_fn = self._get_random_fn()
-        serialized_component = pm.DensityDist(self.uuid, *logp_params,
+        serial_component = pm.DensityDist(self.uuid, *logp_params,
                                               logp=logp_fn,
                                               random=random_fn,
                                               dims=[feature_dimension, time_dimension],
                                               observed=observed_values)
 
-        return serialized_component, mean_a0, sd_aa
+        return serial_component, mean_a0, sd_aa
 
     def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
         """

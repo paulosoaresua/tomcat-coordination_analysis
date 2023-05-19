@@ -11,7 +11,7 @@ import xarray
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples
-from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
+from coordination.component.serial_component import SerialComponent, SerialComponentSamples
 from coordination.component.link_component import LinkComponent, LinkComponentSamples
 from coordination.component.serial_observation_component import SerialObservationComponent, \
     SerialObservationComponentSamples
@@ -21,7 +21,7 @@ from coordination.model.vocalic_model import VocalicSeries, VocalicPosteriorSamp
 class VocalicSemanticSamples:
 
     def __init__(self, coordination: CoordinationComponentSamples,
-                 latent_vocalic: SerializedComponentSamples,
+                 latent_vocalic: SerialComponentSamples,
                  semantic_link: LinkComponentSamples, obs_vocalic: SerialObservationComponentSamples):
         self.coordination = coordination
         self.latent_vocalic = latent_vocalic
@@ -90,17 +90,17 @@ class VocalicSemanticModel:
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
-        self.latent_vocalic_cpn = SerializedComponent(uuid="latent_vocalic",
-                                                      num_subjects=num_subjects,
-                                                      dim_value=len(vocalic_features),
-                                                      self_dependent=self_dependent,
-                                                      mean_mean_a0=mean_mean_a0_vocalic,
-                                                      sd_mean_a0=sd_mean_a0_vocalic,
-                                                      sd_sd_aa=sd_sd_aa_vocalic,
-                                                      share_mean_a0_across_subjects=share_mean_a0_across_subjects,
-                                                      share_mean_a0_across_features=share_mean_a0_across_features,
-                                                      share_sd_aa_across_subjects=share_sd_aa_across_subjects,
-                                                      share_sd_aa_across_features=share_sd_aa_across_features)
+        self.latent_vocalic_cpn = SerialComponent(uuid="latent_vocalic",
+                                                  num_subjects=num_subjects,
+                                                  dim_value=len(vocalic_features),
+                                                  self_dependent=self_dependent,
+                                                  mean_mean_a0=mean_mean_a0_vocalic,
+                                                  sd_mean_a0=sd_mean_a0_vocalic,
+                                                  sd_sd_aa=sd_sd_aa_vocalic,
+                                                  share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                                  share_mean_a0_across_features=share_mean_a0_across_features,
+                                                  share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                                  share_sd_aa_across_features=share_sd_aa_across_features)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
                                                b_p=b_p_semantic_link)

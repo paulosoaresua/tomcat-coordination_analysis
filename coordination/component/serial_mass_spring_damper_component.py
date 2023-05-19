@@ -6,7 +6,7 @@ import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
 
-from coordination.component.serialized_component import SerializedComponent
+from coordination.component.serial_component import SerialComponent
 
 
 def logp(sample: Any,
@@ -66,7 +66,7 @@ def logp(sample: Any,
     return total_logp
 
 
-class SerializedMassSpringDamperComponent(SerializedComponent):
+class SerialMassSpringDamperComponent(SerialComponent):
 
     def __init__(self, uuid: str,
                  num_springs: int,

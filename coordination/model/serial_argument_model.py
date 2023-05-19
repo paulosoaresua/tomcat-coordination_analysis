@@ -6,8 +6,8 @@ import pymc as pm
 
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples
-from coordination.component.serialized_component import SerializedComponentSamples
-from coordination.component.serialized_mass_spring_damper_component import SerializedMassSpringDamperComponent
+from coordination.component.serial_component import SerialComponentSamples
+from coordination.component.serial_mass_spring_damper_component import SerialMassSpringDamperComponent
 from coordination.component.serial_observation_component import SerialObservationComponent, \
     SerialObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
@@ -36,7 +36,7 @@ class SerialArgumentSeries:
 
 class SerialArgumentSamples:
 
-    def __init__(self, coordination: CoordinationComponentSamples, state: SerializedComponentSamples,
+    def __init__(self, coordination: CoordinationComponentSamples, state: SerialComponentSamples,
                  observation: SerialObservationComponentSamples):
         self.coordination = coordination
         self.state = state
@@ -67,20 +67,20 @@ class SerialArgumentModel:
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
-        self.state_space_cpn = SerializedMassSpringDamperComponent(uuid="state_space",
-                                                                   num_springs=num_subjects,
-                                                                   spring_constant=frequency,
-                                                                   mass=np.ones(num_subjects),
-                                                                   damping_coefficient=damping_coefficient,
-                                                                   dt=dt,
-                                                                   self_dependent=self_dependent,
-                                                                   mean_mean_a0=mean_mean_a0,
-                                                                   sd_mean_a0=sd_mean_a0,
-                                                                   sd_sd_aa=sd_sd_aa,
-                                                                   share_mean_a0_across_springs=share_mean_a0_across_subjects,
-                                                                   share_sd_aa_across_springs=share_sd_aa_across_subjects,
-                                                                   share_mean_a0_across_features=share_mean_a0_across_features,
-                                                                   share_sd_aa_across_features=share_sd_aa_across_features)
+        self.state_space_cpn = SerialMassSpringDamperComponent(uuid="state_space",
+                                                               num_springs=num_subjects,
+                                                               spring_constant=frequency,
+                                                               mass=np.ones(num_subjects),
+                                                               damping_coefficient=damping_coefficient,
+                                                               dt=dt,
+                                                               self_dependent=self_dependent,
+                                                               mean_mean_a0=mean_mean_a0,
+                                                               sd_mean_a0=sd_mean_a0,
+                                                               sd_sd_aa=sd_sd_aa,
+                                                               share_mean_a0_across_springs=share_mean_a0_across_subjects,
+                                                               share_sd_aa_across_springs=share_sd_aa_across_subjects,
+                                                               share_mean_a0_across_features=share_mean_a0_across_features,
+                                                               share_sd_aa_across_features=share_sd_aa_across_features)
         self.observation_cpn = SerialObservationComponent(uuid="observation",
                                                           num_subjects=num_subjects,
                                                           dim_value=self.state_space_cpn.dim_value,

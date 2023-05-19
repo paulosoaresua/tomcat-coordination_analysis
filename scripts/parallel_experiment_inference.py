@@ -49,7 +49,6 @@ def parallel_inference(out_dir: str,
                        share_sd_aa_across_features: int,
                        share_sd_o_across_subjects: int,
                        share_sd_o_across_features: int,
-                       vocalic_mode: str,
                        sd_uc: str,
                        mean_a0_vocalic: str,
                        sd_aa_vocalic: str,
@@ -129,7 +128,6 @@ def parallel_inference(out_dir: str,
                                      f'--share_sd_aa_across_features={share_sd_aa_across_features} ' \
                                      f'--share_sd_o_across_subjects={share_sd_o_across_subjects} ' \
                                      f'--share_sd_o_across_features={share_sd_o_across_features} ' \
-                                     f'--vocalic_mode={vocalic_mode} ' \
                                      f'--nuts_init_method={nuts_init_method} ' \
                                      f'--target_accept={target_accept}'
 
@@ -216,8 +214,6 @@ if __name__ == "__main__":
                         help="Whether to fit one sd_o for all subjects.")
     parser.add_argument("--share_sd_o_across_features", type=int, required=False, default=0,
                         help="Whether to fit one sd_o for all features.")
-    parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
-                        help="How coordination controls vocalics from different individuals.")
     parser.add_argument("--sd_uc", type=str, required=False, default="",
                         help="Fixed value for sd_uc. It can be passed in single number, array or matrix form "
                              "depending on how parameters are shared.")
@@ -269,7 +265,6 @@ if __name__ == "__main__":
                        share_sd_aa_across_features=args.share_sd_aa_across_features,
                        share_sd_o_across_subjects=args.share_sd_o_across_subjects,
                        share_sd_o_across_features=args.share_sd_o_across_features,
-                       vocalic_mode=args.vocalic_mode,
                        sd_uc=args.sd_uc,
                        mean_a0_vocalic=args.mean_a0_vocalic,
                        sd_aa_vocalic=args.sd_aa_vocalic,
