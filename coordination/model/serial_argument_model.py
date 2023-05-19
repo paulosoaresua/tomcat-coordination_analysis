@@ -14,6 +14,9 @@ from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 class SerialArgumentSeries:
+    """
+    Used to encapsulate observations and meta-data.
+    """
 
     def __init__(self,
                  subjects_in_time: np.ndarray,
@@ -44,6 +47,9 @@ class SerialArgumentSamples:
 
 
 class SerialArgumentModel:
+    """
+    This class represents the Spring model.
+    """
 
     def __init__(self,
                  num_subjects: int,
@@ -101,8 +107,12 @@ class SerialArgumentModel:
         self.state_space_cpn.clear_parameter_values()
         self.observation_cpn.parameters.clear_values()
 
-    def draw_samples(self, num_series: int, num_time_steps: int, coordination_samples: Optional[np.ndarray],
-                     seed: Optional[int] = None, can_repeat_subject: bool = False) -> SerialArgumentSamples:
+    def draw_samples(self,
+                     num_series: int,
+                     num_time_steps: int,
+                     coordination_samples: Optional[np.ndarray],
+                     seed: Optional[int] = None,
+                     can_repeat_subject: bool = False) -> SerialArgumentSamples:
         if coordination_samples is None:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
             seed = None
@@ -121,15 +131,26 @@ class SerialArgumentModel:
 
         return samples
 
-    def fit(self, evidence: SerialArgumentSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
-        pm.Model, az.InferenceData]:
+    def fit(self,
+            evidence: SerialArgumentSeries,
+            burn_in: int,
+            num_samples: int,
+            num_chains: int,
+            seed: Optional[int] = None,
+            num_jobs: int = 1,
+            init_method: str = "jitter+adapt_diag",
+            target_accept: float = 0.8) -> Tuple[pm.Model, az.InferenceData]:
         assert evidence.observation.shape[0] == self.state_space_cpn.dim_value
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
-                              cores=num_jobs)
+            idata = pm.sample(num_samples,
+                              init=init_method,
+                              tune=burn_in,
+                              chains=num_chains,
+                              random_seed=seed,
+                              cores=num_jobs,
+                              target_accept=target_accept)
 
         return pymc_model, idata
 
@@ -212,7 +233,8 @@ if __name__ == "__main__":
         num_chains=2,
         seed=0,
         num_jobs=2,
-        init_method="jitter+adapt_diag"
+        init_method="jitter+adapt_diag",
+        target_accept=0.9
     )
 
     sampled_vars = set(idata.posterior.data_vars)
