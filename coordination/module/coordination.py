@@ -9,14 +9,14 @@ from coordination.model.parametrization import Parameter, HalfNormalParameterPri
 from coordination.common.utils import set_random_seed
 
 
-class CoordinationComponentSamples:
+class CoordinationSamples:
 
     def __init__(self):
         self.unbounded_coordination = np.array([])
         self.coordination = np.array([])
 
 
-class SigmoidGaussianCoordinationComponentParameters:
+class SigmoidGaussianCoordinationParameters:
 
     def __init__(self, sd_mean_uc0: float, sd_sd_uc: float):
         self.mean_uc0 = Parameter(NormalParameterPrior(mean=np.zeros(1), sd=np.array([sd_mean_uc0])))
@@ -27,13 +27,13 @@ class SigmoidGaussianCoordinationComponentParameters:
         self.sd_uc.value = None
 
 
-class SigmoidGaussianCoordinationComponent:
+class SigmoidGaussianCoordination:
     """
     This class models a time series of continuous unbounded coordination and its bounded values (\tilde{C}).
     """
 
     def __init__(self, sd_mean_uc0: float, sd_sd_uc: float):
-        self.parameters = SigmoidGaussianCoordinationComponentParameters(sd_mean_uc0, sd_sd_uc)
+        self.parameters = SigmoidGaussianCoordinationParameters(sd_mean_uc0, sd_sd_uc)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -53,10 +53,10 @@ class SigmoidGaussianCoordinationComponent:
     def draw_samples(self,
                      num_series: int,
                      num_time_steps: int,
-                     seed: Optional[int] = None) -> CoordinationComponentSamples:
+                     seed: Optional[int] = None) -> CoordinationSamples:
         set_random_seed(seed)
 
-        samples = CoordinationComponentSamples()
+        samples = CoordinationSamples()
 
         # Initialization
         samples.unbounded_coordination = np.zeros((num_series, num_time_steps))

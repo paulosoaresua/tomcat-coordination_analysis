@@ -1,10 +1,10 @@
-from typing import Any, List, Optional
+from typing import List
 
 import numpy as np
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior
 
 
-class ObservationComponentParameters:
+class ObservationParameters:
 
     def __init__(self, sd_sd_o: np.ndarray):
         self.sd_o = Parameter(HalfNormalParameterPrior(sd_sd_o))
@@ -13,7 +13,7 @@ class ObservationComponentParameters:
         self.sd_o.value = None
 
 
-class ObservationComponent:
+class Observation:
     """
     This class models generic observations. Use specific observation classes for non-serial and serial components
     """
@@ -43,7 +43,7 @@ class ObservationComponent:
         self.share_sd_o_across_subjects = share_sd_o_across_subjects
         self.share_sd_o_across_features = share_sd_o_across_features
 
-        self.parameters = ObservationComponentParameters(sd_sd_o)
+        self.parameters = ObservationParameters(sd_sd_o)
 
     @property
     def parameter_names(self) -> List[str]:

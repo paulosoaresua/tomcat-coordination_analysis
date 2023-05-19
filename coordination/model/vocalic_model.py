@@ -9,11 +9,10 @@ import pymc as pm
 import xarray
 
 from coordination.common.functions import logit
-from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    CoordinationComponentSamples
-from coordination.component.serial_component import SerialComponent, SerialComponentSamples
-from coordination.component.serial_observation_component import SerialObservationComponent, \
-    SerialObservationComponentSamples
+from coordination.module.coordination import SigmoidGaussianCoordination, \
+    CoordinationSamples
+from coordination.module.serial_component import SerialComponent, SerialComponentSamples
+from coordination.module.serial_observation import SerialObservation, SerialObservationSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 VOCALIC_FEATURES = [
@@ -27,9 +26,9 @@ VOCALIC_FEATURES = [
 class VocalicSamples:
 
     def __init__(self,
-                 coordination: CoordinationComponentSamples,
+                 coordination: CoordinationSamples,
                  latent_vocalic: SerialComponentSamples,
-                 obs_vocalic: SerialObservationComponentSamples):
+                 obs_vocalic: SerialObservationSamples):
         self.coordination = coordination
         self.latent_vocalic = latent_vocalic
         self.obs_vocalic = obs_vocalic
@@ -175,8 +174,8 @@ class VocalicModel:
         self.vocalic_features = vocalic_features
 
         # Coordination is a deterministic transformation of its unbounded estimate
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                     sd_sd_uc=sd_sd_uc)
+        self.coordination_cpn = SigmoidGaussianCoordination(sd_mean_uc0=sd_mean_uc0,
+                                                            sd_sd_uc=sd_sd_uc)
 
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
@@ -193,12 +192,12 @@ class VocalicModel:
                                                   share_sd_aa_across_subjects=share_sd_aa_across_subjects,
                                                   share_sd_aa_across_features=share_sd_aa_across_features)
 
-        self.obs_vocalic_cpn = SerialObservationComponent(uuid="obs_vocalic",
-                                                          num_subjects=num_subjects,
-                                                          dim_value=len(vocalic_features),
-                                                          sd_sd_o=sd_sd_o_vocalic,
-                                                          share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                                          share_sd_o_across_features=share_sd_o_across_features)
+        self.obs_vocalic_cpn = SerialObservation(uuid="obs_vocalic",
+                                                 num_subjects=num_subjects,
+                                                 dim_value=len(vocalic_features),
+                                                 sd_sd_o=sd_sd_o_vocalic,
+                                                 share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                 share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -242,7 +241,6 @@ class VocalicModel:
             num_jobs: int = 1,
             init_method: str = "jitter+adapt_diag",
             target_accept: float = 0.8) -> Tuple[pm.Model, az.InferenceData]:
-
         assert evidence.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)

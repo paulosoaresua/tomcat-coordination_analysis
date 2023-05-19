@@ -8,7 +8,7 @@ from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, BetaParameterPrior
 
 
-class LinkComponentParameters:
+class SpikeObservationParameters:
 
     def __init__(self, a_p: float, b_p: float):
         self.p = Parameter(BetaParameterPrior(a_p, b_p))
@@ -17,11 +17,11 @@ class LinkComponentParameters:
         self.p.value = None
 
 
-class LinkComponentSamples:
+class SpikeObservationSamples:
 
     def __init__(self):
         # For each time step in the component's scale, it contains the time step in the coordination scale
-        # were a link occurred.
+        # were a spike occurred.
         self.time_steps_in_coordination_scale: List[np.ndarray] = []
 
     @property
@@ -32,7 +32,7 @@ class LinkComponentSamples:
         return self.time_steps_in_coordination_scale[0].shape[-1]
 
 
-class LinkComponent:
+class SpikeObservation:
     """
     This class models semantic links or any kind of binary observations with similar distribution.
     """
@@ -40,7 +40,7 @@ class LinkComponent:
     def __init__(self, uuid: str, a_p: float, b_p: float):
         self.uuid = uuid
 
-        self.parameters = LinkComponentParameters(a_p, b_p)
+        self.parameters = SpikeObservationParameters(a_p, b_p)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -56,10 +56,10 @@ class LinkComponent:
                      num_series: int,
                      time_scale_density: float,
                      coordination: np.ndarray,
-                     seed: Optional[int] = None) -> LinkComponentSamples:
+                     seed: Optional[int] = None) -> SpikeObservationSamples:
         set_random_seed(seed)
 
-        samples = LinkComponentSamples()
+        samples = SpikeObservationSamples()
 
         # Randomly sample candidate time steps in which we observe a link
         density_mask = bernoulli(p=time_scale_density).rvs(coordination.shape)

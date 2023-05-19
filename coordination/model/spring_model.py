@@ -4,21 +4,19 @@ import arviz as az
 import numpy as np
 import pymc as pm
 
-from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    CoordinationComponentSamples
-from coordination.component.non_serial_component import NonSerialComponentSamples
-from coordination.component.non_serial_mass_spring_damper_component import NonSerialMassSpringDamperComponent
-from coordination.component.non_serial_observation_component import NonSerialObservationComponent, \
-    NonSerialObservationComponentSamples
+from coordination.module.coordination import SigmoidGaussianCoordination, CoordinationSamples
+from coordination.module.non_serial_component import NonSerialComponentSamples
+from coordination.module.non_serial_mass_spring_damper_component import NonSerialMassSpringDamperComponent
+from coordination.module.non_serial_observation import NonSerialObservation, NonSerialObservationSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 class SpringSamples:
 
     def __init__(self,
-                 coordination: CoordinationComponentSamples,
+                 coordination: CoordinationSamples,
                  state: NonSerialComponentSamples,
-                 observation: NonSerialObservationComponentSamples):
+                 observation: NonSerialObservationSamples):
         self.coordination = coordination
         self.state = state
         self.observation = observation
@@ -47,8 +45,8 @@ class SpringModel:
                  share_sd_o_across_features: bool = False):
         self.num_springs = num_springs
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                     sd_sd_uc=sd_sd_uc)
+        self.coordination_cpn = SigmoidGaussianCoordination(sd_mean_uc0=sd_mean_uc0,
+                                                            sd_sd_uc=sd_sd_uc)
         self.state_space_cpn = NonSerialMassSpringDamperComponent(uuid="state_space",
                                                                   num_springs=num_springs,
                                                                   spring_constant=spring_constant,
@@ -63,12 +61,12 @@ class SpringModel:
                                                                   share_sd_aa_across_springs=share_sd_aa_across_springs,
                                                                   share_mean_a0_across_features=share_mean_a0_across_features,
                                                                   share_sd_aa_across_features=share_sd_aa_across_features)
-        self.observation_cpn = NonSerialObservationComponent(uuid="observation",
-                                                             num_subjects=num_springs,
-                                                             dim_value=self.state_space_cpn.dim_value,
-                                                             sd_sd_o=sd_sd_o,
-                                                             share_sd_o_across_subjects=share_sd_o_across_springs,
-                                                             share_sd_o_across_features=share_sd_o_across_features)
+        self.observation_cpn = NonSerialObservation(uuid="observation",
+                                                    num_subjects=num_springs,
+                                                    dim_value=self.state_space_cpn.dim_value,
+                                                    sd_sd_o=sd_sd_o,
+                                                    share_sd_o_across_subjects=share_sd_o_across_springs,
+                                                    share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:

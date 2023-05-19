@@ -1,20 +1,20 @@
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 import pymc as pm
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.component.observation_component import ObservationComponent
+from coordination.component.observation import Observation
 
 
-class NonSerialObservationComponentSamples:
+class NonSerialObservationSamples:
 
     def __init__(self):
         self.values = np.array([])
 
 
-class NonSerialObservationComponent(ObservationComponent):
+class NonSerialObservation(Observation):
     """
     This class models observations from a latent non-serial component.
     """
@@ -35,7 +35,7 @@ class NonSerialObservationComponent(ObservationComponent):
 
     def draw_samples(self,
                      latent_component: np.ndarray,
-                     seed: Optional[int] = None) -> NonSerialObservationComponentSamples:
+                     seed: Optional[int] = None) -> NonSerialObservationSamples:
         # Check dimensionality of the parameters
         if self.share_sd_o_across_features:
             dim_sd_o_features = 1
@@ -58,7 +58,7 @@ class NonSerialObservationComponent(ObservationComponent):
         # Generate samples
         set_random_seed(seed)
 
-        samples = NonSerialObservationComponentSamples()
+        samples = NonSerialObservationSamples()
         samples.values = norm(loc=latent_component, scale=sd).rvs(size=latent_component.shape)
 
         return samples

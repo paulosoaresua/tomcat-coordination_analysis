@@ -4,12 +4,11 @@ import arviz as az
 import numpy as np
 import pymc as pm
 
-from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    CoordinationComponentSamples
-from coordination.component.serial_component import SerialComponentSamples
-from coordination.component.serial_mass_spring_damper_component import SerialMassSpringDamperComponent
-from coordination.component.serial_observation_component import SerialObservationComponent, \
-    SerialObservationComponentSamples
+from coordination.module.coordination import SigmoidGaussianCoordination, \
+    CoordinationSamples
+from coordination.module.serial_component import SerialComponentSamples
+from coordination.module.serial_mass_spring_damper_component import SerialMassSpringDamperComponent
+from coordination.module.serial_observation import SerialObservation, SerialObservationSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
@@ -40,9 +39,9 @@ class ArgumentSeries:
 class ArgumentSamples:
 
     def __init__(self,
-                 coordination: CoordinationComponentSamples,
+                 coordination: CoordinationSamples,
                  state: SerialComponentSamples,
-                 observation: SerialObservationComponentSamples):
+                 observation: SerialObservationSamples):
         self.coordination = coordination
         self.state = state
         self.observation = observation
@@ -73,8 +72,8 @@ class ArgumentModel:
                  share_sd_o_across_features: bool = False):
         self.num_subjects = num_subjects
 
-        self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                     sd_sd_uc=sd_sd_uc)
+        self.coordination_cpn = SigmoidGaussianCoordination(sd_mean_uc0=sd_mean_uc0,
+                                                            sd_sd_uc=sd_sd_uc)
         self.state_space_cpn = SerialMassSpringDamperComponent(uuid="state_space",
                                                                num_springs=num_subjects,
                                                                spring_constant=frequency,
@@ -89,12 +88,12 @@ class ArgumentModel:
                                                                share_sd_aa_across_springs=share_sd_aa_across_subjects,
                                                                share_mean_a0_across_features=share_mean_a0_across_features,
                                                                share_sd_aa_across_features=share_sd_aa_across_features)
-        self.observation_cpn = SerialObservationComponent(uuid="observation",
-                                                          num_subjects=num_subjects,
-                                                          dim_value=self.state_space_cpn.dim_value,
-                                                          sd_sd_o=sd_sd_o,
-                                                          share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                                          share_sd_o_across_features=share_sd_o_across_features)
+        self.observation_cpn = SerialObservation(uuid="observation",
+                                                 num_subjects=num_subjects,
+                                                 dim_value=self.state_space_cpn.dim_value,
+                                                 sd_sd_o=sd_sd_o,
+                                                 share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                 share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:

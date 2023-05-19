@@ -5,16 +5,16 @@ import pymc as pm
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.component.observation_component import ObservationComponent
+from coordination.component.observation import Observation
 
 
-class SerialObservationComponentSamples:
+class SerialObservationSamples:
 
     def __init__(self):
         self.values: List[np.ndarray] = []
 
 
-class SerialObservationComponent(ObservationComponent):
+class SerialObservation(Observation):
 
     def __init__(self,
                  uuid: str,
@@ -33,7 +33,7 @@ class SerialObservationComponent(ObservationComponent):
     def draw_samples(self,
                      latent_component: List[np.ndarray],
                      subjects: List[np.ndarray],
-                     seed: Optional[int] = None) -> SerialObservationComponentSamples:
+                     seed: Optional[int] = None) -> SerialObservationSamples:
         # Check dimensionality of the parameters
         if self.share_sd_o_across_features:
             dim_sd_o_features = 1
@@ -48,7 +48,7 @@ class SerialObservationComponent(ObservationComponent):
         # Generate samples
         set_random_seed(seed)
 
-        samples = SerialObservationComponentSamples()
+        samples = SerialObservationSamples()
 
         for i in range(len(latent_component)):
             # Adjust dimensions according to parameter sharing specification
