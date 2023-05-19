@@ -2,6 +2,10 @@ from typing import Any
 
 import numpy as np
 
+"""
+Classes to use when defining parameter values and priors (hyper-priors).
+"""
+
 
 class Parameter:
 
