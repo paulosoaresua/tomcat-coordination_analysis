@@ -11,10 +11,10 @@ import xarray
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples
-from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
+from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
 from coordination.component.link_component import LinkComponent, LinkComponentSamples
-from coordination.component.observation_component import SerializedObservationComponent, \
-    SerializedObservationComponentSamples
+from coordination.component.serial_observation_component import SerialObservationComponent, \
+    SerialObservationComponentSamples
 from coordination.model.vocalic_model import VocalicSeries, VocalicPosteriorSamples
 
 
@@ -22,7 +22,7 @@ class VocalicSemanticSamples:
 
     def __init__(self, coordination: CoordinationComponentSamples,
                  latent_vocalic: SerializedComponentSamples,
-                 semantic_link: LinkComponentSamples, obs_vocalic: SerializedObservationComponentSamples):
+                 semantic_link: LinkComponentSamples, obs_vocalic: SerialObservationComponentSamples):
         self.coordination = coordination
         self.latent_vocalic = latent_vocalic
         self.semantic_link = semantic_link
@@ -80,12 +80,12 @@ class VocalicSemanticModel:
                  sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
                  b_p_semantic_link: float, share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
-                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None, mode: Mode = Mode.BLENDING):
+                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                         sd_sd_uc=sd_sd_uc)
+                                                                     sd_sd_uc=sd_sd_uc)
 
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
@@ -100,17 +100,16 @@ class VocalicSemanticModel:
                                                       share_mean_a0_across_subjects=share_mean_a0_across_subjects,
                                                       share_mean_a0_across_features=share_mean_a0_across_features,
                                                       share_sd_aa_across_subjects=share_sd_aa_across_subjects,
-                                                      share_sd_aa_across_features=share_sd_aa_across_features,
-                                                      mode=mode)
+                                                      share_sd_aa_across_features=share_sd_aa_across_features)
         self.semantic_link_cpn = LinkComponent("obs_semantic_link",
                                                a_p=a_p_semantic_link,
                                                b_p=b_p_semantic_link)
-        self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
-                                                              num_subjects=num_subjects,
-                                                              dim_value=len(vocalic_features),
-                                                              sd_sd_o=sd_sd_o_vocalic,
-                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                                              share_sd_o_across_features=share_sd_o_across_features)
+        self.obs_vocalic_cpn = SerialObservationComponent(uuid="obs_vocalic",
+                                                          num_subjects=num_subjects,
+                                                          dim_value=len(vocalic_features),
+                                                          sd_sd_o=sd_sd_o_vocalic,
+                                                          share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                          share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:

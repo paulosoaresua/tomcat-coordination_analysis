@@ -1,4 +1,4 @@
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import arviz as az
 import numpy as np
@@ -8,8 +8,8 @@ from coordination.component.coordination_component import SigmoidGaussianCoordin
     CoordinationComponentSamples
 from coordination.component.serialized_component import SerializedComponentSamples
 from coordination.component.serialized_mass_spring_damper_component import SerializedMassSpringDamperComponent
-from coordination.component.observation_component import SerializedObservationComponent, \
-    SerializedObservationComponentSamples
+from coordination.component.serial_observation_component import SerialObservationComponent, \
+    SerialObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
@@ -37,7 +37,7 @@ class SerialArgumentSeries:
 class SerialArgumentSamples:
 
     def __init__(self, coordination: CoordinationComponentSamples, state: SerializedComponentSamples,
-                 observation: SerializedObservationComponentSamples):
+                 observation: SerialObservationComponentSamples):
         self.coordination = coordination
         self.state = state
         self.observation = observation
@@ -81,12 +81,12 @@ class SerialArgumentModel:
                                                                    share_sd_aa_across_springs=share_sd_aa_across_subjects,
                                                                    share_mean_a0_across_features=share_mean_a0_across_features,
                                                                    share_sd_aa_across_features=share_sd_aa_across_features)
-        self.observation_cpn = SerializedObservationComponent(uuid="observation",
-                                                              num_subjects=num_subjects,
-                                                              dim_value=self.state_space_cpn.dim_value,
-                                                              sd_sd_o=sd_sd_o,
-                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                                              share_sd_o_across_features=share_sd_o_across_features)
+        self.observation_cpn = SerialObservationComponent(uuid="observation",
+                                                          num_subjects=num_subjects,
+                                                          dim_value=self.state_space_cpn.dim_value,
+                                                          sd_sd_o=sd_sd_o,
+                                                          share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                          share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -221,18 +221,18 @@ if __name__ == "__main__":
         az.plot_trace(idata, var_names=var_names)
         plt.tight_layout()
         plt.show()
-    #
-    # plt.figure()
-    # colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
-    # for s in range(model.num_subjects):
-    #     tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
-    #     mean = idata.posterior["state_space"].sel(feature="position").mean(dim=["draw", "chain"]).to_numpy()[tt]
-    #     plt.scatter(tt, mean, label=f"Subject {s + 1}", s=15, c=colors[s])
-    # plt.xlabel("Time Step")
-    # plt.ylabel("CLO Value")
-    # plt.title(PRX)
-    # plt.legend()
-    # plt.show()
+
+    plt.figure()
+    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+    for s in range(model.num_subjects):
+        tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
+        mean = idata.posterior["state_space"].sel(feature="position").mean(dim=["draw", "chain"]).to_numpy()[tt]
+        plt.scatter(tt, mean, label=f"Subject {s + 1}", s=15, c=colors[s])
+    plt.xlabel("Time Step")
+    plt.ylabel("CLO Value")
+    plt.title(PRX)
+    plt.legend()
+    plt.show()
 
     coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
     coordination_posterior.plot(plt.figure().gca(), show_samples=False)

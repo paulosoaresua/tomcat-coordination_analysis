@@ -3,7 +3,6 @@ import sys
 from typing import Any, List, Optional
 
 import argparse
-from ast import literal_eval
 import pickle
 
 import arviz as az
@@ -20,7 +19,6 @@ from coordination.common.log import configure_log
 from coordination.model.vocalic_semantic_model import VocalicSemanticModel, VocalicSemanticSeries
 from coordination.model.vocalic_model import VocalicModel, VocalicSeries, VOCALIC_FEATURES
 from coordination.model.coordination_model import CoordinationPosteriorSamples
-from coordination.component.serialized_component import Mode
 
 """
 This scripts performs inferences in a subset of experiments from a dataset. Inferences are performed sequentially. That
@@ -62,7 +60,6 @@ def inference(out_dir: str,
               share_sd_aa_across_features: bool,
               share_sd_o_across_subjects: bool,
               share_sd_o_across_features: bool,
-              vocalic_mode: str,
               sd_uc: np.ndarray,
               mean_a0_vocalic: Optional[np.ndarray],
               sd_aa_vocalic: Optional[np.ndarray],
@@ -79,8 +76,6 @@ def inference(out_dir: str,
     set_random_seed(seed)
 
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
-
-    vocalic_mode = Mode.BLENDING if vocalic_mode == "blending" else Mode.MIXTURE
 
     # Non-interactive backend to make sure it works in a TMUX session when executed from PyCharm.
     mpl.use("Agg")
@@ -126,8 +121,7 @@ def inference(out_dir: str,
                                  share_sd_aa_across_subjects=share_sd_aa_across_subjects,
                                  share_sd_aa_across_features=share_sd_aa_across_features,
                                  share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                 share_sd_o_across_features=share_sd_o_across_features,
-                                 mode=vocalic_mode)
+                                 share_sd_o_across_features=share_sd_o_across_features)
 
             model.coordination_cpn.parameters.sd_uc.value = sd_uc
             model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
@@ -152,8 +146,7 @@ def inference(out_dir: str,
                                          share_sd_aa_across_subjects=share_sd_aa_across_subjects,
                                          share_sd_aa_across_features=share_sd_aa_across_features,
                                          share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                         share_sd_o_across_features=share_sd_o_across_features,
-                                         mode=vocalic_mode)
+                                         share_sd_o_across_features=share_sd_o_across_features)
 
             model.coordination_cpn.parameters.sd_uc.value = sd_uc
             model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
@@ -439,8 +432,6 @@ if __name__ == "__main__":
                         help="Whether to fit one sd_o for all subjects.")
     parser.add_argument("--share_sd_o_across_features", type=int, required=False, default=0,
                         help="Whether to fit one sd_o for all features.")
-    parser.add_argument("--vocalic_mode", type=str, required=False, default="blending", choices=["blending", "mixture"],
-                        help="How coordination controls vocalics from different individuals.")
     parser.add_argument("--sd_uc", type=float, required=False,
                         help="Fixed value for sd_uc. It can be passed in single number, array or matrix form "
                              "depending on how parameters are shared.")
@@ -546,7 +537,6 @@ if __name__ == "__main__":
               share_sd_aa_across_features=bool(args.share_sd_aa_across_features),
               share_sd_o_across_subjects=bool(args.share_sd_o_across_subjects),
               share_sd_o_across_features=bool(args.share_sd_o_across_features),
-              vocalic_mode=args.vocalic_mode,
               sd_uc=arg_sd_uc,
               mean_a0_vocalic=arg_mean_a0_vocalic,
               sd_aa_vocalic=arg_sd_aa_vocalic,

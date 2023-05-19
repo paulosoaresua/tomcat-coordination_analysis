@@ -1,4 +1,4 @@
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import arviz as az
 import numpy as np
@@ -8,14 +8,15 @@ from coordination.component.coordination_component import SigmoidGaussianCoordin
     CoordinationComponentSamples
 from coordination.component.mixture_component import MixtureComponentSamples
 from coordination.component.mixture_mass_spring_damper_component import MixtureMassSpringDamperComponent
-from coordination.component.observation_component import ObservationComponent, ObservationComponentSamples
+from coordination.component.non_serial_observation_component import NonSerialObservationComponent, \
+    NonSerialObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
 class MassSpringDamperSamples:
 
     def __init__(self, coordination: CoordinationComponentSamples, state: MixtureComponentSamples,
-                 observation: ObservationComponentSamples):
+                 observation: NonSerialObservationComponentSamples):
         self.coordination = coordination
         self.state = state
         self.observation = observation
@@ -62,12 +63,12 @@ class MassSpringDamperModel:
                                                                 share_sd_aa_across_springs=share_sd_aa_across_springs,
                                                                 share_mean_a0_across_features=share_mean_a0_across_features,
                                                                 share_sd_aa_across_features=share_sd_aa_across_features)
-        self.observation_cpn = ObservationComponent(uuid="observation",
-                                                    num_subjects=num_springs,
-                                                    dim_value=self.state_space_cpn.dim_value,
-                                                    sd_sd_o=sd_sd_o,
-                                                    share_sd_o_across_subjects=share_sd_o_across_springs,
-                                                    share_sd_o_across_features=share_sd_o_across_features)
+        self.observation_cpn = NonSerialObservationComponent(uuid="observation",
+                                                             num_subjects=num_springs,
+                                                             dim_value=self.state_space_cpn.dim_value,
+                                                             sd_sd_o=sd_sd_o,
+                                                             share_sd_o_across_subjects=share_sd_o_across_springs,
+                                                             share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -157,7 +158,7 @@ if __name__ == "__main__":
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
     model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.1
 
-    C = 2/3
+    C = 2 / 3
     T = 100
     samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
 

@@ -11,9 +11,9 @@ import xarray
 from coordination.common.functions import logit
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples
-from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
-from coordination.component.observation_component import SerializedObservationComponent, \
-    SerializedObservationComponentSamples
+from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples
+from coordination.component.serial_observation_component import SerialObservationComponent, \
+    SerialObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 VOCALIC_FEATURES = [
@@ -27,7 +27,7 @@ VOCALIC_FEATURES = [
 class VocalicSamples:
 
     def __init__(self, coordination: CoordinationComponentSamples,
-                 latent_vocalic: SerializedComponentSamples, obs_vocalic: SerializedObservationComponentSamples):
+                 latent_vocalic: SerializedComponentSamples, obs_vocalic: SerialObservationComponentSamples):
         self.coordination = coordination
         self.latent_vocalic = latent_vocalic
         self.obs_vocalic = obs_vocalic
@@ -166,7 +166,7 @@ class VocalicModel:
                  sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
                  share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
                  share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
-                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None, mode: Mode = Mode.BLENDING):
+                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None):
 
         # Either one or the other
 
@@ -190,10 +190,9 @@ class VocalicModel:
                                                       share_mean_a0_across_subjects=share_mean_a0_across_subjects,
                                                       share_mean_a0_across_features=share_mean_a0_across_features,
                                                       share_sd_aa_across_subjects=share_sd_aa_across_subjects,
-                                                      share_sd_aa_across_features=share_sd_aa_across_features,
-                                                      mode=mode)
+                                                      share_sd_aa_across_features=share_sd_aa_across_features)
 
-        self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
+        self.obs_vocalic_cpn = SerialObservationComponent(uuid="obs_vocalic",
                                                               num_subjects=num_subjects,
                                                               dim_value=len(vocalic_features),
                                                               sd_sd_o=sd_sd_o_vocalic,
