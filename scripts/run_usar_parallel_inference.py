@@ -9,7 +9,7 @@ import pandas as pd
 from coordination.common.tmux import TMUX
 
 """
-This script divides the list of experiments in a .csv dataset such that they can be processed in parallel.
+This script divides the list of USAR experiments in a .csv dataset such that they can be processed in parallel.
 Since the parameters are not shared across experiments, we can perform inferences in multiple experiments in
 parallel if we have computing resources.
 
@@ -91,14 +91,14 @@ def parallel_inference(out_dir: str,
         experiment_ids = ",".join(experiments_per_process)
         tmux_window_name = experiment_ids
 
-        # Call the actual inference script (run_sequential.inference.py)
+        # Call the actual inference script (run_usar_sequential.inference.py)
         initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination != "" else ""
         sd_uc_arg = f'--sd_uc={sd_uc} ' if sd_uc != "" else ""
         mean_a0_vocalic_arg = f'--mean_a0_vocalic={mean_a0_vocalic} ' if mean_a0_vocalic != "" else ""
         sd_aa_vocalic_arg = f'--sd_aa_vocalic={sd_aa_vocalic} ' if sd_aa_vocalic != "" else ""
         sd_o_vocalic_arg = f'--sd_o_vocalic={sd_o_vocalic} ' if sd_o_vocalic != "" else ""
         p_semantic_link_arg = f'--p_semantic_link={p_semantic_link} ' if p_semantic_link != "" else ""
-        call_python_script_command = f'python3 "{project_dir}/scripts/sequential_experiment_inference.py" ' \
+        call_python_script_command = f'python3 "{project_dir}/scripts/run_usar_sequential_inference.py" ' \
                                      f'--out_dir="{results_folder}" ' \
                                      f'--experiment_ids="{experiment_ids}" ' \
                                      f'--evidence_filepath="{evidence_filepath}" ' \
