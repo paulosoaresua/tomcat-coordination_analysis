@@ -400,7 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
                         help="Whether to perform posterior inference. Use the value 0 to deactivate.")
     parser.add_argument("--initial_coordination", type=float, required=False,
-                        help="Initial coordination value. If not provided or < 0, initial coordination will be fit "
+                        help="Initial coordination value. If not provided, initial coordination will be fit "
                              "along the other latent variables in the model")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")

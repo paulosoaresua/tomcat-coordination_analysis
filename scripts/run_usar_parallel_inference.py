@@ -1,3 +1,5 @@
+from typing import Optional
+
 import argparse
 import json
 from datetime import datetime
@@ -37,7 +39,7 @@ def parallel_inference(out_dir: str,
                        num_inference_jobs: int,
                        do_prior: int,
                        do_posterior: int,
-                       initial_coordination: str,
+                       initial_coordination: Optional[float],
                        num_subjects: int,
                        vocalic_features: str,
                        self_dependent: int,
@@ -55,11 +57,11 @@ def parallel_inference(out_dir: str,
                        share_sd_aa_across_features: int,
                        share_sd_o_across_subjects: int,
                        share_sd_o_across_features: int,
-                       sd_uc: str,
-                       mean_a0_vocalic: str,
-                       sd_aa_vocalic: str,
-                       sd_o_vocalic: str,
-                       p_semantic_link: str,
+                       sd_uc: Optional[float],
+                       mean_a0_vocalic: Optional[str],
+                       sd_aa_vocalic: Optional[str],
+                       sd_o_vocalic: Optional[str],
+                       p_semantic_link: Optional[str],
                        nuts_init_method: str,
                        target_accept: float):
 
@@ -92,12 +94,12 @@ def parallel_inference(out_dir: str,
         tmux_window_name = experiment_ids
 
         # Call the actual inference script (run_usar_sequential.inference.py)
-        initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination != "" else ""
-        sd_uc_arg = f'--sd_uc={sd_uc} ' if sd_uc != "" else ""
-        mean_a0_vocalic_arg = f'--mean_a0_vocalic={mean_a0_vocalic} ' if mean_a0_vocalic != "" else ""
-        sd_aa_vocalic_arg = f'--sd_aa_vocalic={sd_aa_vocalic} ' if sd_aa_vocalic != "" else ""
-        sd_o_vocalic_arg = f'--sd_o_vocalic={sd_o_vocalic} ' if sd_o_vocalic != "" else ""
-        p_semantic_link_arg = f'--p_semantic_link={p_semantic_link} ' if p_semantic_link != "" else ""
+        initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination else ""
+        sd_uc_arg = f'--sd_uc={sd_uc} ' if sd_uc else ""
+        mean_a0_vocalic_arg = f'--mean_a0_vocalic={mean_a0_vocalic} ' if mean_a0_vocalic else ""
+        sd_aa_vocalic_arg = f'--sd_aa_vocalic={sd_aa_vocalic} ' if sd_aa_vocalic else ""
+        sd_o_vocalic_arg = f'--sd_o_vocalic={sd_o_vocalic} ' if sd_o_vocalic else ""
+        p_semantic_link_arg = f'--p_semantic_link={p_semantic_link} ' if p_semantic_link else ""
         call_python_script_command = f'python3 "{project_dir}/scripts/run_usar_sequential_inference.py" ' \
                                      f'--out_dir="{results_folder}" ' \
                                      f'--experiment_ids="{experiment_ids}" ' \
@@ -179,7 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
                         help="Whether to perform posterior inference. Use the value 0 to deactivate.")
     parser.add_argument("--initial_coordination", type=float, required=False,
-                        help="Initial coordination value. If not provided or < 0, initial coordination will be fit "
+                        help="Initial coordination value. If not provided, initial coordination will be fit "
                              "along the other latent variables in the model")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")
