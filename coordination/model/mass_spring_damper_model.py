@@ -6,8 +6,8 @@ import pymc as pm
 
 from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
     CoordinationComponentSamples
-from coordination.component.mixture_component import MixtureComponentSamples
-from coordination.component.mixture_mass_spring_damper_component import MixtureMassSpringDamperComponent
+from coordination.component.non_serial_component import NonSerialComponentSamples
+from coordination.component.non_serial_mass_spring_damper_component import NonSerialMassSpringDamperComponent
 from coordination.component.non_serial_observation_component import NonSerialObservationComponent, \
     NonSerialObservationComponentSamples
 from coordination.model.coordination_model import CoordinationPosteriorSamples
@@ -15,7 +15,7 @@ from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 class MassSpringDamperSamples:
 
-    def __init__(self, coordination: CoordinationComponentSamples, state: MixtureComponentSamples,
+    def __init__(self, coordination: CoordinationComponentSamples, state: NonSerialComponentSamples,
                  observation: NonSerialObservationComponentSamples):
         self.coordination = coordination
         self.state = state
@@ -36,7 +36,6 @@ class MassSpringDamperModel:
                  mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray,
                  sd_sd_aa: np.ndarray,
-                 a_mixture_weights: np.ndarray,
                  sd_sd_o: np.ndarray,
                  share_mean_a0_across_springs: bool = False,
                  share_mean_a0_across_features: bool = False,
@@ -48,21 +47,20 @@ class MassSpringDamperModel:
 
         self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
                                                                      sd_sd_uc=sd_sd_uc)
-        self.state_space_cpn = MixtureMassSpringDamperComponent(uuid="state_space",
-                                                                num_springs=num_springs,
-                                                                spring_constant=spring_constant,
-                                                                mass=mass,
-                                                                damping_coefficient=damping_coefficient,
-                                                                dt=dt,
-                                                                self_dependent=self_dependent,
-                                                                mean_mean_a0=mean_mean_a0,
-                                                                sd_mean_a0=sd_mean_a0,
-                                                                sd_sd_aa=sd_sd_aa,
-                                                                a_mixture_weights=a_mixture_weights,
-                                                                share_mean_a0_across_springs=share_mean_a0_across_springs,
-                                                                share_sd_aa_across_springs=share_sd_aa_across_springs,
-                                                                share_mean_a0_across_features=share_mean_a0_across_features,
-                                                                share_sd_aa_across_features=share_sd_aa_across_features)
+        self.state_space_cpn = NonSerialMassSpringDamperComponent(uuid="state_space",
+                                                                  num_springs=num_springs,
+                                                                  spring_constant=spring_constant,
+                                                                  mass=mass,
+                                                                  damping_coefficient=damping_coefficient,
+                                                                  dt=dt,
+                                                                  self_dependent=self_dependent,
+                                                                  mean_mean_a0=mean_mean_a0,
+                                                                  sd_mean_a0=sd_mean_a0,
+                                                                  sd_sd_aa=sd_sd_aa,
+                                                                  share_mean_a0_across_springs=share_mean_a0_across_springs,
+                                                                  share_sd_aa_across_springs=share_sd_aa_across_springs,
+                                                                  share_mean_a0_across_features=share_mean_a0_across_features,
+                                                                  share_sd_aa_across_features=share_sd_aa_across_features)
         self.observation_cpn = NonSerialObservationComponent(uuid="observation",
                                                              num_subjects=num_springs,
                                                              dim_value=self.state_space_cpn.dim_value,
@@ -147,7 +145,6 @@ if __name__ == "__main__":
                                   mean_mean_a0=np.zeros((3, 2)),
                                   sd_mean_a0=np.ones((3, 2)) * 20,
                                   sd_sd_aa=np.ones(1),
-                                  a_mixture_weights=np.ones((3, 2)),
                                   sd_sd_o=np.ones(1),
                                   share_sd_aa_across_springs=True,
                                   share_sd_aa_across_features=True,

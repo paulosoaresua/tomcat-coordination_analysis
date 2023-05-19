@@ -6,7 +6,7 @@ import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
 
-from coordination.component.mixture_component import MixtureComponent
+from coordination.component.non_serial_component import NonSerialComponent
 
 
 def logp(sample: Any,
@@ -61,7 +61,7 @@ def logp(sample: Any,
     return total_logp
 
 
-class MixtureMassSpringDamperComponent(MixtureComponent):
+class NonSerialMassSpringDamperComponent(NonSerialComponent):
     """
     This class models a non-serial latent mass-spring-damper component which individual spring's dynamics influence
     that of the other springs as controlled by coordination.
@@ -77,7 +77,6 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                  mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray,
                  sd_sd_aa: np.ndarray,
-                 a_mixture_weights: np.ndarray,
                  share_mean_a0_across_springs: bool,
                  share_mean_a0_across_features: bool,
                  share_sd_aa_across_springs: bool,
@@ -90,7 +89,6 @@ class MixtureMassSpringDamperComponent(MixtureComponent):
                          mean_mean_a0=mean_mean_a0,
                          sd_mean_a0=sd_mean_a0,
                          sd_sd_aa=sd_sd_aa,
-                         a_mixture_weights=a_mixture_weights,
                          share_mean_a0_across_subjects=share_mean_a0_across_springs,
                          share_mean_a0_across_features=share_mean_a0_across_features,
                          share_sd_aa_across_subjects=share_sd_aa_across_springs,

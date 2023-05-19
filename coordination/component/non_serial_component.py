@@ -10,13 +10,13 @@ from coordination.common.utils import set_random_seed
 from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 
 
-def mixture_logp(sample: Any,
-                 initial_mean: Any,
-                 sigma: Any,
-                 coordination: Any,
-                 self_dependent: ptt.TensorConstant):
+def logp(sample: Any,
+         initial_mean: Any,
+         sigma: Any,
+         coordination: Any,
+         self_dependent: ptt.TensorConstant):
     """
-    This function computes the log-probability of a mixture component. We use the following definition in the
+    This function computes the log-probability of a non-serial component. We use the following definition in the
     comments below:
 
     s: number of subjects
@@ -60,16 +60,16 @@ def mixture_logp(sample: Any,
     return total_logp
 
 
-def mixture_random(initial_mean: np.ndarray,
-                   sigma: np.ndarray,
-                   coordination: np.ndarray,
-                   self_dependent: bool,
-                   num_subjects: int,
-                   dim_value: int,
-                   rng: Optional[np.random.Generator] = None,
-                   size: Optional[Tuple[int]] = None) -> np.ndarray:
+def random(initial_mean: np.ndarray,
+           sigma: np.ndarray,
+           coordination: np.ndarray,
+           self_dependent: bool,
+           num_subjects: int,
+           dim_value: int,
+           rng: Optional[np.random.Generator] = None,
+           size: Optional[Tuple[int]] = None) -> np.ndarray:
     """
-    This function generates samples from of a mixture component for prior predictive checks. We use the following
+    This function generates samples from of a non-serial component for prior predictive checks. We use the following
     definition in the comments below:
 
     s: number of subjects
@@ -105,7 +105,7 @@ def mixture_random(initial_mean: np.ndarray,
     return sample + noise
 
 
-class MixtureComponentParameters:
+class NonSerialComponentParameters:
 
     def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
         self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
@@ -116,7 +116,7 @@ class MixtureComponentParameters:
         self.sd_aa.value = None
 
 
-class MixtureComponentSamples:
+class NonSerialComponentSamples:
 
     def __init__(self):
         self.values = np.array([])
@@ -129,16 +129,16 @@ class MixtureComponentSamples:
         return self.values.shape[-1]
 
 
-class MixtureComponent:
+class NonSerialComponent:
     """
     This class models a non-serial latent component which individual subject's dynamics influence that of the other
     subjects as controlled by coordination.
     """
 
     def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, a_mixture_weights: np.ndarray,
-                 share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
-                 share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool):
+                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool, share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_features: bool):
 
         # Check dimensionality of the hyper-prior parameters
         if share_mean_a0_across_features:
@@ -163,8 +163,6 @@ class MixtureComponent:
         else:
             assert (num_subjects, dim_sd_aa_features) == sd_sd_aa.shape
 
-        assert (num_subjects, num_subjects - 1) == a_mixture_weights.shape
-
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dim_value = dim_value
@@ -174,9 +172,9 @@ class MixtureComponent:
         self.share_sd_aa_across_subjects = share_sd_aa_across_subjects
         self.share_sd_aa_across_features = share_sd_aa_across_features
 
-        self.parameters = MixtureComponentParameters(mean_mean_a0=mean_mean_a0,
-                                                     sd_mean_a0=sd_mean_a0,
-                                                     sd_sd_aa=sd_sd_aa)
+        self.parameters = NonSerialComponentParameters(mean_mean_a0=mean_mean_a0,
+                                                       sd_mean_a0=sd_mean_a0,
+                                                       sd_sd_aa=sd_sd_aa)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -199,7 +197,7 @@ class MixtureComponent:
         self.parameters.clear_values()
 
     def draw_samples(self, relative_frequency: float, coordination: np.ndarray,
-                     seed: Optional[int] = None) -> MixtureComponentSamples:
+                     seed: Optional[int] = None) -> NonSerialComponentSamples:
 
         # Check dimensionality of the parameters
         if self.share_mean_a0_across_features:
@@ -238,7 +236,7 @@ class MixtureComponent:
         # Generate samples
         set_random_seed(seed)
 
-        samples = MixtureComponentSamples()
+        samples = NonSerialComponentSamples()
 
         num_time_steps_in_cpn_scale = int(coordination.shape[-1] / relative_frequency)
         samples.time_steps_in_coordination_scale = (np.arange(num_time_steps_in_cpn_scale) * relative_frequency).astype(
@@ -356,13 +354,13 @@ class MixtureComponent:
                        )
         logp_fn = self._get_logp_fn()
         random_fn = self._get_random_fn()
-        mixture_component = pm.CustomDist(self.uuid, *logp_params,
-                                          logp=logp_fn,
-                                          random=random_fn,
-                                          dims=[subject_dimension, feature_dimension, time_dimension],
-                                          observed=observed_values)
+        non_serial_component = pm.CustomDist(self.uuid, *logp_params,
+                                             logp=logp_fn,
+                                             random=random_fn,
+                                             dims=[subject_dimension, feature_dimension, time_dimension],
+                                             observed=observed_values)
 
-        return mixture_component, mean_a0, sd_aa
+        return non_serial_component, mean_a0, sd_aa
 
     def _get_extra_logp_params(self):
         """
@@ -374,10 +372,10 @@ class MixtureComponent:
         """
         Child classes can define their own logp functions
         """
-        return mixture_logp
+        return logp
 
     def _get_random_fn(self):
         """
         Child classes can define their own random functions for prior predictive checks
         """
-        return partial(mixture_random, num_subjects=self.num_subjects, dim_value=self.dim_value)
+        return partial(random, num_subjects=self.num_subjects, dim_value=self.dim_value)
