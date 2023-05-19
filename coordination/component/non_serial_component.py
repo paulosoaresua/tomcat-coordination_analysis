@@ -135,9 +135,17 @@ class NonSerialComponent:
     subjects as controlled by coordination.
     """
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_mean_a0_across_subjects: bool,
-                 share_mean_a0_across_features: bool, share_sd_aa_across_subjects: bool,
+    def __init__(self,
+                 uuid: str,
+                 num_subjects: int,
+                 dim_value: int,
+                 self_dependent: bool,
+                 mean_mean_a0: np.ndarray,
+                 sd_mean_a0: np.ndarray,
+                 sd_sd_aa: np.ndarray,
+                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool,
                  share_sd_aa_across_features: bool):
 
         # Check dimensionality of the hyper-prior parameters
@@ -196,7 +204,9 @@ class NonSerialComponent:
     def clear_parameter_values(self):
         self.parameters.clear_values()
 
-    def draw_samples(self, relative_frequency: float, coordination: np.ndarray,
+    def draw_samples(self,
+                     relative_frequency: float,
+                     coordination: np.ndarray,
                      seed: Optional[int] = None) -> NonSerialComponentSamples:
 
         # Check dimensionality of the parameters
@@ -253,7 +263,9 @@ class NonSerialComponent:
 
         return samples
 
-    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
+    def _draw_from_system_dynamics(self,
+                                   time_steps_in_coordination_scale: np.ndarray,
+                                   sampled_coordination: np.ndarray,
                                    mean_a0: np.ndarray, sd_aa: np.ndarray) -> np.ndarray:
         """
         In this function we use the following notation in the comments:
@@ -340,8 +352,13 @@ class NonSerialComponent:
 
         return mean_a0, sd_aa
 
-    def update_pymc_model(self, coordination: Any, subject_dimension: str, feature_dimension: str, time_dimension: str,
-                          observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
+    def update_pymc_model(self,
+                          coordination: Any,
+                          subject_dimension: str,
+                          feature_dimension: str,
+                          time_dimension: str,
+                          observed_values: Optional[Any] = None,
+                          mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None) -> Any:
 
         mean_a0, sd_aa = self._create_random_parameters(mean_a0, sd_aa)

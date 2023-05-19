@@ -50,7 +50,9 @@ class SigmoidGaussianCoordinationComponent:
     def sd_uc_name(self) -> str:
         return f"sd_uc"
 
-    def draw_samples(self, num_series: int, num_time_steps: int,
+    def draw_samples(self,
+                     num_series: int,
+                     num_time_steps: int,
                      seed: Optional[int] = None) -> CoordinationComponentSamples:
         set_random_seed(seed)
 
@@ -71,7 +73,8 @@ class SigmoidGaussianCoordinationComponent:
 
         return samples
 
-    def update_pymc_model(self, time_dimension: str,
+    def update_pymc_model(self,
+                          time_dimension: str,
                           unbounded_coordination_observed_values: Optional[Any] = None) -> Any:
         mean_uc0 = pm.Normal(name=self.mean_uc0_name, mu=self.parameters.mean_uc0.prior.mean,
                              sigma=self.parameters.mean_uc0.prior.sd, size=1,

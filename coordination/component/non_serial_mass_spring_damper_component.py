@@ -117,8 +117,11 @@ class NonSerialMassSpringDamperComponent(NonSerialComponent):
         self.F = np.concatenate(F, axis=0)
         self.F_inv = np.concatenate(F_inv, axis=0)
 
-    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
-                                   mean_a0: np.ndarray, sd_aa: np.ndarray) -> np.ndarray:
+    def _draw_from_system_dynamics(self,
+                                   time_steps_in_coordination_scale: np.ndarray,
+                                   sampled_coordination: np.ndarray,
+                                   mean_a0: np.ndarray,
+                                   sd_aa: np.ndarray) -> np.ndarray:
         """
         In this function we use the following notation in the comments:
 

@@ -18,8 +18,13 @@ class ObservationComponent:
     This class models generic observations. Use specific observation classes for non-serial and serial components
     """
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, sd_sd_o: np.ndarray,
-                 share_sd_o_across_subjects: bool, share_sd_o_across_features: bool):
+    def __init__(self,
+                 uuid: str,
+                 num_subjects: int,
+                 dim_value: int,
+                 sd_sd_o: np.ndarray,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool):
 
         # Check dimensionality of the hyper-prior parameters
         if share_sd_o_across_features:

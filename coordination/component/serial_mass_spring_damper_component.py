@@ -121,9 +121,13 @@ class SerialMassSpringDamperComponent(SerialComponent):
         self.F = np.concatenate(F, axis=0)
         self.F_inv = np.concatenate(F_inv, axis=0)
 
-    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
-                                   subjects_in_time: np.ndarray, prev_time_same_subject: np.ndarray,
-                                   prev_time_diff_subject: np.ndarray, mean_a0: np.ndarray,
+    def _draw_from_system_dynamics(self,
+                                   time_steps_in_coordination_scale: np.ndarray,
+                                   sampled_coordination: np.ndarray,
+                                   subjects_in_time: np.ndarray,
+                                   prev_time_same_subject: np.ndarray,
+                                   prev_time_diff_subject: np.ndarray,
+                                   mean_a0: np.ndarray,
                                    sd_aa: np.ndarray) -> np.ndarray:
 
         num_time_steps = len(time_steps_in_coordination_scale)
@@ -179,5 +183,4 @@ class SerialMassSpringDamperComponent(SerialComponent):
         return logp
 
     def _get_random_fn(self):
-        # TODO - implement this for prior predictive checks.
         return None

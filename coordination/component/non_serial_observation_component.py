@@ -33,7 +33,9 @@ class NonSerialObservationComponent(ObservationComponent):
                          share_sd_o_across_subjects=share_sd_o_across_subjects,
                          share_sd_o_across_features=share_sd_o_across_features)
 
-    def draw_samples(self, latent_component: np.ndarray, seed: Optional[int] = None) -> NonSerialObservationComponentSamples:
+    def draw_samples(self,
+                     latent_component: np.ndarray,
+                     seed: Optional[int] = None) -> NonSerialObservationComponentSamples:
         # Check dimensionality of the parameters
         if self.share_sd_o_across_features:
             dim_sd_o_features = 1
@@ -89,8 +91,12 @@ class NonSerialObservationComponent(ObservationComponent):
 
         return sd_o
 
-    def update_pymc_model(self, latent_component: Any, subject_dimension: str, feature_dimension: str,
-                          time_dimension: str, observed_values: Any, sd_o: Optional[Any] = None) -> Any:
+    def update_pymc_model(self, latent_component: Any,
+                          subject_dimension: str,
+                          feature_dimension: str,
+                          time_dimension: str,
+                          observed_values: Any,
+                          sd_o: Optional[Any] = None) -> Any:
 
         sd_o = self._create_random_parameters(sd_o)
 

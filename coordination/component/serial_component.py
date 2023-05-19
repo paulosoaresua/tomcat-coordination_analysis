@@ -167,9 +167,17 @@ class SerialComponent:
     subjects as controlled by coordination.
     """
 
-    def __init__(self, uuid: str, num_subjects: int, dim_value: int, self_dependent: bool, mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray, share_mean_a0_across_subjects: bool,
-                 share_mean_a0_across_features: bool, share_sd_aa_across_subjects: bool,
+    def __init__(self,
+                 uuid: str,
+                 num_subjects: int,
+                 dim_value: int,
+                 self_dependent: bool,
+                 mean_mean_a0: np.ndarray,
+                 sd_mean_a0: np.ndarray,
+                 sd_sd_aa: np.ndarray,
+                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool,
                  share_sd_aa_across_features: bool):
 
         # Check dimensionality of the hyper-prior parameters
@@ -228,8 +236,11 @@ class SerialComponent:
     def clear_parameter_values(self):
         self.parameters.clear_values()
 
-    def draw_samples(self, num_series: int, time_scale_density: float,
-                     coordination: np.ndarray, can_repeat_subject: bool,
+    def draw_samples(self,
+                     num_series: int,
+                     time_scale_density: float,
+                     coordination: np.ndarray,
+                     can_repeat_subject: bool,
                      seed: Optional[int] = None) -> SerialComponentSamples:
 
         # Check dimensionality of the parameters
@@ -315,9 +326,13 @@ class SerialComponent:
 
         return samples
 
-    def _draw_from_system_dynamics(self, time_steps_in_coordination_scale: np.ndarray, sampled_coordination: np.ndarray,
-                                   subjects_in_time: np.ndarray, prev_time_same_subject: np.ndarray,
-                                   prev_time_diff_subject: np.ndarray, mean_a0: np.ndarray,
+    def _draw_from_system_dynamics(self,
+                                   time_steps_in_coordination_scale: np.ndarray,
+                                   sampled_coordination: np.ndarray,
+                                   subjects_in_time: np.ndarray,
+                                   prev_time_same_subject: np.ndarray,
+                                   prev_time_diff_subject: np.ndarray,
+                                   mean_a0: np.ndarray,
                                    sd_aa: np.ndarray) -> np.ndarray:
 
         num_time_steps = len(time_steps_in_coordination_scale)
@@ -363,7 +378,10 @@ class SerialComponent:
 
         return values
 
-    def _draw_random_subjects(self, num_series: int, num_time_steps: int, time_scale_density: float,
+    def _draw_random_subjects(self,
+                              num_series: int,
+                              num_time_steps: int,
+                              time_scale_density: float,
                               can_repeat_subject: bool) -> np.ndarray:
 
         # Subject 0 is "No Subject"
@@ -395,7 +413,9 @@ class SerialComponent:
         subjects -= 1
         return subjects
 
-    def _create_random_parameters(self, subjects: np.ndarray, mean_a0: Optional[Any] = None,
+    def _create_random_parameters(self,
+                                  subjects: np.ndarray,
+                                  mean_a0: Optional[Any] = None,
                                   sd_aa: Optional[Any] = None):
         """
         This function creates the initial mean and standard deviation of the serial component distribution as
@@ -453,10 +473,17 @@ class SerialComponent:
 
         return mean_a0, sd_aa
 
-    def update_pymc_model(self, coordination: Any, prev_time_same_subject: np.ndarray,
-                          prev_time_diff_subject: np.ndarray, prev_same_subject_mask: np.ndarray,
-                          prev_diff_subject_mask: np.ndarray, subjects: np.ndarray, feature_dimension: str,
-                          time_dimension: str, observed_values: Optional[Any] = None, mean_a0: Optional[Any] = None,
+    def update_pymc_model(self,
+                          coordination: Any,
+                          prev_time_same_subject: np.ndarray,
+                          prev_time_diff_subject: np.ndarray,
+                          prev_same_subject_mask: np.ndarray,
+                          prev_diff_subject_mask: np.ndarray,
+                          subjects: np.ndarray,
+                          feature_dimension: str,
+                          time_dimension: str,
+                          observed_values: Optional[Any] = None,
+                          mean_a0: Optional[Any] = None,
                           sd_aa: Optional[Any] = None) -> Any:
 
         mean_a0, sd_aa = self._create_random_parameters(subjects, mean_a0, sd_aa)

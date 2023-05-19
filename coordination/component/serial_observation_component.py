@@ -30,7 +30,9 @@ class SerialObservationComponent(ObservationComponent):
                          share_sd_o_across_subjects=share_sd_o_across_subjects,
                          share_sd_o_across_features=share_sd_o_across_features)
 
-    def draw_samples(self, latent_component: List[np.ndarray], subjects: List[np.ndarray],
+    def draw_samples(self,
+                     latent_component: List[np.ndarray],
+                     subjects: List[np.ndarray],
                      seed: Optional[int] = None) -> SerialObservationComponentSamples:
         # Check dimensionality of the parameters
         if self.share_sd_o_across_features:
@@ -92,8 +94,13 @@ class SerialObservationComponent(ObservationComponent):
 
         return sd_o
 
-    def update_pymc_model(self, latent_component: Any, subjects: np.ndarray, feature_dimension: str,
-                          time_dimension: str, observed_values: Any, sd_o: Optional[Any] = None) -> Any:
+    def update_pymc_model(self,
+                          latent_component: Any,
+                          subjects: np.ndarray,
+                          feature_dimension: str,
+                          time_dimension: str,
+                          observed_values: Any,
+                          sd_o: Optional[Any] = None) -> Any:
 
         sd_o = self._create_random_parameters(subjects=subjects, sd_o=sd_o)
 
