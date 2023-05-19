@@ -88,6 +88,8 @@ When evaluating semantic linkages, one more column needs to be present in the fi
 
 Our models achieve the following performance on the [ASIST Study 3 dataset](https://dataverse.asu.edu/dataset.xhtml?persistentId=doi:10.48349/ASU/QDQ4MH) compared to a baseline predictor:
 
+*Numbers are RMSE and standard error.*  
+
 | Mission | Model                                                                | No-Advisor   | ToMCAT Advisor | Combined     |
 |---------|----------------------------------------------------------------------|--------------|----------------|--------------|
 |         | Baseline                                                             | 142.4 (29.9) | 106.4 (17.6)   | 120.0 (16.7) | 
@@ -96,7 +98,6 @@ Our models achieve the following performance on the [ASIST Study 3 dataset](http
 |         | Baseline                                                             | 113.0 (19.3) | 178.5 (24.6)   | 143.4 (18.7) | 
 | B       | Vocalic                                                              | 100.9 (11.7) | 110.0 (26.9)   | 108.2 (16.0) |
 |         | Vocalic + Semantics                                                  | 110.4 (18.5) | 135.4 (24.2)   | 123.7 (16.4) |
-RMSE (standard error)  
 
 ## Contributing
 
