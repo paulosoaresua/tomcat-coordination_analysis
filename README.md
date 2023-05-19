@@ -78,7 +78,11 @@ The evidence_filepath must point to a `.csv` file containing the following colum
 - **jitter**: A list of average jitter values per utterance.
 - **shimmer**: A list of average shimmer values per utterance.
  
-**Note**: The list entries are associated with each of the utterances in the task. Thus their dimension must match. 
+**Note**: The list entries are associated with each of the utterances in the task. Thus their dimension must match.
+
+When evaluating semantic linkages, one more column needs to be present in the file and it does not have to match the dimensions of the lists above because semantic links are in a different time scale than vocalic features. The extra column is:
+
+- **conversational_semantic_link_time_steps_in_coordination_scale**: List of integers representing a the time steps in the coordination scale when semantic links were observed. 
 
 ## Results
 
