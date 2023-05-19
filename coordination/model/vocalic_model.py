@@ -26,18 +26,29 @@ VOCALIC_FEATURES = [
 
 class VocalicSamples:
 
-    def __init__(self, coordination: CoordinationComponentSamples,
-                 latent_vocalic: SerialComponentSamples, obs_vocalic: SerialObservationComponentSamples):
+    def __init__(self,
+                 coordination: CoordinationComponentSamples,
+                 latent_vocalic: SerialComponentSamples,
+                 obs_vocalic: SerialObservationComponentSamples):
         self.coordination = coordination
         self.latent_vocalic = latent_vocalic
         self.obs_vocalic = obs_vocalic
 
 
 class VocalicSeries:
+    """
+    Used to encapsulate observations and meta-data.
+    """
 
-    def __init__(self, uuid: str, features: List[str], num_time_steps_in_coordination_scale: int,
-                 subjects_in_time: np.ndarray, observation: np.ndarray, previous_time_same_subject: np.ndarray,
-                 previous_time_diff_subject: np.ndarray, time_steps_in_coordination_scale: np.ndarray):
+    def __init__(self,
+                 uuid: str,
+                 features: List[str],
+                 num_time_steps_in_coordination_scale: int,
+                 subjects_in_time: np.ndarray,
+                 observation: np.ndarray,
+                 previous_time_same_subject: np.ndarray,
+                 previous_time_diff_subject: np.ndarray,
+                 time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
         self.features = features
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
@@ -47,32 +58,9 @@ class VocalicSeries:
         self.previous_time_diff_subject = previous_time_diff_subject
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
-    def chop(self, min_time_step: int, max_time_step: int):
-        """
-        Chops the series into a pre-defined range.
-        """
-        self.num_time_steps_in_coordination_scale = max_time_step - min_time_step
-        t_min_vocalic = 0
-        t_max_vocalic = 0
-        for t in range(self.num_time_steps_in_vocalic_scale):
-            if self.time_steps_in_coordination_scale[t] < min_time_step:
-                t_min_vocalic = t + 1
-
-            if self.time_steps_in_coordination_scale[t] < max_time_step:
-                t_max_vocalic = t + 1
-
-        self.subjects_in_time = self.subjects_in_time[t_min_vocalic:t_max_vocalic]
-        self.observation = self.observation[:, t_min_vocalic:t_max_vocalic]
-        self.previous_time_same_subject = np.maximum(
-            self.previous_time_same_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
-        self.previous_time_diff_subject = np.maximum(
-            self.previous_time_diff_subject[t_min_vocalic:t_max_vocalic] - t_min_vocalic, -1)
-        self.time_steps_in_coordination_scale = self.time_steps_in_coordination_scale[
-                                                t_min_vocalic:t_max_vocalic] - min_time_step
-
     def normalize_per_subject(self):
         """
-        Make sure measurements have mean 0 and standard deviation 1 per subject and feature.
+        Scale measurements to have mean 0 and standard deviation 1 per subject and feature.
         """
         all_subjects = set(self.subjects_in_time)
 
@@ -104,10 +92,13 @@ class VocalicSeries:
 
     @classmethod
     def from_data_frame(cls, evidence_df: pd.DataFrame, vocalic_features: List[str]):
+        """
+        Parses a dataframe entry to create an evidence object that can be used to fit the model.
+        """
+
         obs_vocalic = []
         for vocalic_feature in vocalic_features:
             obs_vocalic.append(np.array(literal_eval(evidence_df[f"{vocalic_feature}"].values[0])))
-        # Swap axes such that the first dimension represents the different subjects and the second the vocalic features
         obs_vocalic = np.array(obs_vocalic)
 
         return cls(
@@ -143,7 +134,9 @@ class VocalicSeries:
 
 class VocalicPosteriorSamples:
 
-    def __init__(self, unbounded_coordination: xarray.Dataset, coordination: xarray.Dataset,
+    def __init__(self,
+                 unbounded_coordination: xarray.Dataset,
+                 coordination: xarray.Dataset,
                  latent_vocalic: xarray.Dataset):
         self.unbounded_coordination = unbounded_coordination
         self.coordination = coordination
@@ -161,14 +154,23 @@ class VocalicPosteriorSamples:
 
 class VocalicModel:
 
-    def __init__(self, num_subjects: int, vocalic_features: List[str],
-                 self_dependent: bool, sd_mean_uc0: float, sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray,
-                 sd_mean_a0_vocalic: np.ndarray, sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray,
-                 share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
-                 share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
-                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None):
-        # Either one or the other
-
+    def __init__(self,
+                 num_subjects: int,
+                 vocalic_features: List[str],
+                 self_dependent: bool,
+                 sd_mean_uc0: float,
+                 sd_sd_uc: float,
+                 mean_mean_a0_vocalic: np.ndarray,
+                 sd_mean_a0_vocalic: np.ndarray,
+                 sd_sd_aa_vocalic: np.ndarray,
+                 sd_sd_o_vocalic: np.ndarray,
+                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_features: bool,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool,
+                 initial_coordination: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
 
@@ -210,8 +212,12 @@ class VocalicModel:
     def obs_vocalic_variable_name(self) -> str:
         return self.obs_vocalic_cpn.uuid
 
-    def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
-                     can_repeat_subject: bool, seed: Optional[int] = None) -> VocalicSamples:
+    def draw_samples(self,
+                     num_series: int,
+                     num_time_steps: int,
+                     vocalic_time_scale_density: float,
+                     can_repeat_subject: bool,
+                     seed: Optional[int] = None) -> VocalicSamples:
         coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
         latent_vocalic_samples = self.latent_vocalic_cpn.draw_samples(num_series=num_series,
                                                                       time_scale_density=vocalic_time_scale_density,
@@ -221,20 +227,33 @@ class VocalicModel:
         obs_vocalic_samples = self.obs_vocalic_cpn.draw_samples(latent_component=latent_vocalic_samples.values,
                                                                 subjects=latent_vocalic_samples.subjects)
 
-        samples = VocalicSamples(coordination=coordination_samples, latent_vocalic=latent_vocalic_samples,
+        samples = VocalicSamples(coordination=coordination_samples,
+                                 latent_vocalic=latent_vocalic_samples,
                                  obs_vocalic=obs_vocalic_samples)
 
         return samples
 
-    def fit(self, evidence: VocalicSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
-        pm.Model, az.InferenceData]:
+    def fit(self,
+            evidence: VocalicSeries,
+            burn_in: int,
+            num_samples: int,
+            num_chains: int,
+            seed: Optional[int] = None,
+            num_jobs: int = 1,
+            init_method: str = "jitter+adapt_diag",
+            target_accept: float = 0.8) -> Tuple[pm.Model, az.InferenceData]:
+
         assert evidence.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
-                              cores=num_jobs)
+            idata = pm.sample(num_samples,
+                              init=init_method,
+                              tune=burn_in,
+                              chains=num_chains,
+                              random_seed=seed,
+                              cores=num_jobs,
+                              target_accept=target_accept)
 
         return pymc_model, idata
 
@@ -271,7 +290,10 @@ class VocalicModel:
 
         return pymc_model, idata
 
-    def posterior_predictive(self, evidence: VocalicSeries, trace: az.InferenceData, seed: Optional[int] = None):
+    def posterior_predictive(self,
+                             evidence: VocalicSeries,
+                             trace: az.InferenceData,
+                             seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
             idata = pm.sample_posterior_predictive(trace=trace, random_seed=seed)
