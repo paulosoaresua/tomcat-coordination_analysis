@@ -23,6 +23,9 @@ class MassSpringDamperSamples:
 
 
 class MassSpringDamperModel:
+    """
+    This class represents the Spring model.
+    """
 
     def __init__(self,
                  num_springs: int,
@@ -98,16 +101,29 @@ class MassSpringDamperModel:
 
         return samples
 
-    def fit(self, evidence: np.ndarray, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
+    def fit(self,
+            evidence: np.ndarray,
+            burn_in: int,
+            num_samples: int,
+            num_chains: int,
+            seed: Optional[int] = None,
+            num_jobs: int = 1,
+            init_method: str = "jitter+adapt_diag",
+            target_accept: float = 0.8) -> Tuple[
         pm.Model, az.InferenceData]:
+
         assert evidence.shape[0] == self.state_space_cpn.num_subjects
         assert evidence.shape[1] == self.state_space_cpn.dim_value
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
-                              cores=num_jobs)
+            idata = pm.sample(num_samples,
+                              init=init_method,
+                              tune=burn_in,
+                              chains=num_chains,
+                              random_seed=seed,
+                              cores=num_jobs,
+                              target_accept=target_accept)
 
         return pymc_model, idata
 
@@ -180,7 +196,8 @@ if __name__ == "__main__":
         num_chains=2,
         seed=0,
         num_jobs=2,
-        init_method="jitter+adapt_diag"
+        init_method="jitter+adapt_diag",
+        target_accept=0.9
     )
 
     sampled_vars = set(idata.posterior.data_vars)
