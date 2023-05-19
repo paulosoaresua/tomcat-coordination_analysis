@@ -13,7 +13,7 @@ from coordination.component.serial_observation_component import SerialObservatio
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
-class SerialArgumentSeries:
+class ArgumentSeries:
     """
     Used to encapsulate observations and meta-data.
     """
@@ -37,16 +37,18 @@ class SerialArgumentSeries:
         return np.where(self.prev_time_diff_subject >= 0, 1, 0)
 
 
-class SerialArgumentSamples:
+class ArgumentSamples:
 
-    def __init__(self, coordination: CoordinationComponentSamples, state: SerialComponentSamples,
+    def __init__(self,
+                 coordination: CoordinationComponentSamples,
+                 state: SerialComponentSamples,
                  observation: SerialObservationComponentSamples):
         self.coordination = coordination
         self.state = state
         self.observation = observation
 
 
-class SerialArgumentModel:
+class ArgumentModel:
     """
     This class represents the Spring model.
     """
@@ -112,7 +114,7 @@ class SerialArgumentModel:
                      num_time_steps: int,
                      coordination_samples: Optional[np.ndarray],
                      seed: Optional[int] = None,
-                     can_repeat_subject: bool = False) -> SerialArgumentSamples:
+                     can_repeat_subject: bool = False) -> ArgumentSamples:
         if coordination_samples is None:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
             seed = None
@@ -125,14 +127,14 @@ class SerialArgumentModel:
         observation_samples = self.observation_cpn.draw_samples(latent_component=state_samples.values,
                                                                 subjects=state_samples.subjects)
 
-        samples = SerialArgumentSamples(coordination=coordination_samples,
-                                        state=state_samples,
-                                        observation=observation_samples)
+        samples = ArgumentSamples(coordination=coordination_samples,
+                                  state=state_samples,
+                                  observation=observation_samples)
 
         return samples
 
     def fit(self,
-            evidence: SerialArgumentSeries,
+            evidence: ArgumentSeries,
             burn_in: int,
             num_samples: int,
             num_chains: int,
@@ -154,7 +156,7 @@ class SerialArgumentModel:
 
         return pymc_model, idata
 
-    def _define_pymc_model(self, evidence: SerialArgumentSeries):
+    def _define_pymc_model(self, evidence: ArgumentSeries):
         coords = {"feature": ["position", "velocity"],
                   "coordination_time": np.arange(evidence.observation.shape[-1]),
                   "subject_time": np.arange(evidence.observation.shape[-1])}
@@ -181,21 +183,21 @@ class SerialArgumentModel:
 
 
 if __name__ == "__main__":
-    model = SerialArgumentModel(num_subjects=2,
-                                frequency=np.array([0.8, 0.2]),
-                                damping_coefficient=np.array([0, 0]),
-                                dt=0.2,
-                                self_dependent=True,
-                                sd_mean_uc0=1,
-                                sd_sd_uc=1,
-                                mean_mean_a0=np.zeros((2, 2)),
-                                sd_mean_a0=np.ones((2, 2)),
-                                sd_sd_aa=np.ones(1),
-                                sd_sd_o=np.ones(1),
-                                share_sd_aa_across_subjects=True,
-                                share_sd_aa_across_features=True,
-                                share_sd_o_across_subjects=True,
-                                share_sd_o_across_features=True)
+    model = ArgumentModel(num_subjects=2,
+                          frequency=np.array([0.8, 0.2]),
+                          damping_coefficient=np.array([0, 0]),
+                          dt=0.2,
+                          self_dependent=True,
+                          sd_mean_uc0=1,
+                          sd_sd_uc=1,
+                          mean_mean_a0=np.zeros((2, 2)),
+                          sd_mean_a0=np.ones((2, 2)),
+                          sd_sd_aa=np.ones(1),
+                          sd_sd_o=np.ones(1),
+                          share_sd_aa_across_subjects=True,
+                          share_sd_aa_across_features=True,
+                          share_sd_o_across_subjects=True,
+                          share_sd_o_across_features=True)
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
@@ -219,10 +221,10 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
 
-    evidence = SerialArgumentSeries(subjects_in_time=samples.state.subjects[0],
-                                    prev_time_same_subject=samples.state.prev_time_same_subject[0],
-                                    prev_time_diff_subject=samples.state.prev_time_diff_subject[0],
-                                    observation=samples.observation.values[0])
+    evidence = ArgumentSeries(subjects_in_time=samples.state.subjects[0],
+                              prev_time_same_subject=samples.state.prev_time_same_subject[0],
+                              prev_time_diff_subject=samples.state.prev_time_diff_subject[0],
+                              observation=samples.observation.values[0])
 
     # Inference
     model.clear_parameter_values()

@@ -13,19 +13,18 @@ from coordination.component.non_serial_observation_component import NonSerialObs
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
-class MassSpringDamperSamples:
+class SpringSamples:
 
-    def __init__(self, coordination: CoordinationComponentSamples, state: NonSerialComponentSamples,
+    def __init__(self,
+                 coordination: CoordinationComponentSamples,
+                 state: NonSerialComponentSamples,
                  observation: NonSerialObservationComponentSamples):
         self.coordination = coordination
         self.state = state
         self.observation = observation
 
 
-class MassSpringDamperModel:
-    """
-    This class represents the Spring model.
-    """
+class SpringModel:
 
     def __init__(self,
                  num_springs: int,
@@ -85,7 +84,7 @@ class MassSpringDamperModel:
         self.observation_cpn.parameters.clear_values()
 
     def draw_samples(self, num_series: int, num_time_steps: int, coordination_samples: Optional[np.ndarray],
-                     seed: Optional[int] = None) -> MassSpringDamperSamples:
+                     seed: Optional[int] = None) -> SpringSamples:
         if coordination_samples is None:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
             seed = None
@@ -95,9 +94,9 @@ class MassSpringDamperModel:
                                                           seed=seed)
         observation_samples = self.observation_cpn.draw_samples(latent_component=state_samples.values)
 
-        samples = MassSpringDamperSamples(coordination=coordination_samples,
-                                          state=state_samples,
-                                          observation=observation_samples)
+        samples = SpringSamples(coordination=coordination_samples,
+                                state=state_samples,
+                                observation=observation_samples)
 
         return samples
 
@@ -111,7 +110,6 @@ class MassSpringDamperModel:
             init_method: str = "jitter+adapt_diag",
             target_accept: float = 0.8) -> Tuple[
         pm.Model, az.InferenceData]:
-
         assert evidence.shape[0] == self.state_space_cpn.num_subjects
         assert evidence.shape[1] == self.state_space_cpn.dim_value
 
@@ -150,22 +148,22 @@ class MassSpringDamperModel:
 
 
 if __name__ == "__main__":
-    model = MassSpringDamperModel(num_springs=3,
-                                  spring_constant=np.array([16, 8, 4]),
-                                  mass=np.ones(3) * 10,
-                                  damping_coefficient=np.ones(3) * 0,
-                                  dt=0.5,
-                                  self_dependent=True,
-                                  sd_mean_uc0=1,
-                                  sd_sd_uc=1,
-                                  mean_mean_a0=np.zeros((3, 2)),
-                                  sd_mean_a0=np.ones((3, 2)) * 20,
-                                  sd_sd_aa=np.ones(1),
-                                  sd_sd_o=np.ones(1),
-                                  share_sd_aa_across_springs=True,
-                                  share_sd_aa_across_features=True,
-                                  share_sd_o_across_springs=True,
-                                  share_sd_o_across_features=True)
+    model = SpringModel(num_springs=3,
+                        spring_constant=np.array([16, 8, 4]),
+                        mass=np.ones(3) * 10,
+                        damping_coefficient=np.ones(3) * 0,
+                        dt=0.5,
+                        self_dependent=True,
+                        sd_mean_uc0=1,
+                        sd_sd_uc=1,
+                        mean_mean_a0=np.zeros((3, 2)),
+                        sd_mean_a0=np.ones((3, 2)) * 20,
+                        sd_sd_aa=np.ones(1),
+                        sd_sd_o=np.ones(1),
+                        share_sd_aa_across_springs=True,
+                        share_sd_aa_across_features=True,
+                        share_sd_o_across_springs=True,
+                        share_sd_o_across_features=True)
 
     model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [3, 0], [5, 0]])
     model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
