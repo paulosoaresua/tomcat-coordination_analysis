@@ -9,13 +9,19 @@ import pandas as pd
 from coordination.common.tmux import TMUX
 
 """
-This scripts uses divide the list of experiments in a data set such that they can be processed in parallel.
-Since the parameters are not shared across experiments, we can perform inference in an experiment data independenly
-of inferences using data from other experiments.
+This script divides the list of experiments in a .csv dataset such that they can be processed in parallel.
+Since the parameters are not shared across experiments, we can perform inferences in multiple experiments in
+parallel if we have computing resources.
 
 We split the experiments into different processes which are performed in different TMUX windows of the same TMUX 
-session. If the number of experiments is bigger than the number of processes they should be split into, some processes
-will be responsible for performing inference sequentially in the experiments assigned to them.
+session. If the tmux session does not exist, this script will create one with the name provided. If the number of 
+experiments is bigger than the number of processes they should be split into, some processes will be responsible for 
+performing inference sequentially in the experiments assigned to them.
+
+Note: 
+1. This script requires TMUX to be installed in the machine.
+2. This script requires Conda to be installed in the machine and have an environment called 'coordination' with the 
+dependencies listed in requirements.txt installed.
 """
 
 
@@ -56,7 +62,8 @@ def parallel_inference(out_dir: str,
                        p_semantic_link: str,
                        nuts_init_method: str,
                        target_accept: float):
-    # Parameters passed to this function relevant for post-analysis.
+
+    # Parameters passed to this function relevant for post-analysis. We will save them to a file.
     execution_params = locals().copy()
     del execution_params["out_dir"]
 
@@ -69,12 +76,10 @@ def parallel_inference(out_dir: str,
     print("")
 
     # Save arguments passed to the function
-
     with open(f"{results_folder}/execution_params.json", "w") as f:
         json.dump(execution_params, f, indent=4)
 
-    # Set environmental variables that will be used by the shell script that calls the sequential inference
-    # script
+    # Get absolute path to the project. We will use it to execute run_sequential_inference.py from a tmux window.
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
@@ -86,7 +91,7 @@ def parallel_inference(out_dir: str,
         experiment_ids = ",".join(experiments_per_process)
         tmux_window_name = experiment_ids
 
-        # Call the actual inference script
+        # Call the actual inference script (run_sequential.inference.py)
         initial_coordination_arg = f'--initial_coordination={initial_coordination} ' if initial_coordination != "" else ""
         sd_uc_arg = f'--sd_uc={sd_uc} ' if sd_uc != "" else ""
         mean_a0_vocalic_arg = f'--mean_a0_vocalic={mean_a0_vocalic} ' if mean_a0_vocalic != "" else ""
@@ -132,9 +137,10 @@ def parallel_inference(out_dir: str,
                                      f'--target_accept={target_accept}'
 
         tmux.create_window(tmux_window_name)
-        # The user has to make sure tmux initializes conda when a new session or window is created.
-        # This is accomplished by copying the conda initialization script (typically saved in the shell .rc file)
-        # to their shell .profile file.
+
+        # Before running this script for the first time, the user has to check if tmux initializes conda when
+        # a new session or window is created. This is accomplished by copying the conda initialization script,
+        # typically saved in the shell rc file (e.g., .bashrc), to their shell profile file (e.g., .bash_profile).
         tmux.run_command("conda activate coordination")
         tmux.run_command(call_python_script_command)
 
@@ -145,14 +151,16 @@ if __name__ == "__main__":
                     "create a new tmux session and each inference process will run in a separate tmux window."
     )
 
-    parser.add_argument("--out_dir", type=str, required=True,
-                        help="Directory where artifacts must be saved.")
-    parser.add_argument("--evidence_filepath", type=str, required=True,
-                        help="Path of the csv file containing the evidence data.")
     parser.add_argument("--tmux_session_name", type=str, required=True,
                         help="Name of the tmux session to be created.")
     parser.add_argument("--num_parallel_processes", type=int, required=False, default=1,
                         help="Number of processes to split the experiments into.")
+    parser.add_argument("--out_dir", type=str, required=True,
+                        help="Directory where artifacts must be saved.")
+    parser.add_argument("--evidence_filepath", type=str, required=True,
+                        help="Path of the csv file containing the evidence data.")
+    # Arguments below will be passes to run_sequential_inference and should match the arguments in that
+    # script.
     parser.add_argument("--model", type=str, required=True,
                         choices=["vocalic", "vocalic_semantic"],
                         help="Model name.")
@@ -167,71 +175,95 @@ if __name__ == "__main__":
     parser.add_argument("--num_inference_jobs", type=int, required=False, default=4,
                         help="Number of jobs to use per inference process.")
     parser.add_argument("--do_prior", type=int, required=False, default=1,
-                        help="Whether to perform prior predictive check or not. Use the value 0 to deactivate.")
+                        help="Whether to perform prior predictive check. Use the value 0 to deactivate.")
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
-                        help="Whether to perform posterior inference or not. Use the value 0 to deactivate.")
-    parser.add_argument("--initial_coordination", type=str, required=False, default="",
-                        help="Initial coordination value.")
+                        help="Whether to perform posterior inference. Use the value 0 to deactivate.")
+    parser.add_argument("--initial_coordination", type=float, required=False,
+                        help="Initial coordination value. If not provided or < 0, initial coordination will be fit "
+                             "along the other latent variables in the model")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")
     parser.add_argument("--vocalic_features", type=str, required=False, default="all",
-                        help="Vocalic features to use during inference. The features must be separated by commas.")
+                        help="Vocalic features to use during inference. The features must be separated by comma.")
     parser.add_argument("--self_dependent", type=int, required=False, default=1,
-                        help="Whether subjects influence themselves in the absense of coordination.")
+                        help="Whether subjects influence themselves over time.")
     parser.add_argument("--sd_mean_uc0", type=float, required=False, default=5,
-                        help="Standard deviation of the prior distribution of mean_uc0")
+                        help="Standard deviation of mu_c")
     parser.add_argument("--sd_sd_uc", type=float, required=False, default=1,
-                        help="Standard deviation of the prior distribution of sd_uc")
+                        help="Standard deviation of sigma_c")
     parser.add_argument("--mean_mean_a0_vocalic", type=str, required=False, default="0",
-                        help="Mean of the prior distribution of mu_vocalic_0. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Mean of mu_a. If the parameters are different per subject and feature, it is possible to "
+                             "pass a matrix as a string in MATLAB format, i.e., with semi-colons delimiting rows and "
+                             "commas delimiting columns. If parameters are different per subject or feature but not "
+                             "both, pass an array with the values separated by comma. If a single number is passed, "
+                             "it will be replicated for all subjects and features according to the set parameter "
+                             "sharing option.")
     parser.add_argument("--sd_mean_a0_vocalic", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of mu_vocalic_0. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Standard deviation of mu_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--sd_sd_aa_vocalic", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_vocalic. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Standard deviation of sigma_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--sd_sd_o_vocalic", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_obs_vocalic. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
-    parser.add_argument("--a_p_semantic_link", type=float, required=False, default=1,
-                        help="Parameter `a` of the prior distribution of p_link")
-    parser.add_argument("--b_p_semantic_link", type=float, required=False, default=1,
-                        help="Parameter `b` of the prior distribution of p_link")
+                        help="Standard deviation of sigma_o. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
+    parser.add_argument("--a_p_semantic_link", type=float, required=False, default="1",
+                        help="Parameter `a` of the prior distribution of p_semantic_link")
+    parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
+                        help="Parameter `b` of the prior distribution of p_semantic_link")
     parser.add_argument("--share_mean_a0_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one mean_a0 for all subjects.")
+                        help="Whether to fit one mu_a for all subjects.")
     parser.add_argument("--share_mean_a0_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one mean_a0 for all features.")
+                        help="Whether to fit one mu_a for all features.")
     parser.add_argument("--share_sd_aa_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one sd_aa for all subjects.")
+                        help="Whether to fit one sigma_a for all subjects.")
     parser.add_argument("--share_sd_aa_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one sd_aa for all features.")
+                        help="Whether to fit one sigma_a for all features.")
     parser.add_argument("--share_sd_o_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one sd_o for all subjects.")
+                        help="Whether to fit one sigma_o for all subjects.")
     parser.add_argument("--share_sd_o_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one sd_o for all features.")
-    parser.add_argument("--sd_uc", type=str, required=False, default="",
-                        help="Fixed value for sd_uc. It can be passed in single number, array or matrix form "
-                             "depending on how parameters are shared.")
-    parser.add_argument("--mean_a0_vocalic", type=str, required=False, default="",
-                        help="Fixed value for mean_a0_vocalic. It can be passed in single number, array form "
-                             "depending on how parameters are shared.")
-    parser.add_argument("--sd_aa_vocalic", type=str, required=False, default="",
-                        help="Fixed value for sd_aa_vocalic. It can be passed in single number, array form "
-                             "depending on how parameters are shared.")
-    parser.add_argument("--sd_o_vocalic", type=str, required=False, default="",
-                        help="Fixed value for sd_o_vocalic. It can be passed in single number, array form "
-                             "depending on how parameters are shared.")
-    parser.add_argument("--p_semantic_link", type=str, required=False, default="",
+                        help="Whether to fit one sigma_o for all features.")
+    parser.add_argument("--sd_uc", type=float, required=False, help="Fixed value for sigma_c.")
+    parser.add_argument("--mean_a0_vocalic", type=str, required=False,
+                        help="Fixed value for mu_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
+    parser.add_argument("--sd_aa_vocalic", type=str, required=False,
+                        help="Fixed value for sigma_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
+    parser.add_argument("--sd_o_vocalic", type=str, required=False,
+                        help="Fixed value for sigma_o. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
+    parser.add_argument("--p_semantic_link", type=float, required=False,
                         help="Fixed value for p_semantic_link.")
     parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
                         help="NUTS initialization method.")
     parser.add_argument("--target_accept", type=float, required=False, default=0.8,
-                        help="Target acceptance probability used to reduce divergences during inference.")
+                        help="Target acceptance probability used to control step size and reduce "
+                             "divergences during inference.")
 
     args = parser.parse_args()
 

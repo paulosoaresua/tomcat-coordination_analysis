@@ -21,10 +21,11 @@ from coordination.model.vocalic_model import VocalicModel, VocalicSeries, VOCALI
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 """
-This scripts performs inferences in a subset of experiments from a dataset. Inferences are performed sequentially. That
-is , experiment by experiment until all experiments are covered. 
+This script performs inferences in a subset of experiments from a .csv file with vocalic and semantic link data. 
+Inferences are performed sequentially, i.e., experiment by experiment until all experiments are covered. 
 """
 
+# PyMC 5.0.2 prints some warnings when we use GaussianRandomWalk. The snippet below silences them.
 if not sys.warnoptions:
     import warnings
 
@@ -71,9 +72,10 @@ def inference(out_dir: str,
         raise Exception(
             "No inference to be performed. Choose either prior, posterior or both by setting the appropriate flags.")
 
-    evidence_df = pd.read_csv(evidence_filepath, index_col=0)
-
     set_random_seed(seed)
+
+    # Dataset in a .csv file with a series of experiments.
+    evidence_df = pd.read_csv(evidence_filepath, index_col=0)
 
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
 
@@ -87,6 +89,7 @@ def inference(out_dir: str,
         results_dir = f"{out_dir}/{experiment_id}"
         os.makedirs(results_dir, exist_ok=True)
 
+        # Write the logs to a file in the results directory
         configure_log(verbose=True, log_filepath=f"{results_dir}/log.txt")
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
@@ -123,6 +126,8 @@ def inference(out_dir: str,
                                  share_sd_o_across_subjects=share_sd_o_across_subjects,
                                  share_sd_o_across_features=share_sd_o_across_features)
 
+            # Fix model's parameters if requested. If None the parameter will be fit along with the other
+            # latent variables in the model.
             model.coordination_cpn.parameters.sd_uc.value = sd_uc
             model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
             model.latent_vocalic_cpn.parameters.sd_aa.value = sd_aa_vocalic
@@ -148,6 +153,8 @@ def inference(out_dir: str,
                                          share_sd_o_across_subjects=share_sd_o_across_subjects,
                                          share_sd_o_across_features=share_sd_o_across_features)
 
+            # Fix model's parameters if requested. If None the parameter will be fit along with the other
+            # latent variables in the model.
             model.coordination_cpn.parameters.sd_uc.value = sd_uc
             model.latent_vocalic_cpn.parameters.mean_a0.value = mean_a0_vocalic
             model.latent_vocalic_cpn.parameters.sd_aa.value = sd_aa_vocalic
@@ -161,6 +168,7 @@ def inference(out_dir: str,
 
         idata = None
         if do_prior:
+            # Do prior predictive checks and save plots to the results folder
             logger.info("Prior Predictive Check")
             _, idata = model.prior_predictive(evidence=evidence, num_samples=num_samples, seed=seed)
             save_predictive_prior_plots(f"{results_dir}/plots/predictive_prior", idata, evidence, model)
@@ -173,22 +181,26 @@ def inference(out_dir: str,
                                            num_chains=num_chains,
                                            seed=seed,
                                            num_jobs=num_inference_jobs,
-                                           init_method=nuts_init_method)
+                                           init_method=nuts_init_method,
+                                           target_accept=target_accept)
 
             if idata is None:
                 idata = idata_posterior
             else:
                 idata.extend(idata_posterior)
 
+            # Do posterior predictive checks and save plots to the results folder
             _, idata_posterior_predictive = model.posterior_predictive(evidence=evidence, trace=idata_posterior,
                                                                        seed=seed)
             idata.extend(idata_posterior_predictive)
 
+            # Log the percentage of divergences
             num_divergences = float(idata.sample_stats.diverging.sum(dim=["chain", "draw"]))
             num_total_samples = num_samples * num_chains
             logger.info(
                 f"{num_divergences} divergences in {num_total_samples} samples --> {100.0 * num_divergences / num_total_samples}%.")
 
+            # Save the plots
             save_parameters_plot(f"{results_dir}/plots/posterior", idata, model)
             save_coordination_plots(f"{results_dir}/plots/posterior", idata, evidence, model)
             save_convergence_summary(f"{results_dir}", idata)
@@ -356,21 +368,20 @@ def str_to_features(string: str, complete_list: List[str]):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Infers coordination and model's parameters per experiment (in sequence) for a series of experiments."
-                    "Inference data, pymc model definition, execution parameters and plots are artifacts generated "
-                    "by the execution of script. Typically, this script will be called by the parallel_inference.py "
-                    "script, which will spawn a series of calls to this script such that inference of different "
-                    "experiments can be performed in parallel."
-    )
+        description="Runs NUTS inference algorithm per experiment (in sequence) for a series of experiments."
+                    "Inference data and plots are artifacts generated by the execution of script. Typically, "
+                    "this script will be called by the run_parallel_inference.py script, which will spawn a series "
+                    "of calls to this script such that inference of different experiments can be performed in "
+                    "parallel.")
 
     parser.add_argument("--out_dir", type=str, required=True,
                         help="Directory where artifacts must be saved.")
     parser.add_argument("--experiment_ids", type=str, required=True,
                         help="A list of experiment ids for which we want to perform inference. If more than one "
                              "experiment is provided, inference will be performed sequentially, i.e., for one "
-                             "experiment at a time. Experiment ids must be separated commas.")
+                             "experiment at a time. Experiment ids must be separated by comma.")
     parser.add_argument("--evidence_filepath", type=str, required=True,
-                        help="Path of the csv file containing the evidence data.")
+                        help="Path of the .csv file containing the evidence data.")
     parser.add_argument("--model", type=str, required=True,
                         choices=["vocalic", "vocalic_semantic"],
                         help="Model name.")
@@ -385,82 +396,108 @@ if __name__ == "__main__":
     parser.add_argument("--num_inference_jobs", type=int, required=False, default=4,
                         help="Number of jobs to use per inference process.")
     parser.add_argument("--do_prior", type=int, required=False, default=1,
-                        help="Whether to perform prior predictive check or not. Use the value 0 to deactivate.")
+                        help="Whether to perform prior predictive check. Use the value 0 to deactivate.")
     parser.add_argument("--do_posterior", type=int, required=False, default=1,
-                        help="Whether to perform posterior inference or not. Use the value 0 to deactivate.")
+                        help="Whether to perform posterior inference. Use the value 0 to deactivate.")
     parser.add_argument("--initial_coordination", type=float, required=False,
-                        help="Initial coordination value.")
+                        help="Initial coordination value. If not provided or < 0, initial coordination will be fit "
+                             "along the other latent variables in the model")
     parser.add_argument("--num_subjects", type=int, required=False, default=3,
                         help="Number of subjects in the experiment.")
     parser.add_argument("--vocalic_features", type=str, required=False, default="all",
-                        help="Vocalic features to use during inference. The features must be separated by commas.")
+                        help="Vocalic features to use during inference. The features must be separated by comma.")
     parser.add_argument("--self_dependent", type=int, required=False, default=1,
-                        help="Whether subjects influence themselves in the absense of coordination.")
+                        help="Whether subjects influence themselves over time.")
     parser.add_argument("--sd_mean_uc0", type=float, required=False, default=5,
-                        help="Standard deviation of the prior distribution of mean_uc0")
+                        help="Standard deviation of mu_c")
     parser.add_argument("--sd_sd_uc", type=float, required=False, default=1,
-                        help="Standard deviation of the prior distribution of sd_uc")
+                        help="Standard deviation of sigma_c")
     parser.add_argument("--mean_mean_a0_vocalic", type=str, required=False, default="0",
-                        help="Mean of the prior distribution of mu_vocalic_0. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Mean of mu_a. If the parameters are different per subject and feature, it is possible to "
+                             "pass a matrix as a string in MATLAB format, i.e., with semi-colons delimiting rows and "
+                             "commas delimiting columns. If parameters are different per subject or feature but not "
+                             "both, pass an array with the values separated by comma. If a single number is passed, "
+                             "it will be replicated for all subjects and features according to the set parameter "
+                             "sharing option.")
     parser.add_argument("--sd_mean_a0_vocalic", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of mu_vocalic_0. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Standard deviation of mu_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--sd_sd_aa_vocalic", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_vocalic. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Standard deviation of sigma_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--sd_sd_o_vocalic", type=str, required=False, default="1",
-                        help="Standard deviation of the prior distribution of sd_obs_vocalic. If the parameters are "
-                             "different per feature, it is possible to pass an array as a comma-separated list of."
-                             "numbers."),
+                        help="Standard deviation of sigma_o. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--a_p_semantic_link", type=float, required=False, default="1",
-                        help="Parameter `a` of the prior distribution of p_link")
+                        help="Parameter `a` of the prior distribution of p_semantic_link")
     parser.add_argument("--b_p_semantic_link", type=float, required=False, default="1",
-                        help="Parameter `b` of the prior distribution of p_link")
+                        help="Parameter `b` of the prior distribution of p_semantic_link")
     parser.add_argument("--share_mean_a0_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one mean_a0 for all subjects.")
+                        help="Whether to fit one mu_a for all subjects.")
     parser.add_argument("--share_mean_a0_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one mean_a0 for all features.")
+                        help="Whether to fit one mu_a for all features.")
     parser.add_argument("--share_sd_aa_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one sd_aa for all subjects.")
+                        help="Whether to fit one sigma_a for all subjects.")
     parser.add_argument("--share_sd_aa_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one sd_aa for all features.")
+                        help="Whether to fit one sigma_a for all features.")
     parser.add_argument("--share_sd_o_across_subjects", type=int, required=False, default=0,
-                        help="Whether to fit one sd_o for all subjects.")
+                        help="Whether to fit one sigma_o for all subjects.")
     parser.add_argument("--share_sd_o_across_features", type=int, required=False, default=0,
-                        help="Whether to fit one sd_o for all features.")
-    parser.add_argument("--sd_uc", type=float, required=False,
-                        help="Fixed value for sd_uc. It can be passed in single number, array or matrix form "
-                             "depending on how parameters are shared.")
+                        help="Whether to fit one sigma_o for all features.")
+    parser.add_argument("--sd_uc", type=float, required=False, help="Fixed value for sigma_c.")
     parser.add_argument("--mean_a0_vocalic", type=str, required=False,
-                        help="Fixed value for mean_a0_vocalic. It can be passed in single number, array form "
-                             "depending on how parameters are shared.")
+                        help="Fixed value for mu_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--sd_aa_vocalic", type=str, required=False,
-                        help="Fixed value for sd_aa_vocalic. It can be passed in single number, array form "
-                             "depending on how parameters are shared.")
+                        help="Fixed value for sigma_a. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--sd_o_vocalic", type=str, required=False,
-                        help="Fixed value for sd_o_vocalic. It can be passed in single number, array form "
-                             "depending on how parameters are shared.")
+                        help="Fixed value for sigma_o. If the parameters are different per subject and feature, "
+                             "it is possible to pass a matrix as a string in MATLAB format, i.e., with semi-colons "
+                             "delimiting rows and commas delimiting columns. If parameters are different per subject "
+                             "or feature but not both, pass an array with the values separated by comma. If a single "
+                             "number is passed, it will be replicated for all subjects and features according to the "
+                             "set parameter sharing option.")
     parser.add_argument("--p_semantic_link", type=float, required=False,
                         help="Fixed value for p_semantic_link.")
     parser.add_argument("--nuts_init_method", type=str, required=False, default="jitter+adapt_diag",
                         help="NUTS initialization method.")
     parser.add_argument("--target_accept", type=float, required=False, default=0.8,
-                        help="Target acceptance probability used to reduce divergences during inference.")
+                        help="Target acceptance probability used to control step size and reduce "
+                             "divergences during inference.")
 
     args = parser.parse_args()
 
     arg_sd_uc = None if args.sd_uc is None else np.array([float(args.sd_uc)])
 
+    # Determine parameters dimensions according to the parameter sharing configuration
     arg_vocalic_features = str_to_features(args.vocalic_features, VOCALIC_FEATURES)
     dim_mean_a0_features = 1 if bool(args.share_mean_a0_across_features) else len(arg_vocalic_features)
     dim_sd_aa_features = 1 if bool(args.share_sd_aa_across_features) else len(arg_vocalic_features)
     dim_sd_o_features = 1 if bool(args.share_sd_o_across_features) else len(arg_vocalic_features)
 
-    # mean_a0
+    # Transform arguments to arrays and matrices according to the parameter sharing options.
+    # mu_a
     arg_mean_a0_vocalic = None
     if bool(args.share_mean_a0_across_subjects):
         arg_mean_mean_a0_vocalic = str_to_array(args.mean_mean_a0_vocalic, dim_mean_a0_features)
@@ -478,7 +515,7 @@ if __name__ == "__main__":
             arg_mean_a0_vocalic = matrix_to_size(str_to_matrix(args.mean_a0_vocalic), args.num_subjects,
                                                  dim_mean_a0_features)
 
-    # sd_aa
+    # sigma_a
     arg_sd_aa_vocalic = None
     if bool(args.share_sd_aa_across_subjects):
         arg_sd_sd_aa_vocalic = str_to_array(args.sd_sd_aa_vocalic, dim_sd_aa_features)
@@ -492,7 +529,7 @@ if __name__ == "__main__":
         if args.sd_aa_vocalic is not None:
             arg_sd_aa_vocalic = matrix_to_size(str_to_matrix(args.sd_aa_vocalic), args.num_subjects, dim_sd_aa_features)
 
-    # sd_o
+    # sigma_o
     arg_sd_o_vocalic = None
     if bool(args.share_sd_o_across_subjects):
         arg_sd_sd_o_vocalic = str_to_array(args.sd_sd_o_vocalic, dim_sd_o_features)
