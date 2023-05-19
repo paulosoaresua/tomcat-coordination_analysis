@@ -5,7 +5,7 @@ import pymc as pm
 from scipy.stats import bernoulli
 
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, BetaParameterPrior
+from coordination.module.parametrization import Parameter, BetaParameterPrior
 
 
 class SpikeObservationParameters:

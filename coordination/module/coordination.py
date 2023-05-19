@@ -5,7 +5,7 @@ import pymc as pm
 from scipy.stats import norm
 
 from coordination.common.functions import sigmoid
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
+from coordination.module.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
 from coordination.common.utils import set_random_seed
 
 

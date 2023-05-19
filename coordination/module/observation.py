@@ -1,7 +1,7 @@
 from typing import List
 
 import numpy as np
-from coordination.model.parametrization import Parameter, HalfNormalParameterPrior
+from coordination.module.parametrization import Parameter, HalfNormalParameterPrior
 
 
 class ObservationParameters:

@@ -5,7 +5,7 @@ import pymc as pm
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.component.observation import Observation
+from coordination.module.observation import Observation
 
 
 class NonSerialObservationSamples:

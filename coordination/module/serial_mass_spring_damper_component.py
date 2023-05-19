@@ -6,7 +6,7 @@ import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
 
-from coordination.component.serial_component import SerialComponent
+from coordination.module.serial_component import SerialComponent
 
 
 def logp(sample: Any,
