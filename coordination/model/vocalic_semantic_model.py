@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import arviz as az
 from ast import literal_eval
@@ -9,20 +9,20 @@ import pymc as pm
 import xarray
 
 from coordination.common.functions import logit
-from coordination.component.coordination_component import SigmoidGaussianCoordinationComponent, \
-    CoordinationComponentSamples, BetaGaussianCoordinationComponent
-from coordination.component.serialized_component import SerializedComponent, SerializedComponentSamples, Mode
-from coordination.component.link_component import LinkComponent, LinkComponentSamples
-from coordination.component.observation_component import SerializedObservationComponent, \
-    SerializedObservationComponentSamples
+from coordination.module.coordination import SigmoidGaussianCoordination, CoordinationSamples
+from coordination.module.serial_component import SerialComponent, SerialComponentSamples
+from coordination.module.spike_observation import SpikeObservation, SpikeObservationSamples
+from coordination.module.serial_observation import SerialObservation, SerialObservationSamples
 from coordination.model.vocalic_model import VocalicSeries, VocalicPosteriorSamples
 
 
 class VocalicSemanticSamples:
 
-    def __init__(self, coordination: CoordinationComponentSamples,
-                 latent_vocalic: SerializedComponentSamples,
-                 semantic_link: LinkComponentSamples, obs_vocalic: SerializedObservationComponentSamples):
+    def __init__(self,
+                 coordination: CoordinationSamples,
+                 latent_vocalic: SerialComponentSamples,
+                 semantic_link: SpikeObservationSamples,
+                 obs_vocalic: SerialObservationSamples):
         self.coordination = coordination
         self.latent_vocalic = latent_vocalic
         self.semantic_link = semantic_link
@@ -30,8 +30,13 @@ class VocalicSemanticSamples:
 
 
 class VocalicSemanticSeries:
+    """
+    Used to encapsulate observations and meta-data.
+    """
 
-    def __init__(self, uuid: str, vocalic_series: VocalicSeries,
+    def __init__(self,
+                 uuid: str,
+                 vocalic_series: VocalicSeries,
                  semantic_link_time_steps_in_coordination_scale: np.ndarray):
         self.uuid = uuid
         self.vocalic = vocalic_series
@@ -49,14 +54,8 @@ class VocalicSemanticSeries:
                 dtype=int)
         )
 
-    def standardize(self):
-        self.vocalic.standardize()
-
     def normalize_per_subject(self):
         self.vocalic.normalize_per_subject()
-
-    def normalize_across_subject(self):
-        self.vocalic.normalize_across_subject()
 
     @property
     def num_time_steps_in_semantic_link_scale(self) -> int:
@@ -65,7 +64,9 @@ class VocalicSemanticSeries:
 
 class VocalicSemanticPosteriorSamples:
 
-    def __init__(self, unbounded_coordination: xarray.Dataset, coordination: xarray.Dataset,
+    def __init__(self,
+                 unbounded_coordination: xarray.Dataset,
+                 coordination: xarray.Dataset,
                  latent_vocalic: xarray.Dataset):
         self.unbounded_coordination = unbounded_coordination
         self.coordination = coordination
@@ -81,59 +82,54 @@ class VocalicSemanticPosteriorSamples:
 
 class VocalicSemanticModel:
 
-    def __init__(self, num_subjects: int, vocalic_features: List[str], self_dependent: bool, sd_mean_uc0: float,
-                 sd_sd_uc: float, mean_mean_a0_vocalic: np.ndarray, sd_mean_a0_vocalic: np.ndarray,
-                 sd_sd_aa_vocalic: np.ndarray, sd_sd_o_vocalic: np.ndarray, a_p_semantic_link: float,
-                 b_p_semantic_link: float, share_mean_a0_across_subjects: bool, share_mean_a0_across_features: bool,
-                 share_sd_aa_across_subjects: bool, share_sd_aa_across_features: bool, share_sd_o_across_subjects: bool,
-                 share_sd_o_across_features: bool, initial_coordination: Optional[float] = None,
-                 sd_sd_c: Optional[float] = None, mode: Mode = Mode.BLENDING, f: Optional[Callable] = None,
-                 num_layers_f: int = 0, dim_hidden_layer_f: int = 0, activation_function_name_f: str = "linear",
-                 mean_weights_f: float = 0, sd_weights_f: float = 1, max_vocalic_lag: int = 0):
+    def __init__(self,
+                 num_subjects: int,
+                 vocalic_features: List[str],
+                 self_dependent: bool,
+                 sd_mean_uc0: float,
+                 sd_sd_uc: float,
+                 mean_mean_a0_vocalic: np.ndarray,
+                 sd_mean_a0_vocalic: np.ndarray,
+                 sd_sd_aa_vocalic: np.ndarray,
+                 sd_sd_o_vocalic: np.ndarray,
+                 a_p_semantic_link: float,
+                 b_p_semantic_link: float,
+                 share_mean_a0_across_subjects: bool,
+                 share_mean_a0_across_features: bool,
+                 share_sd_aa_across_subjects: bool,
+                 share_sd_aa_across_features: bool,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_features: bool,
+                 initial_coordination: Optional[float] = None):
         self.num_subjects = num_subjects
         self.vocalic_features = vocalic_features
-        self.num_layers_f = num_layers_f
-        self.dim_hidden_layer_f = dim_hidden_layer_f
-        self.activation_function_name_f = activation_function_name_f
 
-        if sd_sd_c is None:
-            # Coordination is a deterministic transformation of its unbounded estimate
-            self.coordination_cpn = SigmoidGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                         sd_sd_uc=sd_sd_uc)
-        else:
-            # Coordination is a latent variable centered around its unbounded estimate
-            self.coordination_cpn = BetaGaussianCoordinationComponent(sd_mean_uc0=sd_mean_uc0,
-                                                                      sd_sd_uc=sd_sd_uc,
-                                                                      sd_sd_c=sd_sd_c)
+        self.coordination_cpn = SigmoidGaussianCoordination(sd_mean_uc0=sd_mean_uc0,
+                                                            sd_sd_uc=sd_sd_uc)
 
         if initial_coordination is not None:
             self.coordination_cpn.parameters.mean_uc0.value = np.array([logit(initial_coordination)])
 
-        self.latent_vocalic_cpn = SerializedComponent(uuid="latent_vocalic",
-                                                      num_subjects=num_subjects,
-                                                      dim_value=len(vocalic_features),
-                                                      self_dependent=self_dependent,
-                                                      mean_mean_a0=mean_mean_a0_vocalic,
-                                                      sd_mean_a0=sd_mean_a0_vocalic,
-                                                      sd_sd_aa=sd_sd_aa_vocalic,
-                                                      share_mean_a0_across_subjects=share_mean_a0_across_subjects,
-                                                      share_mean_a0_across_features=share_mean_a0_across_features,
-                                                      share_sd_aa_across_subjects=share_sd_aa_across_subjects,
-                                                      share_sd_aa_across_features=share_sd_aa_across_features,
-                                                      mode=mode,
-                                                      f=f,
-                                                      mean_weights_f=mean_weights_f,
-                                                      sd_weights_f=sd_weights_f,
-                                                      max_lag=max_vocalic_lag)
-        self.semantic_link_cpn = LinkComponent("obs_semantic_link",
-                                               a_p=a_p_semantic_link,
-                                               b_p=b_p_semantic_link)
-        self.obs_vocalic_cpn = SerializedObservationComponent(uuid="obs_vocalic",
-                                                              num_subjects=num_subjects,
-                                                              dim_value=len(vocalic_features),
-                                                              sd_sd_o=sd_sd_o_vocalic,
-                                                              share_sd_o_across_subjects=share_sd_o_across_subjects,
-                                                              share_sd_o_across_features=share_sd_o_across_features)
+        self.latent_vocalic_cpn = SerialComponent(uuid="latent_vocalic",
+                                                  num_subjects=num_subjects,
+                                                  dim_value=len(vocalic_features),
+                                                  self_dependent=self_dependent,
+                                                  mean_mean_a0=mean_mean_a0_vocalic,
+                                                  sd_mean_a0=sd_mean_a0_vocalic,
+                                                  sd_sd_aa=sd_sd_aa_vocalic,
+                                                  share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+                                                  share_mean_a0_across_features=share_mean_a0_across_features,
+                                                  share_sd_aa_across_subjects=share_sd_aa_across_subjects,
+                                                  share_sd_aa_across_features=share_sd_aa_across_features)
+        self.semantic_link_cpn = SpikeObservation("obs_semantic_link",
+                                                  a_p=a_p_semantic_link,
+                                                  b_p=b_p_semantic_link)
+        self.obs_vocalic_cpn = SerialObservation(uuid="obs_vocalic",
+                                                 num_subjects=num_subjects,
+                                                 dim_value=len(vocalic_features),
+                                                 sd_sd_o=sd_sd_o_vocalic,
+                                                 share_sd_o_across_subjects=share_sd_o_across_subjects,
+                                                 share_sd_o_across_features=share_sd_o_across_features)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -152,8 +148,12 @@ class VocalicSemanticModel:
     def obs_semantic_link_variable_name(self) -> str:
         return self.semantic_link_cpn.uuid
 
-    def draw_samples(self, num_series: int, num_time_steps: int, vocalic_time_scale_density: float,
-                     semantic_link_time_scale_density: float, can_repeat_subject: bool,
+    def draw_samples(self,
+                     num_series: int,
+                     num_time_steps: int,
+                     vocalic_time_scale_density: float,
+                     semantic_link_time_scale_density: float,
+                     can_repeat_subject: bool,
                      seed: Optional[int] = None) -> VocalicSemanticSamples:
         coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed)
         latent_vocalic_samples = self.latent_vocalic_cpn.draw_samples(num_series=num_series,
@@ -172,15 +172,26 @@ class VocalicSemanticModel:
 
         return samples
 
-    def fit(self, evidence: VocalicSemanticSeries, burn_in: int, num_samples: int, num_chains: int,
-            seed: Optional[int] = None, num_jobs: int = 1, init_method: str = "jitter+adapt_diag") -> Tuple[
-        pm.Model, az.InferenceData]:
+    def fit(self,
+            evidence: VocalicSemanticSeries,
+            burn_in: int,
+            num_samples: int,
+            num_chains: int,
+            seed: Optional[int] = None,
+            num_jobs: int = 1,
+            init_method: str = "jitter+adapt_diag",
+            target_accept: float = 0.8) -> Tuple[pm.Model, az.InferenceData]:
         assert evidence.vocalic.num_vocalic_features == len(self.vocalic_features)
 
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:
-            idata = pm.sample(num_samples, init=init_method, tune=burn_in, chains=num_chains, random_seed=seed,
-                              cores=num_jobs)
+            idata = pm.sample(num_samples,
+                              init=init_method,
+                              tune=burn_in,
+                              chains=num_chains,
+                              random_seed=seed,
+                              cores=num_jobs,
+                              target_accept=target_accept)
 
         return pymc_model, idata
 
@@ -201,10 +212,7 @@ class VocalicSemanticModel:
                 prev_diff_subject_mask=evidence.vocalic.vocalic_prev_diff_subject_mask,
                 subjects=evidence.vocalic.subjects_in_time,
                 time_dimension="vocalic_time",
-                feature_dimension="vocalic_feature",
-                num_layers_f=self.num_layers_f,
-                dim_hidden_layer_f=self.dim_hidden_layer_f,
-                activation_function_name_f=self.activation_function_name_f)[0]
+                feature_dimension="vocalic_feature")[0]
 
             self.semantic_link_cpn.update_pymc_model(
                 coordination=coordination[evidence.num_time_steps_in_semantic_link_scale],
@@ -226,7 +234,9 @@ class VocalicSemanticModel:
 
         return pymc_model, idata
 
-    def posterior_predictive(self, evidence: VocalicSemanticSeries, trace: az.InferenceData,
+    def posterior_predictive(self,
+                             evidence: VocalicSemanticSeries,
+                             trace: az.InferenceData,
                              seed: Optional[int] = None):
         pymc_model = self._define_pymc_model(evidence)
         with pymc_model:

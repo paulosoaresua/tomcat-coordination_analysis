@@ -5,10 +5,10 @@ import pymc as pm
 from scipy.stats import bernoulli
 
 from coordination.common.utils import set_random_seed
-from coordination.model.parametrization import Parameter, BetaParameterPrior
+from coordination.module.parametrization import Parameter, BetaParameterPrior
 
 
-class LinkComponentParameters:
+class SpikeObservationParameters:
 
     def __init__(self, a_p: float, b_p: float):
         self.p = Parameter(BetaParameterPrior(a_p, b_p))
@@ -17,11 +17,11 @@ class LinkComponentParameters:
         self.p.value = None
 
 
-class LinkComponentSamples:
+class SpikeObservationSamples:
 
     def __init__(self):
         # For each time step in the component's scale, it contains the time step in the coordination scale
-        # were a link occurred.
+        # were a spike occurred.
         self.time_steps_in_coordination_scale: List[np.ndarray] = []
 
     @property
@@ -32,12 +32,15 @@ class LinkComponentSamples:
         return self.time_steps_in_coordination_scale[0].shape[-1]
 
 
-class LinkComponent:
+class SpikeObservation:
+    """
+    This class models semantic links or any kind of binary observations with similar distribution.
+    """
 
     def __init__(self, uuid: str, a_p: float, b_p: float):
         self.uuid = uuid
 
-        self.parameters = LinkComponentParameters(a_p, b_p)
+        self.parameters = SpikeObservationParameters(a_p, b_p)
 
     @property
     def parameter_names(self) -> List[str]:
@@ -49,24 +52,33 @@ class LinkComponent:
     def p_name(self) -> str:
         return f"p_{self.uuid}"
 
-    def draw_samples(self, num_series: int, time_scale_density: float, coordination: np.ndarray,
-                     seed: Optional[int] = None) -> LinkComponentSamples:
+    def draw_samples(self,
+                     num_series: int,
+                     time_scale_density: float,
+                     coordination: np.ndarray,
+                     seed: Optional[int] = None) -> SpikeObservationSamples:
         set_random_seed(seed)
 
-        samples = LinkComponentSamples()
+        samples = SpikeObservationSamples()
 
-        density_mask = bernoulli(p=time_scale_density).rvs(
-            coordination.shape)
+        # Randomly sample candidate time steps in which we observe a link
+        density_mask = bernoulli(p=time_scale_density).rvs(coordination.shape)
+
+        # Effectively observe links according to the values of coordination
         links = bernoulli(p=coordination * self.parameters.p.value).rvs(coordination.shape)
 
         links *= density_mask
 
         for s in range(num_series):
+            # We don't have numerical values but time steps when links are observed
             samples.time_steps_in_coordination_scale.append(np.array([t for t, l in enumerate(links[s]) if l == 1]))
 
         return samples
 
-    def update_pymc_model(self, coordination: Any, time_dimension: str, observed_values: Any) -> Any:
+    def update_pymc_model(self,
+                          coordination: Any,
+                          time_dimension: str,
+                          observed_values: Any) -> Any:
         p = pm.Beta(name=self.p_name, alpha=self.parameters.p.prior.a, beta=self.parameters.p.prior.b,
                     size=1, observed=self.parameters.p.value)
 
