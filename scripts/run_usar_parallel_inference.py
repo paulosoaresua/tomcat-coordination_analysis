@@ -161,7 +161,7 @@ if __name__ == "__main__":
                         help="Directory where artifacts must be saved.")
     parser.add_argument("--evidence_filepath", type=str, required=True,
                         help="Path of the csv file containing the evidence data.")
-    # Arguments below will be passes to run_sequential_inference and should match the arguments in that
+    # Arguments below will be passed to run_sequential_inference and should match the arguments in that
     # script.
     parser.add_argument("--model", type=str, required=True,
                         choices=["vocalic", "vocalic_semantic"],

@@ -49,7 +49,7 @@ class ArgumentSamples:
 
 class ArgumentModel:
     """
-    This class represents the Spring model.
+    This class represents the Argument model.
     """
 
     def __init__(self,
@@ -179,85 +179,3 @@ class ArgumentModel:
                                                    observed_values=evidence.observation)
 
         return pymc_model
-
-
-if __name__ == "__main__":
-    model = ArgumentModel(num_subjects=2,
-                          frequency=np.array([0.8, 0.2]),
-                          damping_coefficient=np.array([0, 0]),
-                          dt=0.2,
-                          self_dependent=True,
-                          sd_mean_uc0=1,
-                          sd_sd_uc=1,
-                          mean_mean_a0=np.zeros((2, 2)),
-                          sd_mean_a0=np.ones((2, 2)),
-                          sd_sd_aa=np.ones(1),
-                          sd_sd_o=np.ones(1),
-                          share_sd_aa_across_subjects=True,
-                          share_sd_aa_across_features=True,
-                          share_sd_o_across_subjects=True,
-                          share_sd_o_across_features=True)
-
-    model.state_space_cpn.parameters.mean_a0.value = np.array([[1, 0], [1, 0]])
-    model.state_space_cpn.parameters.sd_aa.value = np.ones(1) * 0.1
-    model.observation_cpn.parameters.sd_o.value = np.ones(1) * 0.01
-
-    C = 0.5
-    T = 100
-    PRX = "sd_sd_aa = 1, sd_aa = 0.1, sd_o = 0.5"
-    samples = model.draw_samples(num_series=1, num_time_steps=T, coordination_samples=np.ones((1, T)) * C, seed=0)
-
-    import matplotlib.pyplot as plt
-
-    plt.figure()
-    for s in range(model.num_subjects):
-        tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
-        plt.scatter(tt, samples.observation.values[0][0, tt],
-                    label=f"Subject {s + 1}", s=15)
-        plt.title(f"Coordination = {C}")
-    plt.xlabel("Time Step")
-    plt.ylabel("CLO Value")
-    plt.legend()
-    plt.show()
-
-    evidence = ArgumentSeries(subjects_in_time=samples.state.subjects[0],
-                              prev_time_same_subject=samples.state.prev_time_same_subject[0],
-                              prev_time_diff_subject=samples.state.prev_time_diff_subject[0],
-                              observation=samples.observation.values[0])
-
-    # Inference
-    model.clear_parameter_values()
-    _, idata = model.fit(
-        evidence=evidence,
-        burn_in=1000,
-        num_samples=1000,
-        num_chains=2,
-        seed=0,
-        num_jobs=2,
-        init_method="jitter+adapt_diag",
-        target_accept=0.9
-    )
-
-    sampled_vars = set(idata.posterior.data_vars)
-    var_names = sorted(list(set(model.parameter_names).intersection(sampled_vars)))
-    if len(var_names) > 0:
-        az.plot_trace(idata, var_names=var_names)
-        plt.tight_layout()
-        plt.show()
-
-    plt.figure()
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
-    for s in range(model.num_subjects):
-        tt = [t for t, subject in enumerate(samples.state.subjects[0]) if s == subject]
-        mean = idata.posterior["state_space"].sel(feature="position").mean(dim=["draw", "chain"]).to_numpy()[tt]
-        plt.scatter(tt, mean, label=f"Subject {s + 1}", s=15, c=colors[s])
-    plt.xlabel("Time Step")
-    plt.ylabel("CLO Value")
-    plt.title(PRX)
-    plt.legend()
-    plt.show()
-
-    coordination_posterior = CoordinationPosteriorSamples.from_inference_data(idata)
-    coordination_posterior.plot(plt.figure().gca(), show_samples=False)
-    plt.title(PRX)
-    plt.show()
