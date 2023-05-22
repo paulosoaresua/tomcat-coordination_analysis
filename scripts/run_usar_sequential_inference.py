@@ -212,7 +212,8 @@ def inference(out_dir: str,
 
 
 def save_predictive_prior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
-    _plot_vocalic_predictive_plots(out_dir, idata, single_evidence_series, model, True)
+    vocalic_evidence = single_evidence_series if isinstance(model, VocalicModel) else single_evidence_series.vocalic
+    _plot_vocalic_predictive_plots(out_dir, idata, vocalic_evidence, model, True)
 
 
 def save_predictive_posterior_plots(out_dir: str, idata: az.InferenceData, single_evidence_series: Any, model: Any):
