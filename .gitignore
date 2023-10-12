@@ -122,7 +122,6 @@ dmypy.json
 .pyre/
 
 # Misc
-data/
 .idea/
 .DS_Store
 .vscode/
