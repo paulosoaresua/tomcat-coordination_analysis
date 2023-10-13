@@ -28,7 +28,7 @@ The project splits the general model definition into several modules that are pu
 The project contains 4 different models that can be used to generate data and run inference.
 
 - **SpringModel**: Models coordination as controlling the influence of one spring dynamics on other spring dynamics in a mass-spring-damper system.
-- **ArgumentModel**: Models coordination as controlling the influence of voice intensity from one person on another person's voice intensity, simulating an argument between a romantic couple.
+- **ConversationModel**: Models coordination as controlling the influence of voice intensity from one person on another person's voice intensity, simulating a conversation between a couple.
 - **VocalicModel**: Models coordination as controlling the influence of vocalic features from one person on another person's vocalic features during a conversation.
 - **VocalicSemanticModel**: Adds semantic links to the VocalicModel to evidence moments of increased coordination.
 
@@ -39,8 +39,8 @@ To reproduce the images below, execute the commands in `notebooks/Synthetic Data
 ### Spring Model
 ![Spring Model](assets/images/results_spring_model.png)
 
-### Argument Model
-![Argument Model](assets/images/results_argument_model.png)
+### Conversation Model
+![Conversation Model](assets/images/results_conversation_model.png)
 
 ## Inference
 

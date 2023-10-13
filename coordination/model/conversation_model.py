@@ -9,10 +9,9 @@ from coordination.module.coordination import SigmoidGaussianCoordination, \
 from coordination.module.serial_component import SerialComponentSamples
 from coordination.module.serial_mass_spring_damper_component import SerialMassSpringDamperComponent
 from coordination.module.serial_observation import SerialObservation, SerialObservationSamples
-from coordination.model.coordination_model import CoordinationPosteriorSamples
 
 
-class ArgumentSeries:
+class ConversationSeries:
     """
     Used to encapsulate observations and meta-data.
     """
@@ -36,7 +35,7 @@ class ArgumentSeries:
         return np.where(self.prev_time_diff_subject >= 0, 1, 0)
 
 
-class ArgumentSamples:
+class ConversationSamples:
 
     def __init__(self,
                  coordination: CoordinationSamples,
@@ -47,9 +46,9 @@ class ArgumentSamples:
         self.observation = observation
 
 
-class ArgumentModel:
+class ConversationModel:
     """
-    This class represents the Argument model.
+    This class represents the conversation model.
     """
 
     def __init__(self,
@@ -113,27 +112,30 @@ class ArgumentModel:
                      num_time_steps: int,
                      coordination_samples: Optional[np.ndarray],
                      seed: Optional[int] = None,
-                     can_repeat_subject: bool = False) -> ArgumentSamples:
+                     can_repeat_subject: bool = False) -> ConversationSamples:
         if coordination_samples is None:
-            coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps, seed).coordination
+            coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps,
+                                                                      seed).coordination
             seed = None
 
         state_samples = self.state_space_cpn.draw_samples(num_series,
-                                                          time_scale_density=1,  # Same scale as coordination
+                                                          time_scale_density=1,
+                                                          # Same scale as coordination
                                                           can_repeat_subject=can_repeat_subject,
                                                           coordination=coordination_samples,
                                                           seed=seed)
-        observation_samples = self.observation_cpn.draw_samples(latent_component=state_samples.values,
-                                                                subjects=state_samples.subjects)
+        observation_samples = self.observation_cpn.draw_samples(
+            latent_component=state_samples.values,
+            subjects=state_samples.subjects)
 
-        samples = ArgumentSamples(coordination=coordination_samples,
-                                  state=state_samples,
-                                  observation=observation_samples)
+        samples = ConversationSamples(coordination=coordination_samples,
+                                      state=state_samples,
+                                      observation=observation_samples)
 
         return samples
 
     def fit(self,
-            evidence: ArgumentSeries,
+            evidence: ConversationSeries,
             burn_in: int,
             num_samples: int,
             num_chains: int,
@@ -155,22 +157,24 @@ class ArgumentModel:
 
         return pymc_model, idata
 
-    def _define_pymc_model(self, evidence: ArgumentSeries):
+    def _define_pymc_model(self, evidence: ConversationSeries):
         coords = {"feature": ["position", "velocity"],
                   "coordination_time": np.arange(evidence.observation.shape[-1]),
                   "subject_time": np.arange(evidence.observation.shape[-1])}
 
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
-            coordination_dist = self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
-            state_space_dist = self.state_space_cpn.update_pymc_model(coordination=coordination_dist,
-                                                                      feature_dimension="feature",
-                                                                      time_dimension="subject_time",
-                                                                      subjects=evidence.subjects_in_time,
-                                                                      prev_time_same_subject=evidence.prev_time_same_subject,
-                                                                      prev_time_diff_subject=evidence.prev_time_diff_subject,
-                                                                      prev_same_subject_mask=evidence.prev_same_subject_mask,
-                                                                      prev_diff_subject_mask=evidence.prev_diff_subject_mask)[
+            coordination_dist = \
+            self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
+            state_space_dist = \
+            self.state_space_cpn.update_pymc_model(coordination=coordination_dist,
+                                                   feature_dimension="feature",
+                                                   time_dimension="subject_time",
+                                                   subjects=evidence.subjects_in_time,
+                                                   prev_time_same_subject=evidence.prev_time_same_subject,
+                                                   prev_time_diff_subject=evidence.prev_time_diff_subject,
+                                                   prev_same_subject_mask=evidence.prev_same_subject_mask,
+                                                   prev_diff_subject_mask=evidence.prev_diff_subject_mask)[
                 0]
             self.observation_cpn.update_pymc_model(latent_component=state_space_dist,
                                                    feature_dimension="feature",
