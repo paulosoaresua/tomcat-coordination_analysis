@@ -51,7 +51,7 @@ def logp(sample: Any,
     # dynamics. If we just compare a sample with the blended_mean, we are assuming the samples follow a random gaussian
     # walk. Since we know the system dynamics, we can add that to the logp such that the samples are effectively
     # coming from the component's posterior.
-    sample_transformed = ptt.batched_tensordot(F_inv, sample, axes=[(1,), (1,)])
+    sample_transformed = ptt.batched_tensordot(F_inv, sample, axes=[(2,), (1,)])
 
     # Index samples starting from the second index (i = 1) so that we can effectively compare current values against
     # previous ones (prev_others and prev_same).
