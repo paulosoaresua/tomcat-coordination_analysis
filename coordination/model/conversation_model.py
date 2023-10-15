@@ -112,7 +112,8 @@ class ConversationModel:
                      num_time_steps: int,
                      coordination_samples: Optional[np.ndarray],
                      seed: Optional[int] = None,
-                     can_repeat_subject: bool = False) -> ConversationSamples:
+                     can_repeat_subject: bool = False,
+                     fixed_subject_sequence: bool = False) -> ConversationSamples:
         if coordination_samples is None:
             coordination_samples = self.coordination_cpn.draw_samples(num_series, num_time_steps,
                                                                       seed).coordination
@@ -123,7 +124,8 @@ class ConversationModel:
                                                           # Same scale as coordination
                                                           can_repeat_subject=can_repeat_subject,
                                                           coordination=coordination_samples,
-                                                          seed=seed)
+                                                          seed=seed,
+                                                          fixed_subject_sequence=fixed_subject_sequence)
         observation_samples = self.observation_cpn.draw_samples(
             latent_component=state_samples.values,
             subjects=state_samples.subjects)
@@ -165,17 +167,17 @@ class ConversationModel:
         pymc_model = pm.Model(coords=coords)
         with pymc_model:
             coordination_dist = \
-            self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
+                self.coordination_cpn.update_pymc_model(time_dimension="coordination_time")[1]
             state_space_dist = \
-            self.state_space_cpn.update_pymc_model(coordination=coordination_dist,
-                                                   feature_dimension="feature",
-                                                   time_dimension="subject_time",
-                                                   subjects=evidence.subjects_in_time,
-                                                   prev_time_same_subject=evidence.prev_time_same_subject,
-                                                   prev_time_diff_subject=evidence.prev_time_diff_subject,
-                                                   prev_same_subject_mask=evidence.prev_same_subject_mask,
-                                                   prev_diff_subject_mask=evidence.prev_diff_subject_mask)[
-                0]
+                self.state_space_cpn.update_pymc_model(coordination=coordination_dist,
+                                                       feature_dimension="feature",
+                                                       time_dimension="subject_time",
+                                                       subjects=evidence.subjects_in_time,
+                                                       prev_time_same_subject=evidence.prev_time_same_subject,
+                                                       prev_time_diff_subject=evidence.prev_time_diff_subject,
+                                                       prev_same_subject_mask=evidence.prev_same_subject_mask,
+                                                       prev_diff_subject_mask=evidence.prev_diff_subject_mask)[
+                    0]
             self.observation_cpn.update_pymc_model(latent_component=state_space_dist,
                                                    feature_dimension="feature",
                                                    time_dimension="subject_time",
