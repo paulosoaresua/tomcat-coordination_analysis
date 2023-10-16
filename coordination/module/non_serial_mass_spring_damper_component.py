@@ -45,6 +45,9 @@ def logp(sample: Any,
 
     blended_mean = (prev_others - prev_same) * c + prev_same
 
+    # We don't blend velocity
+    blended_mean[:, 1] = prev_same[:, 1]
+
     # Match the dimensions of the standard deviation with that of the blended mean
     sd = sigma[:, :, None]
 

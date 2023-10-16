@@ -48,6 +48,9 @@ def logp(sample: Any,
     blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
             prev_same * mask_same + (1 - mask_same) * initial_mean)
 
+    # We don't blend velocity
+    blended_mean[1] = (prev_same[1] * mask_same + (1 - mask_same) * initial_mean[1])
+
     # This function can only receive tensors up to 2 dimensions because 'sample' has 2 dimensions.
     # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
     # it back to its original 3 dimensions.
