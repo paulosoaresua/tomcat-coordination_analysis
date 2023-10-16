@@ -172,7 +172,7 @@ class SerialMassSpringDamperComponent(SerialComponent):
                 blended_mean_transformed = np.dot(self.F[subjects_in_time[t]], blended_mean)
 
                 # We don't blend velocity.
-                blended_mean_transformed[1] = prev_same[1]
+                blended_mean_transformed[1] = np.dot(self.F[subjects_in_time[t]], prev_same)[1]
 
                 values[:, t] = norm(loc=blended_mean_transformed, scale=sd).rvs()
 
