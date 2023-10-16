@@ -163,15 +163,13 @@ class SerialMassSpringDamperComponent(SerialComponent):
                     # or it is samples around a fixed mean.
                     prev_same = mean_a0[subject_idx_mean_a0]
 
-                prev_subject = subjects_in_time[prev_time_diff_subject[t]]
                 mask_other = (prev_time_diff_subject[t] != -1).astype(int)
-                prev_other = np.dot(self.F[prev_subject], values[..., prev_time_diff_subject[t]])
-                prev_same = np.dot(self.F[subjects_in_time[t]], prev_same)
+                prev_other = values[..., prev_time_diff_subject[t]]
 
                 blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
 
                 # Use the fundamental matrix to generate samples from a Hookean spring system.
-                blended_mean_transformed = blended_mean  #np.dot(self.F[subjects_in_time[t]], blended_mean[:, None]).T
+                blended_mean_transformed = np.dot(self.F[subjects_in_time[t]], blended_mean[:, None]).T
 
                 values[:, t] = norm(loc=blended_mean_transformed, scale=sd).rvs()
 
