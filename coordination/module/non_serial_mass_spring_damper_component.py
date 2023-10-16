@@ -161,7 +161,6 @@ class NonSerialMassSpringDamperComponent(NonSerialComponent):
                 blended_mean[..., 1] = prev_same[..., 1]
 
                 # Use the fundamental matrix to generate samples from a Hookean spring system.
-                # blended_mean_transformed = np.einsum("ijk,lij->lik", self.F, blended_mean)
                 blended_mean_transformed = np.einsum("ijk,lik->lij", self.F, blended_mean)
 
                 values[..., t] = norm(loc=blended_mean_transformed, scale=sd_aa).rvs()

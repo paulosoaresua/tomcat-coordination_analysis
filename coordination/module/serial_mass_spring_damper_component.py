@@ -18,7 +18,8 @@ def logp(sample: Any,
          prev_same_subject_mask: Any,
          prev_diff_subject_mask: Any,
          self_dependent: ptt.TensorConstant,
-         F_inv: ptt.TensorConstant):
+         Fs_diff: ptt.TensorConstant,
+         Fs_same: ptt.TensorConstant):
     """
     This function computes the log-probability of a serial component. We use the following definition in the
     comments below:
@@ -45,8 +46,16 @@ def logp(sample: Any,
     # initial value in a different time step hence we cannot just use t=0.
     mask_same = prev_same_subject_mask[None, :]  # 1 x t
 
-    blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
-            prev_same * mask_same + (1 - mask_same) * initial_mean)
+    Fs_diff_reshaped = Fs_diff.reshape((Fs_diff.shape[0], 2, 2))
+    Fs_same_reshaped = Fs_same.reshape((Fs_same.shape[0], 2, 2))
+    prev_other_transformed = ptt.batched_tensordot(Fs_diff_reshaped, prev_other.T, axes=[(2,), (1,)]).T
+    prev_same_transformed = ptt.batched_tensordot(Fs_same_reshaped, prev_same.T, axes=[(2,), (1,)]).T
+
+    # blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
+    #         prev_same * mask_same + (1 - mask_same) * initial_mean)
+
+    blended_mean = prev_other_transformed * c * mask_other + (1 - c * mask_other) * (
+                prev_same_transformed * mask_same + (1 - mask_same) * initial_mean)
 
     # print(blended_mean.eval())
 
@@ -54,25 +63,28 @@ def logp(sample: Any,
     POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
     VELOCITY_COL = ptt.as_tensor(np.array([[0], [1]]))
     blended_mean = blended_mean * POSITION_COL + (
-                prev_same * mask_same + (1 - mask_same) * initial_mean) * VELOCITY_COL
+            prev_same * mask_same + (1 - mask_same) * initial_mean) * VELOCITY_COL
 
     # print(blended_mean.eval())
 
     # This function can only receive tensors up to 2 dimensions because 'sample' has 2 dimensions.
     # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
     # it back to its original 3 dimensions.
-    F_inv_reshaped = F_inv.reshape((F_inv.shape[0], 2, 2))
+    # F_inv_reshaped = F_inv.reshape((F_inv.shape[0], 2, 2))
 
     # We transform the sample using backward dynamics so that we learn to generate samples with the underlying system
     # dynamics. If we just compare a sample with the blended_mean, we are assuming the samples follow a random gaussian
     # walk. Since we know the system dynamics, we can add that to the logp such that the samples are effectively
     # coming from the component's posterior.
-    sample_transformed = ptt.batched_tensordot(F_inv_reshaped, sample.T,
-                                               axes=[(2,), (1,)]).T * mask_same + sample * (
-                                     1 - mask_same)
+    # sample_transformed = ptt.batched_tensordot(F_inv_reshaped, sample.T,
+    #                                            axes=[(2,), (1,)]).T * mask_same + sample * (
+    #                              1 - mask_same)
+
+    # total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
+    #                      sample_transformed).sum()
 
     total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
-                         sample_transformed).sum()
+                         sample).sum()
 
     return total_logp
 
@@ -178,24 +190,49 @@ class SerialMassSpringDamperComponent(SerialComponent):
                 mask_other = (prev_time_diff_subject[t] != -1).astype(int)
                 prev_other = values[..., prev_time_diff_subject[t]]
 
+                prev_subject = subjects_in_time[prev_time_diff_subject[t]]
+
+                dt_diff = np.maximum(t - prev_time_diff_subject[t], 1)
+                dt_same = np.maximum(t - prev_time_same_subject[t], 1)
+
+                F_diff = np.linalg.matrix_power(self.F[prev_subject], dt_diff)
+                F_same = np.linalg.matrix_power(self.F[subjects_in_time[t]], dt_same)
+                prev_other = np.dot(F_diff, prev_other)
+                prev_same = np.dot(F_same, prev_same)
+
                 blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
 
                 # We don't blend velocity.
                 blended_mean[1] = prev_same[1]
 
-                # Use the fundamental matrix to generate samples from a Hookean spring system.
-                blended_mean_transformed = np.dot(self.F[subjects_in_time[t]], blended_mean)
+                # # Use the fundamental matrix to generate samples from a Hookean spring system.
+                # blended_mean_transformed = np.dot(self.F[subjects_in_time[t]], blended_mean)
 
-                # We don't blend velocity.
-                # blended_mean_transformed[1] = np.dot(self.F[subjects_in_time[t]], prev_same)[1]
-
-                values[:, t] = norm(loc=blended_mean_transformed, scale=sd).rvs()
+                # values[:, t] = norm(loc=blended_mean_transformed, scale=sd).rvs()
+                values[:, t] = norm(loc=blended_mean, scale=sd).rvs()
 
         return values
 
-    def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
-        F_inv_reshaped = self.F_inv[subjects_in_time].reshape((len(subjects_in_time), 4))
-        return F_inv_reshaped,
+    def _get_extra_logp_params(self, subjects_in_time: np.ndarray,
+                               prev_time_same_subject: np.ndarray,
+                               prev_time_diff_subject: np.ndarray):
+
+        Fs_diff = []
+        Fs_same = []
+        for t in range(len(subjects_in_time)):
+            dt_diff = np.maximum(t - prev_time_diff_subject[t], 1)
+            dt_same = np.maximum(t - prev_time_same_subject[t], 1)
+
+            curr_subject = subjects_in_time[t]
+            diff_subject = subjects_in_time[prev_time_diff_subject[t]]
+            Fs_diff.append(np.linalg.matrix_power(self.F[diff_subject], dt_diff))
+            Fs_same.append(np.linalg.matrix_power(self.F[curr_subject], dt_same))
+
+        # F_inv_reshaped = self.F_inv[subjects_in_time].reshape((len(subjects_in_time), 4))
+        Fs_diff_reshaped = np.array(Fs_diff).reshape((len(subjects_in_time), 4))
+        Fs_same_reshaped = np.array(Fs_same).reshape((len(subjects_in_time), 4))
+
+        return Fs_diff_reshaped, Fs_same_reshaped
 
     def _get_logp_fn(self):
         return logp

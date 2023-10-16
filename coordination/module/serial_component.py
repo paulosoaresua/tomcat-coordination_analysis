@@ -403,9 +403,9 @@ class SerialComponent:
                 transition_matrix[-1, 1] = time_scale_density / 2
                 transition_matrix[-1, -1] = time_scale_density / 2
                 for s1 in range(1, self.num_subjects):
-                    for s2 in range(1, self.num_subjects+1):
+                    for s2 in range(1, self.num_subjects + 1):
                         if s1 == s2 or s2 == s1 + 1:
-                            transition_matrix[s1, s2] = time_scale_density/2
+                            transition_matrix[s1, s2] = time_scale_density / 2
 
             else:
                 transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
@@ -420,7 +420,7 @@ class SerialComponent:
             else:
                 transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
                                             fill_value=time_scale_density / (
-                                                        self.num_subjects - 1))
+                                                    self.num_subjects - 1))
                 transition_matrix[0, 1:] = time_scale_density / self.num_subjects
                 transition_matrix = transition_matrix * (1 - np.eye(self.num_subjects + 1))
                 transition_matrix[:, 0] = 1 - time_scale_density
@@ -525,7 +525,8 @@ class SerialComponent:
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
                        np.array(self.self_dependent),
-                       *self._get_extra_logp_params(subjects)
+                       *self._get_extra_logp_params(subjects, prev_time_same_subject,
+                                                    prev_time_diff_subject)
                        )
         logp_fn = self._get_logp_fn()
         random_fn = self._get_random_fn()
@@ -537,7 +538,9 @@ class SerialComponent:
 
         return serial_component, mean_a0, sd_aa
 
-    def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
+    def _get_extra_logp_params(self, subjects_in_time: np.ndarray,
+                               prev_time_same_subject: np.ndarray,
+                               prev_time_diff_subject: np.ndarray):
         """
         Child classes can pass extra parameters to the logp and random functions
         """
