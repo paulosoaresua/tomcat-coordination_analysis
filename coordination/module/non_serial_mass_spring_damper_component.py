@@ -28,7 +28,8 @@ def logp(sample: Any,
     D = sample.shape[1]
 
     # logp at the initial time step
-    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)), sample[..., 0]).sum()
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)),
+                         sample[..., 0]).sum()
 
     # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
     # We discard the last value as that is not a previous value of any other.
@@ -112,7 +113,8 @@ class NonSerialMassSpringDamperComponent(NonSerialComponent):
                  -self.damping_coefficient[spring] / self.mass[spring]]
             ])
             F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
-            F_inv.append(expm(-A * self.dt)[None, ...])  # Fundamental matrix inverse to estimate backward dynamics
+            F_inv.append(expm(-A * self.dt)[
+                             None, ...])  # Fundamental matrix inverse to estimate backward dynamics
 
         self.F = np.concatenate(F, axis=0)
         self.F_inv = np.concatenate(F_inv, axis=0)
@@ -141,9 +143,11 @@ class NonSerialMassSpringDamperComponent(NonSerialComponent):
                 values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
                     size=(num_series, self.num_subjects, self.dim_value))
             else:
-                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]  # n x 1 x 1
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None,
+                    None]  # n x 1 x 1
 
-                prev_others = np.einsum("jk,ikl->ijl", sum_matrix_others, values[..., t - 1])  # n x s x d
+                prev_others = np.einsum("jk,ikl->ijl", sum_matrix_others,
+                                        values[..., t - 1])  # n x s x d
                 prev_same = values[..., t - 1]  # n x s x d
 
                 blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
@@ -151,6 +155,10 @@ class NonSerialMassSpringDamperComponent(NonSerialComponent):
                 # Use the fundamental matrix to generate samples from a Hookean spring system.
                 # blended_mean_transformed = np.einsum("ijk,lij->lik", self.F, blended_mean)
                 blended_mean_transformed = np.einsum("ijk,lik->lij", self.F, blended_mean)
+
+                # We don't blend velocity.
+                blended_mean_transformed[..., 1] = np.einsum("ijk,lik->lij", self.F, prev_same)[
+                    ..., 1]
 
                 values[..., t] = norm(loc=blended_mean_transformed, scale=sd_aa).rvs()
 
