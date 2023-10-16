@@ -19,7 +19,7 @@ def logp(sample: Any,
     This function computes the log-probability of a non-serial mass-spring-damper component. We use the following
     definition in the comments below:
 
-    s: number of subjects
+    N: number of subjects
     d: number of dimensions/features of the component
     T: number of time steps in the component's scale
     """
@@ -37,7 +37,7 @@ def logp(sample: Any,
     prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]
 
     # The component's value for a subject depends on its previous value for the same subject.
-    prev_same = sample[..., :-1]
+    prev_same = sample[..., :-1]  # N x d x t-1
 
     # Coordination does not affect the component in the first time step because the subjects have no previous
     # dependencies at that time.
@@ -46,7 +46,9 @@ def logp(sample: Any,
     blended_mean = (prev_others - prev_same) * c + prev_same
 
     # We don't blend velocity
-    blended_mean[:, 1] = prev_same[:, 1]
+    POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]
+    VELOCITY_COL = ptt.as_tensor(np.array([[0, 1]])).repeat(N, 0)[..., None]
+    blended_mean = blended_mean * POSITION_COL + prev_same * VELOCITY_COL
 
     # Match the dimensions of the standard deviation with that of the blended mean
     sd = sigma[:, :, None]

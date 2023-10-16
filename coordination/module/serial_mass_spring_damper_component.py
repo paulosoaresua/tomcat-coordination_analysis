@@ -48,8 +48,15 @@ def logp(sample: Any,
     blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
             prev_same * mask_same + (1 - mask_same) * initial_mean)
 
+    # print(blended_mean.eval())
+
     # We don't blend velocity
-    blended_mean[1] = (prev_same[1] * mask_same + (1 - mask_same) * initial_mean[1])
+    POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
+    VELOCITY_COL = ptt.as_tensor(np.array([[0], [1]]))
+    blended_mean = blended_mean * POSITION_COL + (
+                prev_same * mask_same + (1 - mask_same) * initial_mean) * VELOCITY_COL
+
+    # print(blended_mean.eval())
 
     # This function can only receive tensors up to 2 dimensions because 'sample' has 2 dimensions.
     # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
@@ -61,7 +68,8 @@ def logp(sample: Any,
     # walk. Since we know the system dynamics, we can add that to the logp such that the samples are effectively
     # coming from the component's posterior.
     sample_transformed = ptt.batched_tensordot(F_inv_reshaped, sample.T,
-                                               axes=[(2,), (1,)]).T * mask_same + sample * (1 - mask_same)
+                                               axes=[(2,), (1,)]).T * mask_same + sample * (
+                                     1 - mask_same)
 
     total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
                          sample_transformed).sum()
@@ -119,7 +127,8 @@ class SerialMassSpringDamperComponent(SerialComponent):
                  -self.damping_coefficient[spring] / self.mass[spring]]
             ])
             F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
-            F_inv.append(expm(-A * self.dt)[None, ...])  # Fundamental matrix inverse to estimate backward dynamics
+            F_inv.append(expm(-A * self.dt)[
+                             None, ...])  # Fundamental matrix inverse to estimate backward dynamics
 
         self.F = np.concatenate(F, axis=0)
         self.F_inv = np.concatenate(F_inv, axis=0)
