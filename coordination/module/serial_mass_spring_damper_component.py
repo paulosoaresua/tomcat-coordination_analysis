@@ -166,7 +166,7 @@ class SerialMassSpringDamperComponent(SerialComponent):
                 prev_subject = subjects_in_time[prev_time_diff_subject[t]]
                 mask_other = (prev_time_diff_subject[t] != -1).astype(int)
                 prev_other = np.dot(self.F[prev_subject], values[..., prev_time_diff_subject[t]])
-                prev_same = np.dot(self.F[subjects_in_time[t], prev_same])
+                prev_same = np.dot(self.F[subjects_in_time[t]], prev_same)
 
                 blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
 
