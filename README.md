@@ -92,7 +92,7 @@ Our models achieve the following performance on the [ASIST Study 3 dataset](http
 
 *Numbers are mean absolute error (MAE) and standard error of the mean.*  
 
-| Mission | Model                                                                | No-Advisor   | ToMCAT Advisor | Combined     |
+| Mission | Model                                                                | No-Advisor   | Advisor | Combined     |
 |---------|----------------------------------------------------------------------|--------------|----------------|--------------|
 |         | Baseline                                                             | 142 (30) | 106 (18)   | 120 (17) | 
 | A       | Vocalic                                                              | 180 (46) | 101 (19)   | 123 (19) |
@@ -105,7 +105,7 @@ And the following performance on the BLINDED Dataset.
 
 *Numbers are MAE and standard error of the mean.*  
 
-| Mission | Model                                                                | ToMCAT Advisor |
+| Mission | Model                                                                | Advisor |
 |---------|----------------------------------------------------------------------|----------------|
 |         | Baseline                                                             | 121 (21)   |  
 | A       | Vocalic                                                              | 148 (28)   |
