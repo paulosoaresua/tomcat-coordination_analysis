@@ -94,12 +94,12 @@ Our models achieve the following performance on the [ASIST Study 3 dataset](http
 
 | Mission | Model                                                                | No-Advisor   | ToMCAT Advisor | Combined     |
 |---------|----------------------------------------------------------------------|--------------|----------------|--------------|
-|         | Baseline                                                             | 142.4 (29.9) | 106.4 (17.6)   | 120.0 (16.7) | 
-| A       | Vocalic                                                              | 179.7 (45.5) | 101.1 (18.5)   | 123.1 (19.0) |
-|         | Vocalic + Semantics                                                  | 186.8 (49.8) | 105.8 (19.3)   | 123.9 (18.7) |
-|         | Baseline                                                             | 113.0 (19.3) | 178.5 (24.6)   | 143.4 (18.7) | 
-| B       | Vocalic                                                              | 100.9 (11.7) | 110.0 (26.9)   | 108.2 (16.0) |
-|         | Vocalic + Semantics                                                  | 110.4 (18.5) | 135.4 (24.2)   | 123.7 (16.4) |
+|         | Baseline                                                             | 142 (30) | 106 (18)   | 120 (17) | 
+| A       | Vocalic                                                              | 180 (46) | 101 (19)   | 123 (19) |
+|         | Vocalic + Semantics                                                  | 187 (50) | 106 (19)   | 124 (19) |
+|         | Baseline                                                             | 113 (19) | 179 (25)   | 143 (17) | 
+| B       | Vocalic                                                              | 101 (12) | 110 (27)   | 108 (16) |
+|         | Vocalic + Semantics                                                  | 110 (19) | 135 (24)   | 124 (16) |
 
 And the following performance on the BLINDED Dataset.
 
@@ -107,12 +107,12 @@ And the following performance on the BLINDED Dataset.
 
 | Mission | Model                                                                | ToMCAT Advisor |
 |---------|----------------------------------------------------------------------|----------------|
-|         | Baseline                                                             | 121.4 (21.4)   |  
-| A       | Vocalic                                                              | 147.9 (27.7)   |
-|         | Vocalic + Semantics                                                  | 140.0 (18.9)   |
-|         | Baseline                                                             | 104.3 (21.6)   | 
-| B       | Vocalic                                                              | 85.5 (16.4)    |
-|         | Vocalic + Semantics                                                  | 71.5 (16.7)    |
+|         | Baseline                                                             | 121 (21)   |  
+| A       | Vocalic                                                              | 148 (28)   |
+|         | Vocalic + Semantics                                                  | 140 (19)   |
+|         | Baseline                                                             | 104 (22)   | 
+| B       | Vocalic                                                              | 86 (16)    |
+|         | Vocalic + Semantics                                                  | 72 (17)    |
 
 ## License
 
