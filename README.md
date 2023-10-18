@@ -27,8 +27,8 @@ The project splits the general model definition into several modules that are pu
 
 The project contains 4 different models that can be used to generate data and run inference.
 
-- **SpringModel**: Models coordination as controlling the influence of one spring dynamics on other spring dynamics in a mass-spring-damper system. In this model each spring is influences by two others at every time step.
-- **ConversationModel**: Models coordination as controlling the influence of voice intensity from one person on another person's voice intensity, simulating a conversation between a couple. In this model, a person is only influenced by the previous speaker in a pairwise manner.
+- **SpringModel**: Models coordination as controlling the influence of one spring dynamics on other spring dynamics in a mass-spring-damper system. In this model, each spring is influenced by two others at every time step if there's coordination.
+- **ConversationModel**: Models coordination as controlling the influence of voice intensity from one person on another person's voice intensity, simulating a conversation between a couple. In this model, only one person talks at a time and they are influenced by the previous speaker in a pairwise manner if there's coordination.
 - **VocalicModel**: Models coordination as controlling the influence of vocalic features from one person on another person's vocalic features during a conversation.
 - **VocalicSemanticModel**: Adds semantic links to the VocalicModel to evidence moments of increased coordination.
 
