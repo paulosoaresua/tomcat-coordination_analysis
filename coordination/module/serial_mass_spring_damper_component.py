@@ -46,42 +46,28 @@ def logp(sample: Any,
     # initial value in a different time step hence we cannot just use t=0.
     mask_same = prev_same_subject_mask[None, :]  # 1 x t
 
+    # This function can only receive tensors up to 2 dimensions because 'sample' has 2 dimensions.
+    # This is a limitation of PyMC 5.0.2. So, we reshape F before passing to this function and here
+    # we reshape it back to its original 3 dimensions.
     Fs_diff_reshaped = Fs_diff.reshape((Fs_diff.shape[0], 2, 2))
     Fs_same_reshaped = Fs_same.reshape((Fs_same.shape[0], 2, 2))
+
+    # We transform the sample using the fundamental matrix so that we learn to generate samples
+    # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
+    # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
+    # we can add that to the logp such that the samples are effectively coming from the component's
+    # posterior.
     prev_other_transformed = ptt.batched_tensordot(Fs_diff_reshaped, prev_other.T, axes=[(2,), (1,)]).T
     prev_same_transformed = ptt.batched_tensordot(Fs_same_reshaped, prev_same.T, axes=[(2,), (1,)]).T
 
-    # blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
-    #         prev_same * mask_same + (1 - mask_same) * initial_mean)
-
     blended_mean = prev_other_transformed * c * mask_other + (1 - c * mask_other) * (
                 prev_same_transformed * mask_same + (1 - mask_same) * initial_mean)
-
-    # print(blended_mean.eval())
 
     # We don't blend velocity
     POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
     VELOCITY_COL = ptt.as_tensor(np.array([[0], [1]]))
     blended_mean = blended_mean * POSITION_COL + (
             prev_same * mask_same + (1 - mask_same) * initial_mean) * VELOCITY_COL
-
-    # print(blended_mean.eval())
-
-    # This function can only receive tensors up to 2 dimensions because 'sample' has 2 dimensions.
-    # This is a limitation of PyMC 5.0.2. So, we reshape F_inv before passing to this function and here we reshape
-    # it back to its original 3 dimensions.
-    # F_inv_reshaped = F_inv.reshape((F_inv.shape[0], 2, 2))
-
-    # We transform the sample using backward dynamics so that we learn to generate samples with the underlying system
-    # dynamics. If we just compare a sample with the blended_mean, we are assuming the samples follow a random gaussian
-    # walk. Since we know the system dynamics, we can add that to the logp such that the samples are effectively
-    # coming from the component's posterior.
-    # sample_transformed = ptt.batched_tensordot(F_inv_reshaped, sample.T,
-    #                                            axes=[(2,), (1,)]).T * mask_same + sample * (
-    #                              1 - mask_same)
-
-    # total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
-    #                      sample_transformed).sum()
 
     total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
                          sample).sum()
@@ -106,8 +92,9 @@ class SerialMassSpringDamperComponent(SerialComponent):
                  share_sd_aa_across_springs: bool,
                  share_sd_aa_across_features: bool):
         """
-        Generates a time series of latent states formed by position and velocity in a mass-spring-damper system. We do
-        not consider external force in this implementation but it can be easily added if necessary.
+        Generates a time series of latent states formed by position and velocity in a mass-spring-
+        damper system. We do not consider external force in this implementation but it can be easily
+        added if necessary.
         """
         super().__init__(uuid=uuid,
                          num_subjects=num_springs,
@@ -131,7 +118,6 @@ class SerialMassSpringDamperComponent(SerialComponent):
 
         # Systems dynamics matrix
         F = []
-        F_inv = []
         for spring in range(num_springs):
             A = np.array([
                 [0, 1],
@@ -139,11 +125,8 @@ class SerialMassSpringDamperComponent(SerialComponent):
                  -self.damping_coefficient[spring] / self.mass[spring]]
             ])
             F.append(expm(A * self.dt)[None, ...])  # Fundamental matrix
-            F_inv.append(expm(-A * self.dt)[
-                             None, ...])  # Fundamental matrix inverse to estimate backward dynamics
 
         self.F = np.concatenate(F, axis=0)
-        self.F_inv = np.concatenate(F_inv, axis=0)
 
     def _draw_from_system_dynamics(self,
                                    time_steps_in_coordination_scale: np.ndarray,
@@ -228,7 +211,8 @@ class SerialMassSpringDamperComponent(SerialComponent):
             Fs_diff.append(np.linalg.matrix_power(self.F[diff_subject], dt_diff))
             Fs_same.append(np.linalg.matrix_power(self.F[curr_subject], dt_same))
 
-        # F_inv_reshaped = self.F_inv[subjects_in_time].reshape((len(subjects_in_time), 4))
+        # We need the influencer and influencee's transformations because we first bring the
+        # states to the current time and then we blend them.
         Fs_diff_reshaped = np.array(Fs_diff).reshape((len(subjects_in_time), 4))
         Fs_same_reshaped = np.array(Fs_same).reshape((len(subjects_in_time), 4))
 
