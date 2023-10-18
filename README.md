@@ -90,7 +90,7 @@ Data to reproduce the results below is available under the `data/` directory.
 
 Our models achieve the following performance on the [ASIST Study 3 dataset](https://dataverse.asu.edu/dataset.xhtml?persistentId=doi:10.48349/ASU/QDQ4MH) compared to a baseline predictor:
 
-*Numbers are RMSE and standard error.*  
+*Numbers are mean absolute error (MAE) and standard error of the mean.*  
 
 | Mission | Model                                                                | No-Advisor   | ToMCAT Advisor | Combined     |
 |---------|----------------------------------------------------------------------|--------------|----------------|--------------|
@@ -103,7 +103,7 @@ Our models achieve the following performance on the [ASIST Study 3 dataset](http
 
 And the following performance on the BLINDED Dataset.
 
-*Numbers are RMSE and standard error.*  
+*Numbers are MAE and standard error of the mean.*  
 
 | Mission | Model                                                                | ToMCAT Advisor |
 |---------|----------------------------------------------------------------------|----------------|
