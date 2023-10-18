@@ -101,7 +101,7 @@ Our models achieve the following performance on the [ASIST Study 3 dataset](http
 | B       | Vocalic                                                              | 100.9 (11.7) | 110.0 (26.9)   | 108.2 (16.0) |
 |         | Vocalic + Semantics                                                  | 110.4 (18.5) | 135.4 (24.2)   | 123.7 (16.4) |
 
-And the following performance on the ToMCAT Dataset.
+And the following performance on the BLINDED Dataset.
 
 *Numbers are RMSE and standard error.*  
 
