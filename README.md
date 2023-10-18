@@ -101,7 +101,7 @@ Our models achieve the following performance on the [ASIST Study 3 dataset](http
 | B       | Vocalic                                                              | 101 (12) | 110 (27)   | 108 (16) |
 |         | Vocalic + Semantics                                                  | 110 (19) | 135 (24)   | 124 (16) |
 
-And the following performance on the BLINDED Dataset.
+And the following performance on the BLINDED Dataset:
 
 *Numbers are MAE and standard error of the mean.*  
 
