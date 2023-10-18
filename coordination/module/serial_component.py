@@ -6,7 +6,8 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.utils import set_random_seed
-from coordination.module.parametrization import Parameter, HalfNormalParameterPrior, NormalParameterPrior
+from coordination.module.parametrization import Parameter, HalfNormalParameterPrior, \
+    NormalParameterPrior
 
 
 def logp(sample: Any,
@@ -51,7 +52,8 @@ def logp(sample: Any,
         # mean.
         blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * initial_mean
 
-    total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=prev_other.shape), sample).sum()
+    total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=prev_other.shape),
+                         sample).sum()
 
     return total_logp
 
@@ -241,7 +243,8 @@ class SerialComponent:
                      time_scale_density: float,
                      coordination: np.ndarray,
                      can_repeat_subject: bool,
-                     seed: Optional[int] = None) -> SerialComponentSamples:
+                     seed: Optional[int] = None,
+                     fixed_subject_sequence: bool = False) -> SerialComponentSamples:
 
         # Check dimensionality of the parameters
         if self.share_mean_a0_across_features:
@@ -283,8 +286,11 @@ class SerialComponent:
         samples = SerialComponentSamples()
         samples.values = []
         for s in range(num_series):
-            sparse_subjects = self._draw_random_subjects(num_series, coordination.shape[-1], time_scale_density,
-                                                         can_repeat_subject)
+            sparse_subjects = self._draw_random_subjects(num_series,
+                                                         coordination.shape[-1],
+                                                         time_scale_density,
+                                                         can_repeat_subject,
+                                                         fixed_subject_sequence)
             samples.subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
             samples.time_steps_in_coordination_scale.append(
                 np.array([t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int))
@@ -299,14 +305,16 @@ class SerialComponent:
             # Fill dependencies
             prev_time_per_subject = {}
             for t in range(num_time_steps_in_cpn_scale):
-                samples.prev_time_same_subject[s][t] = prev_time_per_subject.get(samples.subjects[s][t], -1)
+                samples.prev_time_same_subject[s][t] = prev_time_per_subject.get(
+                    samples.subjects[s][t], -1)
 
                 for subject, time in prev_time_per_subject.items():
                     if subject == samples.subjects[s][t]:
                         continue
 
                     # Most recent time from a different subject
-                    samples.prev_time_diff_subject[s][t] = time if samples.prev_time_diff_subject[s][t] == -1 else max(
+                    samples.prev_time_diff_subject[s][t] = time if \
+                        samples.prev_time_diff_subject[s][t] == -1 else max(
                         samples.prev_time_diff_subject[s][t], time)
 
                 prev_time_per_subject[samples.subjects[s][t]] = t
@@ -382,27 +390,48 @@ class SerialComponent:
                               num_series: int,
                               num_time_steps: int,
                               time_scale_density: float,
-                              can_repeat_subject: bool) -> np.ndarray:
+                              can_repeat_subject: bool,
+                              fixed_subject_sequence: bool) -> np.ndarray:
 
         # Subject 0 is "No Subject"
         if can_repeat_subject:
             # We allow the same subject to appear in subsequent observations
-            transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
-                                        fill_value=time_scale_density / self.num_subjects)
-            transition_matrix[:, 0] = 1 - time_scale_density
+            if fixed_subject_sequence:
+                transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
+                transition_matrix[:, 0] = 1 - time_scale_density
+                transition_matrix[0, 1] = time_scale_density
+                transition_matrix[-1, 1] = time_scale_density / 2
+                transition_matrix[-1, -1] = time_scale_density / 2
+                for s1 in range(1, self.num_subjects):
+                    for s2 in range(1, self.num_subjects + 1):
+                        if s1 == s2 or s2 == s1 + 1:
+                            transition_matrix[s1, s2] = time_scale_density / 2
+
+            else:
+                transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
+                                            fill_value=time_scale_density / self.num_subjects)
+                transition_matrix[:, 0] = 1 - time_scale_density
         else:
-            transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
-                                        fill_value=time_scale_density / (self.num_subjects - 1))
-            transition_matrix[0, 1:] = time_scale_density / self.num_subjects
-            transition_matrix = transition_matrix * (1 - np.eye(self.num_subjects + 1))
-            transition_matrix[:, 0] = 1 - time_scale_density
+            if fixed_subject_sequence:
+                transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
+                transition_matrix[:, 0] = 1 - time_scale_density
+                transition_matrix[:-1, 1:] = np.eye(self.num_subjects) * time_scale_density
+                transition_matrix[-1, 1] = time_scale_density
+            else:
+                transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
+                                            fill_value=time_scale_density / (
+                                                    self.num_subjects - 1))
+                transition_matrix[0, 1:] = time_scale_density / self.num_subjects
+                transition_matrix = transition_matrix * (1 - np.eye(self.num_subjects + 1))
+                transition_matrix[:, 0] = 1 - time_scale_density
 
         initial_prob = transition_matrix[0]
         subjects = np.zeros((num_series, num_time_steps), dtype=int)
 
         for t in range(num_time_steps):
             if t == 0:
-                subjects[:, t] = np.random.choice(self.num_subjects + 1, num_series, p=initial_prob)
+                subjects[:, t] = np.random.choice(self.num_subjects + 1, num_series,
+                                                  p=initial_prob)
             else:
                 probs = transition_matrix[subjects[:, t - 1]]
                 cum_prob = np.cumsum(probs, axis=-1)
@@ -496,19 +525,22 @@ class SerialComponent:
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
                        np.array(self.self_dependent),
-                       *self._get_extra_logp_params(subjects)
+                       *self._get_extra_logp_params(subjects, prev_time_same_subject,
+                                                    prev_time_diff_subject)
                        )
         logp_fn = self._get_logp_fn()
         random_fn = self._get_random_fn()
         serial_component = pm.DensityDist(self.uuid, *logp_params,
-                                              logp=logp_fn,
-                                              random=random_fn,
-                                              dims=[feature_dimension, time_dimension],
-                                              observed=observed_values)
+                                          logp=logp_fn,
+                                          random=random_fn,
+                                          dims=[feature_dimension, time_dimension],
+                                          observed=observed_values)
 
         return serial_component, mean_a0, sd_aa
 
-    def _get_extra_logp_params(self, subjects_in_time: np.ndarray):
+    def _get_extra_logp_params(self, subjects_in_time: np.ndarray,
+                               prev_time_same_subject: np.ndarray,
+                               prev_time_diff_subject: np.ndarray):
         """
         Child classes can pass extra parameters to the logp and random functions
         """
