@@ -70,7 +70,7 @@ def parallel_inference(out_dir: str,
     del execution_params["out_dir"]
 
     execution_time = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
-    results_folder = f"{out_dir}/{model}/{execution_time}"
+    results_folder = f"{out_dir}/{execution_time}"
     os.makedirs(results_folder, exist_ok=True)
 
     print("")
