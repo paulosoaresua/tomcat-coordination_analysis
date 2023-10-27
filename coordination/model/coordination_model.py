@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import xarray
@@ -64,3 +64,11 @@ class CoordinationPosteriorSamples:
         ax.set_ylabel("Coordination")
         ax.set_xlim([-0.5, T + 0.5])
         ax.set_ylim([0, 1.05])
+
+class CoordinationModel:
+
+    def __init__(self,
+                 sd_mean_uc0: float,
+                 sd_sd_uc: float,
+                 components: List[Components],
+                 initial_coordination: Optional[float] = None):
