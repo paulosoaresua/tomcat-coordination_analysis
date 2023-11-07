@@ -11,6 +11,9 @@ from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
 from coordination.module.latent_component import LatentComponent, LatentComponentSamples
 from coordination.module.coordination import CoordinationSamples
+from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
+                                           DEFAULT_SUBJECT_REPETITION_FLAG,
+                                           DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG)
 
 
 class SerialComponent(LatentComponent):
@@ -26,11 +29,11 @@ class SerialComponent(LatentComponent):
                  self_dependent: bool,
                  mean_mean_a0: np.ndarray,
                  sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray,
+                 sd_sd_a: np.ndarray,
                  share_mean_a0_across_subjects: bool,
                  share_mean_a0_across_dimensions: bool,
-                 share_sd_aa_across_subjects: bool,
-                 share_sd_aa_across_dimensions: bool,
+                 share_sd_a_across_subjects: bool,
+                 share_sd_a_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None):
         """
         Creates a serial latent component.
@@ -38,18 +41,18 @@ class SerialComponent(LatentComponent):
         @param uuid: String uniquely identifying the latent component in the model.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
-        @param self_dependent: whether the latent variables in the component are tied to the
-        past values from the same subject. If False, coordination will blend the previous latent
-        value of a different subject with the value of the component at time t = 0 for the current
-        subject (the latent component's prior for that subject).
+        @param self_dependent: whether the latent variables in the component are tied to the past
+            values from the same subject. If False, coordination will blend the previous latent
+            value of a different subject with the value of the component at time t = 0 for the
+            current subject (the latent component's prior for that subject).
         @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
-        latent component).
-        @param sd_sd_aa: std of the hyper-prior of sigma_aa (std of the Gaussian random walk of
+            latent component).
+        @param sd_sd_a: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
         the latent component).
         @param share_mean_a0_across_subjects: whether to use the same mu_a0 for all subjects.
         @param share_mean_a0_across_dimensions: whether to use the same mu_a0 for all dimensions.
-        @param share_sd_aa_across_subjects: whether to use the same sigma_aa for all subjects.
-        @param share_sd_aa_across_dimensions: whether to use the same sigma_aa for all dimensions.
+        @param share_sd_a_across_subjects: whether to use the same sigma_a for all subjects.
+        @param share_sd_a_across_dimensions: whether to use the same sigma_a for all dimensions.
         @param dimension_names: the names of each dimension of the latent component. If not
         informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         """
@@ -59,19 +62,19 @@ class SerialComponent(LatentComponent):
                          self_dependent=self_dependent,
                          mean_mean_a0=mean_mean_a0,
                          sd_mean_a0=sd_mean_a0,
-                         sd_sd_aa=sd_sd_aa,
+                         sd_sd_a=sd_sd_a,
                          share_mean_a0_across_subjects=share_mean_a0_across_subjects,
                          share_mean_a0_across_dimensions=share_mean_a0_across_dimensions,
-                         share_sd_aa_across_subjects=share_sd_aa_across_subjects,
-                         share_sd_aa_across_dimensions=share_sd_aa_across_dimensions,
+                         share_sd_a_across_subjects=share_sd_a_across_subjects,
+                         share_sd_a_across_dimensions=share_sd_a_across_dimensions,
                          dimension_names=dimension_names)
 
     def draw_samples(self,
-                     coordination: CoordinationSamples,
                      seed: Optional[int],
-                     time_scale_density: float = None,
-                     can_repeat_subject: bool = None,
-                     fixed_subject_sequence: bool = None,
+                     coordination: CoordinationSamples = None,
+                     time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
+                     can_repeat_subject: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+                     fixed_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                      **kwargs) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
@@ -101,10 +104,10 @@ class SerialComponent(LatentComponent):
         else:
             mean_a0 = self.parameters.mean_a0.value
 
-        if self.share_sd_aa_across_subjects:
-            sd_aa = self.parameters.sd_aa.value[None, :].repeat(self.num_subjects, axis=0)
+        if self.share_sd_a_across_subjects:
+            sd_a = self.parameters.sd_a.value[None, :].repeat(self.num_subjects, axis=0)
         else:
-            sd_aa = self.parameters.sd_aa.value
+            sd_a = self.parameters.sd_a.value
 
         assert 0 <= time_scale_density <= 1
 
@@ -161,7 +164,7 @@ class SerialComponent(LatentComponent):
                 prev_time_same_subject=prev_time_same_subject[s],
                 prev_time_diff_subject=prev_time_diff_subject[s],
                 mean_a0=mean_a0,
-                sd_aa=sd_aa)
+                sd_a=sd_a)
             sampled_values.append(values)
 
         return SerialComponentSamples(
@@ -179,9 +182,9 @@ class SerialComponent(LatentComponent):
                                    prev_time_same_subject: np.ndarray,
                                    prev_time_diff_subject: np.ndarray,
                                    mean_a0: np.ndarray,
-                                   sd_aa: np.ndarray) -> np.ndarray:
+                                   sd_a: np.ndarray) -> np.ndarray:
         """
-        Draw values from the system dynamics. The default serialized component generates samples
+        Draws values from the system dynamics. The default serialized component generates samples
         by following a Gaussian random walk with mean defined by pairwise blended values from
         different subjects according to the coordination levels over time. Child classes can
         implement their own dynamics, like spring-mass-damping systems for instance.
@@ -196,7 +199,7 @@ class SerialComponent(LatentComponent):
         @param prev_time_diff_subject: an array containing indices to most recent previous times
         the component from the a different subject was observed in the component's time scale.
         @param mean_a0: initial mean of the latent component.
-        @param sd_aa: standard deviation of the Gaussian transition distribution.
+        @param sd_a: standard deviation of the Gaussian transition distribution.
 
         @return: sampled values.
         """
@@ -214,12 +217,12 @@ class SerialComponent(LatentComponent):
             else:
                 subject_idx_mean_a0 = subjects_in_time[t]
 
-            if self.share_sd_aa_across_subjects:
-                subject_idx_sd_aa = 0
+            if self.share_sd_a_across_subjects:
+                subject_idx_sd_a = 0
             else:
-                subject_idx_sd_aa = subjects_in_time[t]
+                subject_idx_sd_a = subjects_in_time[t]
 
-            sd = sd_aa[subject_idx_sd_aa]
+            sd = sd_a[subject_idx_sd_a]
 
             if prev_time_same_subject[t] < 0:
                 # This is the first time we see an observation for the subject. We then sample
@@ -257,7 +260,7 @@ class SerialComponent(LatentComponent):
                               can_repeat_subject: bool,
                               fixed_subject_sequence: bool) -> np.ndarray:
         """
-        Draw a random sequence of subjects over time. We define subject 0 as "No Subject", meaning
+        Draws random sequences of subjects over time. We define subject -1 as "No Subject", meaning
         the latent component is not observed when that subject is the one sampled in a given time
         step.
 
@@ -325,10 +328,11 @@ class SerialComponent(LatentComponent):
         return subjects
 
     def _get_logp_params(self,
-                         coordination: Any,
+                         pymc_model: pm.Model,
+                         coordination: pm.Distribution,
                          observed_values: Optional[TensorTypes] = None,
                          mean_a0: Optional[TensorTypes] = None,
-                         sd_aa: Optional[TensorTypes] = None,
+                         sd_a: Optional[TensorTypes] = None,
                          subjects: np.ndarray = None,
                          prev_time_same_subject: np.ndarray = None,
                          prev_time_diff_subject: np.ndarray = None,
@@ -336,13 +340,14 @@ class SerialComponent(LatentComponent):
         """
         Gets parameters to be passed to the logp and random functions.
 
+        @param pymc_model: model definition in pymc.
         @param coordination: latent random variable representing a time series of coordination.
         @param observed_values: latent component values if one wants to fix them. This will treat
         the latent component as known and constant. This is not the value of an observation
         component, but the latent component itself.
         @param mean_a0: initial mean of the latent component if previously defined outside of the
         component. This is useful if one wants to share this across different components.
-        @param sd_aa: standard deviation of the latent component Gaussian transition distribution
+        @param sd_a: standard deviation of the latent component Gaussian transition distribution
         if previously defined outside of the component. This is useful if one wants to share this
         across different components.
         @param subjects: array of numbers indicating which subject is associated to the component
@@ -359,8 +364,9 @@ class SerialComponent(LatentComponent):
         @return: a list of parameters of the logp function defined in this module.
         """
 
-        mean_a0 = self._create_initial_mean_variable() if mean_a0 is None else mean_a0
-        sd_aa = self._create_transition_standard_deviation_variable() if sd_aa is None else sd_aa
+        with pymc_model:
+            mean_a0 = self._create_initial_mean_variable() if mean_a0 is None else mean_a0
+            sd_a = self._create_transition_standard_deviation_variable() if sd_a is None else sd_a
 
         if self.share_mean_a0_across_subjects:
             mean_a0 = mean_a0[:, None]  # feature x time = 1 (broadcast across time)
@@ -370,44 +376,28 @@ class SerialComponent(LatentComponent):
         if self.share_mean_a0_across_dimensions:
             mean_a0 = mean_a0.repeat(self.dimension_size, axis=0)
 
-        if self.share_sd_aa_across_subjects:
-            sd_aa = sd_aa[:, None]  # feature x time = 1 (broadcast across time)
+        if self.share_sd_a_across_subjects:
+            sd_a = sd_a[:, None]  # feature x time = 1 (broadcast across time)
         else:
-            sd_aa = sd_aa[subjects].transpose()  # feature x time
+            sd_a = sd_a[subjects].transpose()  # feature x time
 
-        if self.share_sd_aa_across_dimensions:
-            sd_aa = sd_aa.repeat(self.dimension_size, axis=0)
+        if self.share_sd_a_across_dimensions:
+            sd_a = sd_a.repeat(self.dimension_size, axis=0)
 
         # Mask with 1 for time steps where there is observation for a subject (subject index >= 0)
         prev_same_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_same_subject])
         prev_diff_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_diff_subject])
 
         logp_params = (mean_a0,
-                       sd_aa,
+                       sd_a,
                        coordination,
                        prev_time_same_subject,
                        prev_time_diff_subject,
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
-                       np.array(self.self_dependent),
-                       *self._get_extra_logp_params(subjects,
-                                                    prev_time_same_subject,
-                                                    prev_time_diff_subject)
-                       )
+                       np.array(self.self_dependent))
 
         return logp_params
-
-    def _get_extra_logp_params(self,
-                               subjects_in_time: np.ndarray,
-                               prev_time_same_subject: np.ndarray,
-                               prev_time_diff_subject: np.ndarray) -> Tuple[Any, ...]:
-        """
-        Gets extra parameters that are passed to the logp and random functions. Child classes can
-        use that if they need to pass extra information to those functions.
-
-        :@return extra parameters to the logp and random functions.
-        """
-        return ()
 
     def _get_logp_fn(self) -> Callable:
         """
