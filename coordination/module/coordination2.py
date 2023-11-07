@@ -47,8 +47,14 @@ class SigmoidGaussianCoordination(Module):
         @param num_series: number of samples to generate.
         @param num_time_steps: length of each coordination series.
         @param kwargs: extra arguments to be defined by subclasses.
+        @raise ValueError: if either num_series or num_time_steps is None.
         @return: coordination samples. One coordination series per row.
         """
+        if num_series is None:
+            raise ValueError(f"The number of series to sample is undefined.")
+        if num_time_steps is None:
+            raise ValueError(f"The number of time steps to sample is undefined.")
+
         set_random_seed(seed)
 
         # Gaussian random walk via re-parametrization trick
@@ -81,25 +87,30 @@ class SigmoidGaussianCoordination(Module):
         @param kwargs: extra parameters to be used by child classes.
         @return: unbounded coordination, coordination, mean_uc0, sd_uc.
         """
-        mean_uc0 = pm.Normal(name=self.parameters.mean_uc0.uuid,
-                             mu=self.parameters.mean_uc0.prior.mean,
-                             sigma=self.parameters.mean_uc0.prior.sd,
-                             size=1,
-                             observed=self.parameters.mean_uc0.value)
-        sd_uc = pm.HalfNormal(name=self.parameters.sd_uc.uuid,
-                              sigma=self.parameters.sd_uc.prior.sd,
-                              size=1,
-                              observed=self.parameters.sd_uc.value)
 
-        prior = pm.Normal.dist(mu=mean_uc0, sigma=sd_uc)
-        unbounded_coordination = pm.GaussianRandomWalk("unbounded_coordination",
-                                                       init_dist=prior,
-                                                       sigma=sd_uc,
-                                                       dims=[time_dimension],
-                                                       observed=unbounded_coordination_observed_values)
+        with pymc_model:
+            mean_uc0 = pm.Normal(name=self.parameters.mean_uc0.uuid,
+                                 mu=self.parameters.mean_uc0.prior.mean,
+                                 sigma=self.parameters.mean_uc0.prior.sd,
+                                 size=1,
+                                 observed=self.parameters.mean_uc0.value)
+            sd_uc = pm.HalfNormal(name=self.parameters.sd_uc.uuid,
+                                  sigma=self.parameters.sd_uc.prior.sd,
+                                  size=1,
+                                  observed=self.parameters.sd_uc.value)
 
-        coordination = pm.Deterministic("coordination", pm.math.sigmoid(unbounded_coordination),
-                                        dims=[time_dimension])
+            prior = pm.Normal.dist(mu=mean_uc0, sigma=sd_uc)
+            unbounded_coordination = pm.GaussianRandomWalk(
+                name="unbounded_coordination",
+                init_dist=prior,
+                sigma=sd_uc,
+                dims=[time_dimension],
+                observed=unbounded_coordination_observed_values
+            )
+
+            coordination = pm.Deterministic(name="coordination",
+                                            var=pm.math.sigmoid(unbounded_coordination),
+                                            dims=[time_dimension])
 
         return unbounded_coordination, coordination, mean_uc0, sd_uc
 

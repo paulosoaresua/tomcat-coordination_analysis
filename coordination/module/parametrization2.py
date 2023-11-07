@@ -38,6 +38,7 @@ class NormalParameterPrior:
 
         @param mean: mean of the normal distribution.
         @param sd: standard deviation of the normal distribution.
+        @raise ValueError: if sd <= 0.
         """
 
         if (sd <= 0).any():
@@ -57,6 +58,7 @@ class HalfNormalParameterPrior:
         Creates a half-normal parameter prior.
 
         @param sd: standard deviation of the half-normal distribution.
+        @raise ValueError: if sd <= 0.
         """
 
         if (sd <= 0).any():
@@ -75,6 +77,7 @@ class DirichletParameterPrior:
         Creates a Dirichlet parameter prior.
 
         @param a: parameter "a" of a Dirichlet distribution.
+        @raise ValueError: if a <= 0.
         """
 
         if (a <= 0).any():
@@ -92,8 +95,9 @@ class BetaParameterPrior:
         """
         Creates a Beta parameter prior.
 
-        @param a: parameter "a" of a beta distribution.
-        @param b: parameter "b" of a beta distribution.
+        @param a: parameter "a" (a > 0) of a beta distribution.
+        @param b: parameter "b" (b > a) of a beta distribution.
+        @raise ValueError: if either a or b is <= 0.
         """
 
         if a <= 0:
@@ -116,9 +120,11 @@ class UniformDiscreteParameterPrior:
 
         @param lower: smallest integer value in the sampling range.
         @param upper: largest integer value in the sampling range.
+        @raise ValueError: if lower > upper.
         """
 
-        assert lower <= upper
+        if lower > upper:
+            raise ValueError(f"Lower bound ({lower}) is larger than upper bound ({upper}).")
 
         self.lower = lower
         self.upper = upper
