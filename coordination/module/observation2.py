@@ -1,5 +1,5 @@
 from __future__ import annotations
-from abc import ABC
+import abc
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import numpy as np
@@ -7,124 +7,78 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.module.parametrization import (Parameter,
-                                                 HalfNormalParameterPrior,
-                                                 NormalParameterPrior)
-from coordination.module.coordination import CoordinationSamples
+                                                 HalfNormalParameterPrior)
 
 
-class LatentComponent(ABC):
+class Observation(abc.ABC):
     """
-    This class represents a latent system component. A latent system component is directly affected
-    by coordination which controls to what extend one the latent component from one subject
-    influences the same component in another subject in the future.
-
-    We assume latent components evolve as a Gaussian random walk with mean defined by some blending
-    strategy that takes coordination and past latent values from other subjects into consideration.
-
-    A latent component can have a function f that transforms that mean in someway. For instance,
-    if coordination manifests in an anti-symmetric way, f can be set to f(x) = -x.
+    This class represents an observation (O) from a latent system component (A). Observations are
+    evidence to the model. This implementation samples observation from a Gaussian distribution
+     centered on some transformation, g(.),  of the latent components, i.e., O ~ N(g(A), var_o).
     """
 
     def __init__(self,
                  uuid: str,
                  num_subjects: int,
                  dimension_size: int,
-                 self_dependent: bool,
-                 mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray,
-                 sd_sd_aa: np.ndarray,
-                 share_mean_a0_across_subjects: bool,
-                 share_mean_a0_across_dimensions: bool,
-                 share_sd_aa_across_subjects: bool,
-                 share_sd_aa_across_dimensions: bool,
+                 sd_sd_o: np.ndarray,
+                 share_sd_o_across_subjects: bool,
+                 share_sd_o_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None):
         """
-        Creates a latent component.
+        Creates an observation.
 
         @param uuid: String uniquely identifying the latent component in the model.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
-        @param self_dependent: whether the latent variables in the component are tied to the
-            past values from the same subject. If False, coordination will blend the previous
-            latent value of a different subject with the value of the component at time t = 0 for
-            the current subject (the latent component's prior for that subject).
-        @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
-            latent component).
-        @param sd_mean_a0: std of the hyper-prior of mu_a0.
-        @param sd_sd_aa: std of the hyper-prior of sigma_aa (std of the Gaussian random walk of
-            the latent component).
-        @param share_mean_a0_across_subjects: whether to use the same mu_a0 for all subjects.
-        @param share_mean_a0_across_dimensions: whether to use the same mu_a0 for all dimensions.
-        @param share_sd_aa_across_subjects: whether to use the same sigma_aa for all subjects.
-        @param share_sd_aa_across_dimensions: whether to use the same sigma_aa for all dimensions.
-        @param dimension_names: the names of each dimension of the latent component. If not
+        @param sd_sd_o: std of the hyper-prior of sigma_o (std of the Gaussian emission
+            distribution).
+        @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
+        @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
+        @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         """
 
         # If a parameter is shared across dimensions, we only have one parameter to infer.
-        dim_mean_a0_dimensions = 1 if share_mean_a0_across_dimensions else dimension_size
-        dim_sd_aa_dimensions = 1 if share_sd_aa_across_dimensions else dimension_size
+        dim_sd_o_dimensions = 1 if share_sd_o_across_dimensions else dimension_size
 
         # Check if the values passed as hyperparameter are in agreement with the dimension of the
         # variables that we need to infer. Parameters usually have dimensions: num subjects x
         # dimension size, but that changes depending on the sharing options.
-        if share_mean_a0_across_subjects:
-            assert (dim_mean_a0_dimensions,) == mean_mean_a0.shape
-            assert (dim_mean_a0_dimensions,) == sd_mean_a0.shape
+        if share_sd_o_across_subjects:
+            assert (dim_sd_o_dimensions,) == sd_sd_o.shape
         else:
-            assert (num_subjects, dim_mean_a0_dimensions) == mean_mean_a0.shape
-            assert (num_subjects, dim_mean_a0_dimensions) == sd_mean_a0.shape
-
-        if share_sd_aa_across_subjects:
-            assert (dim_sd_aa_dimensions,) == sd_sd_aa.shape
-        else:
-            assert (num_subjects, dim_sd_aa_dimensions) == sd_sd_aa.shape
+            assert (num_subjects, dim_sd_o_dimensions) == sd_sd_o.shape
 
         self.uuid = uuid
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size
-        self.self_dependent = self_dependent
-        self.share_mean_a0_across_subjects = share_mean_a0_across_subjects
-        self.share_mean_a0_across_dimensions = share_mean_a0_across_dimensions
-        self.share_sd_aa_across_subjects = share_sd_aa_across_subjects
-        self.share_sd_aa_across_dimensions = share_sd_aa_across_dimensions
+        self.share_sd_o_across_subjects = share_sd_o_across_subjects
+        self.share_sd_o_across_dimensions = share_sd_o_across_dimensions
         self.dimension_names = dimension_names
 
-        self.parameters = LatentComponentParameters(mean_mean_a0=mean_mean_a0,
-                                                    sd_mean_a0=sd_mean_a0,
-                                                    sd_sd_aa=sd_sd_aa)
+        self.parameters = ObservationParameters(sd_sd_o=sd_sd_o)
 
     @property
     def parameter_names(self) -> List[str]:
         """
-        Gets the names of all the parameters used in the distributions of a latent component.
+        Gets the names of all the parameters used in the distributions of an observation.
 
         @return: a list with the parameter names.
         """
         names = [
-            self.mean_a0_name,
-            self.sd_aa_name
+            self.sd_o_name
         ]
 
         return names
 
     @property
-    def mean_a0_name(self) -> str:
+    def sd_o_name(self) -> str:
         """
-        Gets a unique name for the mean of the latent component at time t = 0.
+        Gets a unique name for the standard deviation of the emission distribution.
 
-        @return: the name of the parameter that stores the mean of the latent component at time
-            t = 0.
-        """
-        return f"mean_a0_{self.uuid}"
-
-    @property
-    def sd_aa_name(self) -> str:
-        """
-        Gets a unique name for the standard deviation of the latent component.
-
-        @return: the name of the parameter that stores the standard deviation of the latent
-            component.
+        @return: the name of the parameter that stores the standard deviation of emission
+            distribution.
         """
         return f"sd_aa_{self.uuid}"
 
@@ -135,9 +89,9 @@ class LatentComponent(ABC):
         self.parameters.clear_values()
 
     def draw_samples(self,
-                     coordination: CoordinationSamples,
+                     coordination: np.ndarray,
                      seed: Optional[int],
-                     **kwargs) -> LatentComponentSamples:
+                     **kwargs) -> ObservationSamples:
         """
         Draws latent component samples using ancestral sampling and some blending strategy with
         coordination and different subjects. This method must be implemented by concrete
@@ -231,10 +185,10 @@ class LatentComponent(ABC):
         """
 
         logp_params = self._get_logp_params(coordination=coordination,
-                                           observed_values=observed_values,
-                                           mean_a0=mean_a0,
-                                           sd_aa=sd_aa,
-                                           **kwargs)
+                                            observed_values=observed_values,
+                                            mean_a0=mean_a0,
+                                            sd_aa=sd_aa,
+                                            **kwargs)
 
         dimension_axis_name = f"{self.uuid}_dimension"
         time_axis_name = f"{self.uuid}_time"
@@ -320,57 +274,45 @@ class LatentComponent(ABC):
 ###################################################################################################
 
 
-class LatentComponentParameters:
+class ObservationParameters:
     """
-    This class stores values and hyper-priors of the parameters of a latent component.
+    This class stores values and hyper-priors of the parameters of an observation.
     """
 
-    def __init__(self, mean_mean_a0: np.ndarray, sd_mean_a0: np.ndarray, sd_sd_aa: np.ndarray):
+    def __init__(self, sd_sd_o: np.ndarray):
         """
-        Creates an object to store latent component parameter info.
+        Creates an object to store observation parameter info.
 
-        @param mean_mean_a0: mean of the hyper-prior of the mean at time t = 0.
-        @param sd_mean_a0: standard deviation of the hyper-prior of the mean at time t = 0.
-        @param sd_sd_aa: standard deviation of the hyper-prior of the standard deviation used in
-        the Gaussian random walk when transitioning from one time to the next.
+        @param sd_sd_o: standard deviation of the hyper-prior of the standard deviation used in
+            the Gaussian emission distribution.
         """
-        self.mean_a0 = Parameter(NormalParameterPrior(mean_mean_a0, sd_mean_a0))
-        self.sd_aa = Parameter(HalfNormalParameterPrior(sd_sd_aa))
+        self.sd_o = Parameter(HalfNormalParameterPrior(sd_sd_o))
 
     def clear_values(self):
         """
         Set values of the parameters to None. Parameters with None value will be fit to the data
         along with other latent values in the model.
         """
-        self.mean_a0.value = None
-        self.sd_aa.value = None
+        self.sd_o.value = None
 
 
-class LatentComponentSamples:
+class ObservationSamples:
     """
-    This class stores samples generated by a latent component.
+    This class stores samples generated by an observation.
     """
 
     def __init__(self,
-                 values: Union[List[np.ndarray], np.ndarray],
-                 time_steps_in_coordination_scale: Union[List[np.ndarray], np.ndarray]):
+                 values: Union[List[np.ndarray], np.ndarray]):
         """
         Creates an object to store samples.
 
-        @param values: sampled values of the latent component. For serial components, this will be
-        a list of time series of values of different sizes. For non-serial components, this will be
-        a tensor as the number of observations in time do not change for different sampled time
+        @param values: sampled values of the observation. For serial observations, this will be
+        a list of time series of values of different sizes. For non-serial observations, this will
+        be a tensor as the number of observations in time do not change for different sampled time
         series.
-        @param time_steps_in_coordination_scale: indexes to the coordination used to generate the
-        sample. If the component is in a different time scale from the time scale used to compute
-        coordination, this mapping will tell which value of coordination to map to each sampled
-        value of the latent component. For serial components, this will be a list of time series of
-        indices of different sizes. For non-serial components, this will be a tensor as the number
-        of observations in time do not change for different sampled time series.
         """
 
         self.values = values
-        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
     @property
     def num_time_steps(self) -> Union[int, np.array]:

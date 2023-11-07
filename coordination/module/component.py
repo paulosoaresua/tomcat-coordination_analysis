@@ -6,6 +6,22 @@ from coordination.module.serial_component import SerialComponent, SerialComponen
 from coordination.module.serial_observation import SerialObservation, SerialObservationSamples
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ComponentSamples:
 
     def __init__(self,

@@ -1,16 +1,16 @@
 from __future__ import annotations
-from typing import Any, List, Optional, Tuple, Union
+
+from typing import Any, List, Optional, Tuple, Callable
 
 import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
 from scipy.stats import norm
 
+from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
-from coordination.module.parametrization import Parameter, HalfNormalParameterPrior, \
-    NormalParameterPrior
-from coordination.module.latent_component import LatentComponent, LatentComponentSamples, \
-    LatentComponentParameters
+from coordination.module.latent_component import LatentComponent, LatentComponentSamples
+from coordination.module.coordination import CoordinationSamples
 
 
 class SerialComponent(LatentComponent):
@@ -67,7 +67,7 @@ class SerialComponent(LatentComponent):
                          dimension_names=dimension_names)
 
     def draw_samples(self,
-                     coordination: np.ndarray,
+                     coordination: CoordinationSamples,
                      seed: Optional[int],
                      time_scale_density: float = None,
                      can_repeat_subject: bool = None,
@@ -111,8 +111,8 @@ class SerialComponent(LatentComponent):
         # Generate samples
         set_random_seed(seed)
 
-        num_series = coordination.shape[0]
-        num_time_steps = coordination.shape[1]
+        num_series = coordination.coordination.shape[0]
+        num_time_steps = coordination.coordination.shape[1]
         sampled_subjects = []
         sampled_values = []
         time_steps_in_coordination_scale = []
@@ -129,7 +129,7 @@ class SerialComponent(LatentComponent):
             time_steps_in_coordination_scale.append(
                 np.array([t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int))
 
-            num_time_steps_in_cpn_scale = len(samples.time_steps_in_coordination_scale[s])
+            num_time_steps_in_cpn_scale = len(time_steps_in_coordination_scale[s])
 
             prev_time_same_subject.append(
                 np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
@@ -324,92 +324,40 @@ class SerialComponent(LatentComponent):
         subjects -= 1
         return subjects
 
-    def _transform_initial_mean(self, mean_a0: pm.Distribution) -> pm.Distribution:
-        if self.share_mean_a0_across_subjects:
-            mean_a0 = mean_a0[:, None]  # feature x time = 1 (broadcast across time)
-        else:
-            mean_a0 = mean_a0[subjects].transpose()  # feature x time
-
-        if self.share_mean_a0_across_dimensions:
-            mean_a0 = mean_a0.repeat(self.dimension_size, axis=0)
-
-
-    def _create_random_parameters(self,
-                                  subjects: np.ndarray,
-                                  mean_a0: Optional[Any] = None,
-                                  sd_aa: Optional[Any] = None):
+    def _get_logp_params(self,
+                         coordination: Any,
+                         observed_values: Optional[TensorTypes] = None,
+                         mean_a0: Optional[TensorTypes] = None,
+                         sd_aa: Optional[TensorTypes] = None,
+                         subjects: np.ndarray = None,
+                         prev_time_same_subject: np.ndarray = None,
+                         prev_time_diff_subject: np.ndarray = None,
+                         **kwargs) -> Any:
         """
-        This function creates the initial mean and standard deviation of the serial component distribution as
-        random variables.
+        Gets parameters to be passed to the logp and random functions.
+
+        @param coordination: latent random variable representing a time series of coordination.
+        @param observed_values: latent component values if one wants to fix them. This will treat
+        the latent component as known and constant. This is not the value of an observation
+        component, but the latent component itself.
+        @param mean_a0: initial mean of the latent component if previously defined outside of the
+        component. This is useful if one wants to share this across different components.
+        @param sd_aa: standard deviation of the latent component Gaussian transition distribution
+        if previously defined outside of the component. This is useful if one wants to share this
+        across different components.
+        @param subjects: array of numbers indicating which subject is associated to the component
+        at every time step (e.g. the current speaker for a speech component). In serial components,
+        only one user's latent component is observed at a time. This array indicates which user
+        that is.
+        @param prev_time_same_subject: time indices indicating the previous observation of the
+        latent component produced by the same subject at a given time. For instance, the last time
+        when the current speaker talked.
+        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
+        when the latent component was observed for a different subject.
+        @param kwargs: extra parameters to be used by child classes.
+
+        @return: a list of parameters of the logp function defined in this module.
         """
-
-        # Adjust feature dimensionality according to sharing options
-        if self.share_mean_a0_across_features:
-            dim_mean_a0_features = 1
-        else:
-            dim_mean_a0_features = self.dim_value
-
-        if self.share_sd_aa_across_features:
-            dim_sd_aa_features = 1
-        else:
-            dim_sd_aa_features = self.dim_value
-
-        # Initialize mean_a0 parameter if it hasn't been defined previously
-        if mean_a0 is None:
-            if self.share_mean_a0_across_subjects:
-                mean_a0 = pm.Normal(name=self.mean_a0_name,
-                                    mu=self.parameters.mean_a0.prior.mean,
-                                    sigma=self.parameters.mean_a0.prior.sd,
-                                    size=dim_mean_a0_features,
-                                    observed=self.parameters.mean_a0.value)
-                mean_a0 = mean_a0[:, None]  # feature x time = 1 (broadcast across time)
-            else:
-                mean_a0 = pm.Normal(name=self.mean_a0_name,
-                                    mu=self.parameters.mean_a0.prior.mean,
-                                    sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(self.num_subjects, dim_mean_a0_features),
-                                    observed=self.parameters.mean_a0.value)
-                mean_a0 = mean_a0[subjects].transpose()  # feature x time
-
-            if self.share_mean_a0_across_features:
-                mean_a0 = mean_a0.repeat(self.dim_value, axis=0)
-
-        # Initialize sd_aa parameter if it hasn't been defined previously
-        if sd_aa is None:
-            if self.share_sd_aa_across_subjects:
-                sd_aa = pm.HalfNormal(name=self.sd_aa_name,
-                                      sigma=self.parameters.sd_aa.prior.sd,
-                                      size=dim_sd_aa_features,
-                                      observed=self.parameters.sd_aa.value)
-                sd_aa = sd_aa[:, None]  # feature x time = 1 (broadcast across time)
-            else:
-                sd_aa = pm.HalfNormal(name=self.sd_aa_name,
-                                      sigma=self.parameters.sd_aa.prior.sd,
-                                      size=(self.num_subjects, dim_sd_aa_features),
-                                      observed=self.parameters.sd_aa.value)
-                sd_aa = sd_aa[subjects].transpose()  # feature x time
-
-            if self.share_sd_aa_across_features:
-                sd_aa = sd_aa.repeat(self.dim_value, axis=0)
-
-        return mean_a0, sd_aa
-
-    def update_pymc_model(self,
-                          coordination: Any,
-                          dimension_names: List[str],
-                          observed_values: Optional[TensorTypes] = None,
-                          mean_a0: Optional[TensorTypes] = None,
-                          sd_aa: Optional[TensorTypes] = None,
-
-                          prev_time_same_subject: np.ndarray,
-                          prev_time_diff_subject: np.ndarray,
-                          prev_same_subject_mask: np.ndarray,
-                          prev_diff_subject_mask: np.ndarray,
-                          subjects: np.ndarray,
-                          feature_dimension: str,
-                          time_dimension: str,
-                          observed_values: Optional[Any] = None,
-                          **kwargs) -> Any:
 
         mean_a0 = self._create_initial_mean_variable() if mean_a0 is None else mean_a0
         sd_aa = self._create_transition_standard_deviation_variable() if sd_aa is None else sd_aa
@@ -430,6 +378,10 @@ class SerialComponent(LatentComponent):
         if self.share_sd_aa_across_dimensions:
             sd_aa = sd_aa.repeat(self.dimension_size, axis=0)
 
+        # Mask with 1 for time steps where there is observation for a subject (subject index >= 0)
+        prev_same_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_same_subject])
+        prev_diff_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_diff_subject])
+
         logp_params = (mean_a0,
                        sd_aa,
                        coordination,
@@ -438,36 +390,38 @@ class SerialComponent(LatentComponent):
                        prev_same_subject_mask,
                        prev_diff_subject_mask,
                        np.array(self.self_dependent),
-                       *self._get_extra_logp_params(subjects, prev_time_same_subject,
+                       *self._get_extra_logp_params(subjects,
+                                                    prev_time_same_subject,
                                                     prev_time_diff_subject)
                        )
-        logp_fn = self._get_logp_fn()
-        random_fn = self._get_random_fn()
-        serial_component = pm.DensityDist(self.uuid, *logp_params,
-                                          logp=logp_fn,
-                                          random=random_fn,
-                                          dims=[feature_dimension, time_dimension],
-                                          observed=observed_values)
 
-        return serial_component, mean_a0, sd_aa
+        return logp_params
 
-    def _get_extra_logp_params(self, subjects_in_time: np.ndarray,
+    def _get_extra_logp_params(self,
+                               subjects_in_time: np.ndarray,
                                prev_time_same_subject: np.ndarray,
-                               prev_time_diff_subject: np.ndarray):
+                               prev_time_diff_subject: np.ndarray) -> Tuple[Any, ...]:
         """
-        Child classes can pass extra parameters to the logp and random functions
+        Gets extra parameters that are passed to the logp and random functions. Child classes can
+        use that if they need to pass extra information to those functions.
+
+        :@return extra parameters to the logp and random functions.
         """
         return ()
 
-    def _get_logp_fn(self):
+    def _get_logp_fn(self) -> Callable:
         """
-        Child classes can define their own logp functions
+        Gets a reference to a log-probability function of the component.
+
+        :@return log-probability function of the component.
         """
         return logp
 
-    def _get_random_fn(self):
+    def _get_random_fn(self) -> Callable:
         """
-        Child classes can define their own random functions for prior predictive checks
+        Gets a reference to a random function for prior predictive checks.
+
+        :@return random function to generate samples for predictive checks.
         """
         return random
 
@@ -525,52 +479,77 @@ class SerialComponentSamples(LatentComponentSamples):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
-def logp(sample: Any,
-         initial_mean: Any,
-         sigma: Any,
-         coordination: Any,
+def logp(sample: ptt.TensorVariable,
+         initial_mean: ptt.TensorVariable,
+         sigma: ptt.TensorVariable,
+         coordination: ptt.TensorVariable,
          prev_time_same_subject: ptt.TensorConstant,
          prev_time_diff_subject: ptt.TensorConstant,
-         prev_same_subject_mask: Any,
-         prev_diff_subject_mask: Any,
+         prev_same_subject_mask: ptt.TensorConstant,
+         prev_diff_subject_mask: ptt.TensorConstant,
          self_dependent: ptt.TensorConstant):
     """
-    This function computes the log-probability of a serial component. We use the following definition in the
-    comments below:
+    Computes the log-probability function of a sample.
 
-    d: number of dimensions/features of the component
-    T: number of time steps in the component's scale
+    @param sample: (dimension x time) a single samples series.
+    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is associated with the
+        subject at that time. The initial mean is only used the first time the user speaks but we
+        repeat the values here over time for uniform vector operations (e.g., we can multiply this
+        with other tensors) and we fix the behavior with mask tensors.
+    @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
+        associated with the subject at that time.
+    @param coordination: (time) a series of coordination values. Axis (time).
+    @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
+        associated with the same subject. For instance, prev_time_same_subject[t] points to the
+        most recent time step where the subject at time t had an observation. If there's no such a
+        time, prev_time_same_subject[t] will be -1. Axes (time).
+    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time step
+        associated with a different subject. For instance, prev_time_diff_subject[t] points to the
+        most recent time step where a different subject than the one at time t had an observation.
+        If there's no such a time, prev_time_diff_subject[t] will be -1.
+    @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
+        is -1.
+    @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
+        is -1.
+    @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @return:
     """
 
-    # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects in each time
-    # step. We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
-    # the sample component is one.
-    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # d x T
+    # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
+    # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
+    # case the first dimension of the sample component is one.
+    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # (dimension x time)
 
-    # We use this binary mask to zero out entries with no observations from partners.
-    mask_other = prev_diff_subject_mask[None, :]  # 1 x T
+    # We use this binary mask to zero out entries with no observations from partners. We create an
+    # extra dimension for broadcasting across the dimension axis (axis 0).
+    mask_other = prev_diff_subject_mask[None, :]  # (1 x time)
 
-    c = coordination[None, :]  # 1 x T
+    # We create an extra dimension for broadcasting across the dimension axis (axis 0).
+    c = coordination[None, :]  # (1 x time)
+
     if self_dependent.eval():
-        # The component's value for a subject depends on its previous value for the same subject.
-        prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # d x T
+        # The component's value for a subject depends on previous value of the same subject.
+        prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # (dimension x time)
 
-        # We use this binary mask to zero out entries with no previous observations from the subjects. We use this
-        # to determine the time steps that belong to the initial values of the component. Each subject will have their
-        # initial value in a different time step hence we cannot just use t=0.
-        mask_same = prev_same_subject_mask[None, :]  # 1 x t
+        # We use this binary mask to zero out entries with no previous values of the same subjects.
+        # We use this to determine the time steps that belong to the initial values of the
+        # component. Each subject will have their initial value in a different time step hence
+        # we cannot just use t=0.
+        # We create an extra dimension for broadcasting across the dimension axis (axis 0).
+        mask_same = prev_same_subject_mask[None, :]  # (1 x time)
         blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
-                prev_same * mask_same + (1 - mask_same) * initial_mean)
+                prev_same * mask_same + (1 - mask_same) * initial_mean)  # (dimension x time)
     else:
-        # The component's value for a subject does not depend on its previous value for the same subject.
-        # At every time step, the value from others is blended with a fixed value given by the component's initial
-        # mean.
+        # The component's value for a subject doesn't depend on previous value of the same subject.
+        # At every time step, the value from other subjects is blended with a fixed value given
+        # by the component's initial means associated with the subjects over time.
+        # (dimension x time)
         blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * initial_mean
 
-    total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=prev_other.shape),
-                         sample).sum()
-
-    return total_logp
+    return pm.logp(rv=pm.Normal.dist(mu=blended_mean,
+                                     sigma=sigma,
+                                     shape=prev_other.shape),
+                   value=sample).sum()
 
 
 def random(initial_mean: np.ndarray,
@@ -584,12 +563,35 @@ def random(initial_mean: np.ndarray,
            rng: Optional[np.random.Generator] = None,
            size: Optional[Tuple[int]] = None) -> np.ndarray:
     """
-    This function generates samples from of a serial component for prior predictive checks. We use the following
-    definition in the comments below:
+    Generates samples from of a serial component for prior predictive checks.
 
-    d: number of dimensions/features of the component
-    T: number of time steps in the component's scale
+    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is associated with the
+        subject at that time. The initial mean is only used the first time the user speaks but we
+        repeat the values here over time for uniform vector operations (e.g., we can multiply this
+        with other tensors) and we fix the behavior with mask tensors.
+    @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
+        associated with the subject at that time.
+    @param coordination: (time) a series of coordination values. Axis (time).
+    @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
+        associated with the same subject. For instance, prev_time_same_subject[t] points to the
+        most recent time step where the subject at time t had an observation. If there's no such a
+        time, prev_time_same_subject[t] will be -1. Axes (time).
+    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time step
+        associated with a different subject. For instance, prev_time_diff_subject[t] points to the
+        most recent time step where a different subject than the one at time t had an observation.
+        If there's no such a time, prev_time_diff_subject[t] will be -1.
+    @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
+        is -1.
+    @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
+        is -1.
+    @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param rng: random number generator.
+    @param size: size of the sample.
+
+    @return: a serial latent component sample.
     """
+
+    # TODO: Unify this with the class sampling method.
 
     T = coordination.shape[-1]
 
@@ -609,8 +611,8 @@ def random(initial_mean: np.ndarray,
         if self_dependent and prev_same_subject_mask[t] == 1:
             prev_same = sample[..., prev_time_same_subject[t]]
         else:
-            # When there's no self-dependency, the transition distribution is a blending between the previous value
-            # from another individual, and a fixed mean.
+            # When there's no self-dependency, the transition distribution is a blending between
+            # the previous value from another individual, and a fixed mean.
             if initial_mean.shape[1] == 1:
                 prev_same = initial_mean[..., 0]
             else:
