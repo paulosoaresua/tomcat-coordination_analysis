@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, List, Optional, Union
+from typing import Any, Optional
 
 import numpy as np
 import pymc as pm
@@ -9,18 +9,18 @@ from coordination.common.functions import sigmoid
 from coordination.module.parametrization2 import Parameter, HalfNormalParameterPrior, \
     NormalParameterPrior
 from coordination.common.utils import set_random_seed
-from coordination.module.component2 import ComponentSamples, Component, ComponentParameters
+from coordination.module.module import ModuleSamples, Module, ModuleParameters
 
 
-class SigmoidGaussianCoordination(Component):
+class SigmoidGaussianCoordination(Module):
     """
     This class models a time series of continuous unbounded coordination (C) and its bounded
-    version $\tilde{C} = sigmoid(C)$.
+    version tilde{C} = sigmoid(C).
     """
 
     def __init__(self, mean_mean_uc0: float, sd_mean_uc0: float, sd_sd_uc: float):
         """
-        Creates a coordination component.
+        Creates a coordination.
 
         @param mean_mean_uc0: mean of the hyper-prior of mu_uc0 (mean of the initial value of the
             unbounded coordination).
@@ -51,17 +51,13 @@ class SigmoidGaussianCoordination(Component):
         """
         set_random_seed(seed)
 
-        # Initialization
-        unbounded_coordination = np.zeros((num_series, num_time_steps))
-        coordination = np.zeros((num_series, num_time_steps))
-
         # Gaussian random walk via re-parametrization trick
         unbounded_coordination = norm(loc=0, scale=1).rvs(
             size=(num_series, num_time_steps)) * self.parameters.sd_uc.value
         unbounded_coordination[:, 0] += self.parameters.mean_uc0.value
         unbounded_coordination = unbounded_coordination.cumsum(axis=1)
 
-        # $\tilde{C}$ is a bounded version of coordination in the range [0,1]
+        # tilde{C} is a bounded version of coordination in the range [0,1]
         coordination = sigmoid(unbounded_coordination)
 
         return CoordinationSamples(unbounded_coordination=unbounded_coordination,
@@ -113,7 +109,7 @@ class SigmoidGaussianCoordination(Component):
 ###################################################################################################
 
 
-class CoordinationSamples(ComponentSamples):
+class CoordinationSamples(ModuleSamples):
 
     def __init__(self,
                  unbounded_coordination: np.ndarray,
@@ -123,7 +119,7 @@ class CoordinationSamples(ComponentSamples):
 
         @param unbounded_coordination: sampled values of an unbounded coordination variable.
             Unbounded coordination range from -Inf to +Inf.
-        @param coordination: sampled coordination values in the range [0,1], or exacly 0 or 1 for
+        @param coordination: sampled coordination values in the range [0,1], or exactly 0 or 1 for
             discrete coordination.
         """
         super().__init__(coordination)
@@ -131,9 +127,9 @@ class CoordinationSamples(ComponentSamples):
         self.unbounded_coordination = unbounded_coordination
 
 
-class SigmoidGaussianCoordinationParameters(ComponentParameters):
+class SigmoidGaussianCoordinationParameters(ModuleParameters):
     """
-    This class stores values and hyper-priors of the parameters of a coordination component.
+    This class stores values and hyper-priors of the parameters of the coordination module.
     """
 
     def __init__(self, mean_mean_uc0: float, sd_mean_uc0: float, sd_sd_uc: float):
@@ -142,7 +138,7 @@ class SigmoidGaussianCoordinationParameters(ComponentParameters):
 
         @param mean_mean_uc0: mean of the hyper-prior of the unbounded coordination mean at time
             t = 0.
-        @param sd_mean_uc0: standard deviation of the hyper-prior of of the unbounded coordination
+        @param sd_mean_uc0: standard deviation of the hyper-prior of the unbounded coordination
             mean at time t = 0.
         @param sd_sd_uc: standard deviation of the hyper-prior of the standard deviation used in
             the Gaussian random walk when transitioning from one time to the next.
