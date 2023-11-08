@@ -346,8 +346,8 @@ class SerialLatentComponent(LatentComponent):
     def update_pymc_model(
             self,
             pymc_model: pm.Model,
-            observed_values: Optional[TensorTypes] = None) -> Tuple[
-        Union[TensorTypes, pm.Distribution], ...]:
+            observed_values: Optional[Dict[str, TensorTypes]] = None
+    ) -> Dict[str, Union[TensorTypes, pm.Distribution], ...]:
         """
 
         @param pymc_model: model definition in pymc.
@@ -356,8 +356,8 @@ class SerialLatentComponent(LatentComponent):
         component, but the latent component itself.
         @raise ValueError: if either subjects, prev_time_same_subject or prev_time_diff_subject are
             None.
-        @return: random variables created in the PyMC model associated with the latent component.
-            Precisely, latent component, mean_a0 and sd_a.
+        @return: random variables created in the PyMC model associated with the latent component
+            indexed by their uuids.
         """
 
         if self.subject_indices is None:

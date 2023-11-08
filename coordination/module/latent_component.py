@@ -82,6 +82,7 @@ class LatentComponent(ABC, Module):
         # Check if the values passed as hyperparameter are in agreement with the dimension of the
         # variables that we need to infer. Parameters usually have dimensions: num subjects x
         # dimension size, but that changes depending on the sharing options.
+        # TODO: replace asserts with ValueError
         if share_mean_a0_across_subjects:
             assert (dim_mean_a0_dimensions,) == mean_mean_a0.shape
             assert (dim_mean_a0_dimensions,) == sd_mean_a0.shape
@@ -124,15 +125,15 @@ class LatentComponent(ABC, Module):
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
-        if self._coordination_samples is None:
-            raise ValueError("No coordination samples. Please call set_coordination_samples "
+        if self.coordination_samples is None:
+            raise ValueError("No coordination samples. Please set coordination_samples "
                              "before invoking the draw_samples method.")
-
-        pass
 
     def _check_parameter_dimensionality_consistency(self):
         """
         Check if their dimensionality is consistent with the sharing options.
+
+        @raise ValueError: if either mean_a0 or sd_a have undefined values.
         """
 
         if self.parameters.mean_a0.value is None:
@@ -182,8 +183,6 @@ class LatentComponent(ABC, Module):
 
             if self.sd_a_random_variable is None:
                 self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
-
-        pass
 
     def _create_initial_mean_variable(self) -> pm.Distribution:
         """

@@ -53,7 +53,7 @@ class SerialObservation(Observation):
         for i in range(len(latent_component)):
             # Adjust dimensions according to parameter sharing specification
             if self.share_sd_o_across_subjects:
-                # Broadcasted across time
+                # Broadcast across time
                 sd = self.parameters.sd_o.value[:, None]
             else:
                 sd = self.parameters.sd_o.value[subjects[i]].T
