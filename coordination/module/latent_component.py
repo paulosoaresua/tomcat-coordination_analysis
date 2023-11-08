@@ -97,24 +97,30 @@ class LatentComponent(ABC, Module):
                                                     sd_mean_a0=sd_mean_a0,
                                                     sd_sd_a=sd_sd_a)
 
+        # Variables that must be set before a calling to draw_samples
+        self.coordination_samples: CoordinationSamples = None
+
+        # Variables that must be set before a calling to update_pymc_model
+        self.coordination_random_variable: pm.Distribution = None
+
+        # Variables that can be set before a calling to update_pymc_model
+        self.mean_a0_random_variable: pm.Distribution = None
+        self.sd_a_random_variable: pm.Distribution = None
+
     @abstractmethod
-    def draw_samples(self,
-                     seed: Optional[int],
-                     coordination: CoordinationSamples = None,
-                     **kwargs) -> LatentComponentSamples:
+    def draw_samples(self, seed: Optional[int]) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and some blending strategy with
         coordination and different subjects. This method must be implemented by concrete
         subclasses.
 
         @param seed: random seed for reproducibility.
-        @param coordination: sampled coordination values.
-        @param kwargs: extra arguments to be defined by subclasses.
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
-        if coordination is None:
-            raise ValueError(f"No coordination samples.")
+        if self._coordination_samples is None:
+            raise ValueError("No coordination samples. Please call set_coordination_samples "
+                             "before invoking the draw_samples method.")
 
         pass
 
@@ -146,32 +152,29 @@ class LatentComponent(ABC, Module):
     def update_pymc_model(
             self,
             pymc_model: pm.Model,
-            coordination: pm.Distribution = None,
-            observed_values: Optional[TensorTypes] = None,
-            mean_a0: Optional[pm.Distribution] = None,
-            sd_a: Optional[pm.Distribution] = None,
-            **kwargs) -> Tuple[
-        Union[TensorTypes, pm.Distribution], ...]:
+            observed_values: Optional[Dict[str, TensorTypes]] = None
+    ) -> Dict[str, Union[TensorTypes, pm.Distribution], ...]:
         """
         Creates parameters and latent component variables in a PyMC model.
 
         @param pymc_model: model definition in pymc.
-        @param coordination: latent random variable representing a time series of coordination.
         @param observed_values: latent component values if one wants to fix them. This will treat
         the latent component as known and constant. This is not the value of an observation
         component, but the latent component itself.
-        @param mean_a0: initial mean of the latent component if previously defined outside of the
-        component. This is useful if one wants to share this across different components.
-        @param sd_a: standard deviation of the latent component Gaussian transition distribution
-            if previously defined outside of the module. This is useful if one wants to share this
-            across different components.
-        @param kwargs: extra parameters to be used by child classes.
-        @raise ValueError: if coordination is None.
+        @raise ValueError: if coordination_random_variable is None.
         @return: random variables created in the PyMC model associated with the latent component.
         """
 
-        if coordination is None:
-            raise ValueError("Coordination variable is undefined.")
+        if self.coordination_random_variable is None:
+            raise ValueError("Coordination variable is undefined. Please set "
+                             "coordination_random_variable before invoking the update_pymc_model "
+                             "method.")
+
+        if self.mean_a0_random_variable is None:
+            self.mean_a0_random_variable = self._create_initial_mean_variable()
+
+        if self.sd_a_random_variable is None:
+            self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
 
         pass
 

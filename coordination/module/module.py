@@ -32,27 +32,30 @@ class Module:
 
     @abstractmethod
     def draw_samples(self,
-                     seed: Optional[int],
-                     **kwargs) -> ModuleSamples:
+                     seed: Optional[int]) -> ModuleSamples:
         """
         Draws samples using ancestral sampling.
 
         @param seed: random seed for reproducibility.
-        @param kwargs: extra arguments to be defined by subclasses.
         @return: samples.
         """
         pass
 
     @abstractmethod
-    def update_pymc_model(self,
-                          pymc_model: pm.Model,
-                          **kwargs) -> Tuple[Union[TensorTypes, pm.Distribution], ...]:
+    def update_pymc_model(
+            self,
+            pymc_model: pm.Model,
+            observed_values: Optional[Dict[str, TensorTypes]] = None
+    ) -> Dict[str, Union[TensorTypes, pm.Distribution], ...]:
         """
         Creates variables in a PyMC model. This function
 
         @param pymc_model: model definition in pymc.
-        @param kwargs: extra parameters to be used by child classes.
-        @return: random variables added to the model.
+        @param observed_values: observations for the non-parameter variables in the model. Values
+            for the parameter variables are set directly in the module's parameters attribute. If a
+            value is set, the variable is not latent anymore. The dictionary key indicated the uuid
+            of the variable with observed values.
+        @return: random variables added to the model indexed by their uuids.
         """
         pass
 
