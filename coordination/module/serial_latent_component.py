@@ -34,7 +34,17 @@ class SerialLatentComponent(LatentComponent):
                  share_mean_a0_across_dimensions: bool,
                  share_sd_a_across_subjects: bool,
                  share_sd_a_across_dimensions: bool,
-                 dimension_names: Optional[List[str]] = None):
+                 dimension_names: Optional[List[str]] = None,
+                 coordination_samples: CoordinationSamples = None,
+                 coordination_random_variable: pm.Distribution = None,
+                 mean_a0_random_variable: pm.Distribution = None,
+                 sd_a_random_variable: pm.Distribution = None,
+                 sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
+                 allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+                 fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+                 subject_indices: np.ndarray = None,
+                 prev_time_same_subject: np.ndarray = None,
+                 prev_time_diff_subject: np.ndarray = None):
         """
         Creates a serial latent component.
 
@@ -55,6 +65,37 @@ class SerialLatentComponent(LatentComponent):
         @param share_sd_a_across_dimensions: whether to use the same sigma_a for all dimensions.
         @param dimension_names: the names of each dimension of the latent component. If not
         informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
+        @param coordination_samples: coordination samples to be used in a call to draw_samples.
+            This variable must be set before such a call.
+        @param coordination_random_variable: coordination random variable to be used in a call to
+            update_pymc_model. This variable must be set before such a call.
+        @param mean_a0_random_variable: random variable to be used in a call to
+            update_pymc_model. If not set, it will be created in such a call.
+        @param sd_a_random_variable: random variable to be used in a call to
+            update_pymc_model. If not set, it will be created in such a call.
+        @param sampling_time_scale_density: a number between 0 and 1 indicating the frequency in
+            which we have observations for the latent component. If 1, the latent component is
+            observed at every time in the coordination timescale. If 0.5, in average, only half of
+            the time. The final number of observations is not a deterministic function of the time
+            density, as the density is used to define transition probabilities between a subjects
+            and a non-existing subject.
+        @param allow_sampled_subject_repetition: whether subsequent observations can come from the
+            same subject.
+        @param fix_sampled_subject_sequence: whether the sequence of subjects is fixed
+            (0,1,2,...,0,1,2...) or randomized.
+        @param subject_indices: array of numbers indicating which subject is associated to the
+            latent component at every time step (e.g. the current speaker for a speech component).
+            In serial components, only one user's latent component is observed at a time. This
+            array indicates which user that is. This array contains no gaps. The size of the array
+            is the number of observed latent component in time, i.e., latent component time
+            indices with an associated subject.
+        @param prev_time_same_subject: time indices indicating the previous observation of the
+            latent component produced by the same subject at a given time. For instance, the last
+            time when the current speaker talked. This variable must be set before a call to
+            update_pymc_model.
+        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
+            when the latent component was observed for a different subject. This variable must be
+            set before a call to update_pymc_model.
         """
         super().__init__(uuid=uuid,
                          num_subjects=num_subjects,
@@ -67,34 +108,32 @@ class SerialLatentComponent(LatentComponent):
                          share_mean_a0_across_dimensions=share_mean_a0_across_dimensions,
                          share_sd_a_across_subjects=share_sd_a_across_subjects,
                          share_sd_a_across_dimensions=share_sd_a_across_dimensions,
-                         dimension_names=dimension_names)
+                         dimension_names=dimension_names,
+                         coordination_samples=coordination_samples,
+                         coordination_random_variable=coordination_random_variable,
+                         mean_a0_random_variable=mean_a0_random_variable,
+                         sd_a_random_variable=sd_a_random_variable)
 
-    def draw_samples(self,
-                     seed: Optional[int],
-                     coordination: CoordinationSamples = None,
-                     time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
-                     can_repeat_subject: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-                     fixed_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-                     **kwargs) -> LatentComponentSamples:
+        self.sampling_time_scale_density = sampling_time_scale_density
+        self.allow_sampled_subject_repetition = allow_sampled_subject_repetition
+        self.fix_sampled_subject_sequence = fix_sampled_subject_sequence
+        self.subject_indices = subject_indices
+        self.prev_time_same_subject = prev_time_same_subject
+        self.prev_time_diff_subject = prev_time_diff_subject
+
+    def draw_samples(self, seed: Optional[int]) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
         coordination and different subjects.
 
-        @param coordination: sampled coordination values.
         @param seed: random seed for reproducibility.
-        @param time_scale_density: a number between 0 and 1 indicating the frequency in which we
-        have observations for the latent component. If 1, the latent component is observed at every
-        time in the coordination timescale, if 0.5, in average, only half of the time. The final
-        number of observations is not a deterministic function of the time density, as the density
-        is used to define transition probabilities between a subjects and a non-existing subject.
-        @param can_repeat_subject: whether subsequent observations can come from the same subject.
-        @param fixed_subject_sequence: whether the sequence of subjects is fixed (0,1,...,n,0,1...)
-        or randomized.
-        @param kwargs: extra arguments to be defined by subclasses.
-
         @return: latent component samples for each coordination series.
         """
-        super().draw_samples(seed, coordination)
+        super().draw_samples(seed)
+
+        if self.sampling_time_scale_density <= 0 or self.sampling_time_scale_density > 1:
+            raise ValueError(f"The time scale density ({self.sampling_time_scale_density}) "
+                             f"must be a float number in the range (0,1].")
 
         self._check_parameter_dimensionality_consistency()
 
@@ -109,24 +148,16 @@ class SerialLatentComponent(LatentComponent):
         else:
             sd_a = self.parameters.sd_a.value
 
-        assert 0 <= time_scale_density <= 1
-
         # Generate samples
         set_random_seed(seed)
 
-        num_series = coordination.num_series
-        num_time_steps = coordination.num_time_steps
         sampled_subjects = []
         sampled_values = []
         time_steps_in_coordination_scale = []
         prev_time_same_subject = []
         prev_time_diff_subject = []
-        for s in range(num_series):
-            sparse_subjects = self._draw_random_subjects(num_series,
-                                                         num_time_steps,
-                                                         time_scale_density,
-                                                         can_repeat_subject,
-                                                         fixed_subject_sequence)
+        for s in range(self.coordination_samples.num_series):
+            sparse_subjects = self._draw_random_subjects()
             sampled_subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
 
             time_steps_in_coordination_scale.append(
@@ -159,7 +190,6 @@ class SerialLatentComponent(LatentComponent):
 
             values = self._draw_from_system_dynamics(
                 time_steps_in_coordination_scale=time_steps_in_coordination_scale[s],
-                sampled_coordination=coordination.values[s],
                 subjects_in_time=sampled_subjects[s],
                 prev_time_same_subject=prev_time_same_subject[s],
                 prev_time_diff_subject=prev_time_diff_subject[s],
@@ -177,7 +207,6 @@ class SerialLatentComponent(LatentComponent):
 
     def _draw_from_system_dynamics(self,
                                    time_steps_in_coordination_scale: np.ndarray,
-                                   sampled_coordination: np.ndarray,
                                    subjects_in_time: np.ndarray,
                                    prev_time_same_subject: np.ndarray,
                                    prev_time_diff_subject: np.ndarray,
@@ -233,7 +262,7 @@ class SerialLatentComponent(LatentComponent):
                 mean = mean_a0[subject_idx_mean_a0]
                 values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dimension_size)
             else:
-                c = sampled_coordination[time_steps_in_coordination_scale[t]]
+                c = self.coordination_samples.values[time_steps_in_coordination_scale[t]]
 
                 if self.self_dependent:
                     # When there's self dependency, the component either depends on the previous
@@ -253,67 +282,54 @@ class SerialLatentComponent(LatentComponent):
 
         return values
 
-    def _draw_random_subjects(self,
-                              num_series: int,
-                              num_time_steps: int,
-                              time_scale_density: float,
-                              can_repeat_subject: bool,
-                              fixed_subject_sequence: bool) -> np.ndarray:
+    def _draw_random_subjects(self) -> np.ndarray:
         """
         Draws random sequences of subjects over time. We define subject -1 as "No Subject", meaning
         the latent component is not observed when that subject is the one sampled in a given time
         step.
 
-        @param num_series: number of sampled series.
-        @param num_time_steps: number of time steps in the coordination timescale.
-        @param time_scale_density: a number between 0 and 1 indicating the frequency in which we
-        have observations for the latent component. If 1, the latent component is observed at every
-        time in the coordination timescale, if 0.5, in average, only half of the time. The final
-        number of observations is not a deterministic function of the time density, as the density
-        is used to define transition probabilities between a subjects and a non-existing subject.
-        @param can_repeat_subject: whether subsequent observations can come from the same subject.
-        @param fixed_subject_sequence: whether the sequence of subjects is fixed (0,1,...,n,0,1...)
-        or randomized.
-
         @return: a matrix of sampled subject series.
         """
 
-        #
-        if can_repeat_subject:
+        if self.allow_sampled_subject_repetition:
             # We allow the same subject to appear in subsequent observations
-            if fixed_subject_sequence:
+            if self.fix_sampled_subject_sequence:
                 transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
-                transition_matrix[:, 0] = 1 - time_scale_density
-                transition_matrix[0, 1] = time_scale_density
-                transition_matrix[-1, 1] = time_scale_density / 2
-                transition_matrix[-1, -1] = time_scale_density / 2
+                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
+                transition_matrix[0, 1] = self.sampling_time_scale_density
+                transition_matrix[-1, 1] = self.sampling_time_scale_density / 2
+                transition_matrix[-1, -1] = self.sampling_time_scale_density / 2
                 for s1 in range(1, self.num_subjects):
                     for s2 in range(1, self.num_subjects + 1):
                         if s1 == s2 or s2 == s1 + 1:
-                            transition_matrix[s1, s2] = time_scale_density / 2
+                            transition_matrix[s1, s2] = self.sampling_time_scale_density / 2
 
             else:
-                transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
-                                            fill_value=time_scale_density / self.num_subjects)
-                transition_matrix[:, 0] = 1 - time_scale_density
+                transition_matrix = np.full(
+                    shape=(self.num_subjects + 1, self.num_subjects + 1),
+                    fill_value=self.sampling_time_scale_density / self.num_subjects)
+                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
         else:
             if fixed_subject_sequence:
                 transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
-                transition_matrix[:, 0] = 1 - time_scale_density
-                transition_matrix[:-1, 1:] = np.eye(self.num_subjects) * time_scale_density
-                transition_matrix[-1, 1] = time_scale_density
+                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
+                transition_matrix[:-1, 1:] = np.eye(
+                    self.num_subjects) * self.sampling_time_scale_density
+                transition_matrix[-1, 1] = self.sampling_time_scale_density
             else:
-                transition_matrix = np.full(shape=(self.num_subjects + 1, self.num_subjects + 1),
-                                            fill_value=time_scale_density / (
-                                                    self.num_subjects - 1))
-                transition_matrix[0, 1:] = time_scale_density / self.num_subjects
+                transition_matrix = np.full(
+                    shape=(self.num_subjects + 1, self.num_subjects + 1),
+                    fill_value=self.sampling_time_scale_density / (self.num_subjects - 1))
+                transition_matrix[0, 1:] = self.sampling_time_scale_density / self.num_subjects
                 transition_matrix = transition_matrix * (1 - np.eye(self.num_subjects + 1))
-                transition_matrix[:, 0] = 1 - time_scale_density
+                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
 
         initial_prob = transition_matrix[0]
-        subjects = np.zeros((num_series, num_time_steps), dtype=int)
+        subjects = np.zeros(
+            (self.coordination_samples.num_series, self.coordination_samples.num_time_steps),
+            dtype=int)
 
-        for t in range(num_time_steps):
+        for t in range(self.coordination_samples.num_time_steps):
             if t == 0:
                 subjects[:, t] = np.random.choice(self.num_subjects + 1, num_series,
                                                   p=initial_prob)
@@ -330,76 +346,55 @@ class SerialLatentComponent(LatentComponent):
     def update_pymc_model(
             self,
             pymc_model: pm.Model,
-            coordination: pm.Distribution = None,
-            observed_values: Optional[TensorTypes] = None,
-            mean_a0: Optional[pm.Distribution] = None,
-            sd_a: Optional[pm.Distribution] = None,
-            subjects: np.ndarray = None,
-            prev_time_same_subject: np.ndarray = None,
-            prev_time_diff_subject: np.ndarray = None,
-            **kwargs) -> Tuple[
+            observed_values: Optional[TensorTypes] = None) -> Tuple[
         Union[TensorTypes, pm.Distribution], ...]:
         """
 
         @param pymc_model: model definition in pymc.
-        @param coordination: latent random variable representing a time series of coordination.
         @param observed_values: latent component values if one wants to fix them. This will treat
         the latent component as known and constant. This is not the value of an observation
         component, but the latent component itself.
-        @param mean_a0: initial mean of the latent component if previously defined outside of the
-        module. This is useful if one wants to share this across different components.
-        @param sd_a: standard deviation of the latent component Gaussian transition distribution
-        if previously defined outside of the module. This is useful if one wants to share this
-        across different components.
-        @param subjects: array of numbers indicating which subject is associated to the component
-        at every time step (e.g. the current speaker for a speech component). In serial components,
-        only one user's latent component is observed at a time. This array indicates which user
-        that is.
-        @param prev_time_same_subject: time indices indicating the previous observation of the
-        latent component produced by the same subject at a given time. For instance, the last time
-        when the current speaker talked.
-        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
-        when the latent component was observed for a different subject.
-        @param kwargs: extra parameters to be used by child classes.
         @raise ValueError: if either subjects, prev_time_same_subject or prev_time_diff_subject are
             None.
         @return: random variables created in the PyMC model associated with the latent component.
             Precisely, latent component, mean_a0 and sd_a.
         """
 
-        if subjects is None:
-            raise ValueError("The list of subjects is undefined.")
+        if self.subject_indices is None:
+            raise ValueError("subject_indices is undefined.")
 
-        if prev_time_same_subject is None:
+        if self.prev_time_same_subject is None:
             raise ValueError("prev_time_same_subject is undefined.")
 
-        if prev_time_diff_subject is None:
+        if self.prev_time_diff_subject is None:
             raise ValueError("prev_time_diff_subject is undefined.")
-
-        with pymc_model:
-            mean_a0 = self._create_initial_mean_variable() if mean_a0 is None else mean_a0
-            sd_a = self._create_transition_standard_deviation_variable() if sd_a is None else sd_a
 
         # Adjust dimensions for proper indexing and broadcast in the log_prob function.
         if self.share_mean_a0_across_subjects:
-            mean_a0 = mean_a0[:, None]  # feature x time = 1 (broadcast across time)
+            # dimension x time = 1 (broadcast across time)
+            mean_a0 = self.mean_a0_random_variable[:, None]
         else:
-            mean_a0 = mean_a0[subjects].transpose()  # feature x time
+            # dimension x time
+            mean_a0 = self.mean_a0_random_variable[self.subject_indices].transpose()
 
         if self.share_mean_a0_across_dimensions:
             mean_a0 = mean_a0.repeat(self.dimension_size, axis=0)
 
         if self.share_sd_a_across_subjects:
-            sd_a = sd_a[:, None]  # feature x time = 1 (broadcast across time)
+            # dimension x time = 1 (broadcast across time)
+            sd_a = self.sd_a_random_variable[:, None]
         else:
-            sd_a = sd_a[subjects].transpose()  # feature x time
+            # dimension x time
+            sd_a = sd_a_random_variable[self.subject_indices].transpose()
 
         if self.share_sd_a_across_dimensions:
             sd_a = sd_a.repeat(self.dimension_size, axis=0)
 
         # Mask with 1 for time steps where there is observation for a subject (subject index >= 0)
-        prev_same_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_same_subject])
-        prev_diff_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_diff_subject])
+        prev_same_subject_mask = np.array(
+            [np.where(x >= 0, 1, 0) for x in self.prev_time_same_subject])
+        prev_diff_subject_mask = np.array(
+            [np.where(x >= 0, 1, 0) for x in self.prev_time_diff_subject])
 
         log_prob_params = (mean_a0,
                            sd_a,

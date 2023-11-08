@@ -38,7 +38,11 @@ class LatentComponent(ABC, Module):
                  share_mean_a0_across_dimensions: bool,
                  share_sd_a_across_subjects: bool,
                  share_sd_a_across_dimensions: bool,
-                 dimension_names: Optional[List[str]] = None):
+                 dimension_names: Optional[List[str]] = None,
+                 coordination_samples: CoordinationSamples = None,
+                 coordination_random_variable: pm.Distribution = None,
+                 mean_a0_random_variable: pm.Distribution = None,
+                 sd_a_random_variable: pm.Distribution = None):
         """
         Creates a latent component module.
 
@@ -60,6 +64,14 @@ class LatentComponent(ABC, Module):
         @param share_sd_a_across_dimensions: whether to use the same sigma_a for all dimensions.
         @param dimension_names: the names of each dimension of the latent component. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
+        @param coordination_samples: coordination samples to be used in a call to draw_samples.
+            This variable must be set before such a call.
+        @param coordination_random_variable: coordination random variable to be used in a call to
+            update_pymc_model. This variable must be set before such a call.
+        @param mean_a0_random_variable: random variable to be used in a call to
+            update_pymc_model. If not set, it will be created in such a call.
+        @param sd_a_random_variable: random variable to be used in a call to
+            update_pymc_model. If not set, it will be created in such a call.
         """
         super().__init__()
 
@@ -91,21 +103,15 @@ class LatentComponent(ABC, Module):
         self.share_sd_a_across_subjects = share_sd_a_across_subjects
         self.share_sd_a_across_dimensions = share_sd_a_across_dimensions
         self.dimension_names = dimension_names
+        self.coordination_samples = coordination_samples
+        self.coordination_random_variable = coordination_random_variable
+        self.mean_a0_random_variable = mean_a0_random_variable
+        self.sd_a_random_variable = sd_a_random_variable
 
         self.parameters = LatentComponentParameters(module_uuid=uuid,
                                                     mean_mean_a0=mean_mean_a0,
                                                     sd_mean_a0=sd_mean_a0,
                                                     sd_sd_a=sd_sd_a)
-
-        # Variables that must be set before a calling to draw_samples
-        self.coordination_samples: CoordinationSamples = None
-
-        # Variables that must be set before a calling to update_pymc_model
-        self.coordination_random_variable: pm.Distribution = None
-
-        # Variables that can be set before a calling to update_pymc_model
-        self.mean_a0_random_variable: pm.Distribution = None
-        self.sd_a_random_variable: pm.Distribution = None
 
     @abstractmethod
     def draw_samples(self, seed: Optional[int]) -> LatentComponentSamples:
@@ -170,11 +176,12 @@ class LatentComponent(ABC, Module):
                              "coordination_random_variable before invoking the update_pymc_model "
                              "method.")
 
-        if self.mean_a0_random_variable is None:
-            self.mean_a0_random_variable = self._create_initial_mean_variable()
+        with pymc_model:
+            if self.mean_a0_random_variable is None:
+                self.mean_a0_random_variable = self._create_initial_mean_variable()
 
-        if self.sd_a_random_variable is None:
-            self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
+            if self.sd_a_random_variable is None:
+                self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
 
         pass
 
