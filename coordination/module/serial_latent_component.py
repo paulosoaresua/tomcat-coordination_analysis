@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple, Callable
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
@@ -10,16 +10,16 @@ from scipy.stats import norm
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
 from coordination.module.latent_component import LatentComponent, LatentComponentSamples
-from coordination.module.coordination import CoordinationSamples
+from coordination.module.coordination2 import CoordinationSamples
 from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG)
 
 
-class SerialComponent(LatentComponent):
+class SerialLatentComponent(LatentComponent):
     """
     This class represents a serial latent component where there's only one observation per subject
-    at a time in the component's scale, and subjects are influenced in a pairwise manner.
+    at a time in the component's scale, and subjects are influenced in a pair-wised manner.
     """
 
     def __init__(self,
@@ -84,7 +84,7 @@ class SerialComponent(LatentComponent):
         @param seed: random seed for reproducibility.
         @param time_scale_density: a number between 0 and 1 indicating the frequency in which we
         have observations for the latent component. If 1, the latent component is observed at every
-        time in the coordination time scale, if 0.5, in average, only half of the time. The final
+        time in the coordination timescale, if 0.5, in average, only half of the time. The final
         number of observations is not a deterministic function of the time density, as the density
         is used to define transition probabilities between a subjects and a non-existing subject.
         @param can_repeat_subject: whether subsequent observations can come from the same subject.
@@ -94,7 +94,7 @@ class SerialComponent(LatentComponent):
 
         @return: latent component samples for each coordination series.
         """
-        super().draw_samples(coordination, seed)
+        super().draw_samples(seed, coordination)
 
         self._check_parameter_dimensionality_consistency()
 
@@ -114,8 +114,8 @@ class SerialComponent(LatentComponent):
         # Generate samples
         set_random_seed(seed)
 
-        num_series = coordination.coordination.shape[0]
-        num_time_steps = coordination.coordination.shape[1]
+        num_series = coordination.num_series
+        num_time_steps = coordination.num_time_steps
         sampled_subjects = []
         sampled_values = []
         time_steps_in_coordination_scale = []
@@ -159,7 +159,7 @@ class SerialComponent(LatentComponent):
 
             values = self._draw_from_system_dynamics(
                 time_steps_in_coordination_scale=time_steps_in_coordination_scale[s],
-                sampled_coordination=coordination[s],
+                sampled_coordination=coordination.values[s],
                 subjects_in_time=sampled_subjects[s],
                 prev_time_same_subject=prev_time_same_subject[s],
                 prev_time_diff_subject=prev_time_diff_subject[s],
@@ -167,7 +167,7 @@ class SerialComponent(LatentComponent):
                 sd_a=sd_a)
             sampled_values.append(values)
 
-        return SerialComponentSamples(
+        return SerialLatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             subjects=sampled_subjects,
@@ -195,9 +195,9 @@ class SerialComponent(LatentComponent):
         @param subjects_in_time: an array indicating which subject is responsible for a latent
         component observation at a time.
         @param prev_time_same_subject: an array containing indices to most recent previous times
-        the component from the same subject was observed in the component's time scale.
+        the component from the same subject was observed in the component's timescale.
         @param prev_time_diff_subject: an array containing indices to most recent previous times
-        the component from the a different subject was observed in the component's time scale.
+        the component from a different subject was observed in the component's timescale.
         @param mean_a0: initial mean of the latent component.
         @param sd_a: standard deviation of the Gaussian transition distribution.
 
@@ -210,7 +210,7 @@ class SerialComponent(LatentComponent):
         for t in range(num_time_steps):
 
             # The way we index subjects change depending on the sharing options. If shared, the
-            # the parameters will have a single dimension across subjects so we can index by 0,
+            # parameters will have a single dimension across subjects, so we can index by 0,
             # otherwise we use the subject number to index the correct parameter for that subject.
             if self.share_mean_a0_across_subjects:
                 subject_idx_mean_a0 = 0
@@ -237,7 +237,7 @@ class SerialComponent(LatentComponent):
 
                 if self.self_dependent:
                     # When there's self dependency, the component either depends on the previous
-                    # value of another subject or the previous value of he same subject.
+                    # value of another subject or the previous value of the same subject.
                     prev_same = values[..., prev_time_same_subject[t]]
                 else:
                     # When there's no self dependency, the component either depends on the previous
@@ -265,10 +265,10 @@ class SerialComponent(LatentComponent):
         step.
 
         @param num_series: number of sampled series.
-        @param num_time_steps: number of time steps in the coordination time scale.
+        @param num_time_steps: number of time steps in the coordination timescale.
         @param time_scale_density: a number between 0 and 1 indicating the frequency in which we
         have observations for the latent component. If 1, the latent component is observed at every
-        time in the coordination time scale, if 0.5, in average, only half of the time. The final
+        time in the coordination timescale, if 0.5, in average, only half of the time. The final
         number of observations is not a deterministic function of the time density, as the density
         is used to define transition probabilities between a subjects and a non-existing subject.
         @param can_repeat_subject: whether subsequent observations can come from the same subject.
@@ -327,18 +327,19 @@ class SerialComponent(LatentComponent):
         subjects -= 1
         return subjects
 
-    def _get_logp_params(self,
-                         pymc_model: pm.Model,
-                         coordination: pm.Distribution,
-                         observed_values: Optional[TensorTypes] = None,
-                         mean_a0: Optional[TensorTypes] = None,
-                         sd_a: Optional[TensorTypes] = None,
-                         subjects: np.ndarray = None,
-                         prev_time_same_subject: np.ndarray = None,
-                         prev_time_diff_subject: np.ndarray = None,
-                         **kwargs) -> Any:
+    def update_pymc_model(
+            self,
+            pymc_model: pm.Model,
+            coordination: pm.Distribution = None,
+            observed_values: Optional[TensorTypes] = None,
+            mean_a0: Optional[pm.Distribution] = None,
+            sd_a: Optional[pm.Distribution] = None,
+            subjects: np.ndarray = None,
+            prev_time_same_subject: np.ndarray = None,
+            prev_time_diff_subject: np.ndarray = None,
+            **kwargs) -> Tuple[
+        Union[TensorTypes, pm.Distribution], ...]:
         """
-        Gets parameters to be passed to the logp and random functions.
 
         @param pymc_model: model definition in pymc.
         @param coordination: latent random variable representing a time series of coordination.
@@ -346,9 +347,9 @@ class SerialComponent(LatentComponent):
         the latent component as known and constant. This is not the value of an observation
         component, but the latent component itself.
         @param mean_a0: initial mean of the latent component if previously defined outside of the
-        component. This is useful if one wants to share this across different components.
+        module. This is useful if one wants to share this across different components.
         @param sd_a: standard deviation of the latent component Gaussian transition distribution
-        if previously defined outside of the component. This is useful if one wants to share this
+        if previously defined outside of the module. This is useful if one wants to share this
         across different components.
         @param subjects: array of numbers indicating which subject is associated to the component
         at every time step (e.g. the current speaker for a speech component). In serial components,
@@ -360,14 +361,26 @@ class SerialComponent(LatentComponent):
         @param prev_time_diff_subject: similar to the above but it indicates the most recent time
         when the latent component was observed for a different subject.
         @param kwargs: extra parameters to be used by child classes.
-
-        @return: a list of parameters of the logp function defined in this module.
+        @raise ValueError: if either subjects, prev_time_same_subject or prev_time_diff_subject are
+            None.
+        @return: random variables created in the PyMC model associated with the latent component.
+            Precisely, latent component, mean_a0 and sd_a.
         """
+
+        if subjects is None:
+            raise ValueError("The list of subjects is undefined.")
+
+        if prev_time_same_subject is None:
+            raise ValueError("prev_time_same_subject is undefined.")
+
+        if prev_time_diff_subject is None:
+            raise ValueError("prev_time_diff_subject is undefined.")
 
         with pymc_model:
             mean_a0 = self._create_initial_mean_variable() if mean_a0 is None else mean_a0
             sd_a = self._create_transition_standard_deviation_variable() if sd_a is None else sd_a
 
+        # Adjust dimensions for proper indexing and broadcast in the log_prob function.
         if self.share_mean_a0_across_subjects:
             mean_a0 = mean_a0[:, None]  # feature x time = 1 (broadcast across time)
         else:
@@ -388,39 +401,35 @@ class SerialComponent(LatentComponent):
         prev_same_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_same_subject])
         prev_diff_subject_mask = np.array([np.where(x >= 0, 1, 0) for x in prev_time_diff_subject])
 
-        logp_params = (mean_a0,
-                       sd_a,
-                       coordination,
-                       prev_time_same_subject,
-                       prev_time_diff_subject,
-                       prev_same_subject_mask,
-                       prev_diff_subject_mask,
-                       np.array(self.self_dependent))
+        log_prob_params = (mean_a0,
+                           sd_a,
+                           coordination,
+                           prev_time_same_subject,
+                           prev_time_diff_subject,
+                           prev_same_subject_mask,
+                           prev_diff_subject_mask,
+                           np.array(self.self_dependent))
 
-        return logp_params
+        dimension_axis_name = f"{self.uuid}_dimension"
+        time_axis_name = f"{self.uuid}_time"
 
-    def _get_logp_fn(self) -> Callable:
-        """
-        Gets a reference to a log-probability function of the component.
+        with pymc_model:
+            latent_component = pm.DensityDist(self.uuid,
+                                              *log_prob_params,
+                                              logp=log_prob,
+                                              random=random,
+                                              dims=[dimension_axis_name, time_axis_name],
+                                              observed=observed_values)
 
-        :@return log-probability function of the component.
-        """
-        return logp
-
-    def _get_random_fn(self) -> Callable:
-        """
-        Gets a reference to a random function for prior predictive checks.
-
-        :@return random function to generate samples for predictive checks.
-        """
-        return random
+        return latent_component, mean_a0, sd_a
 
 
 ###################################################################################################
 # AUXILIARY CLASSES
 ###################################################################################################
 
-class SerialComponentSamples(LatentComponentSamples):
+
+class SerialLatentComponentSamples(LatentComponentSamples):
 
     def __init__(self,
                  values: List[np.ndarray],
@@ -431,12 +440,10 @@ class SerialComponentSamples(LatentComponentSamples):
         """
         Creates an object to store samples.
 
-        @param values: sampled values of the latent component. For serial components, this will be
-        a list of time series of values of different sizes. For non-serial components, this will be
-        a tensor as the number of observations in time do not change for different sampled time
-        series.
+        @param values: sampled values of the latent component. This is a list of time series of
+        values of different sizes because each sampled series may have a different sparsity level.
         @param time_steps_in_coordination_scale: indexes to the coordination used to generate the
-        sample. If the component is in a different time scale from the time scale used to compute
+        sample. If the component is in a different timescale from the timescale used to compute
         coordination, this mapping will tell which value of coordination to map to each sampled
         value of the latent component. For serial components, this will be a list of time series of
         indices of different sizes. For non-serial components, this will be a tensor as the number
@@ -469,21 +476,21 @@ class SerialComponentSamples(LatentComponentSamples):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
-def logp(sample: ptt.TensorVariable,
-         initial_mean: ptt.TensorVariable,
-         sigma: ptt.TensorVariable,
-         coordination: ptt.TensorVariable,
-         prev_time_same_subject: ptt.TensorConstant,
-         prev_time_diff_subject: ptt.TensorConstant,
-         prev_same_subject_mask: ptt.TensorConstant,
-         prev_diff_subject_mask: ptt.TensorConstant,
-         self_dependent: ptt.TensorConstant):
+def log_prob(sample: ptt.TensorVariable,
+             initial_mean: ptt.TensorVariable,
+             sigma: ptt.TensorVariable,
+             coordination: ptt.TensorVariable,
+             prev_time_same_subject: ptt.TensorConstant,
+             prev_time_diff_subject: ptt.TensorConstant,
+             prev_same_subject_mask: ptt.TensorConstant,
+             prev_diff_subject_mask: ptt.TensorConstant,
+             self_dependent: ptt.TensorConstant):
     """
     Computes the log-probability function of a sample.
 
     @param sample: (dimension x time) a single samples series.
     @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is associated with the
-        subject at that time. The initial mean is only used the first time the user speaks but we
+        subject at that time. The initial mean is only used the first time the user speaks, but we
         repeat the values here over time for uniform vector operations (e.g., we can multiply this
         with other tensors) and we fix the behavior with mask tensors.
     @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
@@ -553,23 +560,23 @@ def random(initial_mean: np.ndarray,
            rng: Optional[np.random.Generator] = None,
            size: Optional[Tuple[int]] = None) -> np.ndarray:
     """
-    Generates samples from of a serial component for prior predictive checks.
+    Generates samples from of a serial latent component for prior predictive checks.
 
-    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is associated with the
-        subject at that time. The initial mean is only used the first time the user speaks but we
-        repeat the values here over time for uniform vector operations (e.g., we can multiply this
-        with other tensors) and we fix the behavior with mask tensors.
-    @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
-        associated with the subject at that time.
+    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
+        associated with the subject at that time. The initial mean is only used the first time the
+        user speaks, but we repeat the values here over time for uniform vector operations (e.g.,
+        we can multiply this with other tensors) and we fix the behavior with mask tensors.
+    @param sigma: (dimension x time) a series of standard deviations. At each time the standard
+        deviation is associated with the subject at that time.
     @param coordination: (time) a series of coordination values. Axis (time).
     @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
         associated with the same subject. For instance, prev_time_same_subject[t] points to the
         most recent time step where the subject at time t had an observation. If there's no such a
         time, prev_time_same_subject[t] will be -1. Axes (time).
-    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time step
-        associated with a different subject. For instance, prev_time_diff_subject[t] points to the
-        most recent time step where a different subject than the one at time t had an observation.
-        If there's no such a time, prev_time_diff_subject[t] will be -1.
+    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time
+        step associated with a different subject. For instance, prev_time_diff_subject[t] points
+        to the most recent time step where a different subject than the one at time t had an
+        observation. If there's no such a time, prev_time_diff_subject[t] will be -1.
     @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
         is -1.
     @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
