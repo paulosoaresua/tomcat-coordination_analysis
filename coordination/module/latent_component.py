@@ -107,8 +107,8 @@ class LatentComponent(ABC, Module):
         coordination and different subjects. This method must be implemented by concrete
         subclasses.
 
-        @param coordination: sampled coordination values.
         @param seed: random seed for reproducibility.
+        @param coordination: sampled coordination values.
         @param kwargs: extra arguments to be defined by subclasses.
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
