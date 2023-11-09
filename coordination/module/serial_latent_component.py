@@ -8,7 +8,6 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
-from coordination.common.utils import set_random_seed
 from coordination.module.latent_component import LatentComponent, LatentComponentSamples
 from coordination.module.coordination2 import CoordinationSamples
 from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
@@ -23,6 +22,7 @@ class SerialLatentComponent(LatentComponent):
     """
 
     def __init__(self,
+                 pymc_model: pm.Model,
                  uuid: str,
                  num_subjects: int,
                  dimension_size: int,
@@ -37,6 +37,7 @@ class SerialLatentComponent(LatentComponent):
                  dimension_names: Optional[List[str]] = None,
                  coordination_samples: CoordinationSamples = None,
                  coordination_random_variable: pm.Distribution = None,
+                 latent_component_random_variable: pm.Distribution = None,
                  mean_a0_random_variable: pm.Distribution = None,
                  sd_a_random_variable: pm.Distribution = None,
                  sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
@@ -44,10 +45,12 @@ class SerialLatentComponent(LatentComponent):
                  fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                  subject_indices: np.ndarray = None,
                  prev_time_same_subject: np.ndarray = None,
-                 prev_time_diff_subject: np.ndarray = None):
+                 prev_time_diff_subject: np.ndarray = None,
+                 observed_values: TensorTypes = None):
         """
         Creates a serial latent component.
 
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param uuid: String uniquely identifying the latent component in the model.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
@@ -69,6 +72,8 @@ class SerialLatentComponent(LatentComponent):
             This variable must be set before such a call.
         @param coordination_random_variable: coordination random variable to be used in a call to
             update_pymc_model. This variable must be set before such a call.
+        @param latent_component_random_variable: latent component random variable to be used in a
+            call to update_pymc_model. If not set, it will be created in such a call.
         @param mean_a0_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
         @param sd_a_random_variable: random variable to be used in a call to
@@ -96,8 +101,11 @@ class SerialLatentComponent(LatentComponent):
         @param prev_time_diff_subject: similar to the above but it indicates the most recent time
             when the latent component was observed for a different subject. This variable must be
             set before a call to update_pymc_model.
+        @param observed_values: observations for the serial latent component random variable. If
+            a value is set, the variable is not latent anymore.
         """
-        super().__init__(uuid=uuid,
+        super().__init__(pymc_model=pymc_model,
+                         uuid=uuid,
                          num_subjects=num_subjects,
                          dimension_size=dimension_size,
                          self_dependent=self_dependent,
@@ -111,8 +119,10 @@ class SerialLatentComponent(LatentComponent):
                          dimension_names=dimension_names,
                          coordination_samples=coordination_samples,
                          coordination_random_variable=coordination_random_variable,
+                         latent_component_random_variable=latent_component_random_variable,
                          mean_a0_random_variable=mean_a0_random_variable,
-                         sd_a_random_variable=sd_a_random_variable)
+                         sd_a_random_variable=sd_a_random_variable,
+                         observed_values=observed_values)
 
         self.sampling_time_scale_density = sampling_time_scale_density
         self.allow_sampled_subject_repetition = allow_sampled_subject_repetition
@@ -147,9 +157,6 @@ class SerialLatentComponent(LatentComponent):
             sd_a = self.parameters.sd_a.value[None, :].repeat(self.num_subjects, axis=0)
         else:
             sd_a = self.parameters.sd_a.value
-
-        # Generate samples
-        set_random_seed(seed)
 
         sampled_subjects = []
         sampled_values = []
@@ -343,22 +350,16 @@ class SerialLatentComponent(LatentComponent):
         subjects -= 1
         return subjects
 
-    def update_pymc_model(
-            self,
-            pymc_model: pm.Model,
-            observed_values: Optional[Dict[str, TensorTypes]] = None
-    ) -> Dict[str, Union[TensorTypes, pm.Distribution], ...]:
+    def create_random_variables(self):
         """
+        Creates parameters and serial latent component variables in a PyMC model.
 
-        @param pymc_model: model definition in pymc.
-        @param observed_values: latent component values if one wants to fix them. This will treat
-        the latent component as known and constant. This is not the value of an observation
-        component, but the latent component itself.
         @raise ValueError: if either subjects, prev_time_same_subject or prev_time_diff_subject are
             None.
-        @return: random variables created in the PyMC model associated with the latent component
-            indexed by their uuids.
         """
+
+        if self.latent_component_random_variable is not None:
+            return
 
         if self.subject_indices is None:
             raise ValueError("subject_indices is undefined.")
@@ -375,17 +376,19 @@ class SerialLatentComponent(LatentComponent):
             mean_a0 = self.mean_a0_random_variable[:, None]
         else:
             # dimension x time
-            mean_a0 = self.mean_a0_random_variable[self.subject_indices].transpose()
+            mean_a0 = self.mean_a0_random_variable[
+                self.subject_indices].transpose()
 
         if self.share_mean_a0_across_dimensions:
-            mean_a0 = mean_a0.repeat(self.dimension_size, axis=0)
+            mean_a0 = mean_a0.repeat(self.dimension_size,
+                                     axis=0)
 
         if self.share_sd_a_across_subjects:
             # dimension x time = 1 (broadcast across time)
             sd_a = self.sd_a_random_variable[:, None]
         else:
             # dimension x time
-            sd_a = sd_a_random_variable[self.subject_indices].transpose()
+            sd_a = self.sd_a_random_variable[self.subject_indices].transpose()
 
         if self.share_sd_a_across_dimensions:
             sd_a = sd_a.repeat(self.dimension_size, axis=0)
@@ -408,15 +411,16 @@ class SerialLatentComponent(LatentComponent):
         dimension_axis_name = f"{self.uuid}_dimension"
         time_axis_name = f"{self.uuid}_time"
 
-        with pymc_model:
-            latent_component = pm.DensityDist(self.uuid,
-                                              *log_prob_params,
-                                              logp=log_prob,
-                                              random=random,
-                                              dims=[dimension_axis_name, time_axis_name],
-                                              observed=observed_values)
-
-        return latent_component, mean_a0, sd_a
+        with self.pymc_model:
+            self.latent_component_random_variable = pm.DensityDist(
+                self.uuid,
+                *log_prob_params,
+                logp=log_prob,
+                random=random,
+                dims=[dimension_axis_name,
+                      time_axis_name],
+                observed=self.observed_values
+            )
 
 
 ###################################################################################################

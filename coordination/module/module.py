@@ -8,12 +8,29 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.module.parametrization2 import Parameter
+from coordination.common.utils import set_random_seed
 
 
 class Module:
+    """
+    This class represents a generic module of a coordination model.
+    """
 
-    def __init__(self):
-        self.parameters: ModuleParameters = None
+    def __init__(self,
+                 pymc_model: pm.Model,
+                 parameters: ModuleParameters,
+                 observed_values: TensorTypes):
+        """
+
+        @param pymc_model: a PyMC model instance where modules are to be created at.
+        @param parameters: parameters of the module.
+        @param observed_values: observations for the non-parameter random variable in the model.
+            Values for the parameter variables are set directly in the module's parameters
+            attribute. If a value is set, the variable is not latent anymore.
+        """
+        self.pymc_model = pymc_model
+        self.parameters = parameters
+        self.observed_values = observed_values
 
     @property
     def parameter_names(self) -> List[str]:
@@ -24,6 +41,20 @@ class Module:
         """
         return self.parameters.parameter_names
 
+    @property
+    def random_variables(self) -> Dict[str, pm.Distribution]:
+        """
+        Gets all random variables created in the module as a dictionary indexed by their names.
+
+        @return: dictionary of random variables defined in the module.
+        """
+
+        rv_dict = {}
+        for rv in self.pymc_model.basic_RVs:
+            rv_dict[rv.name] = rv
+
+        return rv_dict
+
     def clear_parameter_values(self):
         """
         Clears the values of all the parameters. Their hyper-priors are preserved.
@@ -31,31 +62,18 @@ class Module:
         self.parameters.clear_values()
 
     @abstractmethod
-    def draw_samples(self,
-                     seed: Optional[int]) -> ModuleSamples:
+    def draw_samples(self, seed: Optional[int]) -> ModuleSamples:
         """
         Draws samples using ancestral sampling.
 
         @param seed: random seed for reproducibility.
-        @return: samples.
         """
-        pass
+        set_random_seed(seed)
 
     @abstractmethod
-    def update_pymc_model(
-            self,
-            pymc_model: pm.Model,
-            observed_values: Optional[Dict[str, TensorTypes]] = None
-    ) -> Dict[str, Union[TensorTypes, pm.Distribution], ...]:
+    def create_random_variables(self):
         """
-        Creates variables in a PyMC model. This function
-
-        @param pymc_model: model definition in pymc.
-        @param observed_values: observations for the non-parameter variables in the model. Values
-            for the parameter variables are set directly in the module's parameters attribute. If a
-            value is set, the variable is not latent anymore. The dictionary key indicated the uuid
-            of the variable with observed values.
-        @return: random variables added to the model indexed by their uuids.
+        Creates random variables in a PyMC model.
         """
         pass
 

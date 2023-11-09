@@ -9,7 +9,7 @@ from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
-from coordination.module.serial_latent_component import SerialLatentComponentSamples
+from coordination.module.latent_component import LatentComponentSamples
 from coordination.module.observation2 import Observation, ObservationSamples, ObservationParameters
 
 
@@ -21,6 +21,7 @@ class GaussianObservation(ABC, Observation):
     """
 
     def __init__(self,
+                 pymc_model: pm.Model,
                  uuid: str,
                  num_subjects: int,
                  dimension_size: int,
@@ -28,10 +29,15 @@ class GaussianObservation(ABC, Observation):
                  share_sd_o_across_subjects: bool,
                  share_sd_o_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None,
-                 latent_component_samples: CoordinationSamples = None):
+                 latent_component_samples: LatentComponentSamples = None,
+                 latent_component_random_variable: pm.Distribution = None,
+                 observation_random_variable: pm.Distribution = None,
+                 sd_o_random_variable: pm.Distribution = None,
+                 observed_values: TensorTypes = None):
         """
         Creates a Gaussian observation.
 
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param uuid: String uniquely identifying the latent component in the model.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
@@ -41,17 +47,29 @@ class GaussianObservation(ABC, Observation):
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
+        @param observation_random_variable: observation random variable to be used in a
+            call to update_pymc_model. If not set, it will be created in such a call.
         @param latent_component_samples: latent component samples to be used in a call to
             draw_samples. This variable must be set before such a call.
         @param latent_component_random_variable: latent component random variable to be used in a
             call to update_pymc_model. This variable must be set before such a call.
         @param sd_o_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
+        @param observed_values: observations for the latent component random variable. If a value
+            is set, the variable is not latent anymore.
         """
-        super().__init__(uuid=uuid,
-                         num_subjects=num_subjects,
-                         dimension_size=dimension_size,
-                         dimension_names=dimension_names)
+
+        # No need to set coordination terms because a Gaussian observation only depends on the
+        # latent component. It does not depend on coordination directly.
+        super(Observation).__init__(pymc_model=pymc_model,
+                                    uuid=uuid,
+                                    num_subjects=num_subjects,
+                                    dimension_size=dimension_size,
+                                    dimension_names=dimension_names,
+                                    coordination_samples=None,
+                                    coordination_random_variable=None,
+                                    observation_random_variable=observation_random_variable,
+                                    observed_values=observed_values)
 
         # If a parameter is shared across dimensions, we only have one parameter to infer.
         dim_sd_o_dimensions = 1 if share_sd_o_across_dimensions else dimension_size
@@ -86,11 +104,11 @@ class GaussianObservation(ABC, Observation):
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
+        super(Observation).draw_samples(seed)
+
         if self.latent_component_samples is None:
             raise ValueError("No latent component samples. Please call  "
                              "before invoking the draw_samples method.")
-
-        pass
 
     def _check_parameter_dimensionality_consistency(self):
         """
@@ -109,30 +127,23 @@ class GaussianObservation(ABC, Observation):
             assert (self.num_subjects, dim_sd_o_dimensions) == self.parameters.sd_o.value.shape
 
     @abstractmethod
-    def update_pymc_model(
-            self,
-            pymc_model: pm.Model,
-            observed_values: Optional[Dict[str, TensorTypes]] = None
-    ) -> Dict[str, Union[TensorTypes, pm.Distribution], ...]:
+    def create_random_variables(self):
         """
         Creates parameters and observation variables in a PyMC model.
 
-        @param pymc_model: model definition in pymc.
-        @param observed_values: observed values of the observation variables to be used as
-            evidence for model inference.
         @raise ValueError: if latent_component_random_variable is None.
-        @return: random variables created in the PyMC model associated with the observation
-            indexed by their uuids.
         """
+        super(Observation).update_pymc_model(pymc_model, observed_values)
 
-        if self.latent_component_random_variable is None:
-            raise ValueError("Latent component variable is undefined. Please set "
-                             "latent_component_random_variable before invoking the "
-                             "update_pymc_model method.")
-
-        with pymc_model:
+        with self.pymc_model:
             if self.sd_o_random_variable is None:
                 self.sd_o_random_variable = self._create_emission_standard_deviation_variable()
+
+        if self.observation_random_variable is None:
+            if self.latent_component_random_variable is None:
+                raise ValueError("Latent component variable is undefined. Please set "
+                                 "latent_component_random_variable before invoking the "
+                                 "update_pymc_model method.")
 
     def _create_emission_standard_deviation_variable(self) -> pm.Distribution:
         """
@@ -145,18 +156,19 @@ class GaussianObservation(ABC, Observation):
 
         dim_sd_o_dimensions = 1 if self.share_sd_o_across_dimensions else self.dimension_size
 
-        if self.share_sd_o_across_subjects:
-            # When shared across subjects, only one parameter per dimension is needed.
-            sd_o = pm.HalfNormal(name=self.parameters.sd_o.uuid,
-                                 sigma=self.parameters.sd_o.prior.sd,
-                                 size=dim_sd_o_dimensions,
-                                 observed=self.parameters.sd_o.value)
-        else:
-            # Different parameters per subject and dimension.
-            sd_o = pm.HalfNormal(name=self.parameters.sd_o.uuid,
-                                 sigma=self.parameters.sd_o.prior.sd,
-                                 size=(self.num_subjects, dim_sd_o_dimensions),
-                                 observed=self.parameters.sd_o.value)
+        with self.pymc_model:
+            if self.share_sd_o_across_subjects:
+                # When shared across subjects, only one parameter per dimension is needed.
+                sd_o = pm.HalfNormal(name=self.parameters.sd_o.uuid,
+                                     sigma=self.parameters.sd_o.prior.sd,
+                                     size=dim_sd_o_dimensions,
+                                     observed=self.parameters.sd_o.value)
+            else:
+                # Different parameters per subject and dimension.
+                sd_o = pm.HalfNormal(name=self.parameters.sd_o.uuid,
+                                     sigma=self.parameters.sd_o.prior.sd,
+                                     size=(self.num_subjects, dim_sd_o_dimensions),
+                                     observed=self.parameters.sd_o.value)
 
         return sd_o
 
