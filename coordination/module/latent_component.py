@@ -40,17 +40,17 @@ class LatentComponent(ABC, Module):
                  share_sd_a_across_subjects: bool,
                  share_sd_a_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None,
-                 coordination_samples: CoordinationSamples = None,
-                 coordination_random_variable: pm.Distribution = None,
-                 latent_component_random_variable: pm.Distribution = None,
-                 mean_a0_random_variable: pm.Distribution = None,
-                 sd_a_random_variable: pm.Distribution = None,
-                 observed_values: TensorTypes = None):
+                 coordination_samples: Optional[CoordinationSamples] = None,
+                 coordination_random_variable: Optional[pm.Distribution] = None,
+                 latent_component_random_variable: Optional[pm.Distribution] = None,
+                 mean_a0_random_variable: Optional[pm.Distribution] = None,
+                 sd_a_random_variable: Optional[pm.Distribution] = None,
+                 observed_values: Optional[TensorTypes] = None):
         """
         Creates a latent component module.
 
+        @param uuid: string uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
-        @param uuid: String uniquely identifying the latent component in the model.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
         @param self_dependent: whether the latent variables in the component are tied to the
@@ -82,6 +82,7 @@ class LatentComponent(ABC, Module):
             is set, the variable is not latent anymore.
         """
         super(Module).__init__(
+            uuid=uuid,
             pymc_model=pymc_model,
             parameters=LatentComponentParameters(module_uuid=uuid,
                                                  mean_mean_a0=mean_mean_a0,
@@ -109,7 +110,6 @@ class LatentComponent(ABC, Module):
         else:
             assert (num_subjects, dim_sd_a_dimensions) == sd_sd_a.shape
 
-        self.uuid = uuid
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size
         self.self_dependent = self_dependent
@@ -117,7 +117,8 @@ class LatentComponent(ABC, Module):
         self.share_mean_a0_across_dimensions = share_mean_a0_across_dimensions
         self.share_sd_a_across_subjects = share_sd_a_across_subjects
         self.share_sd_a_across_dimensions = share_sd_a_across_dimensions
-        self.dimension_names = dimension_names
+        self.dimension_names = np.arange(
+            dimension_size) if dimension_names is None else dimension_names
         self.coordination_samples = coordination_samples
         self.coordination_random_variable = coordination_random_variable
         self.latent_component_random_variable = latent_component_random_variable
@@ -125,17 +126,18 @@ class LatentComponent(ABC, Module):
         self.sd_a_random_variable = sd_a_random_variable
 
     @abstractmethod
-    def draw_samples(self, seed: Optional[int]) -> LatentComponentSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and some blending strategy with
         coordination and different subjects. This method must be implemented by concrete
         subclasses.
 
         @param seed: random seed for reproducibility.
+        @param num_series: how many series of samples to generate.
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
-        super(Module).draw_samples(seed)
+        super(Module).draw_samples(seed, num_series)
 
         if self.coordination_samples is None:
             raise ValueError("No coordination samples. Please set coordination_samples "
@@ -269,6 +271,8 @@ class LatentComponentParameters(ModuleParameters):
         @param sd_sd_a: standard deviation of the hyper-prior of the standard deviation used in
             the Gaussian random walk when transitioning from one time to the next.
         """
+        super().__init__()
+
         self.mean_a0 = Parameter(uuid=f"{module_uuid}_mean_a0",
                                  prior=NormalParameterPrior(mean_mean_a0, sd_mean_a0))
         self.sd_a = Parameter(uuid=f"{module_uuid}_sd_a",

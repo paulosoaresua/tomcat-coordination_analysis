@@ -21,24 +21,24 @@ class GaussianObservation(ABC, Observation):
     """
 
     def __init__(self,
-                 pymc_model: pm.Model,
                  uuid: str,
+                 pymc_model: pm.Model,
                  num_subjects: int,
                  dimension_size: int,
                  sd_sd_o: np.ndarray,
                  share_sd_o_across_subjects: bool,
                  share_sd_o_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None,
-                 latent_component_samples: LatentComponentSamples = None,
-                 latent_component_random_variable: pm.Distribution = None,
-                 observation_random_variable: pm.Distribution = None,
-                 sd_o_random_variable: pm.Distribution = None,
-                 observed_values: TensorTypes = None):
+                 latent_component_samples: Optional[LatentComponentSamples] = None,
+                 latent_component_random_variable: Optional[pm.Distribution] = None,
+                 observation_random_variable: Optional[pm.Distribution] = None,
+                 sd_o_random_variable: Optional[pm.Distribution] = None,
+                 observed_values: Optional[TensorTypes] = None):
         """
         Creates a Gaussian observation.
 
-        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param uuid: String uniquely identifying the latent component in the model.
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
         @param sd_sd_o: std of the hyper-prior of sigma_o (std of the Gaussian emission
@@ -61,8 +61,8 @@ class GaussianObservation(ABC, Observation):
 
         # No need to set coordination terms because a Gaussian observation only depends on the
         # latent component. It does not depend on coordination directly.
-        super(Observation).__init__(pymc_model=pymc_model,
-                                    uuid=uuid,
+        super(Observation).__init__(uuid=uuid,
+                                    pymc_model=pymc_model,
                                     num_subjects=num_subjects,
                                     dimension_size=dimension_size,
                                     dimension_names=dimension_names,
@@ -94,17 +94,18 @@ class GaussianObservation(ABC, Observation):
                                                         sd_sd_o=sd_sd_o)
 
     @abstractmethod
-    def draw_samples(self, seed: Optional[int]) -> ObservationSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> ObservationSamples:
         """
         Draws latent component samples using ancestral sampling and some blending strategy with
         coordination and different subjects. This method must be implemented by concrete
         subclasses.
 
         @param seed: random seed for reproducibility.
+        @param num_series: how many series of samples to generate.
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
-        super(Observation).draw_samples(seed)
+        super(Observation).draw_samples(seed, num_series)
 
         if self.latent_component_samples is None:
             raise ValueError("No latent component samples. Please call  "

@@ -22,24 +22,25 @@ class SerialGaussianObservation(GaussianObservation):
     """
 
     def __init__(self,
-                 pymc_model: pm.Model,
                  uuid: str,
+                 pymc_model: pm.Model,
                  num_subjects: int,
                  dimension_size: int,
                  sd_sd_o: np.ndarray,
                  share_sd_o_across_subjects: bool,
                  share_sd_o_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None,
-                 observation_random_variable: pm.Distribution = None,
-                 latent_component_samples: SerialLatentComponentSamples = None,
-                 latent_component_random_variable: pm.Distribution = None,
-                 sd_o_random_variable: pm.Distribution = None,
-                 observed_values: TensorTypes = None):
+                 observation_random_variable: Optional[pm.Distribution] = None,
+                 latent_component_samples: Optional[SerialLatentComponentSamples] = None,
+                 latent_component_random_variable: Optional[pm.Distribution] = None,
+                 sd_o_random_variable: Optional[pm.Distribution] = None,
+                 subject_indices: Optional[np.ndarray] = None,
+                 observed_values: Optional[TensorTypes] = None):
         """
         Creates a serial Gaussian observation.
 
-        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param uuid: String uniquely identifying the latent component in the model.
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
         @param sd_sd_o: std of the hyper-prior of sigma_o (std of the Gaussian emission
@@ -56,11 +57,17 @@ class SerialGaussianObservation(GaussianObservation):
             call to update_pymc_model. This variable must be set before such a call.
         @param sd_o_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
+        @param subject_indices: array of numbers indicating which subject is associated to the
+            observation at every time step (e.g. the current speaker for a speech observation).
+            In serial observations, only one subject's observation exists at a time. This
+            array indicates which user that is. This array contains no gaps. The size of the array
+            is the number of observed latent component in time, i.e., observation time
+            indices with an associated subject.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
         """
-        super().__init__(pymc_model=pymc_model,
-                         uuid=uuid,
+        super().__init__(uuid=uuid,
+                         pymc_model=pymc_model,
                          num_subjects=num_subjects,
                          dimension_size=dimension_size,
                          sd_sd_o=sd_sd_o,
@@ -73,14 +80,18 @@ class SerialGaussianObservation(GaussianObservation):
                          sd_o_random_variable=sd_o_random_variable,
                          observed_values=observed_values)
 
-    def draw_samples(self, seed: Optional[int]) -> SerialGaussianObservationSamples:
+        self.subject_indices = subject_indices
+
+    def draw_samples(self, seed: Optional[int],
+                     num_series: int) -> SerialGaussianObservationSamples:
         """
         Draws observation samples using ancestral sampling.
 
         @param seed: random seed for reproducibility.
+        @param num_series: how many series of samples to generate.
         @return: observation samples for each coordination series.
         """
-        super().draw_samples(seed)
+        super().draw_samples(seed, num_series)
 
         self._check_parameter_dimensionality_consistency()
 
@@ -109,24 +120,29 @@ class SerialGaussianObservation(GaussianObservation):
             return
 
         if self.share_sd_o_across_subjects:
-            sd_o = self.sd_o_random_variable[:,
-                   None]  # dimension x time = 1 (broadcast across time)
+            # dimension x time = 1 (broadcast across time)
+            sd_o = self.sd_o_random_variable[:, None]
         else:
-            sd_o = self.sd_o_random_variable[subjects].transpose()  # dimension x time
+            sd_o = self.sd_o_random_variable[self.subject_indices].transpose()  # dimension x time
 
         if self.share_sd_o_across_features:
             sd_o = sd_o.repeat(self.dimension_size, axis=0)
 
-        dimension_axis_name = f"{self.uuid}_dimension"
-        time_axis_name = f"{self.uuid}_time"
+        # Add coordinates to the model
+        if self.dimension_axis_name not in self.pymc_model.coords:
+            self.pymc_model.add_coord(name=self.dimension_axis_name,
+                                      values=self.dimension_names)
+
+        if self.time_axis_name not in self.pymc_model.coords:
+            self.pymc_model.add_coord(name=self.time_axis_name,
+                                      values=np.arange(len(self.subject_indices)))
 
         with self.pymc_model:
             self.observation_random_variable = pm.Normal(
                 name=self.uuid,
                 mu=latent_component,
                 sigma=sd_o,
-                dims=[dimension_axis_name,
-                      time_axis_name],
+                dims=[self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values
             )
 

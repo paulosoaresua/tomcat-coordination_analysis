@@ -17,29 +17,53 @@ class Module:
     """
 
     def __init__(self,
+                 uuid: str,
                  pymc_model: pm.Model,
-                 parameters: ModuleParameters,
-                 observed_values: TensorTypes):
+                 parameters: Optional[ModuleParameters],
+                 observed_values: Optional[TensorTypes]):
         """
 
+        @param uuid: unique identifier of the module.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param parameters: parameters of the module.
         @param observed_values: observations for the non-parameter random variable in the model.
             Values for the parameter variables are set directly in the module's parameters
             attribute. If a value is set, the variable is not latent anymore.
         """
+        self.uuid = uuid
         self.pymc_model = pymc_model
         self.parameters = parameters
         self.observed_values = observed_values
 
     @property
+    def time_axis_name(self) -> str:
+        return f"{self.uuid}_time"
+
+    @property
+    def dimension_axis_name(self) -> str:
+        return f"{self.uuid}_dimension"
+
+    @property
+    def subject_axis_name(self) -> str:
+        return f"{self.uuid}_subject"
+
+    @property
     def parameter_names(self) -> List[str]:
         """
-        Gets the names of all the parameters used in the distributions of a latent variables.
+        Gets the names of all the parameters used in the distributions of a latent variables
+        recursively.
 
         @return: a list with the parameter names.
         """
-        return self.parameters.parameter_names
+        parameter_names = self.parameters.parameter_names
+
+        # Look for other modules nested to this one and gather parameters from them.
+        attributes = vars(self)
+        for _, attribute in attributes.items():
+            if isinstance(attribute, Module):
+                parameter_names.extend(attribute.parameter_names)
+
+        return parameter_names
 
     @property
     def random_variables(self) -> Dict[str, pm.Distribution]:
@@ -62,11 +86,14 @@ class Module:
         self.parameters.clear_values()
 
     @abstractmethod
-    def draw_samples(self, seed: Optional[int]) -> ModuleSamples:
+    def draw_samples(self,
+                     seed: Optional[int],
+                     num_series: int) -> ModuleSamples:
         """
         Draws samples using ancestral sampling.
 
         @param seed: random seed for reproducibility.
+        @param num_series: how many series of samples to generate.
         """
         set_random_seed(seed)
 
@@ -120,7 +147,7 @@ class ModuleSamples(ABC):
     """
 
     def __init__(self,
-                 values: Union[List[np.ndarray], np.ndarray]):
+                 values: Optional[Union[List[np.ndarray], np.ndarray]]):
         """
         Creates an object to store samples.
 

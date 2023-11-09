@@ -22,8 +22,8 @@ class SerialLatentComponent(LatentComponent):
     """
 
     def __init__(self,
-                 pymc_model: pm.Model,
                  uuid: str,
+                 pymc_model: pm.Model,
                  num_subjects: int,
                  dimension_size: int,
                  self_dependent: bool,
@@ -35,23 +35,23 @@ class SerialLatentComponent(LatentComponent):
                  share_sd_a_across_subjects: bool,
                  share_sd_a_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None,
-                 coordination_samples: CoordinationSamples = None,
-                 coordination_random_variable: pm.Distribution = None,
-                 latent_component_random_variable: pm.Distribution = None,
-                 mean_a0_random_variable: pm.Distribution = None,
-                 sd_a_random_variable: pm.Distribution = None,
+                 coordination_samples: Optional[CoordinationSamples] = None,
+                 coordination_random_variable: Optional[pm.Distribution] = None,
+                 latent_component_random_variable: Optional[pm.Distribution] = None,
+                 mean_a0_random_variable: Optional[pm.Distribution] = None,
+                 sd_a_random_variable: Optional[pm.Distribution] = None,
                  sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
                  allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
                  fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-                 subject_indices: np.ndarray = None,
-                 prev_time_same_subject: np.ndarray = None,
-                 prev_time_diff_subject: np.ndarray = None,
-                 observed_values: TensorTypes = None):
+                 subject_indices: Optional[np.ndarray] = None,
+                 prev_time_same_subject: Optional[np.ndarray] = None,
+                 prev_time_diff_subject: Optional[np.ndarray] = None,
+                 observed_values: Optional[TensorTypes] = None):
         """
         Creates a serial latent component.
 
-        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param uuid: String uniquely identifying the latent component in the model.
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
         @param self_dependent: whether the latent variables in the component are tied to the past
@@ -104,8 +104,8 @@ class SerialLatentComponent(LatentComponent):
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
         """
-        super().__init__(pymc_model=pymc_model,
-                         uuid=uuid,
+        super().__init__(uuid=uuid,
+                         pymc_model=pymc_model,
                          num_subjects=num_subjects,
                          dimension_size=dimension_size,
                          self_dependent=self_dependent,
@@ -131,15 +131,16 @@ class SerialLatentComponent(LatentComponent):
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
 
-    def draw_samples(self, seed: Optional[int]) -> LatentComponentSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
         coordination and different subjects.
 
         @param seed: random seed for reproducibility.
+        @param num_series: how many series of samples to generate.
         @return: latent component samples for each coordination series.
         """
-        super().draw_samples(seed)
+        super().draw_samples(seed, num_series)
 
         if self.sampling_time_scale_density <= 0 or self.sampling_time_scale_density > 1:
             raise ValueError(f"The time scale density ({self.sampling_time_scale_density}) "
@@ -163,7 +164,7 @@ class SerialLatentComponent(LatentComponent):
         time_steps_in_coordination_scale = []
         prev_time_same_subject = []
         prev_time_diff_subject = []
-        for s in range(self.coordination_samples.num_series):
+        for s in range(num_series):
             sparse_subjects = self._draw_random_subjects()
             sampled_subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
 
@@ -408,8 +409,14 @@ class SerialLatentComponent(LatentComponent):
                            prev_diff_subject_mask,
                            np.array(self.self_dependent))
 
-        dimension_axis_name = f"{self.uuid}_dimension"
-        time_axis_name = f"{self.uuid}_time"
+        # Add coordinates to the model
+        if self.dimension_axis_name not in self.pymc_model.coords:
+            self.pymc_model.add_coord(name=self.dimension_axis_name,
+                                      values=self.dimension_names)
+
+        if self.time_axis_name not in self.pymc_model.coords:
+            self.pymc_model.add_coord(name=self.time_axis_name,
+                                      values=np.arange(len(self.subject_indices)))
 
         with self.pymc_model:
             self.latent_component_random_variable = pm.DensityDist(
@@ -417,8 +424,7 @@ class SerialLatentComponent(LatentComponent):
                 *log_prob_params,
                 logp=log_prob,
                 random=random,
-                dims=[dimension_axis_name,
-                      time_axis_name],
+                dims=[self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values
             )
 

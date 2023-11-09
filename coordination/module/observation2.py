@@ -21,22 +21,22 @@ class Observation(ABC, Module):
     """
 
     def __init__(self,
-                 pymc_model: pm.Model,
                  uuid: str,
+                 pymc_model: pm.Model,
                  num_subjects: int,
                  dimension_size: int,
                  dimension_names: Optional[List[str]] = None,
-                 coordination_samples: CoordinationSamples = None,
-                 latent_component_samples: LatentComponentSamples = None,
-                 coordination_random_variable: pm.Distribution = None,
-                 latent_component_random_variable: pm.Distribution = None,
-                 observation_random_variable: pm.Distribution = None,
-                 observed_values: TensorTypes = None):
+                 coordination_samples: Optional[CoordinationSamples] = None,
+                 latent_component_samples: Optional[LatentComponentSamples] = None,
+                 coordination_random_variable: Optional[pm.Distribution] = None,
+                 latent_component_random_variable: Optional[pm.Distribution] = None,
+                 observation_random_variable: Optional[pm.Distribution] = None,
+                 observed_values: Optional[TensorTypes] = None):
         """
         Creates an observation.
 
-    @param pymc_model: a PyMC model instance where modules are to be created at.
         @param uuid: String uniquely identifying the latent component in the model.
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
         @param dimension_names: the names of each dimension of the observation. If not
@@ -49,15 +49,16 @@ class Observation(ABC, Module):
             call to update_pymc_model. If not set, it will be created in such a call.
         """
         super(Module).__init__(
+            uuid=uuid,
             pymc_model=pymc_model,
             parameters=ObservationParameters(module_uuid=uuid,
                                              sd_sd_o=sd_sd_o),
             observed_values=observed_values)
 
-        self.uuid = uuid
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size
-        self.dimension_names = dimension_names
+        self.dimension_names = np.arange(
+            dimension_size) if dimension_names is None else dimension_names
         self.coordination_samples = coordination_samples
         self.latent_component_samples = latent_component_samples
         self.coordination_random_variable = coordination_random_variable

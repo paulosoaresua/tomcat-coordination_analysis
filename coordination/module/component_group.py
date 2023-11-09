@@ -15,41 +15,54 @@ class ComponentGroup(Module):
     """
 
     def __init__(self,
+                 uuid: str,
+                 pymc_model: pm.Model,
                  latent_component: LatentComponent,
                  observations: Dict[str, Observation]):
         """
         Creates a component group.
 
+        @param uuid: string uniquely identifying the component group in the model.
+        @param pymc_model: a PyMC model instance where modules are to be created at.
         @param latent_component: a latent system component.
         @param observations: a dictionary of observations associated with the latent component
             indexed by the observation module's id.
         """
-        super().__init__()
+        super().__init__(
+            uuid=uuid,
+            pymc_model=pymc_model,
+            parameters=None,
+            observed_values=None
+        )
 
         self.latent_component = latent_component
         self.observations = observations
 
-    def draw_samples(self, seed: Optional[int]) -> ComponentGroupSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> ComponentGroupSamples:
         """
         Draws latent component and observations samples using ancestral sampling and some blending
         strategy with coordination and different subjects.
 
         @param seed: random seed for reproducibility.
+        @param num_series: how many series of samples to generate.
         @return: latent component and observation samples for each coordination series.
         """
 
-        latent_component_samples = self.latent_component.draw_samples(seed)
+        latent_component_samples = self.latent_component.draw_samples(seed, num_series)
         observation_samples = {}
         for observation in self.observations:
             observation.coordination_samples = self.latent_component.coordination_samples
             observation.latent_component_samples = latent_component_samples
-            observation_samples[observation.uuid] = observation.draw_samples(seed)
+            observation_samples[observation.uuid] = observation.draw_samples(seed, num_series)
 
         return ComponentGroupSamples(latent_component_samples, observation_samples)
 
     def create_random_variables(self):
+        """
+        Creates random variables for the latent component and associated observations.
+        """
         self.latent_component.create_random_variables()
-        for observation in observations:
+        for observation in self.observations:
             # TODO: Add transformation
             transformation = self.latent_component.latent_component_random_variable
             observation.coordination_random_variable = self.latent_component.coordination_random_variable
@@ -62,7 +75,7 @@ class ComponentGroup(Module):
 ###################################################################################################
 
 
-class ComponentGroupSamples:
+class ComponentGroupSamples(ModuleSamples):
 
     def __init__(self,
                  latent_component_samples: LatentComponentSamples,
@@ -74,6 +87,7 @@ class ComponentGroupSamples:
         @param observation_samples: a dictionary of samples from each observation indexed by the
             observation module's id.
         """
+        super().__init__(values=None)
 
         self.latent_component_samples = latent_component_samples
         self.observation_samples = observation_samples
