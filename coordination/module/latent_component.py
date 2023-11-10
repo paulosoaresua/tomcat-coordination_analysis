@@ -9,7 +9,6 @@ from coordination.common.types import TensorTypes
 from coordination.module.parametrization2 import (Parameter,
                                                   HalfNormalParameterPrior,
                                                   NormalParameterPrior)
-from coordination.module.coordination2 import CoordinationSamples
 from coordination.module.module import Module, ModuleSamples, ModuleParameters
 
 
@@ -40,7 +39,7 @@ class LatentComponent(ABC, Module):
                  share_sd_a_across_subjects: bool,
                  share_sd_a_across_dimensions: bool,
                  dimension_names: Optional[List[str]] = None,
-                 coordination_samples: Optional[CoordinationSamples] = None,
+                 coordination_samples: Optional[ModuleSamples] = None,
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
@@ -81,7 +80,7 @@ class LatentComponent(ABC, Module):
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
         """
-        super(Module).__init__(
+        super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
             parameters=LatentComponentParameters(module_uuid=uuid,
@@ -137,7 +136,7 @@ class LatentComponent(ABC, Module):
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
-        super(Module).draw_samples(seed, num_series)
+        super().draw_samples(seed, num_series)
 
         if self.coordination_samples is None:
             raise ValueError("No coordination samples. Please set coordination_samples "
@@ -176,7 +175,7 @@ class LatentComponent(ABC, Module):
 
         @raise ValueError: if coordination_random_variable is None.
         """
-        super(Module).update_pymc_model(pymc_model, observed_values)
+        super().update_pymc_model(pymc_model, observed_values)
 
         if self.coordination_random_variable is None:
             raise ValueError("Coordination variable is undefined. Please set "

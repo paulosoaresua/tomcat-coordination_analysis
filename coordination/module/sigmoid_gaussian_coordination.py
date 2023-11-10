@@ -12,6 +12,9 @@ from coordination.module.parametrization2 import Parameter, HalfNormalParameterP
 from coordination.common.utils import set_random_seed
 from coordination.module.module import ModuleSamples, Module, ModuleParameters
 from coordination.module.coordination2 import Coordination
+from coordination.module.constants import (DEFAULT_UNB_COORDINATION_MEAN_PARAM,
+                                           DEFAULT_UNB_COORDINATION_SD_PARAM,
+                                           DEFAULT_NUM_TIME_STEPS)
 
 
 class SigmoidGaussianCoordination(Coordination):
@@ -23,14 +26,14 @@ class SigmoidGaussianCoordination(Coordination):
     def __init__(self,
                  uuid: str,
                  pymc_model: pm.Model,
-                 num_time_steps: int,
-                 mean_mean_uc0: float,
-                 sd_mean_uc0: float,
-                 sd_sd_uc: float,
+                 num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
+                 mean_mean_uc0: float = DEFAULT_UNB_COORDINATION_MEAN_PARAM,
+                 sd_mean_uc0: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
+                 sd_sd_uc: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  mean_uc0_random_variable: Optional[pm.Distribution] = None,
                  sd_uc_random_variable: Optional[pm.Distribution] = None,
-                 observed_values: Optional[TensorTypes] = None):
+                 unbounded_coordination_observed_values: Optional[TensorTypes] = None):
         """
         Creates a coordination module with an unbounded auxiliary variable.
 
@@ -48,8 +51,8 @@ class SigmoidGaussianCoordination(Coordination):
             update_pymc_model. If not set, it will be created in such a call.
         @param sd_uc_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
-        @param observed_values: observations for the unbounded coordination random variable. If a
-            value is set, the variable is not latent anymore.
+        @param unbounded_coordination_observed_values: observations for the unbounded coordination
+            random variable. If a value is set, the variable is not latent anymore.
         """
         super().__init__(
             uuid=uuid,
@@ -61,7 +64,7 @@ class SigmoidGaussianCoordination(Coordination):
                 sd_sd_uc=sd_sd_uc),
             num_time_steps=num_time_steps,
             coordination_random_variable=coordination_random_variable,
-            observed_values=observed_values
+            observed_values=unbounded_coordination_observed_values
         )
 
         self.mean_uc0_random_variable = mean_uc0_random_variable
@@ -116,7 +119,7 @@ class SigmoidGaussianCoordination(Coordination):
                 # Add coordinates to the model
                 if self.time_axis_name not in self.pymc_model.coords:
                     self.pymc_model.add_coord(name=self.time_axis_name,
-                                              values=np.arange(len(self.num_time_steps)))
+                                              values=np.arange(self.num_time_steps))
 
                 # Create variables
                 prior = pm.Normal.dist(mu=self.mean_uc0_random_variable,
@@ -124,9 +127,9 @@ class SigmoidGaussianCoordination(Coordination):
                 unbounded_coordination = pm.GaussianRandomWalk(
                     name="unbounded_coordination",
                     init_dist=prior,
-                    sigma=sd_uc,
+                    sigma=self.sd_uc_random_variable,
                     dims=[self.time_axis_name],
-                    observed=unbounded_coordination_observed_values
+                    observed=self.observed_values
                 )
 
                 self.coordination_random_variable = pm.Deterministic(

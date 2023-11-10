@@ -55,13 +55,21 @@ class Module:
 
         @return: a list with the parameter names.
         """
-        parameter_names = self.parameters.parameter_names
+
+        parameter_names = []
+
+        if self.parameters:
+            parameter_names.extend(self.parameters.parameter_names)
 
         # Look for other modules nested to this one and gather parameters from them.
         attributes = vars(self)
         for _, attribute in attributes.items():
             if isinstance(attribute, Module):
                 parameter_names.extend(attribute.parameter_names)
+            elif isinstance(attribute, List):
+                for list_item in attribute:
+                    if isinstance(list_item, Module):
+                        parameter_names.extend(list_item.parameter_names)
 
         return parameter_names
 
@@ -81,9 +89,23 @@ class Module:
 
     def clear_parameter_values(self):
         """
-        Clears the values of all the parameters. Their hyper-priors are preserved.
+        Clears the values of all the parameters recursively through the nested modules. The
+        parameter hyper-priors are preserved.
         """
-        self.parameters.clear_values()
+        if self.parameters:
+            self.parameters.clear_values()
+
+        # Look for other modules nested to this one and clear parameters from them.
+        attributes = vars(self)
+        for _, attribute in attributes.items():
+            if isinstance(attribute, Module):
+                attribute.clear_parameter_values()
+            elif isinstance(attribute, List):
+                for list_item in attribute:
+                    if isinstance(list_item, Module):
+                        list_item.clear_parameter_values()
+
+        return parameter_names
 
     @abstractmethod
     def draw_samples(self,

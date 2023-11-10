@@ -1,11 +1,12 @@
-from typing import Tuple, Union, Optional
+from __future__ import annotations
+from typing import Dict, Tuple, Union, Optional
 
 import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
 from coordination.module.latent_component import LatentComponent, LatentComponentSamples
-from coordination.module.observation2 import Observation, ObservationSamples
+from coordination.module.observation2 import Observation
 
 
 class ComponentGroup(Module):
@@ -47,6 +48,7 @@ class ComponentGroup(Module):
         @param num_series: how many series of samples to generate.
         @return: latent component and observation samples for each coordination series.
         """
+        super().draw_samples(seed, num_series)
 
         latent_component_samples = self.latent_component.draw_samples(seed, num_series)
         observation_samples = {}
@@ -61,6 +63,8 @@ class ComponentGroup(Module):
         """
         Creates random variables for the latent component and associated observations.
         """
+        super().create_random_variables()
+
         self.latent_component.create_random_variables()
         for observation in self.observations:
             # TODO: Add transformation
@@ -79,7 +83,7 @@ class ComponentGroupSamples(ModuleSamples):
 
     def __init__(self,
                  latent_component_samples: LatentComponentSamples,
-                 observation_samples: Dict[str, ObservationSamples]):
+                 observation_samples: Dict[str, ModuleSamples]):
         """
         Creates an object to store latent samples and samples from associates observations.
 

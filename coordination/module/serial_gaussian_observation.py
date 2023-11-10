@@ -11,8 +11,14 @@ from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
 from coordination.module.serial_latent_component import SerialLatentComponentSamples
 from coordination.module.gaussian_observation import GaussianObservation, \
-    GaussianObservationParameters, ObservationParameters
-from coordination.module.observation2 import ObservationSamples
+    GaussianObservationParameters
+from coordination.module.module import ModuleSamples
+from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
+                                           DEFAULT_OBSERVATION_DIMENSION_SIZE,
+                                           DEFAULT_SELF_DEPENDENCY,
+                                           DEFAULT_OBSERVATION_SD_PARAM,
+                                           DEFAULT_SHARING_ACROSS_SUBJECTS,
+                                           DEFAULT_SHARING_ACROSS_DIMENSIONS)
 
 
 class SerialGaussianObservation(GaussianObservation):
@@ -24,11 +30,11 @@ class SerialGaussianObservation(GaussianObservation):
     def __init__(self,
                  uuid: str,
                  pymc_model: pm.Model,
-                 num_subjects: int,
-                 dimension_size: int,
-                 sd_sd_o: np.ndarray,
-                 share_sd_o_across_subjects: bool,
-                 share_sd_o_across_dimensions: bool,
+                 num_subjects: int = DEFAULT_NUM_SUBJECTS,
+                 dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
+                 sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
+                 share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+                 share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
                  dimension_names: Optional[List[str]] = None,
                  observation_random_variable: Optional[pm.Distribution] = None,
                  latent_component_samples: Optional[SerialLatentComponentSamples] = None,
@@ -152,7 +158,7 @@ class SerialGaussianObservation(GaussianObservation):
 ###################################################################################################
 
 
-class SerialGaussianObservationSamples(ObservationSamples):
+class SerialGaussianObservationSamples(ModuleSamples):
 
     def __init__(self,
                  values: List[np.ndarray],

@@ -9,10 +9,17 @@ from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
 from coordination.module.latent_component import LatentComponent, LatentComponentSamples
-from coordination.module.coordination2 import CoordinationSamples
+from coordination.module.module import ModuleSamples
 from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
-                                           DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG)
+                                           DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+                                           DEFAULT_NUM_SUBJECTS,
+                                           DEFAULT_LATENT_DIMENSION_SIZE,
+                                           DEFAULT_SELF_DEPENDENCY,
+                                           DEFAULT_LATENT_MEAN_PARAM,
+                                           DEFAULT_LATENT_SD_PARAM,
+                                           DEFAULT_SHARING_ACROSS_SUBJECTS,
+                                           DEFAULT_SHARING_ACROSS_DIMENSIONS)
 
 
 class SerialLatentComponent(LatentComponent):
@@ -24,18 +31,18 @@ class SerialLatentComponent(LatentComponent):
     def __init__(self,
                  uuid: str,
                  pymc_model: pm.Model,
-                 num_subjects: int,
-                 dimension_size: int,
-                 self_dependent: bool,
-                 mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray,
-                 sd_sd_a: np.ndarray,
-                 share_mean_a0_across_subjects: bool,
-                 share_mean_a0_across_dimensions: bool,
-                 share_sd_a_across_subjects: bool,
-                 share_sd_a_across_dimensions: bool,
+                 num_subjects: int = DEFAULT_NUM_SUBJECTS,
+                 dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
+                 self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
+                 mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+                 sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+                 sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+                 share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+                 share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+                 share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+                 share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
                  dimension_names: Optional[List[str]] = None,
-                 coordination_samples: Optional[CoordinationSamples] = None,
+                 coordination_samples: Optional[ModuleSamples] = None,
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,

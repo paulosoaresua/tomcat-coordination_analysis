@@ -33,7 +33,7 @@ class Coordination(ABC, Module):
         @param observed_values: observations for the coordination random variable. If a value
             is set, the variable is not latent anymore.
         """
-        super(Module).__init__(
+        super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
             parameters=parameters,

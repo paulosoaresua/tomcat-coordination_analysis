@@ -10,10 +10,12 @@ from scipy.stats import norm
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
 from coordination.module.latent_component import LatentComponentSamples
-from coordination.module.observation2 import Observation, ObservationSamples, ObservationParameters
+from coordination.module.observation2 import Observation
+from coordination.module.module import ModuleSamples, ModuleParameters
+from coordination.module.parametrization2 import Parameter, HalfNormalParameterPrior
 
 
-class GaussianObservation(ABC, Observation):
+class GaussianObservation(Observation, ABC):
     """
     This class represents an observation (O) from a latent system component (A) sampled from
     a Gaussian distribution centered on some transformation, g(.), of the latent component, i.e.,
@@ -61,15 +63,17 @@ class GaussianObservation(ABC, Observation):
 
         # No need to set coordination terms because a Gaussian observation only depends on the
         # latent component. It does not depend on coordination directly.
-        super(Observation).__init__(uuid=uuid,
-                                    pymc_model=pymc_model,
-                                    num_subjects=num_subjects,
-                                    dimension_size=dimension_size,
-                                    dimension_names=dimension_names,
-                                    coordination_samples=None,
-                                    coordination_random_variable=None,
-                                    observation_random_variable=observation_random_variable,
-                                    observed_values=observed_values)
+        super().__init__(uuid=uuid,
+                         pymc_model=pymc_model,
+                         parameters=GaussianObservationParameters(module_uuid=uuid,
+                                                                  sd_sd_o=sd_sd_o),
+                         num_subjects=num_subjects,
+                         dimension_size=dimension_size,
+                         dimension_names=dimension_names,
+                         coordination_samples=None,
+                         coordination_random_variable=None,
+                         observation_random_variable=observation_random_variable,
+                         observed_values=observed_values)
 
         # If a parameter is shared across dimensions, we only have one parameter to infer.
         dim_sd_o_dimensions = 1 if share_sd_o_across_dimensions else dimension_size
@@ -90,11 +94,8 @@ class GaussianObservation(ABC, Observation):
         self.latent_component_random_variable = latent_component_random_variable
         self.sd_o_random_variable = sd_o_random_variable
 
-        self.parameters = GaussianObservationParameters(module_uuid=uuid,
-                                                        sd_sd_o=sd_sd_o)
-
     @abstractmethod
-    def draw_samples(self, seed: Optional[int], num_series: int) -> ObservationSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:
         """
         Draws latent component samples using ancestral sampling and some blending strategy with
         coordination and different subjects. This method must be implemented by concrete
@@ -105,7 +106,7 @@ class GaussianObservation(ABC, Observation):
         @raise ValueError: if coordination is None.
         @return: latent component samples for each coordination series.
         """
-        super(Observation).draw_samples(seed, num_series)
+        super().draw_samples(seed, num_series)
 
         if self.latent_component_samples is None:
             raise ValueError("No latent component samples. Please call  "
@@ -134,7 +135,7 @@ class GaussianObservation(ABC, Observation):
 
         @raise ValueError: if latent_component_random_variable is None.
         """
-        super(Observation).update_pymc_model(pymc_model, observed_values)
+        super().update_pymc_model(pymc_model, observed_values)
 
         with self.pymc_model:
             if self.sd_o_random_variable is None:
