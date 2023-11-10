@@ -76,10 +76,16 @@ class SigmoidGaussianCoordination(Coordination):
 
         @param seed: random seed for reproducibility.
         @param num_series: how many series of samples to generate.
-        @raise ValueError: if either num_series or num_time_steps is None.
+        @raise ValueError: if either mean_uc0 or sd_uc is None.
         @return: coordination samples. One coordination series per row.
         """
         super().draw_samples(seed, num_series)
+
+        if self.parameters.sd_uc.value is None:
+            raise ValueError(f"Value of {self.parameters.mean_uc0.uuid} is undefined.")
+
+        if self.parameters.sd_uc.value is None:
+            raise ValueError(f"Value of {self.parameters.sd_uc.uuid} is undefined.")
 
         # Gaussian random walk via re-parametrization trick
         unbounded_coordination = norm(loc=0, scale=1).rvs(
@@ -90,8 +96,8 @@ class SigmoidGaussianCoordination(Coordination):
         # tilde{C} is a bounded version of coordination in the range [0,1]
         coordination = sigmoid(unbounded_coordination)
 
-        return CoordinationSamples(unbounded_coordination=unbounded_coordination,
-                                   coordination=coordination)
+        return SigmoidGaussianCoordinationSamples(unbounded_coordination=unbounded_coordination,
+                                                  coordination=coordination)
 
     def create_random_variables(self):
         """
@@ -144,29 +150,6 @@ class SigmoidGaussianCoordination(Coordination):
 # AUXILIARY CLASSES
 ###################################################################################################
 
-
-class SigmoidGaussianCoordinationSamples(ModuleSamples):
-
-    def __init__(self,
-                 unbounded_coordination: np.ndarray,
-                 coordination: np.ndarray):
-        """
-        Creates an object to store coordination samples.
-
-        @param unbounded_coordination: sampled values of an unbounded coordination variable.
-            Unbounded coordination range from -Inf to +Inf.
-        @param coordination: sampled coordination values in the range [0,1], or exactly 0 or 1 for
-            discrete coordination.
-        """
-        super().__init__(coordination)
-
-        self.unbounded_coordination = unbounded_coordination
-
-
-###################################################################################################
-# AUXILIARY CLASSES
-###################################################################################################
-
 class SigmoidGaussianCoordinationParameters(ModuleParameters):
     """
     This class stores values and hyper-priors of the parameters of the coordination module.
@@ -195,3 +178,21 @@ class SigmoidGaussianCoordinationParameters(ModuleParameters):
                                   )
         self.sd_uc = Parameter(uuid=f"{module_uuid}_sd_uc",
                                prior=HalfNormalParameterPrior(np.array([sd_sd_uc])))
+
+
+class SigmoidGaussianCoordinationSamples(ModuleSamples):
+
+    def __init__(self,
+                 unbounded_coordination: np.ndarray,
+                 coordination: np.ndarray):
+        """
+        Creates an object to store coordination samples.
+
+        @param unbounded_coordination: sampled values of an unbounded coordination variable.
+            Unbounded coordination range from -Inf to +Inf.
+        @param coordination: sampled coordination values in the range [0,1], or exactly 0 or 1 for
+            discrete coordination.
+        """
+        super().__init__(coordination)
+
+        self.unbounded_coordination = unbounded_coordination

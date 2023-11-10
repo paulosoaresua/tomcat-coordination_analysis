@@ -105,8 +105,6 @@ class Module:
                     if isinstance(list_item, Module):
                         list_item.clear_parameter_values()
 
-        return parameter_names
-
     @abstractmethod
     def draw_samples(self,
                      seed: Optional[int],

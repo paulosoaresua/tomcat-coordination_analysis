@@ -75,7 +75,9 @@ class Model(Module):
 
         self.coordination.create_random_variables()
         for g in self.component_groups:
-            g.latent_component.coordination_random_variable = self.coordination.coordination_random_variable
+            g.latent_component.coordination_random_variable = \
+                self.coordination.coordination_random_variable[
+                    g.latent_component.time_steps_in_coordination_scale]
             g.create_random_variables()
 
     def fit(self,

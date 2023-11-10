@@ -102,7 +102,7 @@ class SerialGaussianObservation(GaussianObservation):
         self._check_parameter_dimensionality_consistency()
 
         observation_series = []
-        for i in range(len(latent_component)):
+        for i in range(self.latent_component_samples.num_series):
             # Adjust dimensions according to parameter sharing specification
             if self.share_sd_o_across_subjects:
                 # Broadcast across time
@@ -121,6 +121,7 @@ class SerialGaussianObservation(GaussianObservation):
         """
         Creates parameters and observation variables in a PyMC model.
         """
+        super().create_random_variables()
 
         if self.observation_random_variable is not None:
             return
@@ -131,7 +132,7 @@ class SerialGaussianObservation(GaussianObservation):
         else:
             sd_o = self.sd_o_random_variable[self.subject_indices].transpose()  # dimension x time
 
-        if self.share_sd_o_across_features:
+        if self.share_sd_o_across_dimensions:
             sd_o = sd_o.repeat(self.dimension_size, axis=0)
 
         # Add coordinates to the model
@@ -146,7 +147,7 @@ class SerialGaussianObservation(GaussianObservation):
         with self.pymc_model:
             self.observation_random_variable = pm.Normal(
                 name=self.uuid,
-                mu=latent_component,
+                mu=self.latent_component_random_variable,
                 sigma=sd_o,
                 dims=[self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values

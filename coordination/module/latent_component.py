@@ -44,6 +44,7 @@ class LatentComponent(ABC, Module):
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
                  sd_a_random_variable: Optional[pm.Distribution] = None,
+                 time_steps_in_coordination_scale: Optional[np.array] = None,
                  observed_values: Optional[TensorTypes] = None):
         """
         Creates a latent component module.
@@ -77,6 +78,8 @@ class LatentComponent(ABC, Module):
             update_pymc_model. If not set, it will be created in such a call.
         @param sd_a_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
+        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
+            each index in the latent component scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
         """
@@ -123,6 +126,7 @@ class LatentComponent(ABC, Module):
         self.latent_component_random_variable = latent_component_random_variable
         self.mean_a0_random_variable = mean_a0_random_variable
         self.sd_a_random_variable = sd_a_random_variable
+        self.time_steps_in_coordination_scale= time_steps_in_coordination_scale
 
     @abstractmethod
     def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
@@ -175,7 +179,7 @@ class LatentComponent(ABC, Module):
 
         @raise ValueError: if coordination_random_variable is None.
         """
-        super().update_pymc_model(pymc_model, observed_values)
+        super().create_random_variables()
 
         if self.coordination_random_variable is None:
             raise ValueError("Coordination variable is undefined. Please set "

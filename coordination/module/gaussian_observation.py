@@ -120,7 +120,7 @@ class GaussianObservation(Observation, ABC):
         """
 
         if self.parameters.sd_o.value is None:
-            raise ValueError("Emission standard deviation parameter value is undefined.")
+            raise ValueError(f"Value of {self.parameters.sd_o.uuid} is undefined.")
 
         dim_sd_o_dimensions = 1 if self.share_sd_o_across_dimensions else self.dimension_size
         if self.share_sd_o_across_subjects:
@@ -135,7 +135,7 @@ class GaussianObservation(Observation, ABC):
 
         @raise ValueError: if latent_component_random_variable is None.
         """
-        super().update_pymc_model(pymc_model, observed_values)
+        super().create_random_variables()
 
         with self.pymc_model:
             if self.sd_o_random_variable is None:
