@@ -32,7 +32,7 @@ class NormalParameterPrior:
     Represents a normal parameter prior.
     """
 
-    def __init__(self, mean: np.ndarray, sd: np.ndarray):
+    def __init__(self, mean: Union[np.ndarray, float], sd: Union[np.ndarray, float]):
         """
         Creates a normal parameter prior.
 
@@ -41,7 +41,7 @@ class NormalParameterPrior:
         @raise ValueError: if sd <= 0.
         """
 
-        if (sd <= 0).any():
+        if (isinstance(sd, float) and sd <= 0) or (isinstance(sd, np.ndarray) and (sd <= 0).any()):
             raise ValueError(f"Standard deviation ({sd}) contains non-positive elements.")
 
         self.mean = mean
@@ -53,7 +53,7 @@ class HalfNormalParameterPrior:
     Represents a half-normal parameter prior.
     """
 
-    def __init__(self, sd: np.ndarray):
+    def __init__(self, sd: Union[np.ndarray, float]):
         """
         Creates a half-normal parameter prior.
 
@@ -61,7 +61,7 @@ class HalfNormalParameterPrior:
         @raise ValueError: if sd <= 0.
         """
 
-        if (sd <= 0).any():
+        if (isinstance(sd, float) and sd <= 0) or (isinstance(sd, np.ndarray) and (sd <= 0).any()):
             raise ValueError(f"Standard deviation ({sd}) contains non-positive elements.")
 
         self.sd = sd

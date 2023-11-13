@@ -50,13 +50,13 @@ class GaussianObservation(Observation, ABC):
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
-            call to update_pymc_model. If not set, it will be created in such a call.
+            call to create_random_variables. If not set, it will be created in such a call.
         @param latent_component_samples: latent component samples to be used in a call to
             draw_samples. This variable must be set before such a call.
         @param latent_component_random_variable: latent component random variable to be used in a
-            call to update_pymc_model. This variable must be set before such a call.
+            call to create_random_variables. This variable must be set before such a call.
         @param sd_o_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
         """
@@ -145,7 +145,7 @@ class GaussianObservation(Observation, ABC):
             if self.latent_component_random_variable is None:
                 raise ValueError("Latent component variable is undefined. Please set "
                                  "latent_component_random_variable before invoking the "
-                                 "update_pymc_model method.")
+                                 "create_random_variables method.")
 
     def _create_emission_standard_deviation_variable(self) -> pm.Distribution:
         """

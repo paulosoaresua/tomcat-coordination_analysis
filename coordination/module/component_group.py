@@ -7,6 +7,7 @@ from coordination.common.types import TensorTypes
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
 from coordination.module.latent_component import LatentComponent, LatentComponentSamples
 from coordination.module.observation2 import Observation
+from coordination.module.transformation import Transformation
 
 
 class ComponentGroup(Module):
@@ -19,15 +20,16 @@ class ComponentGroup(Module):
                  uuid: str,
                  pymc_model: pm.Model,
                  latent_component: LatentComponent,
-                 observations: Dict[str, Observation]):
+                 observations: List[Observation],
+                 transformations: Optional[List[Transformation]] = None):
         """
         Creates a component group.
 
         @param uuid: string uniquely identifying the component group in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param latent_component: a latent system component.
-        @param observations: a dictionary of observations associated with the latent component
-            indexed by the observation module's id.
+        @param observations: a list of observations associated with the latent component.
+        @param transformations: a list of transformations associated with the observations.
         """
         super().__init__(
             uuid=uuid,
@@ -36,8 +38,14 @@ class ComponentGroup(Module):
             observed_values=None
         )
 
+        if transformations is not None:
+            if len(transformations) != len(observations):
+                raise ValueError(f"The number of transformations ({len(transformations)}) does "
+                                 f"not match the number of observations ({len(observations)}.")
+
         self.latent_component = latent_component
         self.observations = observations
+        self.transformations = transformations
 
     def draw_samples(self, seed: Optional[int], num_series: int) -> ComponentGroupSamples:
         """
@@ -52,9 +60,17 @@ class ComponentGroup(Module):
 
         latent_component_samples = self.latent_component.draw_samples(seed, num_series)
         observation_samples = {}
-        for observation in self.observations:
+        transformation_list = [None] * len(
+            self.observations) if self.transformations is None else self.transformations
+        for transformation, observation in zip(transformation_list, self.observations):
             observation.coordination_samples = self.latent_component.coordination_samples
-            observation.latent_component_samples = latent_component_samples
+            if transformation is None:
+                transformed_latent_samples = latent_component_samples
+            else:
+                transformation.input_samples = latent_component_samples
+                transformed_latent_samples = transformation.draw_samples(seed, num_series)
+
+            observation.latent_component_samples = transformed_latent_samples
             observation_samples[observation.uuid] = observation.draw_samples(seed, num_series)
 
         return ComponentGroupSamples(latent_component_samples, observation_samples)
@@ -66,11 +82,20 @@ class ComponentGroup(Module):
         super().create_random_variables()
 
         self.latent_component.create_random_variables()
-        for observation in self.observations:
-            # TODO: Add transformation
-            transformation = self.latent_component.latent_component_random_variable
-            observation.coordination_random_variable = self.latent_component.coordination_random_variable
-            observation.latent_component_random_variable = transformation
+        transformation_list = [None] * len(
+            self.observations) if self.transformations is None else self.transformations
+        for transformation, observation in zip(transformation_list, self.observations):
+            if transformation is None:
+                transformed_latent_rv = self.latent_component.latent_component_random_variable
+            else:
+                transformation.input_random_variable = \
+                    self.latent_component.latent_component_random_variable
+                transformation.create_random_variables()
+                transformed_latent_rv = transformation.output_random_variable
+
+            observation.coordination_random_variable = \
+                self.latent_component.coordination_random_variable
+            observation.latent_component_random_variable = transformed_latent_rv
             observation.create_random_variables()
 
 

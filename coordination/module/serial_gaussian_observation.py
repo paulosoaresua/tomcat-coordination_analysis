@@ -56,13 +56,13 @@ class SerialGaussianObservation(GaussianObservation):
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
-            call to update_pymc_model. If not set, it will be created in such a call.
+            call to create_random_variables. If not set, it will be created in such a call.
         @param latent_component_samples: latent component samples to be used in a call to
             draw_samples. This variable must be set before such a call.
         @param latent_component_random_variable: latent component random variable to be used in a
-            call to update_pymc_model. This variable must be set before such a call.
+            call to create_random_variables. This variable must be set before such a call.
         @param sd_o_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param subject_indices: array of numbers indicating which subject is associated to the
             observation at every time step (e.g. the current speaker for a speech observation).
             In serial observations, only one subject's observation exists at a time. This

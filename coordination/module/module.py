@@ -20,7 +20,7 @@ class Module:
                  uuid: str,
                  pymc_model: pm.Model,
                  parameters: Optional[ModuleParameters],
-                 observed_values: Optional[TensorTypes]):
+                 observed_values: Optional[Union[TensorTypes, Dict[str, TensorTypes]]]):
         """
 
         @param uuid: unique identifier of the module.
@@ -144,6 +144,10 @@ class ModuleParameters(ABC):
         for _, parameter in attributes.items():
             if isinstance(parameter, Parameter):
                 parameter.value = None
+            elif isinstance(parameter, List):
+                for p in parameter:
+                    if isinstance(p, Parameter):
+                        p.value = None
 
     @property
     def parameter_names(self) -> List[str]:
@@ -157,6 +161,10 @@ class ModuleParameters(ABC):
         for _, parameter in attributes.items():
             if isinstance(parameter, Parameter):
                 names.append(parameter.uuid)
+            elif isinstance(parameter, List):
+                for p in parameter:
+                    if isinstance(p, Parameter):
+                        names.append(p.uuid)
 
         return names
 

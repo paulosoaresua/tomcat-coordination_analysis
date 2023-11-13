@@ -71,13 +71,13 @@ class LatentComponent(ABC, Module):
         @param coordination_samples: coordination samples to be used in a call to draw_samples.
             This variable must be set before such a call.
         @param coordination_random_variable: coordination random variable to be used in a call to
-            update_pymc_model. This variable must be set before such a call.
+            create_random_variables. This variable must be set before such a call.
         @param latent_component_random_variable: latent component random variable to be used in a
-            call to update_pymc_model. If not set, it will be created in such a call.
+            call to create_random_variables. If not set, it will be created in such a call.
         @param mean_a0_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param sd_a_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
         @param observed_values: observations for the latent component random variable. If a value
@@ -137,7 +137,7 @@ class LatentComponent(ABC, Module):
 
         @param seed: random seed for reproducibility.
         @param num_series: how many series of samples to generate.
-        @raise ValueError: if coordination is None.
+        @raise ValueError: if coordination_samples is None.
         @return: latent component samples for each coordination series.
         """
         super().draw_samples(seed, num_series)
@@ -183,8 +183,8 @@ class LatentComponent(ABC, Module):
 
         if self.coordination_random_variable is None:
             raise ValueError("Coordination variable is undefined. Please set "
-                             "coordination_random_variable before invoking the update_pymc_model "
-                             "method.")
+                             "coordination_random_variable before invoking the "
+                             "create_random_variables method.")
 
         with self.pymc_model:
             if self.mean_a0_random_variable is None:

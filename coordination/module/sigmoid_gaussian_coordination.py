@@ -46,11 +46,11 @@ class SigmoidGaussianCoordination(Coordination):
         @param sd_sd_uc: std of the hyper-prior of sigma_uc (std of the Gaussian random walk of
             the unbounded coordination).
         @param coordination_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param mean_uc0_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param sd_uc_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param unbounded_coordination_observed_values: observations for the unbounded coordination
             random variable. If a value is set, the variable is not latent anymore.
         """

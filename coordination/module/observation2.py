@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Dict, Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
@@ -31,7 +31,7 @@ class Observation(ABC, Module):
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  observation_random_variable: Optional[pm.Distribution] = None,
-                 observed_values: Optional[TensorTypes] = None):
+                 observed_values: Union[TensorTypes, Dict[str, TensorTypes]] = None):
         """
         Creates an observation.
 
@@ -47,7 +47,7 @@ class Observation(ABC, Module):
         @param coordination_random_variable: coordination random variable.
         @param latent_component_random_variable: latent component random variable.
         @param observation_random_variable: observation random variable to be used in a
-            call to update_pymc_model. If not set, it will be created in such a call.
+            call to create_random_variables. If not set, it will be created in such a call.
         """
         super().__init__(
             uuid=uuid,

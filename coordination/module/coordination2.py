@@ -29,7 +29,7 @@ class Coordination(ABC, Module):
         @param parameters: parameters of the module.
         @param num_time_steps: number of time steps in the coordination scale.
         @param coordination_random_variable: random variable to be used in a call to
-            update_pymc_model. If not set, it will be created in such a call.
+            create_random_variables. If not set, it will be created in such a call.
         @param observed_values: observations for the coordination random variable. If a value
             is set, the variable is not latent anymore.
         """
