@@ -8,7 +8,8 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
-from coordination.module.latent_component import LatentComponent, LatentComponentSamples
+from coordination.module.latent_component.latent_component import (LatentComponent,
+                                                                   LatentComponentSamples)
 from coordination.module.module import ModuleSamples
 from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
@@ -420,7 +421,8 @@ class SerialLatentComponent(LatentComponent):
 
         log_prob_params = (mean_a0,
                            sd_a,
-                           self.coordination_random_variable[self.time_steps_in_coordination_scale],
+                           self.coordination_random_variable[
+                               self.time_steps_in_coordination_scale],
                            self.prev_time_same_subject,
                            self.prev_time_diff_subject,
                            prev_same_subject_mask,
@@ -431,8 +433,9 @@ class SerialLatentComponent(LatentComponent):
         self.pymc_model.add_coord(name=self.dimension_axis_name,
                                   values=self.dimension_names)
         self.pymc_model.add_coord(name=self.time_axis_name,
-                                  values=[f"{sub}#{time}" for sub, time in zip(self.subject_indices,
-                                                                          self.time_steps_in_coordination_scale)])
+                                  values=[f"{sub}#{time}" for sub, time in
+                                          zip(self.subject_indices,
+                                              self.time_steps_in_coordination_scale)])
 
         with self.pymc_model:
             self.latent_component_random_variable = pm.DensityDist(

@@ -9,9 +9,10 @@ from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
-from coordination.module.serial_latent_component import SerialLatentComponentSamples
-from coordination.module.gaussian_observation import GaussianObservation, \
-    GaussianObservationParameters
+from coordination.module.latent_component.serial_latent_component import \
+    SerialLatentComponentSamples
+from coordination.module.observation.gaussian_observation import (GaussianObservation,
+                                                                  GaussianObservationParameters)
 from coordination.module.module import ModuleSamples
 from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_OBSERVATION_DIMENSION_SIZE,

@@ -11,7 +11,7 @@ from coordination.module.parametrization2 import Parameter, HalfNormalParameterP
     NormalParameterPrior
 from coordination.common.utils import set_random_seed
 from coordination.module.module import ModuleSamples, Module, ModuleParameters
-from coordination.module.coordination2 import Coordination
+from coordination.module.coordination.coordination import Coordination
 from coordination.module.constants import (DEFAULT_UNB_COORDINATION_MEAN_PARAM,
                                            DEFAULT_UNB_COORDINATION_SD_PARAM,
                                            DEFAULT_NUM_TIME_STEPS)

@@ -13,7 +13,7 @@ from coordination.module.parametrization2 import (Parameter,
                                                   HalfNormalParameterPrior,
                                                   NormalParameterPrior)
 from coordination.module.module import Module, ModuleSamples, ModuleParameters
-from coordination.module.transformation import Transformation
+from coordination.module.transformation.transformation import Transformation
 from coordination.module.constants import (DEFAULT_MLP_MEAN_WEIGHTS,
                                            DEFAULT_MLP_SD_WEIGHTS,
                                            DEFAULT_MLP_ACTIVATION,

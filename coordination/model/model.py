@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 
 import pymc as pm
 
-from coordination.module.coordination2 import Coordination
+from coordination.module.coordination.coordination import Coordination
 from coordination.module.component_group import ComponentGroup, ComponentGroupSamples
 from coordination.module.module import Module, ModuleSamples
 from coordination.module.constants import (DEFAULT_SEED,

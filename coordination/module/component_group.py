@@ -5,9 +5,10 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
-from coordination.module.latent_component import LatentComponent, LatentComponentSamples
-from coordination.module.observation2 import Observation
-from coordination.module.transformation import Transformation
+from coordination.module.latent_component.latent_component import (LatentComponent,
+                                                                   LatentComponentSamples)
+from coordination.module.observation.observation import Observation
+from coordination.module.transformation.transformation import Transformation
 
 
 class ComponentGroup(Module):

@@ -4,7 +4,7 @@ import numpy as np
 import pytensor.tensor as ptt
 import pymc as pm
 
-from coordination.module.mlp import MLP
+from coordination.module.transformation.mlp import MLP
 from coordination.module.module import ModuleSamples
 
 

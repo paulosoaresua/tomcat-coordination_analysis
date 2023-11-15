@@ -9,7 +9,7 @@ from coordination.common.types import TensorTypes
 from coordination.module.parametrization2 import (Parameter,
                                                   HalfNormalParameterPrior)
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
-from coordination.module.latent_component import LatentComponentSamples
+from coordination.module.latent_component.latent_component import LatentComponentSamples
 
 
 class Observation(ABC, Module):

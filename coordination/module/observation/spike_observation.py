@@ -9,8 +9,8 @@ from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
-from coordination.module.latent_component import LatentComponentSamples
-from coordination.module.observation2 import Observation
+from coordination.module.observation.latent_component import LatentComponentSamples
+from coordination.module.observation.observation import Observation
 from coordination.module.module import ModuleSamples, ModuleParameters
 from coordination.module.parametrization2 import Parameter, BetaParameterPrior
 
