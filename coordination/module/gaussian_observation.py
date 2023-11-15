@@ -70,9 +70,9 @@ class GaussianObservation(Observation, ABC):
                          num_subjects=num_subjects,
                          dimension_size=dimension_size,
                          dimension_names=dimension_names,
-                         coordination_samples=None,
-                         coordination_random_variable=None,
                          observation_random_variable=observation_random_variable,
+                         latent_component_samples=latent_component_samples,
+                         latent_component_random_variable=latent_component_random_variable,
                          observed_values=observed_values)
 
         # If a parameter is shared across dimensions, we only have one parameter to infer.
@@ -87,11 +87,8 @@ class GaussianObservation(Observation, ABC):
         else:
             assert (num_subjects, dim_sd_o_dimensions) == sd_sd_o.shape
 
-        self.dimension_size = dimension_size
         self.share_sd_o_across_subjects = share_sd_o_across_subjects
         self.share_sd_o_across_dimensions = share_sd_o_across_dimensions
-        self.latent_component_samples = latent_component_samples
-        self.latent_component_random_variable = latent_component_random_variable
         self.sd_o_random_variable = sd_o_random_variable
 
     @abstractmethod
@@ -103,7 +100,7 @@ class GaussianObservation(Observation, ABC):
 
         @param seed: random seed for reproducibility.
         @param num_series: how many series of samples to generate.
-        @raise ValueError: if coordination is None.
+        @raise ValueError: if latent_component_samples is None.
         @return: latent component samples for each coordination series.
         """
         super().draw_samples(seed, num_series)

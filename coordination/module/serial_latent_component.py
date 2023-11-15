@@ -374,18 +374,6 @@ class SerialLatentComponent(LatentComponent):
         """
         super().create_random_variables()
 
-        if self.latent_component_random_variable is not None:
-            return
-
-        if self.subject_indices is None:
-            raise ValueError("subject_indices is undefined.")
-
-        if self.prev_time_same_subject is None:
-            raise ValueError("prev_time_same_subject is undefined.")
-
-        if self.prev_time_diff_subject is None:
-            raise ValueError("prev_time_diff_subject is undefined.")
-
         # Adjust dimensions for proper indexing and broadcast in the log_prob function.
         if self.share_mean_a0_across_subjects:
             # dimension x time = 1 (broadcast across time)
@@ -409,6 +397,21 @@ class SerialLatentComponent(LatentComponent):
         if self.share_sd_a_across_dimensions:
             sd_a = sd_a.repeat(self.dimension_size, axis=0)
 
+        if self.latent_component_random_variable is not None:
+            return
+
+        if self.subject_indices is None:
+            raise ValueError("subject_indices is undefined.")
+
+        if self.time_steps_in_coordination_scale is None:
+            raise ValueError("time_steps_in_coordination_scale is undefined.")
+
+        if self.prev_time_same_subject is None:
+            raise ValueError("prev_time_same_subject is undefined.")
+
+        if self.prev_time_diff_subject is None:
+            raise ValueError("prev_time_diff_subject is undefined.")
+
         # Mask with 1 for time steps where there is observation for a subject (subject index >= 0)
         prev_same_subject_mask = np.array(
             [np.where(x >= 0, 1, 0) for x in self.prev_time_same_subject])
@@ -417,7 +420,7 @@ class SerialLatentComponent(LatentComponent):
 
         log_prob_params = (mean_a0,
                            sd_a,
-                           self.coordination_random_variable,
+                           self.coordination_random_variable[self.time_steps_in_coordination_scale],
                            self.prev_time_same_subject,
                            self.prev_time_diff_subject,
                            prev_same_subject_mask,
@@ -463,9 +466,7 @@ class SerialLatentComponentSamples(LatentComponentSamples):
         @param time_steps_in_coordination_scale: indexes to the coordination used to generate the
         sample. If the component is in a different timescale from the timescale used to compute
         coordination, this mapping will tell which value of coordination to map to each sampled
-        value of the latent component. For serial components, this will be a list of time series of
-        indices of different sizes. For non-serial components, this will be a tensor as the number
-        of observations in time do not change for different sampled time series.
+        value of the latent component.
         @param subjects: number indicating which subject is associated to the component at every
         time step (e.g. the current speaker for a speech component). In serial components, only one
         user's latent component is observed at a time. This array indicates which user that is.
