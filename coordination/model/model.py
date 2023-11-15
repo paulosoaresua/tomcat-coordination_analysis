@@ -14,6 +14,7 @@ from coordination.module.constants import (DEFAULT_SEED,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_INIT_METHOD,
                                            DEFAULT_TARGET_ACCEPT)
+from coordination.entity.inference_data import InferenceData
 
 
 class Model(Module):
@@ -26,7 +27,8 @@ class Model(Module):
                  name: str,
                  pymc_model: pm.Model,
                  coordination: Coordination,
-                 component_groups: List[ComponentGroup]):
+                 component_groups: List[ComponentGroup],
+                 coordination_samples: Optional[ModuleSamples] = None):
         """
         Creates a model instance.
 
@@ -34,6 +36,9 @@ class Model(Module):
         @param pymc_model: a PyMC model instance where model's modules are to be created at.
         @param coordination: coordination module.
         @param component_groups: list of component groups in the model.
+        @param coordination_samples: fixed coordination samples to be used during a call to
+            draw_samples. If provided, these samples will be used and samples from the coordination
+            component won't be drawn.
         """
 
         super().__init__(
@@ -45,6 +50,7 @@ class Model(Module):
 
         self.coordination = coordination
         self.component_groups = component_groups
+        self.coordination_samples = coordination_samples
 
     def draw_samples(self,
                      seed: Optional[int] = DEFAULT_SEED,
@@ -59,7 +65,10 @@ class Model(Module):
         """
         super().draw_samples(seed, num_series)
 
-        coordination_samples = self.coordination.draw_samples(seed, num_series)
+        if self.coordination_samples is None:
+            coordination_samples = self.coordination.draw_samples(seed, num_series)
+        else:
+            coordination_samples = self.coordination_samples
         component_group_samples = {}
         for g in self.component_groups:
             g.latent_component.coordination_samples = coordination_samples
@@ -87,7 +96,7 @@ class Model(Module):
             num_chains: int = DEFAULT_NUM_CHAINS,
             num_jobs: int = DEFAULT_NUM_JOBS,
             init_method: str = DEFAULT_INIT_METHOD,
-            target_accept: float = DEFAULT_TARGET_ACCEPT) -> az.InferenceData:
+            target_accept: float = DEFAULT_TARGET_ACCEPT) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
 
@@ -110,7 +119,7 @@ class Model(Module):
                               cores=num_jobs,
                               target_accept=target_accept)
 
-        return idata
+        return InferenceData(idata)
 
     def prior_predictive(self,
                          seed: Optional[int] = DEFAULT_SEED,

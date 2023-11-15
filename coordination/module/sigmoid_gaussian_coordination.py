@@ -24,7 +24,6 @@ class SigmoidGaussianCoordination(Coordination):
     """
 
     def __init__(self,
-                 uuid: str,
                  pymc_model: pm.Model,
                  num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
                  mean_mean_uc0: float = DEFAULT_UNB_COORDINATION_MEAN_PARAM,
@@ -37,7 +36,6 @@ class SigmoidGaussianCoordination(Coordination):
         """
         Creates a coordination module with an unbounded auxiliary variable.
 
-        @param uuid: string uniquely identifying the coordination module in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_time_steps: number of time steps in the coordination scale.
         @param mean_mean_uc0: mean of the hyper-prior of mu_uc0 (mean of the initial value of the
@@ -55,10 +53,9 @@ class SigmoidGaussianCoordination(Coordination):
             random variable. If a value is set, the variable is not latent anymore.
         """
         super().__init__(
-            uuid=uuid,
             pymc_model=pymc_model,
             parameters=SigmoidGaussianCoordinationParameters(
-                module_uuid=uuid,
+                module_uuid=Coordination.UUID,
                 mean_mean_uc0=mean_mean_uc0,
                 sd_mean_uc0=sd_mean_uc0,
                 sd_sd_uc=sd_sd_uc),
@@ -139,7 +136,7 @@ class SigmoidGaussianCoordination(Coordination):
                 )
 
                 self.coordination_random_variable = pm.Deterministic(
-                    name="coordination",
+                    name=self.uuid,
                     var=pm.math.sigmoid(
                         unbounded_coordination),
                     dims=[self.time_axis_name]

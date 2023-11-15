@@ -14,8 +14,10 @@ from coordination.module.module import ModuleSamples, Module, ModuleParameters
 
 
 class Coordination(ABC, Module):
+
+    UUID = "coordination"
+
     def __init__(self,
-                 uuid: str,
                  pymc_model: pm.Model,
                  parameters: ModuleParameters,
                  num_time_steps: int,
@@ -24,7 +26,6 @@ class Coordination(ABC, Module):
         """
         Creates a coordination module.
 
-        @param uuid: string uniquely identifying the coordination module in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param parameters: parameters of the module.
         @param num_time_steps: number of time steps in the coordination scale.
@@ -34,7 +35,7 @@ class Coordination(ABC, Module):
             is set, the variable is not latent anymore.
         """
         super().__init__(
-            uuid=uuid,
+            uuid=Coordination.UUID,
             pymc_model=pymc_model,
             parameters=parameters,
             observed_values=observed_values)

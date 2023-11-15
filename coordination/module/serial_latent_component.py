@@ -425,13 +425,11 @@ class SerialLatentComponent(LatentComponent):
                            np.array(self.self_dependent))
 
         # Add coordinates to the model
-        if self.dimension_axis_name not in self.pymc_model.coords:
-            self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                      values=self.dimension_names)
-
-        if self.time_axis_name not in self.pymc_model.coords:
-            self.pymc_model.add_coord(name=self.time_axis_name,
-                                      values=np.arange(len(self.subject_indices)))
+        self.pymc_model.add_coord(name=self.dimension_axis_name,
+                                  values=self.dimension_names)
+        self.pymc_model.add_coord(name=self.time_axis_name,
+                                  values=[f"{sub}#{time}" for sub, time in zip(self.subject_indices,
+                                                                          self.time_steps_in_coordination_scale)])
 
         with self.pymc_model:
             self.latent_component_random_variable = pm.DensityDist(
