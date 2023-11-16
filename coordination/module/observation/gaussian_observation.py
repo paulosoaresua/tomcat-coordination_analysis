@@ -109,6 +109,8 @@ class GaussianObservation(Observation, ABC):
             raise ValueError("No latent component samples. Please call  "
                              "before invoking the draw_samples method.")
 
+        self._check_parameter_dimensionality_consistency()
+
     def _check_parameter_dimensionality_consistency(self):
         """
         Check if their dimensionality is consistent with the sharing options.
@@ -143,6 +145,7 @@ class GaussianObservation(Observation, ABC):
                 raise ValueError("Latent component variable is undefined. Please set "
                                  "latent_component_random_variable before invoking the "
                                  "create_random_variables method.")
+        self._add_coordinates()
 
     def _create_emission_standard_deviation_variable(self) -> pm.Distribution:
         """

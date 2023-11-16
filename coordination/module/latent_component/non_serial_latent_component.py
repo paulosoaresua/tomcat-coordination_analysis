@@ -43,6 +43,7 @@ class NonSerialLatentComponent(LatentComponent):
                  share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
                  share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
                  dimension_names: Optional[List[str]] = None,
+                 subject_names: Optional[List[str]] = None,
                  coordination_samples: Optional[ModuleSamples] = None,
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
@@ -71,7 +72,9 @@ class NonSerialLatentComponent(LatentComponent):
         @param share_sd_a_across_subjects: whether to use the same sigma_a for all subjects.
         @param share_sd_a_across_dimensions: whether to use the same sigma_a for all dimensions.
         @param dimension_names: the names of each dimension of the latent component. If not
-        informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
+            informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
+        @param subject_names: the names of each subject of the latent component. If not
+            informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param coordination_samples: coordination samples to be used in a call to draw_samples.
             This variable must be set before such a call.
         @param coordination_random_variable: coordination random variable to be used in a call to
@@ -112,7 +115,17 @@ class NonSerialLatentComponent(LatentComponent):
                          time_steps_in_coordination_scale=time_steps_in_coordination_scale,
                          observed_values=observed_values)
 
+        self.subject_names = subject_names
         self.relative_frequency = relative_frequency
+
+    @property
+    def subject_coordinates(self) -> Union[List[str], np.ndarray]:
+        """
+        Gets a list of values representing the names of each subject.
+
+        @return: a list of dimension names.
+        """
+        return np.arange(self.num_subjects) if self.subject_names is None else self.subject_names
 
     def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
         """
@@ -246,14 +259,6 @@ class NonSerialLatentComponent(LatentComponent):
                            np.array(self.self_dependent),
                            *self._get_extra_logp_params())
 
-        # Add coordinates to the model
-        self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                  values=self.dimension_names)
-        self.pymc_model.add_coord(name=self.time_axis_name,
-                                  values=[f"{sub}#{time}" for sub, time in
-                                          zip(self.subject_indices,
-                                              self.time_steps_in_coordination_scale)])
-
         with self.pymc_model:
             self.latent_component_random_variable = pm.DensityDist(
                 self.uuid,
@@ -263,6 +268,17 @@ class NonSerialLatentComponent(LatentComponent):
                 dims=[self.subject_axis_name, self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values
             )
+
+    def _add_coordinates(self):
+        """
+        Adds relevant coordinates to the model. Overrides superclass.
+        """
+        super()._add_coordinates()
+
+        self.pymc_model.add_coord(name=self.subject_axis_name,
+                                  values=self.subject_coordinates)
+        self.pymc_model.add_coord(name=self.time_axis_name,
+                                  values=self.time_steps_in_coordination_scale)
 
     def _get_extra_logp_params(self) -> Tuple[Any, ...]:
         """

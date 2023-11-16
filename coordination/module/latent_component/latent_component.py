@@ -119,14 +119,23 @@ class LatentComponent(ABC, Module):
         self.share_mean_a0_across_dimensions = share_mean_a0_across_dimensions
         self.share_sd_a_across_subjects = share_sd_a_across_subjects
         self.share_sd_a_across_dimensions = share_sd_a_across_dimensions
-        self.dimension_names = np.arange(
-            dimension_size) if dimension_names is None else dimension_names
+        self.dimension_names = dimension_names
         self.coordination_samples = coordination_samples
         self.coordination_random_variable = coordination_random_variable
         self.latent_component_random_variable = latent_component_random_variable
         self.mean_a0_random_variable = mean_a0_random_variable
         self.sd_a_random_variable = sd_a_random_variable
-        self.time_steps_in_coordination_scale= time_steps_in_coordination_scale
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+
+    @property
+    def dimension_coordinates(self) -> Union[List[str], np.ndarray]:
+        """
+        Gets a list of values representing the names of each dimension.
+
+        @return: a list of dimension names.
+        """
+        return np.arange(
+            self.dimension_size) if self.dimension_names is None else self.dimension_names
 
     @abstractmethod
     def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
@@ -181,17 +190,26 @@ class LatentComponent(ABC, Module):
         """
         super().create_random_variables()
 
-        if self.coordination_random_variable is None:
-            raise ValueError("Coordination variable is undefined. Please set "
-                             "coordination_random_variable before invoking the "
-                             "create_random_variables method.")
-
         with self.pymc_model:
             if self.mean_a0_random_variable is None:
                 self.mean_a0_random_variable = self._create_initial_mean_variable()
 
             if self.sd_a_random_variable is None:
                 self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
+
+        if self.coordination_random_variable is None:
+            raise ValueError("Coordination variable is undefined. Please set "
+                             "coordination_random_variable before invoking the "
+                             "create_random_variables method.")
+
+        self._add_coordinates()
+
+    def _add_coordinates(self):
+        """
+        Adds relevant coordinates to the model.
+        """
+        self.pymc_model.add_coord(name=self.dimension_axis_name,
+                                  values=self.dimension_coordinates)
 
     def _create_initial_mean_variable(self) -> pm.Distribution:
         """

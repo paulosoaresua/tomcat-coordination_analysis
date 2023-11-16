@@ -22,10 +22,10 @@ from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS)
 
 
-class SerialGaussianObservation(GaussianObservation):
+class NonSerialGaussianObservation(GaussianObservation):
     """
-    This class represents a Gaussian observation where there's only one subject per observation
-    at a time in the module's scale.
+    This class represents a Gaussian observation where there are there are observations for all
+    the subjects at each time in the module's scale.
     """
 
     def __init__(self,
@@ -37,14 +37,14 @@ class SerialGaussianObservation(GaussianObservation):
                  share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
                  share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
                  dimension_names: Optional[List[str]] = None,
+                 subject_names: Optional[List[str]] = None,
                  observation_random_variable: Optional[pm.Distribution] = None,
                  latent_component_samples: Optional[SerialLatentComponentSamples] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  sd_o_random_variable: Optional[pm.Distribution] = None,
-                 subject_indices: Optional[np.ndarray] = None,
                  observed_values: Optional[TensorTypes] = None):
         """
-        Creates a serial Gaussian observation.
+        Creates a non-serial Gaussian observation.
 
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
@@ -56,6 +56,8 @@ class SerialGaussianObservation(GaussianObservation):
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
+        @param subject_names: the names of each subject of the latent component. If not
+            informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
             call to create_random_variables. If not set, it will be created in such a call.
         @param latent_component_samples: latent component samples to be used in a call to
@@ -64,12 +66,6 @@ class SerialGaussianObservation(GaussianObservation):
             call to create_random_variables. This variable must be set before such a call.
         @param sd_o_random_variable: random variable to be used in a call to
             create_random_variables. If not set, it will be created in such a call.
-        @param subject_indices: array of numbers indicating which subject is associated to the
-            observation at every time step (e.g. the current speaker for a speech observation).
-            In serial observations, only one subject's observation exists at a time. This
-            array indicates which user that is. This array contains no gaps. The size of the array
-            is the number of observed latent component in time, i.e., observation time
-            indices with an associated subject.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
         """
@@ -87,10 +83,18 @@ class SerialGaussianObservation(GaussianObservation):
                          sd_o_random_variable=sd_o_random_variable,
                          observed_values=observed_values)
 
-        self.subject_indices = subject_indices
+        self.subject_names = subject_names
 
-    def draw_samples(self, seed: Optional[int],
-                     num_series: int) -> SerialGaussianObservationSamples:
+    @property
+    def subject_coordinates(self) -> Union[List[str], np.ndarray]:
+        """
+        Gets a list of values representing the names of each subject.
+
+        @return: a list of dimension names.
+        """
+        return np.arange(self.num_subjects) if self.subject_names is None else self.subject_names
+
+    def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:
         """
         Draws observation samples using ancestral sampling.
 
@@ -100,21 +104,17 @@ class SerialGaussianObservation(GaussianObservation):
         """
         super().draw_samples(seed, num_series)
 
-        observation_series = []
-        for i in range(self.latent_component_samples.num_series):
-            # Adjust dimensions according to parameter sharing specification
-            if self.share_sd_o_across_subjects:
-                # Broadcast across time
-                sd = self.parameters.sd_o.value[:, None]
-            else:
-                sd = self.parameters.sd_o.value[subjects[i]].T
+        # Adjust dimensions according to parameter sharing specification
+        if self.share_sd_o_across_subjects:
+            # Broadcast across series, subjects and time
+            sd = self.parameters.sd_o.value[None, None, :, None]
+        else:
+            # Broadcast across series and time
+            sd = self.parameters.sd_o.value[None, :, :, None]
 
-            samples = norm(loc=self.latent_component_samples.values[i], scale=sd).rvs(
-                size=self.latent_component_samples.values[i].shape)
-            observation_series.append(samples)
+        sampled_values = norm(loc=latent_component, scale=sd).rvs(size=latent_component.shape)
 
-        return SerialGaussianObservationSamples(observation_series,
-                                                self.latent_component_samples.subjects)
+        return ModuleSamples(sampled_values)
 
     def create_random_variables(self):
         """
@@ -126,20 +126,18 @@ class SerialGaussianObservation(GaussianObservation):
             return
 
         if self.share_sd_o_across_subjects:
-            # dimension x time = 1 (broadcast across time)
-            sd_o = self.sd_o_random_variable[:, None]
+            # subject x feature x time (broadcast across subject and time)
+            sd_o = self.sd_o_random_variable[None, :, None]
         else:
-            sd_o = self.sd_o_random_variable[self.subject_indices].transpose()  # dimension x time
-
-        if self.share_sd_o_across_dimensions:
-            sd_o = sd_o.repeat(self.dimension_size, axis=0)
+            # subject x feature x time (broadcast across time)
+            sd_o = self.sd_o_random_variable[:, :, None]
 
         with self.pymc_model:
             self.observation_random_variable = pm.Normal(
                 name=self.uuid,
                 mu=self.latent_component_random_variable,
                 sigma=sd_o,
-                dims=[self.dimension_axis_name, self.time_axis_name],
+                dims=[self.subject_axis_name, self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values
             )
 
@@ -149,32 +147,7 @@ class SerialGaussianObservation(GaussianObservation):
         """
         super()._add_coordinates()
 
-        # Add information about which subject is associated with each timestep in the time
-        # coordinate.
+        self.pymc_model.add_coord(name=self.subject_axis_name,
+                                  values=self.subject_coordinates)
         self.pymc_model.add_coord(name=self.time_axis_name,
-                                  values=[f"{sub}#{time}" for sub, time in
-                                          zip(self.subject_indices,
-                                              self.time_steps_in_coordination_scale)])
-
-
-###################################################################################################
-# AUXILIARY CLASSES
-###################################################################################################
-
-
-class SerialGaussianObservationSamples(ModuleSamples):
-
-    def __init__(self,
-                 values: List[np.ndarray],
-                 subjects: List[np.ndarray]):
-        """
-        Creates an object to store samples and associated subjects in time.
-
-        @param values: sampled observation values. This is a list of time series of values of
-        different sizes because each sampled series may have a different sparsity level.
-        @param subjects: number indicating which subject is associated to the observation at every
-        time step (e.g. the current speaker for a speech component).
-        """
-        super().__init__(values)
-
-        self.subjects = subjects
+                                  values=self.time_steps_in_coordination_scale)

@@ -25,7 +25,7 @@ from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
 
 class SerialLatentComponent(LatentComponent):
     """
-    This class represents a serial latent component where there's only one observation per subject
+    This class represents a serial latent component where there's only one subject per observation
     at a time in the component's scale, and subjects are influenced in a pair-wised manner.
     """
 
@@ -430,14 +430,6 @@ class SerialLatentComponent(LatentComponent):
                            np.array(self.self_dependent),
                            *self._get_extra_logp_params())
 
-        # Add coordinates to the model
-        self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                  values=self.dimension_names)
-        self.pymc_model.add_coord(name=self.time_axis_name,
-                                  values=[f"{sub}#{time}" for sub, time in
-                                          zip(self.subject_indices,
-                                              self.time_steps_in_coordination_scale)])
-
         with self.pymc_model:
             self.latent_component_random_variable = pm.DensityDist(
                 self.uuid,
@@ -447,6 +439,19 @@ class SerialLatentComponent(LatentComponent):
                 dims=[self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values
             )
+
+    def _add_coordinates(self):
+        """
+        Adds relevant coordinates to the model. Overrides superclass.
+        """
+        super()._add_coordinates()
+
+        # Add information about which subject is associated with each timestep in the time
+        # coordinate.
+        self.pymc_model.add_coord(name=self.time_axis_name,
+                                  values=[f"{sub}#{time}" for sub, time in
+                                          zip(self.subject_indices,
+                                              self.time_steps_in_coordination_scale)])
 
     def _get_extra_logp_params(self) -> Tuple[Any, ...]:
         """

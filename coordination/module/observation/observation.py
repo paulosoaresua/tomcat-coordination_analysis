@@ -64,3 +64,20 @@ class Observation(ABC, Module):
         self.coordination_random_variable = coordination_random_variable
         self.latent_component_random_variable = latent_component_random_variable
         self.observation_random_variable = observation_random_variable
+
+    @property
+    def dimension_coordinates(self) -> Union[List[str], np.ndarray]:
+        """
+        Gets a list of values representing the names of each dimension.
+
+        @return: a list of dimension names.
+        """
+        return np.arange(
+            self.dimension_size) if self.dimension_names is None else self.dimension_names
+
+    def _add_coordinates(self):
+        """
+        Adds relevant coordinates to the model.
+        """
+        self.pymc_model.add_coord(name=self.dimension_axis_name,
+                                  values=self.dimension_coordinates)

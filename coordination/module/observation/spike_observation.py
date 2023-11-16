@@ -145,9 +145,6 @@ class SpikeObservation(Observation):
         if self.time_steps_in_coordination_scale is None:
             raise ValueError("time_steps_in_coordination_scale is undefined.")
 
-        self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                  values=self.dimension_names)
-
         adjusted_prob = pm.Deterministic(f"{self.uuid}_adjusted_p",
                                          p * coordination[self.time_steps_in_coordination_scale])
 
@@ -155,6 +152,15 @@ class SpikeObservation(Observation):
                      adjusted_prob,
                      dims=self.time_axis_name,
                      observed=self.observed_values)
+
+    def _add_coordinates(self):
+        """
+        Adds relevant coordinates to the model. Overrides superclass.
+        """
+        super()._add_coordinates()
+
+        self.pymc_model.add_coord(name=self.time_axis_name,
+                                  values=self.time_steps_in_coordination_scale)
 
 
 ###################################################################################################
