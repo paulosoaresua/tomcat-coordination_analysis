@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
@@ -181,7 +181,7 @@ class NonSerialLatentComponent(LatentComponent):
         @return: sampled values.
         """
 
-        # Dimension legend:
+        # Axes legend:
         # n: number of series (first dimension of coordination)
         # s: number of subjects
         # d: dimension size
@@ -264,19 +264,19 @@ class NonSerialLatentComponent(LatentComponent):
                 observed=self.observed_values
             )
 
-    def _get_extra_logp_params(self):
+    def _get_extra_logp_params(self) -> Tuple[Any, ...]:
         """
         Gets extra parameters to be passed to the log_prob and random functions.
         """
         return ()
 
-    def _get_logp_fn(self):
+    def _get_logp_fn(self) -> Callable:
         """
         Gets a reference to a log_prob function.
         """
         return log_prob
 
-    def _get_random_fn(self):
+    def _get_random_fn(self) -> Callable:
         """
         Gets a reference to a random function for prior predictive checks.
         """
@@ -291,7 +291,7 @@ def log_prob(sample: ptt.TensorVariable,
              initial_mean: ptt.TensorVariable,
              sigma: ptt.TensorVariable,
              coordination: ptt.TensorVariable,
-             self_dependent: ptt.TensorConstant):
+             self_dependent: ptt.TensorConstant) -> float:
     """
     Computes the log-probability function of a sample.
 

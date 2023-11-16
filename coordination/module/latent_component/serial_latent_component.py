@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
@@ -448,19 +448,19 @@ class SerialLatentComponent(LatentComponent):
                 observed=self.observed_values
             )
 
-    def _get_extra_logp_params(self):
+    def _get_extra_logp_params(self) -> Tuple[Any, ...]:
         """
         Gets extra parameters to be passed to the log_prob and random functions.
         """
         return ()
 
-    def _get_logp_fn(self):
+    def _get_logp_fn(self) -> Callable:
         """
         Gets a reference to a log_prob function.
         """
         return log_prob
 
-    def _get_random_fn(self):
+    def _get_random_fn(self) -> Callable:
         """
         Gets a reference to a random function for prior predictive checks.
         """
@@ -524,7 +524,7 @@ def log_prob(sample: ptt.TensorVariable,
              prev_time_diff_subject: ptt.TensorConstant,
              prev_same_subject_mask: ptt.TensorConstant,
              prev_diff_subject_mask: ptt.TensorConstant,
-             self_dependent: ptt.TensorConstant):
+             self_dependent: ptt.TensorConstant) -> float:
     """
     Computes the log-probability function of a sample.
 
