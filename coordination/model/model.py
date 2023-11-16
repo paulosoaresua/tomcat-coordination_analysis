@@ -15,6 +15,9 @@ from coordination.module.constants import (DEFAULT_SEED,
                                            DEFAULT_INIT_METHOD,
                                            DEFAULT_TARGET_ACCEPT)
 from coordination.entity.inference_data import InferenceData
+from coordination.common.plot import plot_series
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class Model(Module):
@@ -69,10 +72,17 @@ class Model(Module):
             coordination_samples = self.coordination.draw_samples(seed, num_series)
         else:
             coordination_samples = self.coordination_samples
+
+        # Place the latent component and observation samples from all groups in a single
+        # dictionary for easy query.
         component_group_samples = {}
         for g in self.component_groups:
             g.latent_component.coordination_samples = coordination_samples
-            component_group_samples[g.uuid] = g.draw_samples(seed, num_series)
+            group_samples = g.draw_samples(None, num_series)
+            component_group_samples[
+                g.latent_component.uuid] = group_samples.latent_component_samples
+            for obs_uuid, obs_samples in group_samples.observation_samples.items():
+                component_group_samples[obs_uuid] = obs_samples
 
         return ModelSamples(coordination_samples, component_group_samples)
 
@@ -179,3 +189,80 @@ class ModelSamples(ModuleSamples):
 
         self.coordination_samples = coordination_samples
         self.component_group_samples = component_group_samples
+
+    def plot(self,
+             variable_uuid: str,
+             ax: Optional[plt.axis] = None,
+             series_idx: int = 0,
+             dimension_idx: int = 0,
+             **kwargs) -> plt.axis:
+        """
+        Plots the time series of samples.
+
+        @param variable_uuid: variable to plot.
+        @param ax: axis to plot on. It will be created if not provided.
+        @param series_idx: index of the series of samples to plot.
+        @param dimension_idx: index of the dimension axis to plot.
+        @param kwargs: extra parameters to pass to the plot function.
+        @return: plot axis.
+        """
+
+        if ax is None:
+            plt.figure()
+            ax = plt.gca()
+
+        if variable_uuid == Coordination.UUID:
+            samples = self.coordination_samples
+        else:
+            samples = self.component_group_samples.get(variable_uuid, None)
+
+        if samples is None:
+            raise ValueError(f"Found no samples for the variable ({variable_uuid}).")
+
+        time_steps = np.arange(samples.num_time_steps)
+        sampled_values = samples.values[series_idx]
+        if len(sampled_values.shape) == 1:
+            # Coordination plot
+            plot_series(x=time_steps,
+                        y=sampled_values,
+                        y_std=None,
+                        label=None,
+                        include_bands=False,
+                        value_bounds=None,
+                        ax=ax,
+                        **kwargs)
+            ax.set_ylabel("Coordination")
+        elif len(sampled_values.shape) == 2:
+            # Serial variable
+            subject_indices = samples.subject_indices[series_idx]
+            time_steps = samples.time_steps_in_coordination_scale[series_idx]
+            subjects = sorted(list(set(subject_indices)))
+            for s in subjects:
+                idx = [i for i, subject in enumerate(subject_indices) if subject == s]
+                plot_series(x=time_steps[idx],
+                            y=sampled_values[dimension_idx, idx],
+                            y_std=None,
+                            label=f"Subject {s}",
+                            include_bands=False,
+                            value_bounds=None,
+                            ax=ax,
+                            **kwargs)
+            ax.set_xlabel("Dimension")
+        else:
+            # Non-serial variable
+            for s in range(samples.shape[0]):
+                plot_series(x=time_steps,
+                            y=sampled_values[s, dimension_idx],
+                            y_std=None,
+                            label=f"Subject {s}",
+                            include_bands=False,
+                            value_bounds=None,
+                            ax=ax,
+                            **kwargs)
+
+            ax.set_xlabel("Dimension")
+
+        ax.set_xlabel("Time Step")
+        ax.spines[['right', 'top']].set_visible(False)
+
+        return ax

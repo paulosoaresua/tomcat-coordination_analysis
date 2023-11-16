@@ -113,8 +113,9 @@ class SerialGaussianObservation(GaussianObservation):
                 size=self.latent_component_samples.values[i].shape)
             observation_series.append(samples)
 
-        return SerialGaussianObservationSamples(observation_series,
-                                                self.latent_component_samples.subjects)
+        return SerialGaussianObservationSamples(
+            values=observation_series,
+            subject_indices=self.latent_component_samples.subject_indices)
 
     def create_random_variables(self):
         """
@@ -166,15 +167,15 @@ class SerialGaussianObservationSamples(ModuleSamples):
 
     def __init__(self,
                  values: List[np.ndarray],
-                 subjects: List[np.ndarray]):
+                 subject_indices: List[np.ndarray]):
         """
         Creates an object to store samples and associated subjects in time.
 
         @param values: sampled observation values. This is a list of time series of values of
         different sizes because each sampled series may have a different sparsity level.
-        @param subjects: number indicating which subject is associated to the observation at every
-        time step (e.g. the current speaker for a speech component).
+        @param subject_indices: series indicating which subject is associated to the observation
+            at every time step (e.g. the current speaker for a speech component).
         """
         super().__init__(values)
 
-        self.subjects = subjects
+        self.subject_indices = subject_indices

@@ -6,6 +6,7 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
 from scipy.stats import norm
+from scipy.linalg import expm
 
 from coordination.common.types import TensorTypes
 from coordination.module.latent_component.serial_latent_component import (
@@ -153,7 +154,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
         if spring_constant.ndim != 1:
             raise ValueError(f"The spring constant ({spring_constant}) must be a 1D array.")
 
-        if len(spring_constant) == num_subjects:
+        if len(spring_constant) != num_subjects:
             raise ValueError(
                 f"The spring constant ({spring_constant}) must have size {num_subjects}.")
 
@@ -161,7 +162,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
             raise ValueError(f"The dampening coefficient ({dampening_coefficient}) must be a 1D "
                              "array.")
 
-        if len(dampening_coefficient) == num_subjects:
+        if len(dampening_coefficient) != num_subjects:
             raise ValueError(
                 f"The dampening coefficient ({dampening_coefficient}) must have size "
                 f"{num_subjects}.")
@@ -169,7 +170,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
         if mass.ndim != 1:
             raise ValueError(f"The mass ({mass}) must be a 1D array.")
 
-        if len(mass) == num_subjects:
+        if len(mass) != num_subjects:
             raise ValueError(
                 f"The mass ({mass}) must have size {num_subjects}.")
 
@@ -184,11 +185,11 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
 
         # Fundamental matrices. One per subject.
         F = []
-        for spring in range(num_springs):
+        for subject in range(num_subjects):
             A = np.array([
                 [0, 1],
-                [-self.spring_constant[spring] / self.mass[spring],
-                 -self.damping_coefficient[spring] / self.mass[spring]]
+                [-self.spring_constant[subject] / self.mass[subject],
+                 -self.damping_coefficient[subject] / self.mass[subject]]
             ])
             F.append(expm(A * self.dt)[None, ...])
 
@@ -221,7 +222,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
         """
 
         num_time_steps = len(time_steps_in_coordination_scale)
-        values = np.zeros((self.dim_value, num_time_steps))
+        values = np.zeros((self.dimension_size, num_time_steps))
 
         for t in range(num_time_steps):
             if self.share_mean_a0_across_subjects:
@@ -229,21 +230,21 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
             else:
                 subject_idx_mean_a0 = subjects_in_time[t]
 
-            if self.share_sd_aa_across_subjects:
-                subject_idx_sd_aa = 0
+            if self.share_sd_a_across_subjects:
+                subject_idx_sd_a = 0
             else:
-                subject_idx_sd_aa = subjects_in_time[t]
+                subject_idx_sd_a = subjects_in_time[t]
 
-            sd = sd_aa[subject_idx_sd_aa]
+            sd = sd_a[subject_idx_sd_a]
 
             if prev_time_same_subject[t] < 0:
                 # Sample from prior. It is not only when t=0 because the first observation from a
                 # subject can be later in the future. t=0 is the initial state of one of the
                 # subjects only.
                 mean = mean_a0[subject_idx_mean_a0]
-                values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dim_value)
+                values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dimension_size)
             else:
-                c = sampled_coordination[time_steps_in_coordination_scale[t]]
+                c = coordination_sampled_series[time_steps_in_coordination_scale[t]]
 
                 prev_same = values[..., prev_time_same_subject[t]]
 

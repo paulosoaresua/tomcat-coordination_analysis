@@ -221,7 +221,7 @@ class SerialLatentComponent(LatentComponent):
         return SerialLatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
-            subjects=sampled_subjects,
+            subject_indices=sampled_subjects,
             prev_time_same_subject=prev_time_same_subject,
             prev_time_diff_subject=prev_time_diff_subject
         )
@@ -255,7 +255,7 @@ class SerialLatentComponent(LatentComponent):
                     fill_value=self.sampling_time_scale_density / self.num_subjects)
                 transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
         else:
-            if fixed_subject_sequence:
+            if self.fix_sampled_subject_sequence:
                 transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
                 transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
                 transition_matrix[:-1, 1:] = np.eye(
@@ -481,7 +481,7 @@ class SerialLatentComponentSamples(LatentComponentSamples):
     def __init__(self,
                  values: List[np.ndarray],
                  time_steps_in_coordination_scale: List[np.ndarray],
-                 subjects: List[np.ndarray],
+                 subject_indices: List[np.ndarray],
                  prev_time_same_subject: List[np.ndarray],
                  prev_time_diff_subject: List[np.ndarray]):
         """
@@ -493,9 +493,10 @@ class SerialLatentComponentSamples(LatentComponentSamples):
         sample. If the component is in a different timescale from the timescale used to compute
         coordination, this mapping will tell which value of coordination to map to each sampled
         value of the latent component.
-        @param subjects: number indicating which subject is associated to the component at every
-        time step (e.g. the current speaker for a speech component). In serial components, only one
-        user's latent component is observed at a time. This array indicates which user that is.
+        @param subject_indices: series indicating which subject is associated to the component at
+            every time step (e.g. the current speaker for a speech component). In serial
+            components, only one user's latent component is observed at a time. This array
+            indicates which user that is.
         @param prev_time_same_subject: time indices indicating the previous observation of the
         latent component produced by the same subject at a given time. For instance, the last time
         when the current speaker talked.
@@ -504,7 +505,7 @@ class SerialLatentComponentSamples(LatentComponentSamples):
         """
         super().__init__(values, time_steps_in_coordination_scale)
 
-        self.subjects = subjects
+        self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
 

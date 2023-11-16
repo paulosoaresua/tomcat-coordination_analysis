@@ -6,6 +6,7 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
 from scipy.stats import norm
+from scipy.linalg import expm
 
 from coordination.common.types import TensorTypes
 from coordination.module.latent_component.non_serial_latent_component import (
@@ -123,7 +124,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
         if spring_constant.ndim != 1:
             raise ValueError(f"The spring constant ({spring_constant}) must be a 1D array.")
 
-        if len(spring_constant) == num_subjects:
+        if len(spring_constant) != num_subjects:
             raise ValueError(
                 f"The spring constant ({spring_constant}) must have size {num_subjects}.")
 
@@ -131,7 +132,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
             raise ValueError(f"The dampening coefficient ({dampening_coefficient}) must be a 1D "
                              "array.")
 
-        if len(dampening_coefficient) == num_subjects:
+        if len(dampening_coefficient) != num_subjects:
             raise ValueError(
                 f"The dampening coefficient ({dampening_coefficient}) must have size "
                 f"{num_subjects}.")
@@ -139,7 +140,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
         if mass.ndim != 1:
             raise ValueError(f"The mass ({mass}) must be a 1D array.")
 
-        if len(mass) == num_subjects:
+        if len(mass) != num_subjects:
             raise ValueError(
                 f"The mass ({mass}) must have size {num_subjects}.")
 
@@ -154,18 +155,18 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
 
         # Fundamental matrices. One per subject.
         F = []
-        for spring in range(num_springs):
+        for subject in range(num_subjects):
             A = np.array([
                 [0, 1],
-                [-self.spring_constant[spring] / self.mass[spring],
-                 -self.damping_coefficient[spring] / self.mass[spring]]
+                [-self.spring_constant[subject] / self.mass[subject],
+                 -self.damping_coefficient[subject] / self.mass[subject]]
             ])
             F.append(expm(A * self.dt)[None, ...])
 
         self.F = np.concatenate(F, axis=0)
 
     def _draw_from_system_dynamics(self,
-                                   coordination_sampled_series: np.ndarray,
+                                   sampled_coordination: np.ndarray,
                                    time_steps_in_coordination_scale: np.ndarray,
                                    mean_a0: np.ndarray,
                                    sd_a: np.ndarray) -> np.ndarray:
@@ -194,7 +195,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
 
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
-        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
+        values = np.zeros((num_series, self.num_subjects, self.dimension_size, num_time_steps))
 
         N = self.num_subjects
         sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
@@ -202,7 +203,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
         for t in range(num_time_steps):
             if t == 0:
                 values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
-                    size=(num_series, self.num_subjects, self.dim_value))
+                    size=(num_series, self.num_subjects, self.dimension_size))
             else:
                 # n x 1 x 1
                 c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]
@@ -221,7 +222,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
                 # We don't blend speed.
                 blended_mean[..., 1] = prev_same[..., 1]
 
-                values[..., t] = norm(loc=blended_mean, scale=sd_aa).rvs()
+                values[..., t] = norm(loc=blended_mean, scale=sd_a).rvs()
 
         return values
 
