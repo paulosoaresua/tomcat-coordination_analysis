@@ -11,7 +11,7 @@ from coordination.common.types import TensorTypes
 from coordination.module.latent_component.latent_component import (LatentComponent,
                                                                    LatentComponentSamples)
 from coordination.module.module import ModuleSamples
-from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
+from coordination.module.constants import (DEFAULT_RELATIVE_FREQUENCY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_NUM_SUBJECTS,
@@ -23,10 +23,10 @@ from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS)
 
 
-class SerialLatentComponent(LatentComponent):
+class NonSerialLatentComponent(LatentComponent):
     """
-    This class represents a serial latent component where there's only one observation per subject
-    at a time in the component's scale, and subjects are influenced in a pair-wised manner.
+    This class represents a latent component where there are observations for all the subjects at
+    each time in the component's scale. A subject is then influenced by all the others.
     """
 
     def __init__(self,
@@ -48,13 +48,8 @@ class SerialLatentComponent(LatentComponent):
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
                  sd_a_random_variable: Optional[pm.Distribution] = None,
-                 sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
-                 allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-                 fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+                 relative_frequency: float = DEFAULT_RELATIVE_FREQUENCY,
                  time_steps_in_coordination_scale: Optional[np.array] = None,
-                 subject_indices: Optional[np.ndarray] = None,
-                 prev_time_same_subject: Optional[np.ndarray] = None,
-                 prev_time_diff_subject: Optional[np.ndarray] = None,
                  observed_values: Optional[TensorTypes] = None):
         """
         Creates a serial latent component.
@@ -87,31 +82,12 @@ class SerialLatentComponent(LatentComponent):
             update_pymc_model. If not set, it will be created in such a call.
         @param sd_a_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
-        @param sampling_time_scale_density: a number between 0 and 1 indicating the frequency in
-            which we have observations for the latent component. If 1, the latent component is
-            observed at every time in the coordination timescale. If 0.5, in average, only half of
-            the time. The final number of observations is not a deterministic function of the time
-            density, as the density is used to define transition probabilities between a subjects
-            and a non-existing subject.
-        @param allow_sampled_subject_repetition: whether subsequent observations can come from the
-            same subject.
-        @param fix_sampled_subject_sequence: whether the sequence of subjects is fixed
-            (0,1,2,...,0,1,2...) or randomized.
+        @param relative_frequency: a number larger or equal than 1 indicating the frequency in
+            of the latent component with respect to coordination for sample data generation. For
+            instance, if frequency is 2, there will be one component sample every other time step
+            in the coordination scale.
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
-        @param subject_indices: array of numbers indicating which subject is associated to the
-            latent component at every time step (e.g. the current speaker for a speech component).
-            In serial components, only one user's latent component is observed at a time. This
-            array indicates which user that is. This array contains no gaps. The size of the array
-            is the number of observed latent component in time, i.e., latent component time
-            indices with an associated subject.
-        @param prev_time_same_subject: time indices indicating the previous observation of the
-            latent component produced by the same subject at a given time. For instance, the last
-            time when the current speaker talked. This variable must be set before a call to
-            update_pymc_model.
-        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
-            when the latent component was observed for a different subject. This variable must be
-            set before a call to update_pymc_model.
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
         """
@@ -136,12 +112,7 @@ class SerialLatentComponent(LatentComponent):
                          time_steps_in_coordination_scale=time_steps_in_coordination_scale,
                          observed_values=observed_values)
 
-        self.sampling_time_scale_density = sampling_time_scale_density
-        self.allow_sampled_subject_repetition = allow_sampled_subject_repetition
-        self.fix_sampled_subject_sequence = fix_sampled_subject_sequence
-        self.subject_indices = subject_indices
-        self.prev_time_same_subject = prev_time_same_subject
-        self.prev_time_diff_subject = prev_time_diff_subject
+        self.relative_frequency = relative_frequency
 
     def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
         """
@@ -154,279 +125,124 @@ class SerialLatentComponent(LatentComponent):
         """
         super().draw_samples(seed, num_series)
 
-        if self.sampling_time_scale_density <= 0 or self.sampling_time_scale_density > 1:
-            raise ValueError(f"The time scale density ({self.sampling_time_scale_density}) "
-                             f"must be a float number in the range (0,1].")
+        if self.relative_frequency >= 1:
+            raise ValueError(f"The relative frequency ({self.relative_frequency}) must be a float "
+                             f"number larger or equal than 1.")
 
         self._check_parameter_dimensionality_consistency()
 
         # Adjust dimensions according to parameter sharing specification
         if self.share_mean_a0_across_subjects:
-            mean_a0 = self.parameters.mean_a0.value[None, :].repeat(self.num_subjects, axis=0)
+            mean_a0 = self.parameters.mean_a0.value[None, None, :]
         else:
-            mean_a0 = self.parameters.mean_a0.value
+            mean_a0 = self.parameters.mean_a0.value[None, :]
 
         if self.share_sd_a_across_subjects:
-            sd_a = self.parameters.sd_a.value[None, :].repeat(self.num_subjects, axis=0)
+            sd_a = self.parameters.sd_a.value[None, None, :]
         else:
-            sd_a = self.parameters.sd_a.value
+            sd_a = self.parameters.sd_a.value[None, :]
 
-        sampled_subjects = []
-        sampled_values = []
-        time_steps_in_coordination_scale = []
-        prev_time_same_subject = []
-        prev_time_diff_subject = []
-        for s in range(num_series):
-            sparse_subjects = self._draw_random_subjects(num_series)
-            sampled_subjects.append(np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int))
+        num_time_steps_in_cpn_scale = int(
+            self.coordination_samples.num_time_steps / relative_frequency)
 
-            time_steps_in_coordination_scale.append(
-                np.array([t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int))
+        time_steps_in_coordination_scale = (
+                np.arange(num_time_steps_in_cpn_scale) * relative_frequency).astype(int)
 
-            num_time_steps_in_cpn_scale = len(time_steps_in_coordination_scale[s])
+        # Draw values from the system dynamics. The default model generates samples by following a Gaussian random walk
+        # with blended values from different subjects according to the coordination levels over time. Child classes
+        # can implement their own dynamics, like spring-mass-damping systems for instance.
+        sampled_values = self._draw_from_system_dynamics(
+            sampled_coordination=self.coordination_samples,
+            time_steps_in_coordination_scale=samples.time_steps_in_coordination_scale,
+            mean_a0=mean_a0,
+            sd_a=sd_a)
 
-            prev_time_same_subject.append(
-                np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
-            prev_time_diff_subject.append(
-                np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int))
-
-            # Fill dependencies
-            prev_time_per_subject = {}
-            for t in range(num_time_steps_in_cpn_scale):
-                prev_time_same_subject[s][t] = prev_time_per_subject.get(
-                    sampled_subjects[s][t], -1
-                )
-
-                for subject, time in prev_time_per_subject.items():
-                    if subject == sampled_subjects[s][t]:
-                        continue
-
-                    # Most recent time from a different subject
-                    prev_time_diff_subject[s][t] = time if \
-                        prev_time_diff_subject[s][t] == -1 else max(
-                        prev_time_diff_subject[s][t], time)
-
-                prev_time_per_subject[sampled_subjects[s][t]] = t
-
-            values = self._draw_from_system_dynamics(
-                coordination_sampled_series=self.coordination_samples.values[s],
-                time_steps_in_coordination_scale=time_steps_in_coordination_scale[s],
-                subjects_in_time=sampled_subjects[s],
-                prev_time_same_subject=prev_time_same_subject[s],
-                prev_time_diff_subject=prev_time_diff_subject[s],
-                mean_a0=mean_a0,
-                sd_a=sd_a)
-            sampled_values.append(values)
-
-        return SerialLatentComponentSamples(
+        return LatentComponentSamples(
             values=sampled_values,
-            time_steps_in_coordination_scale=time_steps_in_coordination_scale,
-            subjects=sampled_subjects,
-            prev_time_same_subject=prev_time_same_subject,
-            prev_time_diff_subject=prev_time_diff_subject
-        )
-
-    def _draw_random_subjects(self, num_series: int) -> np.ndarray:
-        """
-        Draws random sequences of subjects over time. We define subject -1 as "No Subject", meaning
-        the latent component is not observed when that subject is the one sampled in a given time
-        step.
-
-        @param num_series: how many series of samples to generate.
-        @return: a matrix of sampled subject series.
-        """
-
-        if self.allow_sampled_subject_repetition:
-            # We allow the same subject to appear in subsequent observations
-            if self.fix_sampled_subject_sequence:
-                transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
-                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
-                transition_matrix[0, 1] = self.sampling_time_scale_density
-                transition_matrix[-1, 1] = self.sampling_time_scale_density / 2
-                transition_matrix[-1, -1] = self.sampling_time_scale_density / 2
-                for s1 in range(1, self.num_subjects):
-                    for s2 in range(1, self.num_subjects + 1):
-                        if s1 == s2 or s2 == s1 + 1:
-                            transition_matrix[s1, s2] = self.sampling_time_scale_density / 2
-
-            else:
-                transition_matrix = np.full(
-                    shape=(self.num_subjects + 1, self.num_subjects + 1),
-                    fill_value=self.sampling_time_scale_density / self.num_subjects)
-                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
-        else:
-            if fixed_subject_sequence:
-                transition_matrix = np.zeros(shape=(self.num_subjects + 1, self.num_subjects + 1))
-                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
-                transition_matrix[:-1, 1:] = np.eye(
-                    self.num_subjects) * self.sampling_time_scale_density
-                transition_matrix[-1, 1] = self.sampling_time_scale_density
-            else:
-                transition_matrix = np.full(
-                    shape=(self.num_subjects + 1, self.num_subjects + 1),
-                    fill_value=self.sampling_time_scale_density / (self.num_subjects - 1))
-                transition_matrix[0, 1:] = self.sampling_time_scale_density / self.num_subjects
-                transition_matrix = transition_matrix * (1 - np.eye(self.num_subjects + 1))
-                transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
-
-        initial_prob = transition_matrix[0]
-        subjects = np.zeros(
-            (self.coordination_samples.num_series, self.coordination_samples.num_time_steps),
-            dtype=int)
-
-        for t in range(self.coordination_samples.num_time_steps):
-            if t == 0:
-                subjects[:, t] = np.random.choice(self.num_subjects + 1, num_series,
-                                                  p=initial_prob)
-            else:
-                probs = transition_matrix[subjects[:, t - 1]]
-                cum_prob = np.cumsum(probs, axis=-1)
-                u = np.random.uniform(size=(num_series, 1))
-                subjects[:, t] = np.argmax(u < cum_prob, axis=-1)
-
-        # Map 0 to -1
-        subjects -= 1
-        return subjects
+            time_steps_in_coordination_scale=time_steps_in_coordination_scale)
 
     def _draw_from_system_dynamics(self,
-                                   coordination_sampled_series: np.ndarray,
+                                   sampled_coordination: np.ndarray,
                                    time_steps_in_coordination_scale: np.ndarray,
-                                   subjects_in_time: np.ndarray,
-                                   prev_time_same_subject: np.ndarray,
-                                   prev_time_diff_subject: np.ndarray,
                                    mean_a0: np.ndarray,
                                    sd_a: np.ndarray) -> np.ndarray:
         """
-        Draws values from the system dynamics. The default serialized component generates samples
-        by following a Gaussian random walk with mean defined by pairwise blended values from
+        Draws values from the system dynamics. The default non serial component generates samples
+        by following a Gaussian random walk with mean defined by blended values from
         different subjects according to the coordination levels over time. Child classes can
         implement their own dynamics, like spring-mass-damping systems for instance.
 
-        @param coordination_sampled_series: sampled values of coordination series.
+        @param sampled_coordination: sampled values of coordination (all series included).
         @param time_steps_in_coordination_scale: an array of indices representing time steps in the
         coordination scale that match those of the component's scale.
-        @param subjects_in_time: an array indicating which subject is responsible for a latent
-        component observation at a time.
-        @param prev_time_same_subject: an array containing indices to most recent previous times
-        the component from the same subject was observed in the component's timescale.
-        @param prev_time_diff_subject: an array containing indices to most recent previous times
-        the component from a different subject was observed in the component's timescale.
         @param mean_a0: initial mean of the latent component.
         @param sd_a: standard deviation of the Gaussian transition distribution.
 
         @return: sampled values.
         """
 
+        # Dimension legend:
+        # n: number of series (first dimension of coordination)
+        # s: number of subjects
+        # d: dimension size
+
+        num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
-        values = np.zeros((self.dimension_size, num_time_steps))
+        values = np.zeros((num_series, self.num_subjects, self.dim_value, num_time_steps))
+
+        N = self.num_subjects
+        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
 
         for t in range(num_time_steps):
-
-            # The way we index subjects change depending on the sharing options. If shared, the
-            # parameters will have a single dimension across subjects, so we can index by 0,
-            # otherwise we use the subject number to index the correct parameter for that subject.
-            if self.share_mean_a0_across_subjects:
-                subject_idx_mean_a0 = 0
+            if t == 0:
+                values[..., 0] = norm(loc=mean_a0, scale=sd_aa).rvs(
+                    size=(num_series, self.num_subjects, self.dim_value))
             else:
-                subject_idx_mean_a0 = subjects_in_time[t]
+                # n x 1 x 1
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][:, None, None]
 
-            if self.share_sd_a_across_subjects:
-                subject_idx_sd_a = 0
-            else:
-                subject_idx_sd_a = subjects_in_time[t]
-
-            sd = sd_a[subject_idx_sd_a]
-
-            if prev_time_same_subject[t] < 0:
-                # This is the first time we see an observation for the subject. We then sample
-                # from its prior. This doesn't happen only when t=0 because the first observation
-                # of a subject can be later in the future. So, t=0 is the initial state of one of
-                # the subjects, but not all of them.
-
-                mean = mean_a0[subject_idx_mean_a0]
-                values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dimension_size)
-            else:
-                c = coordination_sampled_series[time_steps_in_coordination_scale[t]]
+                prev_others = np.dot(sum_matrix_others, values[..., t - 1])  # n x s x d
 
                 if self.self_dependent:
-                    # When there's self dependency, the component either depends on the previous
-                    # value of another subject or the previous value of the same subject.
-                    prev_same = values[..., prev_time_same_subject[t]]
+                    prev_same = values[..., t - 1]  # n x s x d
                 else:
-                    # When there's no self dependency, the component either depends on the previous
-                    # value of another subject or a fixed value (the subject's prior).
-                    prev_same = mean_a0[subject_idx_mean_a0]
+                    prev_same = mean_a0  # n x s x d
 
-                mask_other = (prev_time_diff_subject[t] != -1).astype(int)
-                prev_other = values[..., prev_time_diff_subject[t]]
+                blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 
-                blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
-
-                values[:, t] = norm(loc=blended_mean, scale=sd).rvs()
+                values[..., t] = norm(loc=blended_mean, scale=sd_a).rvs()
 
         return values
 
     def create_random_variables(self):
         """
-        Creates parameters and serial latent component variables in a PyMC model.
-
-        @raise ValueError: if either subjects, prev_time_same_subject or prev_time_diff_subject are
-            None.
+        Creates parameters and non-serial latent component variables in a PyMC model.
         """
         super().create_random_variables()
 
         # Adjust dimensions for proper indexing and broadcast in the log_prob function.
+        # We don't create a time dimension for the parameters in this component since there will
+        # be entries for all the subjects at every time step.
         if self.share_mean_a0_across_subjects:
-            # dimension x time = 1 (broadcast across time)
-            mean_a0 = self.mean_a0_random_variable[:, None]
+            # subject x dimension
+            mean_a0 = self.mean_a0_random_variable.mean_a0[None, :].repeat(self.num_subjects,
+                                                                           axis=0)
         else:
-            # dimension x time
-            mean_a0 = self.mean_a0_random_variable[
-                self.subject_indices].transpose()
-
-        if self.share_mean_a0_across_dimensions:
-            mean_a0 = mean_a0.repeat(self.dimension_size,
-                                     axis=0)
+            mean_a0 = self.mean_a0_random_variable
 
         if self.share_sd_a_across_subjects:
-            # dimension x time = 1 (broadcast across time)
-            sd_a = self.sd_a_random_variable[:, None]
+            # subject x dimension
+            sd_a = self.share_sd_a_across_subjects[None, :].repeat(self.num_subjects, axis=0)
         else:
-            # dimension x time
-            sd_a = self.sd_a_random_variable[self.subject_indices].transpose()
-
-        if self.share_sd_a_across_dimensions:
-            sd_a = sd_a.repeat(self.dimension_size, axis=0)
+            sd_a = self.sd_a_random_variable
 
         if self.latent_component_random_variable is not None:
             return
-
-        if self.subject_indices is None:
-            raise ValueError("subject_indices is undefined.")
-
-        if self.time_steps_in_coordination_scale is None:
-            raise ValueError("time_steps_in_coordination_scale is undefined.")
-
-        if self.prev_time_same_subject is None:
-            raise ValueError("prev_time_same_subject is undefined.")
-
-        if self.prev_time_diff_subject is None:
-            raise ValueError("prev_time_diff_subject is undefined.")
-
-        # Mask with 1 for time steps where there is observation for a subject (subject index >= 0)
-        prev_same_subject_mask = np.array(
-            [np.where(x >= 0, 1, 0) for x in self.prev_time_same_subject])
-        prev_diff_subject_mask = np.array(
-            [np.where(x >= 0, 1, 0) for x in self.prev_time_diff_subject])
 
         log_prob_params = (mean_a0,
                            sd_a,
                            self.coordination_random_variable[
                                self.time_steps_in_coordination_scale],
-                           self.prev_time_same_subject,
-                           self.prev_time_diff_subject,
-                           prev_same_subject_mask,
-                           prev_diff_subject_mask,
                            np.array(self.self_dependent),
                            *self._get_extra_logp_params())
 
@@ -444,7 +260,7 @@ class SerialLatentComponent(LatentComponent):
                 *log_prob_params,
                 logp=self._get_log_prob_fn(),
                 random=self._get_random_fn(),
-                dims=[self.dimension_axis_name, self.time_axis_name],
+                dims=[self.subject_axis_name, self.dimension_axis_name, self.time_axis_name],
                 observed=self.observed_values
             )
 
@@ -468,51 +284,6 @@ class SerialLatentComponent(LatentComponent):
 
 
 ###################################################################################################
-# AUXILIARY CLASSES
-###################################################################################################
-
-class SerialLatentComponentSamples(LatentComponentSamples):
-
-    def __init__(self,
-                 values: List[np.ndarray],
-                 time_steps_in_coordination_scale: List[np.ndarray],
-                 subjects: List[np.ndarray],
-                 prev_time_same_subject: List[np.ndarray],
-                 prev_time_diff_subject: List[np.ndarray]):
-        """
-        Creates an object to store samples.
-
-        @param values: sampled values of the latent component. This is a list of time series of
-        values of different sizes because each sampled series may have a different sparsity level.
-        @param time_steps_in_coordination_scale: indexes to the coordination used to generate the
-        sample. If the component is in a different timescale from the timescale used to compute
-        coordination, this mapping will tell which value of coordination to map to each sampled
-        value of the latent component.
-        @param subjects: number indicating which subject is associated to the component at every
-        time step (e.g. the current speaker for a speech component). In serial components, only one
-        user's latent component is observed at a time. This array indicates which user that is.
-        @param prev_time_same_subject: time indices indicating the previous observation of the
-        latent component produced by the same subject at a given time. For instance, the last time
-        when the current speaker talked.
-        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
-        when the latent component was observed for a different subject.
-        """
-        super().__init__(values, time_steps_in_coordination_scale)
-
-        self.subjects = subjects
-        self.prev_time_same_subject = prev_time_same_subject
-        self.prev_time_diff_subject = prev_time_diff_subject
-
-    @property
-    def prev_time_same_subject_mask(self):
-        return [np.where(x >= 0, 1, 0) for x in self.prev_time_same_subject]
-
-    @property
-    def prev_time_diff_subject_mask(self):
-        return [np.where(x >= 0, 1, 0) for x in self.prev_time_diff_subject]
-
-
-###################################################################################################
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
@@ -520,107 +291,70 @@ def log_prob(sample: ptt.TensorVariable,
              initial_mean: ptt.TensorVariable,
              sigma: ptt.TensorVariable,
              coordination: ptt.TensorVariable,
-             prev_time_same_subject: ptt.TensorConstant,
-             prev_time_diff_subject: ptt.TensorConstant,
-             prev_same_subject_mask: ptt.TensorConstant,
-             prev_diff_subject_mask: ptt.TensorConstant,
              self_dependent: ptt.TensorConstant):
     """
     Computes the log-probability function of a sample.
 
-    @param sample: (dimension x time) a single samples series.
-    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is associated with the
-        subject at that time. The initial mean is only used the first time the user speaks, but we
-        repeat the values here over time for uniform vector operations (e.g., we can multiply this
-        with other tensors) and we fix the behavior with mask tensors.
-    @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
-        associated with the subject at that time.
-    @param coordination: (time) a series of coordination values. Axis (time).
-    @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
-        associated with the same subject. For instance, prev_time_same_subject[t] points to the
-        most recent time step where the subject at time t had an observation. If there's no such a
-        time, prev_time_same_subject[t] will be -1. Axes (time).
-    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time step
-        associated with a different subject. For instance, prev_time_diff_subject[t] points to the
-        most recent time step where a different subject than the one at time t had an observation.
-        If there's no such a time, prev_time_diff_subject[t] will be -1.
-    @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
-        is -1.
-    @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
-        is -1.
+    @param sample: (subject x dimension x time) a single samples series.
+    @param initial_mean: (subject x dimension) mean at t0 for each subject.
+    @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
+        deviation is associated with the subject at that time.
+    @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
     @return: log-probability of the sample.
     """
 
-    # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
-    # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
-    # case the first dimension of the sample component is one.
-    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # (dimension x time)
+    N = sample.shape[0]
+    D = sample.shape[1]
 
-    # We use this binary mask to zero out entries with no observations from partners. We create an
-    # extra dimension for broadcasting across the dimension axis (axis 0).
-    mask_other = prev_diff_subject_mask[None, :]  # (1 x time)
+    # log-probability at the initial time step
+    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)),
+                         sample[..., 0]).sum()
 
-    # We create an extra dimension for broadcasting across the dimension axis (axis 0).
-    c = coordination[None, :]  # (1 x time)
+    # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
+    # We discard the last value as that is not a previous value of any other.
+    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+    prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]
 
     if self_dependent.eval():
-        # The component's value for a subject depends on previous value of the same subject.
-        prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # (dimension x time)
-
-        # We use this binary mask to zero out entries with no previous values of the same subjects.
-        # We use this to determine the time steps that belong to the initial values of the
-        # component. Each subject will have their initial value in a different time step hence
-        # we cannot just use t=0.
-        # We create an extra dimension for broadcasting across the dimension axis (axis 0).
-        mask_same = prev_same_subject_mask[None, :]  # (1 x time)
-        blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
-                prev_same * mask_same + (1 - mask_same) * initial_mean)  # (dimension x time)
+        # The component's value for a subject depends on its previous value for the same subject.
+        prev_same = sample[..., :-1]
     else:
-        # The component's value for a subject doesn't depend on previous value of the same subject.
-        # At every time step, the value from other subjects is blended with a fixed value given
-        # by the component's initial means associated with the subjects over time.
-        # (dimension x time)
-        blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * initial_mean
+        # The component's value for a subject does not depend on its previous value for the same subject.
+        # At every time step, the value from others is blended with a fixed value given by the component's initial
+        # mean.
+        prev_same = initial_mean[:, :, None]
 
-    return pm.logp(rv=pm.Normal.dist(mu=blended_mean,
-                                     sigma=sigma,
-                                     shape=prev_other.shape),
-                   value=sample).sum()
+    # Coordination does not affect the component in the first time step because the subjects have no previous
+    # dependencies at that time.
+    c = coordination[None, None, 1:]  # 1 x 1 x t-1
+
+    blended_mean = (prev_others - prev_same) * c + prev_same
+
+    # Match the dimensions of the standard deviation with that of the blended mean
+    sd = sigma[:, :, None]
+
+    # Index samples starting from the second index (i = 1) so that we can effectively compare
+    # current values against previous ones (prev_others and prev_same).
+    total_logp += pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
+                          sample[..., 1:]).sum()
+
+    return total_logp
 
 
 def random(initial_mean: np.ndarray,
            sigma: np.ndarray,
            coordination: np.ndarray,
-           prev_time_same_subject: np.ndarray,
-           prev_time_diff_subject: np.ndarray,
-           prev_same_subject_mask: np.ndarray,
-           prev_diff_subject_mask: np.ndarray,
            self_dependent: bool,
            rng: Optional[np.random.Generator] = None,
            size: Optional[Tuple[int]] = None) -> np.ndarray:
     """
-    Generates samples from of a serial latent component for prior predictive checks.
+    Generates samples from of a non-serial latent component for prior predictive checks.
 
-    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
-        associated with the subject at that time. The initial mean is only used the first time the
-        user speaks, but we repeat the values here over time for uniform vector operations (e.g.,
-        we can multiply this with other tensors) and we fix the behavior with mask tensors.
-    @param sigma: (dimension x time) a series of standard deviations. At each time the standard
+    @param initial_mean: (subject x dimension) mean at t0 for each subject.
+    @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
         deviation is associated with the subject at that time.
-    @param coordination: (time) a series of coordination values. Axis (time).
-    @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
-        associated with the same subject. For instance, prev_time_same_subject[t] points to the
-        most recent time step where the subject at time t had an observation. If there's no such a
-        time, prev_time_same_subject[t] will be -1. Axes (time).
-    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time
-        step associated with a different subject. For instance, prev_time_diff_subject[t] points
-        to the most recent time step where a different subject than the one at time t had an
-        observation. If there's no such a time, prev_time_diff_subject[t] will be -1.
-    @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
-        is -1.
-    @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
-        is -1.
+    @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
     @param rng: random number generator.
     @param size: size of the sample.
@@ -631,38 +365,28 @@ def random(initial_mean: np.ndarray,
     # TODO: Unify this with the class sampling method.
 
     T = coordination.shape[-1]
+    N = num_subjects
 
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
 
     sample = np.zeros_like(noise)
 
-    mean_0 = initial_mean if initial_mean.ndim == 1 else initial_mean[..., 0]
-    sd_0 = sigma if sigma.ndim == 1 else sigma[..., 0]
+    # Sample from prior in the initial time step
+    sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=(num_subjects, dim_value))
 
-    sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
-
+    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
     for t in np.arange(1, T):
-        prev_other = sample[..., prev_time_diff_subject[t]]  # d
+        prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # s x d
 
-        # Previous sample from the same individual
-        if self_dependent and prev_same_subject_mask[t] == 1:
-            prev_same = sample[..., prev_time_same_subject[t]]
+        if self_dependent:
+            # Previous sample from the same subject
+            prev_same = sample[..., t - 1]
         else:
-            # When there's no self-dependency, the transition distribution is a blending between
-            # the previous value from another individual, and a fixed mean.
-            if initial_mean.shape[1] == 1:
-                prev_same = initial_mean[..., 0]
-            else:
-                prev_same = initial_mean[..., t]
+            # No dependency on the same subject. Sample from prior.
+            prev_same = initial_mean
 
-        mean = ((prev_other - prev_same) * coordination[t] * prev_diff_subject_mask[t] + prev_same)
+        blended_mean = (prev_others - prev_same) * coordination[t] + prev_same
 
-        if sigma.shape[1] == 1:
-            # Parameter sharing across subjects
-            transition_sample = rng.normal(loc=mean, scale=sigma[..., 0])
-        else:
-            transition_sample = rng.normal(loc=mean, scale=sigma[..., t])
-
-        sample[..., t] = transition_sample
+        sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
 
     return sample + noise

@@ -143,7 +143,7 @@ class SerialLatentComponent(LatentComponent):
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
 
-    def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> SerialLatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
         coordination and different subjects.
@@ -535,11 +535,11 @@ def log_prob(sample: ptt.TensorVariable,
         with other tensors) and we fix the behavior with mask tensors.
     @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
         associated with the subject at that time.
-    @param coordination: (time) a series of coordination values. Axis (time).
+    @param coordination: (time) a series of coordination values.
     @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
         associated with the same subject. For instance, prev_time_same_subject[t] points to the
         most recent time step where the subject at time t had an observation. If there's no such a
-        time, prev_time_same_subject[t] will be -1. Axes (time).
+        time, prev_time_same_subject[t] will be -1.
     @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time step
         associated with a different subject. For instance, prev_time_diff_subject[t] points to the
         most recent time step where a different subject than the one at time t had an observation.
@@ -608,11 +608,11 @@ def random(initial_mean: np.ndarray,
         we can multiply this with other tensors) and we fix the behavior with mask tensors.
     @param sigma: (dimension x time) a series of standard deviations. At each time the standard
         deviation is associated with the subject at that time.
-    @param coordination: (time) a series of coordination values. Axis (time).
+    @param coordination: (time) a series of coordination values.
     @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
         associated with the same subject. For instance, prev_time_same_subject[t] points to the
         most recent time step where the subject at time t had an observation. If there's no such a
-        time, prev_time_same_subject[t] will be -1. Axes (time).
+        time, prev_time_same_subject[t] will be -1.
     @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time
         step associated with a different subject. For instance, prev_time_diff_subject[t] points
         to the most recent time step where a different subject than the one at time t had an
