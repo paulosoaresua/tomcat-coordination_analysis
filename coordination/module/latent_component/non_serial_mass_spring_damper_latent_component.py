@@ -38,7 +38,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
     def __init__(self,
                  uuid: str,
                  pymc_model: pm.Model,
-                 num_springs: int = DEFAULT_NUM_SUBJECTS,
+                 num_subjects: int = DEFAULT_NUM_SUBJECTS,
                  spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
                  mass: np.ndarray = DEFAULT_MASS,
                  dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
@@ -64,7 +64,6 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
-        @param num_springs: int = DEFAULT_NUM_SUBJECTS,
         @param spring_constant: spring constant per subject/spring used to calculate the
             fundamental matrix of the motion.
         @param mass: mass per subject/spring used to calculate the fundamental

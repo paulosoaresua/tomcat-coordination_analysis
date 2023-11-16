@@ -95,17 +95,20 @@ class Model(Module):
             num_chains: int = DEFAULT_NUM_CHAINS,
             num_jobs: int = DEFAULT_NUM_JOBS,
             init_method: str = DEFAULT_INIT_METHOD,
-            target_accept: float = DEFAULT_TARGET_ACCEPT) -> InferenceData:
+            target_accept: float = DEFAULT_TARGET_ACCEPT,
+            **kwargs) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
 
-        @param seed:
-        @param burn_in:
-        @param num_samples:
-        @param num_chains:
-        @param num_jobs:
-        @param init_method:
-        @param target_accept:
+        @param seed: random seed for reproducibility.
+        @param burn_in: number of samples to use as warm-up.
+        @param num_samples: number of samples from the posterior distribution.
+        @param num_chains: number of parallel chains.
+        @param num_jobs: number of jobs (typically equals the number of chains)
+        @param init_method: initialization method.
+        @param target_accept: target accept value. The higher, the smaller the number of
+            divergences usually but it takes longer to converge.
+        @param: **kwargs: extra parameters to pass to the PyMC sample function.
         @return: inference data with posterior trace.
         """
 
@@ -116,7 +119,8 @@ class Model(Module):
                               chains=num_chains,
                               random_seed=seed,
                               cores=num_jobs,
-                              target_accept=target_accept)
+                              target_accept=target_accept,
+                              **kwargs)
 
         return InferenceData(idata)
 
@@ -126,8 +130,8 @@ class Model(Module):
         """
         Executes prior predictive checks in the model.
 
-        @param seed:
-        @param num_samples:
+        @param seed: random seed for reproducibility.
+        @param num_samples: number of samples from the posterior distribution.
         @return: inference data with prior checks.
         """
 

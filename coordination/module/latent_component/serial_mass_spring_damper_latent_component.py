@@ -38,7 +38,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
     def __init__(self,
                  uuid: str,
                  pymc_model: pm.Model,
-                 num_springs: int = DEFAULT_NUM_SUBJECTS,
+                 num_subjects: int = DEFAULT_NUM_SUBJECTS,
                  spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
                  mass: np.ndarray = DEFAULT_MASS,
                  dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
