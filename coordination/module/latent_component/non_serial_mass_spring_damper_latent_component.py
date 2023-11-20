@@ -14,7 +14,7 @@ from coordination.module.latent_component.non_serial_latent_component import (
     LatentComponentSamples
 )
 from coordination.module.module import ModuleSamples
-from coordination.module.constants import (DEFAULT_RELATIVE_FREQUENCY,
+from coordination.module.constants import (DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_NUM_SUBJECTS,
@@ -56,7 +56,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
                  sd_a_random_variable: Optional[pm.Distribution] = None,
-                 relative_frequency: float = DEFAULT_RELATIVE_FREQUENCY,
+                 sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
                  time_steps_in_coordination_scale: Optional[np.array] = None,
                  observed_values: Optional[TensorTypes] = None):
         """
@@ -90,10 +90,10 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
             update_pymc_model. If not set, it will be created in such a call.
         @param sd_a_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
-        @param relative_frequency: a number larger or equal than 1 indicating the frequency in
-            of the latent component with respect to coordination for sample data generation. For
-            instance, if frequency is 2, there will be one component sample every other time step
-            in the coordination scale.
+        @param sampling_relative_frequency: a number larger or equal than 1 indicating the
+            frequency in of the latent component with respect to coordination for sample data
+            generation. For instance, if frequency is 2, there will be one component sample every
+            other time step in the coordination scale.
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
         @param observed_values: observations for the serial latent component random variable. If
@@ -119,7 +119,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
                          sd_a_random_variable=sd_a_random_variable,
                          time_steps_in_coordination_scale=time_steps_in_coordination_scale,
                          observed_values=observed_values,
-                         relative_frequency=relative_frequency)
+                         sampling_relative_frequency=sampling_relative_frequency)
 
         if spring_constant.ndim != 1:
             raise ValueError(f"The spring constant ({spring_constant}) must be a 1D array.")
@@ -202,7 +202,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
 
         for t in range(num_time_steps):
             if t == 0:
-                values[..., t] = norm(loc=mean_a0, scale=sd_aa).rvs(
+                values[..., t] = norm(loc=mean_a0, scale=sd_a).rvs(
                     size=(num_series, self.num_subjects, self.dimension_size))
             else:
                 # n x 1 x 1
@@ -234,7 +234,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
         # It does not change per time step since all subjects are present in the latent component.
         return self.F,
 
-    def _get_logp_fn(self) -> Callable:
+    def _get_log_prob_fn(self) -> Callable:
         """
         Gets a reference to a log_prob function.
         """

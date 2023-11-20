@@ -11,7 +11,7 @@ from coordination.common.types import TensorTypes
 from coordination.module.latent_component.latent_component import (LatentComponent,
                                                                    LatentComponentSamples)
 from coordination.module.module import ModuleSamples
-from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
+from coordination.module.constants import (DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_NUM_SUBJECTS,
@@ -48,7 +48,7 @@ class SerialLatentComponent(LatentComponent):
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
                  sd_a_random_variable: Optional[pm.Distribution] = None,
-                 sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
+                 sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                  allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
                  fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                  time_steps_in_coordination_scale: Optional[np.array] = None,
@@ -370,8 +370,8 @@ class SerialLatentComponent(LatentComponent):
         """
         Creates parameters and serial latent component variables in a PyMC model.
 
-        @raise ValueError: if either subjects, prev_time_same_subject or prev_time_diff_subject are
-            None.
+        @raise ValueError: if either subject_indices, time_steps_in_coordination_scale,
+            prev_time_same_subject, or prev_time_diff_subject are undefined.
         """
         super().create_random_variables()
 
@@ -459,7 +459,7 @@ class SerialLatentComponent(LatentComponent):
         """
         return ()
 
-    def _get_logp_fn(self) -> Callable:
+    def _get_log_prob_fn(self) -> Callable:
         """
         Gets a reference to a log_prob function.
         """

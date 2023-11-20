@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import pymc as pm
 
@@ -195,6 +195,7 @@ class ModelSamples(ModuleSamples):
              ax: Optional[plt.axis] = None,
              series_idx: int = 0,
              dimension_idx: int = 0,
+             subject_transformation: Callable = None,
              **kwargs) -> plt.axis:
         """
         Plots the time series of samples.
@@ -203,6 +204,8 @@ class ModelSamples(ModuleSamples):
         @param ax: axis to plot on. It will be created if not provided.
         @param series_idx: index of the series of samples to plot.
         @param dimension_idx: index of the dimension axis to plot.
+        @param subject_transformation: function called per subject (series, subject) to transform
+            the subject series before plotting.
         @param kwargs: extra parameters to pass to the plot function.
         @return: plot axis.
         """
@@ -239,8 +242,10 @@ class ModelSamples(ModuleSamples):
             subjects = sorted(list(set(subject_indices)))
             for s in subjects:
                 idx = [i for i, subject in enumerate(subject_indices) if subject == s]
+                y = sampled_values[dimension_idx, idx]
+                y = subject_transformation(y, s) if subject_transformation else y
                 plot_series(x=time_steps[idx],
-                            y=sampled_values[dimension_idx, idx],
+                            y=y,
                             y_std=None,
                             label=f"Subject {s}",
                             include_bands=False,
@@ -250,9 +255,11 @@ class ModelSamples(ModuleSamples):
             ax.set_xlabel("Dimension")
         else:
             # Non-serial variable
-            for s in range(samples.shape[0]):
+            for s in range(sampled_values.shape[0]):
+                y = sampled_values[s, dimension_idx]
+                y = subject_transformation(y, s) if subject_transformation else y
                 plot_series(x=time_steps,
-                            y=sampled_values[s, dimension_idx],
+                            y=y,
                             y_std=None,
                             label=f"Subject {s}",
                             include_bands=False,

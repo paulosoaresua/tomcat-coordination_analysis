@@ -41,6 +41,7 @@ class SerialGaussianObservation(GaussianObservation):
                  latent_component_samples: Optional[SerialLatentComponentSamples] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  sd_o_random_variable: Optional[pm.Distribution] = None,
+                 time_steps_in_coordination_scale: Optional[np.array] = None,
                  subject_indices: Optional[np.ndarray] = None,
                  observed_values: Optional[TensorTypes] = None):
         """
@@ -64,6 +65,8 @@ class SerialGaussianObservation(GaussianObservation):
             call to create_random_variables. This variable must be set before such a call.
         @param sd_o_random_variable: random variable to be used in a call to
             create_random_variables. If not set, it will be created in such a call.
+        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
+            each index in the observation scale.
         @param subject_indices: array of numbers indicating which subject is associated to the
             observation at every time step (e.g. the current speaker for a speech observation).
             In serial observations, only one subject's observation exists at a time. This
@@ -87,6 +90,7 @@ class SerialGaussianObservation(GaussianObservation):
                          sd_o_random_variable=sd_o_random_variable,
                          observed_values=observed_values)
 
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.subject_indices = subject_indices
 
     def draw_samples(self, seed: Optional[int],
@@ -115,6 +119,7 @@ class SerialGaussianObservation(GaussianObservation):
 
         return SerialGaussianObservationSamples(
             values=observation_series,
+            time_steps_in_coordination_scale=self.latent_component_samples.time_steps_in_coordination_scale,
             subject_indices=self.latent_component_samples.subject_indices)
 
     def create_random_variables(self):
@@ -147,8 +152,17 @@ class SerialGaussianObservation(GaussianObservation):
     def _add_coordinates(self):
         """
         Adds relevant coordinates to the model. Overrides superclass.
+
+        @raise ValueError: if either subject_indices or time_steps_in_coordination_scale are
+            undefined.
         """
         super()._add_coordinates()
+
+        if self.subject_indices is None:
+            raise ValueError("subject_indices is undefined.")
+
+        if self.time_steps_in_coordination_scale is None:
+            raise ValueError("time_steps_in_coordination_scale is undefined.")
 
         # Add information about which subject is associated with each timestep in the time
         # coordinate.
@@ -167,15 +181,21 @@ class SerialGaussianObservationSamples(ModuleSamples):
 
     def __init__(self,
                  values: List[np.ndarray],
+                 time_steps_in_coordination_scale: List[np.ndarray],
                  subject_indices: List[np.ndarray]):
         """
         Creates an object to store samples and associated subjects in time.
 
         @param values: sampled observation values. This is a list of time series of values of
-        different sizes because each sampled series may have a different sparsity level.
+            different sizes because each sampled series may have a different sparsity level.
+        @param time_steps_in_coordination_scale: indexes to the coordination used to generate the
+            sample. If the component is in a different timescale from the timescale used to compute
+            coordination, this mapping will tell which value of coordination to map to each sampled
+            value of the latent component.
         @param subject_indices: series indicating which subject is associated to the observation
             at every time step (e.g. the current speaker for a speech component).
         """
         super().__init__(values)
 
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.subject_indices = subject_indices

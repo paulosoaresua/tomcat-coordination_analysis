@@ -11,7 +11,7 @@ from coordination.common.types import TensorTypes
 from coordination.module.latent_component.latent_component import (LatentComponent,
                                                                    LatentComponentSamples)
 from coordination.module.module import ModuleSamples
-from coordination.module.constants import (DEFAULT_RELATIVE_FREQUENCY,
+from coordination.module.constants import (DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_NUM_SUBJECTS,
@@ -49,7 +49,7 @@ class NonSerialLatentComponent(LatentComponent):
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
                  sd_a_random_variable: Optional[pm.Distribution] = None,
-                 relative_frequency: float = DEFAULT_RELATIVE_FREQUENCY,
+                 sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
                  time_steps_in_coordination_scale: Optional[np.array] = None,
                  observed_values: Optional[TensorTypes] = None):
         """
@@ -85,10 +85,10 @@ class NonSerialLatentComponent(LatentComponent):
             update_pymc_model. If not set, it will be created in such a call.
         @param sd_a_random_variable: random variable to be used in a call to
             update_pymc_model. If not set, it will be created in such a call.
-        @param relative_frequency: a number larger or equal than 1 indicating the frequency in
-            of the latent component with respect to coordination for sample data generation. For
-            instance, if frequency is 2, there will be one component sample every other time step
-            in the coordination scale.
+        @param sampling_relative_frequency: a number larger or equal than 1 indicating the
+            frequency in of the latent component with respect to coordination for sample data
+            generation. For instance, if frequency is 2, there will be one component sample every
+            other time step in the coordination scale.
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
         @param observed_values: observations for the serial latent component random variable. If
@@ -116,7 +116,7 @@ class NonSerialLatentComponent(LatentComponent):
                          observed_values=observed_values)
 
         self.subject_names = subject_names
-        self.relative_frequency = relative_frequency
+        self.sampling_relative_frequency = sampling_relative_frequency
 
     @property
     def subject_coordinates(self) -> Union[List[str], np.ndarray]:
@@ -138,9 +138,9 @@ class NonSerialLatentComponent(LatentComponent):
         """
         super().draw_samples(seed, num_series)
 
-        if self.relative_frequency >= 1:
-            raise ValueError(f"The relative frequency ({self.relative_frequency}) must be a float "
-                             f"number larger or equal than 1.")
+        if self.sampling_relative_frequency < 1:
+            raise ValueError(f"The relative frequency ({self.sampling_relative_frequency}) must "
+                             f"be a float number larger or equal than 1.")
 
         self._check_parameter_dimensionality_consistency()
 
@@ -156,23 +156,25 @@ class NonSerialLatentComponent(LatentComponent):
             sd_a = self.parameters.sd_a.value[None, :]
 
         num_time_steps_in_cpn_scale = int(
-            self.coordination_samples.num_time_steps / relative_frequency)
+            self.coordination_samples.num_time_steps / self.sampling_relative_frequency)
 
         time_steps_in_coordination_scale = (
-                np.arange(num_time_steps_in_cpn_scale) * relative_frequency).astype(int)
+                np.arange(num_time_steps_in_cpn_scale) * self.sampling_relative_frequency
+        ).astype(int)
 
         # Draw values from the system dynamics. The default model generates samples by following a Gaussian random walk
         # with blended values from different subjects according to the coordination levels over time. Child classes
         # can implement their own dynamics, like spring-mass-damping systems for instance.
         sampled_values = self._draw_from_system_dynamics(
-            sampled_coordination=self.coordination_samples,
-            time_steps_in_coordination_scale=samples.time_steps_in_coordination_scale,
+            sampled_coordination=self.coordination_samples.values,
+            time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             mean_a0=mean_a0,
             sd_a=sd_a)
 
         return LatentComponentSamples(
             values=sampled_values,
-            time_steps_in_coordination_scale=time_steps_in_coordination_scale)
+            time_steps_in_coordination_scale=time_steps_in_coordination_scale[None, :].repeat(
+                num_series, axis=0))
 
     def _draw_from_system_dynamics(self,
                                    sampled_coordination: np.ndarray,
@@ -245,7 +247,7 @@ class NonSerialLatentComponent(LatentComponent):
 
         if self.share_sd_a_across_subjects:
             # subject x dimension
-            sd_a = self.share_sd_a_across_subjects[None, :].repeat(self.num_subjects, axis=0)
+            sd_a = self.sd_a_random_variable[None, :].repeat(self.num_subjects, axis=0)
         else:
             sd_a = self.sd_a_random_variable
 
@@ -286,7 +288,7 @@ class NonSerialLatentComponent(LatentComponent):
         """
         return ()
 
-    def _get_logp_fn(self) -> Callable:
+    def _get_log_prob_fn(self) -> Callable:
         """
         Gets a reference to a log_prob function.
         """

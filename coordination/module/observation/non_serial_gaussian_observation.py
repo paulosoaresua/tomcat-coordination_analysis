@@ -112,7 +112,8 @@ class NonSerialGaussianObservation(GaussianObservation):
             # Broadcast across series and time
             sd = self.parameters.sd_o.value[None, :, :, None]
 
-        sampled_values = norm(loc=latent_component, scale=sd).rvs(size=latent_component.shape)
+        sampled_values = norm(loc=self.latent_component_samples.values, scale=sd).rvs(
+            size=self.latent_component_samples.values.shape)
 
         return ModuleSamples(sampled_values)
 

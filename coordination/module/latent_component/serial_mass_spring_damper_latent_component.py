@@ -14,7 +14,7 @@ from coordination.module.latent_component.serial_latent_component import (
     SerialLatentComponentSamples
 )
 from coordination.module.module import ModuleSamples
-from coordination.module.constants import (DEFAULT_TIME_SCALE_DENSITY,
+from coordination.module.constants import (DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_NUM_SUBJECTS,
@@ -56,7 +56,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  mean_a0_random_variable: Optional[pm.Distribution] = None,
                  sd_a_random_variable: Optional[pm.Distribution] = None,
-                 sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
+                 sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                  allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
                  fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                  time_steps_in_coordination_scale: Optional[np.array] = None,
@@ -278,23 +278,23 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
         """
         Fs_diff = []
         Fs_same = []
-        for t in range(len(subjects_in_time)):
-            dt_diff = np.maximum(t - prev_time_diff_subject[t], 1)
-            dt_same = np.maximum(t - prev_time_same_subject[t], 1)
+        for t in range(len(self.subject_indices)):
+            dt_diff = np.maximum(t - self.prev_time_diff_subject[t], 1)
+            dt_same = np.maximum(t - self.prev_time_same_subject[t], 1)
 
-            curr_subject = subjects_in_time[t]
-            diff_subject = subjects_in_time[prev_time_diff_subject[t]]
+            curr_subject = self.subject_indices[t]
+            diff_subject = self.subject_indices[self.prev_time_diff_subject[t]]
             Fs_diff.append(np.linalg.matrix_power(self.F[diff_subject], dt_diff))
             Fs_same.append(np.linalg.matrix_power(self.F[curr_subject], dt_same))
 
         # We need the influencer and influencee's transformations because we first bring the
         # states to the current time and then we blend them.
-        Fs_diff_reshaped = np.array(Fs_diff).reshape((len(subjects_in_time), 4))
-        Fs_same_reshaped = np.array(Fs_same).reshape((len(subjects_in_time), 4))
+        Fs_diff_reshaped = np.array(Fs_diff).reshape((len(self.subject_indices), 4))
+        Fs_same_reshaped = np.array(Fs_same).reshape((len(self.subject_indices), 4))
 
         return Fs_diff_reshaped, Fs_same_reshaped
 
-    def _get_logp_fn(self) -> Callable:
+    def _get_log_prob_fn(self) -> Callable:
         """
         Gets a reference to a log_prob function.
         """
