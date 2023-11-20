@@ -1,6 +1,7 @@
 import numpy as np
 
 # Common to both models
+NUM_SUBJECTS = 3
 SD_MEAN_UC0 = 1
 SD_SD_UC = 1
 MEAN_MEAN_A0 = np.zeros((NUM_SUBJECTS, 2))
@@ -17,8 +18,6 @@ NUM_SAMPLES = 2000
 TARGET_ACCEPT = 0.9
 
 # Conversation model
-NUM_SUBJECTS = 3
-
 #   For sample generation
 INITIAL_STATE_CONVERSATION_MODEL = np.array([[1, 0], [1, 0], [1, 0]])
 SD_A_CONVERSATION_MODEL = np.array([0.1])
@@ -35,8 +34,6 @@ ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL = False
 FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL = True
 
 # Spring model
-NUM_SPRINGS = 3
-
 #   For sample generation
 INITIAL_STATE_SPRING_MODEL = np.array([[1, 0], [3, 0], [5, 0]])
 SD_A_SPRING_MODEL = np.array([0.1])

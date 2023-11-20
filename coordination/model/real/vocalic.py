@@ -38,15 +38,10 @@ from coordination.model.synthetic.constants import (
 from coordination.common.types import TensorTypes
 
 
-class ConversationModel(Model):
+class VocalicModel(Model):
     """
-    This class represents a conversational model where subjects are talking to each other and
-    their voice intensities evolve in an oscillatory fashion and pair-wisely blended by
-    coordination.
-
-    The variables in the latent component and observations are 2 dimensional. The first dimension
-    contains the voice intensity and the second the speed. Speed evolves with the laws that govern
-    harmonic oscillators but it is not blended by coordination as the voice intensity is.
+    This class represents a vocalic model where subjects are talking to each other and their
+    speech vocalics are observed as they finish talking.
     """
 
     def __init__(
