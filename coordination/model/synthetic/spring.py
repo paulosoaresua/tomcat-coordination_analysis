@@ -24,7 +24,7 @@ from coordination.model.synthetic.constants import (
     INITIAL_STATE_SPRING_MODEL,
     SD_MEAN_UC0,
     SD_SD_UC,
-    MEAN_MEAN_A0,
+    MEAN_MEAN_A0_SPRINGN_MODEL,
     SD_MEAN_A0_SPRING_MODEL,
     SD_SD_A,
     SD_SD_O,
@@ -61,7 +61,7 @@ class SpringModel(Model):
             dt: float = DT_SPRING_MODEL,
             sd_mean_uc0: float = SD_MEAN_UC0,
             sd_sd_uc: float = SD_SD_UC,
-            mean_mean_a0: np.ndarray = MEAN_MEAN_A0,
+            mean_mean_a0: np.ndarray = MEAN_MEAN_A0_SPRING_MODEL,
             sd_mean_a0: np.ndarray = SD_MEAN_A0_SPRING_MODEL,
             sd_sd_a: np.ndarray = SD_SD_A,
             sd_sd_o: np.ndarray = SD_SD_O,
@@ -90,7 +90,6 @@ class SpringModel(Model):
             the unbounded coordination).
         @param dampening_coefficient: dampening coefficient per subject used to calculate the
             fundamental matrix of the motion.
-        @param dt: the size of each time step to calculate the fundamental matrix of the motion.
         @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
             latent component).
         @param sd_sd_a: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
@@ -164,20 +163,27 @@ class SpringModel(Model):
         )
 
     def prepare_for_sampling(self,
+                             mean_uc0: float = MEAN_UC0,
+                             sd_uc: float = SD_UC,
                              initial_state: np.ndarray = INITIAL_STATE_SPRING_MODEL,
                              sd_a: np.ndarray = SD_A_SPRING_MODEL,
                              sd_o: np.ndarray = SD_O_SPRING_MODEL):
         """
         Sets parameter values for sampling.
 
+        @param mean_uc0: mean of the initial value of the unbounded coordination.
+        @param sd_uc: standard deviation of the initial value and random Gaussian walk of the
+            unbounded coordination.
         @param initial_state: value of the latent component at t = 0.
         @param sd_a: noise in the Gaussian random walk in the state space.
         @param sd_o: noise in the observation.
         """
 
-        self.component_groups[0].latent_component.parameters.mean_a0.value = initial_state
-        self.component_groups[0].latent_component.parameters.sd_a.value = sd_a
-        self.component_groups[0].observations[0].parameters.sd_o.value = sd_o
+        self.coordination.parameters.mean_uc0.value = np.ones(1) * mean_uc0
+        self.coordination.parameters.sd_uc.value = np.ones(1) * sd_uc
+        self.state_space.parameters.mean_a0.value = initial_state
+        self.state_space.parameters.sd_a.value = sd_a
+        self.observation.parameters.sd_o.value = sd_o
 
     def prepare_for_inference(self,
                               num_time_steps_in_coordination_scale: int,
@@ -196,3 +202,5 @@ class SpringModel(Model):
         self.state_space.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.observation.observed_values = observed_values
         self.observation.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+
+        self.create_random_variables()

@@ -48,7 +48,15 @@ class Observation(ABC, Module):
         @param latent_component_random_variable: latent component random variable.
         @param observation_random_variable: observation random variable to be used in a
             call to create_random_variables. If not set, it will be created in such a call.
+        @raise ValueError: if the number of elements in dimension_names do not match the
+            dimension_size.
         """
+
+        if dimension_names is not None and len(dimension_names) != dimension_size:
+            raise ValueError(
+                f"The number of items in dimension_names ({len(dimension_names)}) must match the "
+                f"dimension_size ({dimension_size}).")
+
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,

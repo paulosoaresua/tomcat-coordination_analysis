@@ -1,49 +1,49 @@
 import numpy as np
 
-# Common to both models
-NUM_SUBJECTS = 3
-SD_MEAN_UC0 = 1
-SD_SD_UC = 1
-MEAN_MEAN_A0 = np.zeros((NUM_SUBJECTS, 2))
-SD_SD_A = np.ones(1)
-SD_SD_O = np.ones(1)
-SHARE_MEAN_A0_ACROSS_SUBJECT = False
-SHARE_MEAN_A0_ACROSS_DIMENSIONS = False
-SHARE_SD_ACROSS_SUBJECTS = True  # same variance across subjects
-SHARE_SD_ACROSS_DIMENSIONS = True  # same variance for position and speed
-NUM_TIME_STEPS = 100
-
+DEFAULT_NUM_TIME_STEPS = 100
+DEFAULT_NUM_SUBJECTS = 3
+SUBJECT_NAMES = ["S1", "S2", "S3"]
 BURN_IN = 2000
 NUM_SAMPLES = 2000
-TARGET_ACCEPT = 0.9
+TARGET_ACCEPT = 0.8
 
-# Conversation model
-#   For sample generation
-INITIAL_STATE_CONVERSATION_MODEL = np.array([[1, 0], [1, 0], [1, 0]])
-SD_A_CONVERSATION_MODEL = np.array([0.1])
-SD_O_CONVERSATION_MODEL = np.array([0.01])
-# ---
-SUBJECT_NAMES_CONVERSATION_MODEL = ["Bob", "Alice", "Dan"]
-ANGULAR_FREQUENCIES_CONVERSATION_MODEL = np.array([1, 0.5, 0.1])
-DAMPENING_COEFFICIENTS_CONVERSATION_MODEL = np.zeros(NUM_SUBJECTS)
-DT_CONVERSATION_MODEL = 0.2
-SD_MEAN_A0_CONVERSATION_MODEL = np.ones((NUM_SUBJECTS, 2)) * max(
-    INITIAL_STATE_CONVERSATION_MODEL[:, 0])
-SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL = 1.0
-ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL = False
-FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL = True
 
-# Spring model
-#   For sample generation
-INITIAL_STATE_SPRING_MODEL = np.array([[1, 0], [3, 0], [5, 0]])
-SD_A_SPRING_MODEL = np.array([0.1])
-SD_O_SPRING_MODEL = np.array([0.1])
-# ---
-SPRING_NAMES_SPRING_MODEL = ["Spring 1", "Spring 2", "Spring 3"]
-MASS_SPRING_MODEL = np.ones(NUM_SUBJECTS) * 10
-SPRING_CONSTANT_SPRING_MODEL = np.array([16, 8, 4])
-DAMPENING_COEFFICIENTS_SPRING_MODEL = np.zeros(NUM_SUBJECTS)
-DT_SPRING_MODEL = 1.0
-SD_MEAN_A0_SPRING_MODEL = np.ones((NUM_SUBJECTS, 2)) * max(
-    INITIAL_STATE_SPRING_MODEL[:, 0])
-SAMPLING_RELATIVE_FREQUENCY_SPRING_MODEL = 1.0
+class VocalicConstants:
+    """
+    This class contains default values for a vocalics group.
+    """
+
+    NUM_VOCALIC_FEATURES = 4
+    VOCALIC_FEATURE_NAMES = ["pitch", "intensity", "jitter", "shimmer"]
+    STATE_SPACE_DIM_SIZE = NUM_VOCALIC_FEATURES
+    STATE_SPACE_DIM_NAMES = VOCALIC_FEATURE_NAMES
+    SELF_DEPENDENT_STATE_SPACE = True
+
+    # Sharing options
+    SHARE_MEAN_A0_ACROSS_SUBJECT = False
+    SHARE_MEAN_A0_ACROSS_DIMENSIONS = False
+    SHARE_SD_A_ACROSS_SUBJECTS = True
+    SHARE_SD_A_ACROSS_DIMENSIONS = False
+    SHARE_SD_O_ACROSS_SUBJECTS = True
+    SHARE_SD_O_ACROSS_DIMENSIONS = True
+
+    # For inference
+    SD_MEAN_UC0 = 1
+    SD_SD_UC = 1
+    MEAN_MEAN_A0 = np.zeros((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
+    SD_MEAN_A0 = np.ones((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
+    # Same variance across subjects but not dimensions
+    SD_SD_A = np.ones(STATE_SPACE_DIM_SIZE)
+    # Same variance across subjects and dimensions
+    SD_SD_O = np.ones(1)
+
+    # For sample generation
+    MEAN_UC0 = 0
+    SD_UC = 0.5  # this is fixed during inference as well
+    MEAN_A0 = np.zeros_like(MEAN_MEAN_A0)
+    SD_A = np.ones_like(SD_SD_A) * 0.1
+    SD_O = np.ones_like(SD_SD_O) * 0.1  # this is fixed during inference as well
+
+    SAMPLING_TIME_SCALE_DENSITY = 1.0
+    ALLOW_SAMPLED_SUBJECT_REPETITION = False
+    FIX_SAMPLED_SUBJECT_SEQUENCE = True

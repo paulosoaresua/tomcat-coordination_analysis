@@ -128,7 +128,7 @@ class Model(Module):
                               tune=burn_in,
                               chains=num_chains,
                               random_seed=seed,
-                              cores=num_jobs,
+                              cores=min(num_jobs, num_chains),
                               target_accept=target_accept,
                               **kwargs)
 

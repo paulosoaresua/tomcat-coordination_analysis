@@ -82,7 +82,15 @@ class LatentComponent(ABC, Module):
             each index in the latent component scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @raise ValueError: if the number of elements in dimension_names do not match the
+            dimension_size.
         """
+
+        if dimension_names is not None and len(dimension_names) != dimension_size:
+            raise ValueError(
+                f"The number of items in dimension_names ({len(dimension_names)}) must match the "
+                f"dimension_size ({dimension_size}).")
+
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
