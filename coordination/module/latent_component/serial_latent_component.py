@@ -8,8 +8,9 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
-from coordination.module.latent_component.latent_component import (LatentComponent,
-                                                                   LatentComponentSamples)
+from coordination.module.latent_component.gaussian_latent_component import (
+    GaussianLatentComponent,
+    GaussianLatentComponentSamples)
 from coordination.module.module import ModuleSamples
 from coordination.module.constants import (DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
@@ -23,7 +24,7 @@ from coordination.module.constants import (DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS)
 
 
-class SerialLatentComponent(LatentComponent):
+class SerialLatentComponent(GaussianLatentComponent):
     """
     This class represents a serial latent component where there's only one subject per observation
     at a time in the component's scale, and subjects are influenced in a pair-wised manner.
@@ -476,7 +477,7 @@ class SerialLatentComponent(LatentComponent):
 # AUXILIARY CLASSES
 ###################################################################################################
 
-class SerialLatentComponentSamples(LatentComponentSamples):
+class SerialLatentComponentSamples(GaussianLatentComponentSamples):
 
     def __init__(self,
                  values: List[np.ndarray],

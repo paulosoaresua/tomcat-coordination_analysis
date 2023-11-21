@@ -9,7 +9,6 @@ from coordination.common.types import TensorTypes
 from coordination.module.parametrization2 import (Parameter,
                                                   HalfNormalParameterPrior)
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
-from coordination.module.latent_component.latent_component import LatentComponentSamples
 
 
 class Observation(ABC, Module):
@@ -27,7 +26,7 @@ class Observation(ABC, Module):
                  dimension_size: int,
                  dimension_names: Optional[List[str]] = None,
                  coordination_samples: Optional[ModuleSamples] = None,
-                 latent_component_samples: Optional[LatentComponentSamples] = None,
+                 latent_component_samples: Optional[ModuleSamples] = None,
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  latent_component_random_variable: Optional[pm.Distribution] = None,
                  observation_random_variable: Optional[pm.Distribution] = None,

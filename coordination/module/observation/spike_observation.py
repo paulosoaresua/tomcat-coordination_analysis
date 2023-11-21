@@ -9,10 +9,10 @@ from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
-from coordination.module.observation.latent_component import LatentComponentSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.module import ModuleSamples, ModuleParameters
 from coordination.module.parametrization2 import Parameter, BetaParameterPrior
+from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 
 
 class SpikeObservation(Observation):
@@ -35,7 +35,7 @@ class SpikeObservation(Observation):
                  coordination_random_variable: Optional[pm.Distribution] = None,
                  p_random_variable: Optional[pm.Distribution] = None,
                  observation_random_variable: Optional[pm.Distribution] = None,
-                 sampling_time_scale_density: float = DEFAULT_TIME_SCALE_DENSITY,
+                 sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                  time_steps_in_coordination_scale: Optional[np.array] = None,
                  observed_values: Optional[TensorTypes] = None):
         """

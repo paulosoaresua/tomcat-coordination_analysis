@@ -8,8 +8,9 @@ import pytensor.tensor as ptt
 from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
-from coordination.module.latent_component.latent_component import (LatentComponent,
-                                                                   LatentComponentSamples)
+from coordination.module.latent_component.gaussian_latent_component import (
+    GaussianLatentComponent,
+    GaussianLatentComponentSamples)
 from coordination.module.module import ModuleSamples
 from coordination.module.constants import (DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
                                            DEFAULT_SUBJECT_REPETITION_FLAG,
@@ -23,7 +24,7 @@ from coordination.module.constants import (DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS)
 
 
-class NonSerialLatentComponent(LatentComponent):
+class NonSerialLatentComponent(GaussianLatentComponent):
     """
     This class represents a latent component where there are observations for all the subjects at
     each time in the component's scale. A subject is then influenced by all the others.

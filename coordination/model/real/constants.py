@@ -47,3 +47,9 @@ class VocalicConstants:
     SAMPLING_TIME_SCALE_DENSITY = 1.0
     ALLOW_SAMPLED_SUBJECT_REPETITION = False
     FIX_SAMPLED_SUBJECT_SEQUENCE = True
+
+
+class SemanticLinkConstants:
+    A_P = 1
+    B_P = 1
+    P = 1

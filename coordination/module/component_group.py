@@ -5,8 +5,7 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
-from coordination.module.latent_component.latent_component import (LatentComponent,
-                                                                   LatentComponentSamples)
+from coordination.module.latent_component.latent_component import LatentComponent
 from coordination.module.observation.observation import Observation
 from coordination.module.transformation.transformation import Transformation
 
@@ -20,7 +19,7 @@ class ComponentGroup(Module):
     def __init__(self,
                  uuid: str,
                  pymc_model: pm.Model,
-                 latent_component: LatentComponent,
+                 latent_component: Optional[LatentComponent],
                  observations: List[Observation],
                  transformations: Optional[List[Transformation]] = None):
         """
@@ -44,7 +43,18 @@ class ComponentGroup(Module):
                 raise ValueError(f"The number of transformations ({len(transformations)}) does "
                                  f"not match the number of observations ({len(observations)}.")
 
-        self.latent_component = latent_component
+        if latent_component:
+            self.latent_component = latent_component
+        else:
+            # Bypass for groups with observations that depend directly on coordination (e.g.,
+            # spike observation)
+            self.latent_component = LatentComponent(
+                uuid="null_latent_component",
+                pymc_model=pymc_model,
+                num_subjects=0,
+                dimension_size=0,
+                self_dependent=False
+            )
         self.observations = observations
         self.transformations = transformations
 
