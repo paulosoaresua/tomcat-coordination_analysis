@@ -1,33 +1,28 @@
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
-from scipy.stats import norm
 from scipy.linalg import expm
+from scipy.stats import norm
 
 from coordination.common.types import TensorTypes
-from coordination.module.latent_component.serial_latent_component import (
-    SerialLatentComponent,
-    SerialLatentComponentSamples
-)
-from coordination.module.module import ModuleSamples
-from coordination.module.constants import (DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-                                           DEFAULT_SUBJECT_REPETITION_FLAG,
+from coordination.module.constants import (DEFAULT_DAMPENING_COEFFICIENT,
+                                           DEFAULT_DT,
                                            DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-                                           DEFAULT_NUM_SUBJECTS,
-                                           DEFAULT_LATENT_DIMENSION_SIZE,
-                                           DEFAULT_SELF_DEPENDENCY,
                                            DEFAULT_LATENT_MEAN_PARAM,
                                            DEFAULT_LATENT_SD_PARAM,
-                                           DEFAULT_SHARING_ACROSS_SUBJECTS,
+                                           DEFAULT_MASS, DEFAULT_NUM_SUBJECTS,
+                                           DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
+                                           DEFAULT_SHARING_ACROSS_SUBJECTS,
                                            DEFAULT_SPRING_CONSTANT,
-                                           DEFAULT_MASS,
-                                           DEFAULT_DAMPENING_COEFFICIENT,
-                                           DEFAULT_DT)
+                                           DEFAULT_SUBJECT_REPETITION_FLAG)
+from coordination.module.latent_component.serial_latent_component import \
+    SerialLatentComponent
+from coordination.module.module import ModuleSamples
 
 
 class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
@@ -36,34 +31,36 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
     determined by coordination and no external force.
     """
 
-    def __init__(self,
-                 uuid: str,
-                 pymc_model: pm.Model,
-                 num_subjects: int = DEFAULT_NUM_SUBJECTS,
-                 spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
-                 mass: np.ndarray = DEFAULT_MASS,
-                 dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
-                 dt: float = DEFAULT_DT,
-                 mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-                 sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-                 sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-                 share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-                 share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-                 share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-                 share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-                 coordination_samples: Optional[ModuleSamples] = None,
-                 coordination_random_variable: Optional[pm.Distribution] = None,
-                 latent_component_random_variable: Optional[pm.Distribution] = None,
-                 mean_a0_random_variable: Optional[pm.Distribution] = None,
-                 sd_a_random_variable: Optional[pm.Distribution] = None,
-                 sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-                 allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-                 fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-                 time_steps_in_coordination_scale: Optional[np.array] = None,
-                 subject_indices: Optional[np.ndarray] = None,
-                 prev_time_same_subject: Optional[np.ndarray] = None,
-                 prev_time_diff_subject: Optional[np.ndarray] = None,
-                 observed_values: Optional[TensorTypes] = None):
+    def __init__(
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
+        mass: np.ndarray = DEFAULT_MASS,
+        dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
+        dt: float = DEFAULT_DT,
+        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+        allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+        fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        subject_indices: Optional[np.ndarray] = None,
+        prev_time_same_subject: Optional[np.ndarray] = None,
+        prev_time_diff_subject: Optional[np.ndarray] = None,
+        observed_values: Optional[TensorTypes] = None,
+    ):
         """
         Creates a serial mass-spring-damper latent component.
 
@@ -124,59 +121,65 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
         """
-        super().__init__(uuid=uuid,
-                         pymc_model=pymc_model,
-                         num_subjects=num_subjects,
-                         dimension_size=2,
-                         self_dependent=True,
-                         mean_mean_a0=mean_mean_a0,
-                         sd_mean_a0=sd_mean_a0,
-                         sd_sd_a=sd_sd_a,
-                         share_mean_a0_across_subjects=share_mean_a0_across_subjects,
-                         share_mean_a0_across_dimensions=share_mean_a0_across_dimensions,
-                         share_sd_a_across_subjects=share_sd_a_across_subjects,
-                         share_sd_a_across_dimensions=share_sd_a_across_dimensions,
-                         dimension_names=["position", "speed"],
-                         coordination_samples=coordination_samples,
-                         coordination_random_variable=coordination_random_variable,
-                         latent_component_random_variable=latent_component_random_variable,
-                         mean_a0_random_variable=mean_a0_random_variable,
-                         sd_a_random_variable=sd_a_random_variable,
-                         time_steps_in_coordination_scale=time_steps_in_coordination_scale,
-                         observed_values=observed_values,
-                         sampling_time_scale_density=sampling_time_scale_density,
-                         allow_sampled_subject_repetition=allow_sampled_subject_repetition,
-                         fix_sampled_subject_sequence=fix_sampled_subject_sequence,
-                         subject_indices=subject_indices,
-                         prev_time_same_subject=prev_time_same_subject,
-                         prev_time_diff_subject=prev_time_diff_subject)
+        super().__init__(
+            uuid=uuid,
+            pymc_model=pymc_model,
+            num_subjects=num_subjects,
+            dimension_size=2,
+            self_dependent=True,
+            mean_mean_a0=mean_mean_a0,
+            sd_mean_a0=sd_mean_a0,
+            sd_sd_a=sd_sd_a,
+            share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+            share_mean_a0_across_dimensions=share_mean_a0_across_dimensions,
+            share_sd_a_across_subjects=share_sd_a_across_subjects,
+            share_sd_a_across_dimensions=share_sd_a_across_dimensions,
+            dimension_names=["position", "speed"],
+            coordination_samples=coordination_samples,
+            coordination_random_variable=coordination_random_variable,
+            latent_component_random_variable=latent_component_random_variable,
+            mean_a0_random_variable=mean_a0_random_variable,
+            sd_a_random_variable=sd_a_random_variable,
+            time_steps_in_coordination_scale=time_steps_in_coordination_scale,
+            observed_values=observed_values,
+            sampling_time_scale_density=sampling_time_scale_density,
+            allow_sampled_subject_repetition=allow_sampled_subject_repetition,
+            fix_sampled_subject_sequence=fix_sampled_subject_sequence,
+            subject_indices=subject_indices,
+            prev_time_same_subject=prev_time_same_subject,
+            prev_time_diff_subject=prev_time_diff_subject,
+        )
 
         if spring_constant.ndim != 1:
-            raise ValueError(f"The spring constant ({spring_constant}) must be a 1D array.")
+            raise ValueError(
+                f"The spring constant ({spring_constant}) must be a 1D array."
+            )
 
         if len(spring_constant) != num_subjects:
             raise ValueError(
-                f"The spring constant ({spring_constant}) must have size {num_subjects}.")
+                f"The spring constant ({spring_constant}) must have size {num_subjects}."
+            )
 
         if dampening_coefficient.ndim != 1:
-            raise ValueError(f"The dampening coefficient ({dampening_coefficient}) must be a 1D "
-                             "array.")
+            raise ValueError(
+                f"The dampening coefficient ({dampening_coefficient}) must be a 1D "
+                "array."
+            )
 
         if len(dampening_coefficient) != num_subjects:
             raise ValueError(
                 f"The dampening coefficient ({dampening_coefficient}) must have size "
-                f"{num_subjects}.")
+                f"{num_subjects}."
+            )
 
         if mass.ndim != 1:
             raise ValueError(f"The mass ({mass}) must be a 1D array.")
 
         if len(mass) != num_subjects:
-            raise ValueError(
-                f"The mass ({mass}) must have size {num_subjects}.")
+            raise ValueError(f"The mass ({mass}) must have size {num_subjects}.")
 
         if dt <= 0:
-            raise ValueError(
-                f"The dt ({dt}) must be a positive number.")
+            raise ValueError(f"The dt ({dt}) must be a positive number.")
 
         self.spring_constant = spring_constant
         self.mass = mass
@@ -186,23 +189,29 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
         # Fundamental matrices. One per subject.
         F = []
         for subject in range(num_subjects):
-            A = np.array([
-                [0, 1],
-                [-self.spring_constant[subject] / self.mass[subject],
-                 -self.damping_coefficient[subject] / self.mass[subject]]
-            ])
+            A = np.array(
+                [
+                    [0, 1],
+                    [
+                        -self.spring_constant[subject] / self.mass[subject],
+                        -self.damping_coefficient[subject] / self.mass[subject],
+                    ],
+                ]
+            )
             F.append(expm(A * self.dt)[None, ...])
 
         self.F = np.concatenate(F, axis=0)
 
-    def _draw_from_system_dynamics(self,
-                                   coordination_sampled_series: np.ndarray,
-                                   time_steps_in_coordination_scale: np.ndarray,
-                                   subjects_in_time: np.ndarray,
-                                   prev_time_same_subject: np.ndarray,
-                                   prev_time_diff_subject: np.ndarray,
-                                   mean_a0: np.ndarray,
-                                   sd_a: np.ndarray) -> np.ndarray:
+    def _draw_from_system_dynamics(
+        self,
+        coordination_sampled_series: np.ndarray,
+        time_steps_in_coordination_scale: np.ndarray,
+        subjects_in_time: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        mean_a0: np.ndarray,
+        sd_a: np.ndarray,
+    ) -> np.ndarray:
         """
         Draws values from a mass-spring-damper system dynamics using the fundamental matrices.
 
@@ -272,7 +281,7 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
 
         return values
 
-    def _get_extra_logp_params(self) -> Tuple[Any, ...]:
+    def _get_extra_logp_params(self) -> Tuple[Union[TensorTypes, pm.Distribution], ...]:
         """
         Gets fundamental matrices per time step.
         """
@@ -312,36 +321,39 @@ class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
-def log_prob(sample: ptt.TensorVariable,
-             initial_mean: ptt.TensorVariable,
-             sigma: ptt.TensorVariable,
-             coordination: ptt.TensorVariable,
-             prev_time_same_subject: ptt.TensorConstant,
-             prev_time_diff_subject: ptt.TensorConstant,
-             prev_same_subject_mask: ptt.TensorConstant,
-             prev_diff_subject_mask: ptt.TensorConstant,
-             self_dependent: ptt.TensorConstant,
-             Fs_diff: ptt.TensorConstant,
-             Fs_same: ptt.TensorConstant) -> float:
+
+def log_prob(
+    sample: ptt.TensorVariable,
+    initial_mean: ptt.TensorVariable,
+    sigma: ptt.TensorVariable,
+    coordination: ptt.TensorVariable,
+    prev_time_same_subject: ptt.TensorConstant,
+    prev_time_diff_subject: ptt.TensorConstant,
+    prev_same_subject_mask: ptt.TensorConstant,
+    prev_diff_subject_mask: ptt.TensorConstant,
+    self_dependent: ptt.TensorConstant,
+    Fs_diff: ptt.TensorConstant,
+    Fs_same: ptt.TensorConstant,
+) -> float:
     """
     Computes the log-probability function of a sample.
 
     @param sample: (dimension x time) a single samples series.
-    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is associated with the
-        subject at that time. The initial mean is only used the first time the user speaks, but we
-        repeat the values here over time for uniform vector operations (e.g., we can multiply this
-        with other tensors) and we fix the behavior with mask tensors.
-    @param sigma: (dimension x time) a series of standard deviations. At each time the standard deviation is
-        associated with the subject at that time.
+    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
+        associated with the subject at that time. The initial mean is only used the first time the
+        user speaks, but we repeat the values here over time for uniform vector operations (e.g.,
+        we can multiply this with other tensors) and we fix the behavior with mask tensors.
+    @param sigma: (dimension x time) a series of standard deviations. At each time the standard
+        deviation is associated with the subject at that time.
     @param coordination: (time) a series of coordination values. Axis (time).
     @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
         associated with the same subject. For instance, prev_time_same_subject[t] points to the
         most recent time step where the subject at time t had an observation. If there's no such a
         time, prev_time_same_subject[t] will be -1. Axes (time).
-    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time step
-        associated with a different subject. For instance, prev_time_diff_subject[t] points to the
-        most recent time step where a different subject than the one at time t had an observation.
-        If there's no such a time, prev_time_diff_subject[t] will be -1.
+    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time
+        step associated with a different subject. For instance, prev_time_diff_subject[t] points
+        to the most recent time step where a different subject than the one at time t had an
+        observation. If there's no such a time, prev_time_diff_subject[t] will be -1.
     @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
         is -1.
     @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
@@ -355,9 +367,9 @@ def log_prob(sample: ptt.TensorVariable,
     @return: log-probability of the sample.
     """
 
-    # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects in each time
-    # step. We reshape to guarantee we don't create dimensions with unknown size in case the first dimension of
-    # the sample component is one.
+    # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
+    # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
+    # case the first dimension of the sample component is one.
     prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # d x T
 
     # We use this binary mask to zero out entries with no observations from partners.
@@ -385,21 +397,27 @@ def log_prob(sample: ptt.TensorVariable,
     # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
     # we can add that to the log-probability such that the samples are effectively coming from the
     # component's posterior.
-    prev_other_transformed = ptt.batched_tensordot(Fs_diff_reshaped, prev_other.T,
-                                                   axes=[(2,), (1,)]).T
-    prev_same_transformed = ptt.batched_tensordot(Fs_same_reshaped, prev_same.T,
-                                                  axes=[(2,), (1,)]).T
+    prev_other_transformed = ptt.batched_tensordot(
+        Fs_diff_reshaped, prev_other.T, axes=[(2,), (1,)]
+    ).T
+    prev_same_transformed = ptt.batched_tensordot(
+        Fs_same_reshaped, prev_same.T, axes=[(2,), (1,)]
+    ).T
 
     blended_mean = prev_other_transformed * c * mask_other + (1 - c * mask_other) * (
-            prev_same_transformed * mask_same + (1 - mask_same) * initial_mean)
+        prev_same_transformed * mask_same + (1 - mask_same) * initial_mean
+    )
 
     # We don't blend speed
     POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
     SPEED_COL = ptt.as_tensor(np.array([[0], [1]]))
-    blended_mean = blended_mean * POSITION_COL + (
-            prev_same * mask_same + (1 - mask_same) * initial_mean) * SPEED_COL
+    blended_mean = (
+        blended_mean * POSITION_COL
+        + (prev_same * mask_same + (1 - mask_same) * initial_mean) * SPEED_COL
+    )
 
-    total_logp = pm.logp(pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape),
-                         sample).sum()
+    total_logp = pm.logp(
+        pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape), sample
+    ).sum()
 
     return total_logp

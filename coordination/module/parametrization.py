@@ -8,14 +8,12 @@ Classes to use when defining parameter values and priors (hyper-priors).
 
 
 class Parameter:
-
     def __init__(self, prior: Any, value: Any = None):
         self.prior = prior
         self.value = value
 
 
 class NormalParameterPrior:
-
     def __init__(self, mean: np.ndarray, sd: np.ndarray):
         assert (sd > 0).all()
 
@@ -24,7 +22,6 @@ class NormalParameterPrior:
 
 
 class HalfNormalParameterPrior:
-
     def __init__(self, sd: np.ndarray):
         assert (sd > 0).all()
 
@@ -32,7 +29,6 @@ class HalfNormalParameterPrior:
 
 
 class DirichletParameterPrior:
-
     def __init__(self, a: np.ndarray):
         assert (a > 0).all()
 
@@ -40,7 +36,6 @@ class DirichletParameterPrior:
 
 
 class BetaParameterPrior:
-
     def __init__(self, a: float, b: float):
         assert a > 0 and b > 0
 
@@ -49,7 +44,6 @@ class BetaParameterPrior:
 
 
 class UniformDiscreteParameterPrior:
-
     def __init__(self, lower: int, upper: int):
         assert lower <= upper
 

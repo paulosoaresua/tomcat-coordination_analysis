@@ -1,13 +1,12 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Callable, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import pymc as pm
 
 from coordination.common.types import TensorTypes
-from coordination.module.parametrization2 import (Parameter,
-                                                  HalfNormalParameterPrior)
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
 
 
@@ -18,19 +17,21 @@ class Observation(ABC, Module):
      centered on some transformation, g(.),  of the latent components, i.e., O ~ N(g(A), var_o).
     """
 
-    def __init__(self,
-                 uuid: str,
-                 pymc_model: pm.Model,
-                 parameters: ModuleParameters,
-                 num_subjects: int,
-                 dimension_size: int,
-                 dimension_names: Optional[List[str]] = None,
-                 coordination_samples: Optional[ModuleSamples] = None,
-                 latent_component_samples: Optional[ModuleSamples] = None,
-                 coordination_random_variable: Optional[pm.Distribution] = None,
-                 latent_component_random_variable: Optional[pm.Distribution] = None,
-                 observation_random_variable: Optional[pm.Distribution] = None,
-                 observed_values: Union[TensorTypes, Dict[str, TensorTypes]] = None):
+    def __init__(
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        parameters: ModuleParameters,
+        num_subjects: int,
+        dimension_size: int,
+        dimension_names: Optional[List[str]] = None,
+        coordination_samples: Optional[ModuleSamples] = None,
+        latent_component_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        observation_random_variable: Optional[pm.Distribution] = None,
+        observed_values: Union[TensorTypes, Dict[str, TensorTypes]] = None,
+    ):
         """
         Creates an observation.
 
@@ -54,18 +55,21 @@ class Observation(ABC, Module):
         if dimension_names is not None and len(dimension_names) != dimension_size:
             raise ValueError(
                 f"The number of items in dimension_names ({len(dimension_names)}) must match the "
-                f"dimension_size ({dimension_size}).")
+                f"dimension_size ({dimension_size})."
+            )
 
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
             parameters=parameters,
-            observed_values=observed_values)
+            observed_values=observed_values,
+        )
 
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size
-        self.dimension_names = np.arange(
-            dimension_size) if dimension_names is None else dimension_names
+        self.dimension_names = (
+            np.arange(dimension_size) if dimension_names is None else dimension_names
+        )
         self.coordination_samples = coordination_samples
         self.latent_component_samples = latent_component_samples
         self.coordination_random_variable = coordination_random_variable
@@ -79,8 +83,11 @@ class Observation(ABC, Module):
 
         @return: a list of dimension names.
         """
-        return np.arange(
-            self.dimension_size) if self.dimension_names is None else self.dimension_names
+        return (
+            np.arange(self.dimension_size)
+            if self.dimension_names is None
+            else self.dimension_names
+        )
 
     @abstractmethod
     def create_random_variables(self):
@@ -95,5 +102,6 @@ class Observation(ABC, Module):
         """
         Adds relevant coordinates to the model.
         """
-        self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                  values=self.dimension_coordinates)
+        self.pymc_model.add_coord(
+            name=self.dimension_axis_name, values=self.dimension_coordinates
+        )

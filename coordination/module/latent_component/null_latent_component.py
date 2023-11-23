@@ -1,16 +1,13 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Tuple, Union
 
-import numpy as np
+from abc import ABC
+from typing import Optional
+
 import pymc as pm
 
-from coordination.common.types import TensorTypes
-from coordination.module.parametrization2 import (Parameter,
-                                                  HalfNormalParameterPrior,
-                                                  NormalParameterPrior)
-from coordination.module.latent_component.latent_component import LatentComponent
-from coordination.module.module import ModuleSamples, ModuleParameters
+from coordination.module.latent_component.latent_component import \
+    LatentComponent
+from coordination.module.module import ModuleSamples
 
 
 class NullLatentComponent(LatentComponent, ABC):
@@ -20,9 +17,11 @@ class NullLatentComponent(LatentComponent, ABC):
     spike observations.
     """
 
-    def __init__(self,
-                 coordination_samples: Optional[ModuleSamples] = None,
-                 coordination_random_variable: Optional[pm.Distribution] = None):
+    def __init__(
+        self,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+    ):
         """
         Creates a null latent component module.
 
@@ -32,14 +31,16 @@ class NullLatentComponent(LatentComponent, ABC):
             create_random_variables. This variable must be set before such a call.
         """
 
-        super().__init__(uuid="null",
-                         pymc_model=None,
-                         parameters=None,
-                         num_subjects=0,
-                         dimension_size=0,
-                         self_dependent=False,
-                         coordination_samples=coordination_samples,
-                         coordination_random_variable=coordination_random_variable)
+        super().__init__(
+            uuid="null",
+            pymc_model=None,
+            parameters=None,
+            num_subjects=0,
+            dimension_size=0,
+            self_dependent=False,
+            coordination_samples=coordination_samples,
+            coordination_random_variable=coordination_random_variable,
+        )
 
     def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:
         """

@@ -1,15 +1,12 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Tuple, Union
 
-import numpy as np
+from abc import ABC, abstractmethod
+from typing import Dict, Optional, Union
+
 import pymc as pm
 
 from coordination.common.types import TensorTypes
-from coordination.module.parametrization2 import (Parameter,
-                                                  HalfNormalParameterPrior,
-                                                  NormalParameterPrior)
-from coordination.module.module import Module, ModuleSamples, ModuleParameters
+from coordination.module.module import Module, ModuleParameters, ModuleSamples
 
 
 class Transformation(ABC, Module):
@@ -18,16 +15,18 @@ class Transformation(ABC, Module):
     modules.
     """
 
-    def __init__(self,
-                 uuid: str,
-                 pymc_model: pm.Model,
-                 parameters: ModuleParameters,
-                 output_dimension_size: int,
-                 input_samples: Optional[ModuleSamples] = None,
-                 input_random_variable: Optional[pm.Distribution] = None,
-                 output_random_variable: Optional[pm.Distribution] = None,
-                 axis: int = 0,
-                 observed_values: Optional[Union[TensorTypes, Dict[str, TensorTypes]]] = None):
+    def __init__(
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        parameters: ModuleParameters,
+        output_dimension_size: int,
+        input_samples: Optional[ModuleSamples] = None,
+        input_random_variable: Optional[pm.Distribution] = None,
+        output_random_variable: Optional[pm.Distribution] = None,
+        axis: int = 0,
+        observed_values: Optional[Union[TensorTypes, Dict[str, TensorTypes]]] = None,
+    ):
         """
         Creates a transformation.
 
@@ -49,7 +48,8 @@ class Transformation(ABC, Module):
             uuid=uuid,
             pymc_model=pymc_model,
             parameters=parameters,
-            observed_values=observed_values)
+            observed_values=observed_values,
+        )
 
         self.output_dimension_size = output_dimension_size
         self.input_samples = input_samples
@@ -70,8 +70,10 @@ class Transformation(ABC, Module):
         super().draw_samples(seed, num_series)
 
         if self.input_samples is None:
-            raise ValueError("No input samples. Please set input_samples before invoking the "
-                             "draw_samples method.")
+            raise ValueError(
+                "No input samples. Please set input_samples before invoking the "
+                "draw_samples method."
+            )
 
     @abstractmethod
     def create_random_variables(self):
@@ -84,6 +86,8 @@ class Transformation(ABC, Module):
         super().create_random_variables()
 
         if self.input_random_variable is None:
-            raise ValueError("Input variable is undefined. Please set "
-                             "input_random_variable before invoking the create_random_variables "
-                             "method.")
+            raise ValueError(
+                "Input variable is undefined. Please set "
+                "input_random_variable before invoking the create_random_variables "
+                "method."
+            )

@@ -1,15 +1,13 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import pymc as pm
 
 from coordination.common.types import TensorTypes
-from coordination.module.parametrization2 import (Parameter,
-                                                  HalfNormalParameterPrior,
-                                                  NormalParameterPrior)
-from coordination.module.module import Module, ModuleSamples, ModuleParameters
+from coordination.module.module import Module, ModuleParameters, ModuleSamples
 
 
 class LatentComponent(ABC, Module):
@@ -19,19 +17,21 @@ class LatentComponent(ABC, Module):
     one subject influences the same component in another subject in the future.
     """
 
-    def __init__(self,
-                 uuid: str,
-                 pymc_model: pm.Model,
-                 parameters: ModuleParameters,
-                 num_subjects: int,
-                 dimension_size: int,
-                 self_dependent: bool,
-                 dimension_names: Optional[List[str]] = None,
-                 coordination_samples: Optional[ModuleSamples] = None,
-                 coordination_random_variable: Optional[pm.Distribution] = None,
-                 latent_component_random_variable: Optional[pm.Distribution] = None,
-                 time_steps_in_coordination_scale: Optional[np.array] = None,
-                 observed_values: Optional[TensorTypes] = None):
+    def __init__(
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        parameters: ModuleParameters,
+        num_subjects: int,
+        dimension_size: int,
+        self_dependent: bool,
+        dimension_names: Optional[List[str]] = None,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
+    ):
         """
         Creates an abstract latent component module.
 
@@ -63,13 +63,15 @@ class LatentComponent(ABC, Module):
         if dimension_names is not None and len(dimension_names) != dimension_size:
             raise ValueError(
                 f"The number of items in dimension_names ({len(dimension_names)}) must match the "
-                f"dimension_size ({dimension_size}).")
+                f"dimension_size ({dimension_size})."
+            )
 
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
             parameters=parameters,
-            observed_values=observed_values)
+            observed_values=observed_values,
+        )
 
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size
@@ -87,11 +89,14 @@ class LatentComponent(ABC, Module):
 
         @return: a list of dimension names.
         """
-        return np.arange(
-            self.dimension_size) if self.dimension_names is None else self.dimension_names
+        return (
+            np.arange(self.dimension_size)
+            if self.dimension_names is None
+            else self.dimension_names
+        )
 
     @abstractmethod
-    def draw_samples(self, seed: Optional[int], num_series: int) -> LatentComponentSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:
         """
         Draws latent component samples using ancestral sampling and some blending strategy with
         coordination and different subjects. This method must be implemented by concrete
@@ -105,8 +110,10 @@ class LatentComponent(ABC, Module):
         super().draw_samples(seed, num_series)
 
         if self.coordination_samples is None:
-            raise ValueError("No coordination samples. Please set coordination_samples "
-                             "before invoking the draw_samples method.")
+            raise ValueError(
+                "No coordination samples. Please set coordination_samples "
+                "before invoking the draw_samples method."
+            )
 
     @abstractmethod
     def create_random_variables(self):
@@ -118,9 +125,11 @@ class LatentComponent(ABC, Module):
         super().create_random_variables()
 
         if self.coordination_random_variable is None:
-            raise ValueError("Coordination variable is undefined. Please set "
-                             "coordination_random_variable before invoking the "
-                             "create_random_variables method.")
+            raise ValueError(
+                "Coordination variable is undefined. Please set "
+                "coordination_random_variable before invoking the "
+                "create_random_variables method."
+            )
 
         self._add_coordinates()
 
@@ -130,5 +139,6 @@ class LatentComponent(ABC, Module):
         """
 
         if self.dimension_size > 0:
-            self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                      values=self.dimension_coordinates)
+            self.pymc_model.add_coord(
+                name=self.dimension_axis_name, values=self.dimension_coordinates
+            )

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Union
 
 import numpy as np
@@ -41,8 +42,12 @@ class NormalParameterPrior:
         @raise ValueError: if sd <= 0.
         """
 
-        if (isinstance(sd, float) and sd <= 0) or (isinstance(sd, np.ndarray) and (sd <= 0).any()):
-            raise ValueError(f"Standard deviation ({sd}) contains non-positive elements.")
+        if (isinstance(sd, float) and sd <= 0) or (
+            isinstance(sd, np.ndarray) and (sd <= 0).any()
+        ):
+            raise ValueError(
+                f"Standard deviation ({sd}) contains non-positive elements."
+            )
 
         self.mean = mean
         self.sd = sd
@@ -61,8 +66,12 @@ class HalfNormalParameterPrior:
         @raise ValueError: if sd <= 0.
         """
 
-        if (isinstance(sd, float) and sd <= 0) or (isinstance(sd, np.ndarray) and (sd <= 0).any()):
-            raise ValueError(f"Standard deviation ({sd}) contains non-positive elements.")
+        if (isinstance(sd, float) and sd <= 0) or (
+            isinstance(sd, np.ndarray) and (sd <= 0).any()
+        ):
+            raise ValueError(
+                f"Standard deviation ({sd}) contains non-positive elements."
+            )
 
         self.sd = sd
 
@@ -124,7 +133,9 @@ class UniformDiscreteParameterPrior:
         """
 
         if lower > upper:
-            raise ValueError(f"Lower bound ({lower}) is larger than upper bound ({upper}).")
+            raise ValueError(
+                f"Lower bound ({lower}) is larger than upper bound ({upper})."
+            )
 
         self.lower = lower
         self.upper = upper
@@ -135,5 +146,5 @@ PriorTypes = Union[
     HalfNormalParameterPrior,
     DirichletParameterPrior,
     BetaParameterPrior,
-    UniformDiscreteParameterPrior
+    UniformDiscreteParameterPrior,
 ]

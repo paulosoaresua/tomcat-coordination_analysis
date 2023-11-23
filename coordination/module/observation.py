@@ -1,11 +1,12 @@
 from typing import List
 
 import numpy as np
-from coordination.module.parametrization import Parameter, HalfNormalParameterPrior
+
+from coordination.module.parametrization import (HalfNormalParameterPrior,
+                                                 Parameter)
 
 
 class ObservationParameters:
-
     def __init__(self, sd_sd_o: np.ndarray):
         self.sd_o = Parameter(HalfNormalParameterPrior(sd_sd_o))
 
@@ -15,17 +16,19 @@ class ObservationParameters:
 
 class Observation:
     """
-    This class models generic observations. Use specific observation classes for non-serial and serial components
+    This class models generic observations. Use specific observation classes for non-serial and
+    serial components.
     """
 
-    def __init__(self,
-                 uuid: str,
-                 num_subjects: int,
-                 dim_value: int,
-                 sd_sd_o: np.ndarray,
-                 share_sd_o_across_subjects: bool,
-                 share_sd_o_across_features: bool):
-
+    def __init__(
+        self,
+        uuid: str,
+        num_subjects: int,
+        dim_value: int,
+        sd_sd_o: np.ndarray,
+        share_sd_o_across_subjects: bool,
+        share_sd_o_across_features: bool,
+    ):
         # Check dimensionality of the hyper-prior parameters
         if share_sd_o_across_features:
             dim_sd_o_features = 1
@@ -47,9 +50,7 @@ class Observation:
 
     @property
     def parameter_names(self) -> List[str]:
-        return [
-            self.sd_o_name
-        ]
+        return [self.sd_o_name]
 
     @property
     def sd_o_name(self) -> str:

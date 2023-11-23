@@ -5,4 +5,4 @@ from typing import Union
 import numpy as np
 import pytensor.tensor as ptt
 
-TensorTypes = Union[np.array, ptt.TensorVariable, ptt.TensorConstant]
+TensorTypes = Union[np.ndarray, ptt.TensorVariable, ptt.TensorConstant]

@@ -1,5 +1,3 @@
-import seaborn as sns
-
 # From: https://www.heavy.ai/blog/12-color-palettes-for-telling-better-stories-with-your-data
 SPRING_PASTELS_COLOR_PALETTE = [
     "#fd7f6f",  # red
@@ -10,5 +8,5 @@ SPRING_PASTELS_COLOR_PALETTE = [
     "#ffee65",  # yellow
     "#beb9db",  # light purple
     "#fdcce5",  # pink
-    "#8bd3c7"  # green
+    "#8bd3c7",  # green
 ]

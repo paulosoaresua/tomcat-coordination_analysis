@@ -3,7 +3,6 @@ import time
 
 
 class TMUX:
-
     def __init__(self, session_name: str):
         self.session_name = session_name
 

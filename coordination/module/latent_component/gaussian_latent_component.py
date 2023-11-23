@@ -1,16 +1,18 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import pymc as pm
 
 from coordination.common.types import TensorTypes
-from coordination.module.parametrization2 import (Parameter,
-                                                  HalfNormalParameterPrior,
-                                                  NormalParameterPrior)
-from coordination.module.latent_component.latent_component import LatentComponent
-from coordination.module.module import ModuleSamples, ModuleParameters
+from coordination.module.latent_component.latent_component import \
+    LatentComponent
+from coordination.module.module import ModuleParameters, ModuleSamples
+from coordination.module.parametrization2 import (HalfNormalParameterPrior,
+                                                  NormalParameterPrior,
+                                                  Parameter)
 
 
 class GaussianLatentComponent(LatentComponent, ABC):
@@ -20,27 +22,29 @@ class GaussianLatentComponent(LatentComponent, ABC):
     other subjects into consideration.
     """
 
-    def __init__(self,
-                 pymc_model: pm.Model,
-                 uuid: str,
-                 num_subjects: int,
-                 dimension_size: int,
-                 self_dependent: bool,
-                 mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray,
-                 sd_sd_a: np.ndarray,
-                 share_mean_a0_across_subjects: bool,
-                 share_mean_a0_across_dimensions: bool,
-                 share_sd_a_across_subjects: bool,
-                 share_sd_a_across_dimensions: bool,
-                 dimension_names: Optional[List[str]] = None,
-                 coordination_samples: Optional[ModuleSamples] = None,
-                 coordination_random_variable: Optional[pm.Distribution] = None,
-                 latent_component_random_variable: Optional[pm.Distribution] = None,
-                 mean_a0_random_variable: Optional[pm.Distribution] = None,
-                 sd_a_random_variable: Optional[pm.Distribution] = None,
-                 time_steps_in_coordination_scale: Optional[np.array] = None,
-                 observed_values: Optional[TensorTypes] = None):
+    def __init__(
+        self,
+        pymc_model: pm.Model,
+        uuid: str,
+        num_subjects: int,
+        dimension_size: int,
+        self_dependent: bool,
+        mean_mean_a0: np.ndarray,
+        sd_mean_a0: np.ndarray,
+        sd_sd_a: np.ndarray,
+        share_mean_a0_across_subjects: bool,
+        share_mean_a0_across_dimensions: bool,
+        share_sd_a_across_subjects: bool,
+        share_sd_a_across_dimensions: bool,
+        dimension_names: Optional[List[str]] = None,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
+    ):
         """
         Creates a latent component module.
 
@@ -79,24 +83,30 @@ class GaussianLatentComponent(LatentComponent, ABC):
             is set, the variable is not latent anymore.
         """
 
-        super().__init__(uuid=uuid,
-                         pymc_model=pymc_model,
-                         parameters=GaussianLatentComponentParameters(module_uuid=uuid,
-                                                                      mean_mean_a0=mean_mean_a0,
-                                                                      sd_mean_a0=sd_mean_a0,
-                                                                      sd_sd_a=sd_sd_a),
-                         num_subjects=num_subjects,
-                         dimension_size=dimension_size,
-                         self_dependent=self_dependent,
-                         dimension_names=dimension_names,
-                         coordination_samples=coordination_samples,
-                         coordination_random_variable=coordination_random_variable,
-                         latent_component_random_variable=latent_component_random_variable,
-                         time_steps_in_coordination_scale=time_steps_in_coordination_scale,
-                         observed_values=observed_values)
+        super().__init__(
+            uuid=uuid,
+            pymc_model=pymc_model,
+            parameters=GaussianLatentComponentParameters(
+                module_uuid=uuid,
+                mean_mean_a0=mean_mean_a0,
+                sd_mean_a0=sd_mean_a0,
+                sd_sd_a=sd_sd_a,
+            ),
+            num_subjects=num_subjects,
+            dimension_size=dimension_size,
+            self_dependent=self_dependent,
+            dimension_names=dimension_names,
+            coordination_samples=coordination_samples,
+            coordination_random_variable=coordination_random_variable,
+            latent_component_random_variable=latent_component_random_variable,
+            time_steps_in_coordination_scale=time_steps_in_coordination_scale,
+            observed_values=observed_values,
+        )
 
         # If a parameter is shared across dimensions, we only have one parameter to infer.
-        dim_mean_a0_dimensions = 1 if share_mean_a0_across_dimensions else dimension_size
+        dim_mean_a0_dimensions = (
+            1 if share_mean_a0_across_dimensions else dimension_size
+        )
         dim_sd_a_dimensions = 1 if share_sd_a_across_dimensions else dimension_size
 
         # Check if the values passed as hyperparameter are in agreement with the dimension of the
@@ -137,8 +147,11 @@ class GaussianLatentComponent(LatentComponent, ABC):
 
         @return: a list of dimension names.
         """
-        return np.arange(
-            self.dimension_size) if self.dimension_names is None else self.dimension_names
+        return (
+            np.arange(self.dimension_size)
+            if self.dimension_names is None
+            else self.dimension_names
+        )
 
     def _check_parameter_dimensionality_consistency(self):
         """
@@ -153,18 +166,27 @@ class GaussianLatentComponent(LatentComponent, ABC):
         if self.parameters.sd_a.value is None:
             raise ValueError(f"Value of {self.parameters.sd_a.uuid} is undefined.")
 
-        dim_mean_a0_dimensions = 1 if self.share_mean_a0_across_dimensions else self.dimension_size
+        dim_mean_a0_dimensions = (
+            1 if self.share_mean_a0_across_dimensions else self.dimension_size
+        )
         if self.share_mean_a0_across_subjects:
             assert (dim_mean_a0_dimensions,) == self.parameters.mean_a0.value.shape
         else:
-            assert (self.num_subjects,
-                    dim_mean_a0_dimensions) == self.parameters.mean_a0.value.shape
+            assert (
+                self.num_subjects,
+                dim_mean_a0_dimensions,
+            ) == self.parameters.mean_a0.value.shape
 
-        dim_sd_a_dimensions = 1 if self.share_sd_a_across_dimensions else self.dimension_size
+        dim_sd_a_dimensions = (
+            1 if self.share_sd_a_across_dimensions else self.dimension_size
+        )
         if self.share_sd_a_across_subjects:
             assert (dim_sd_a_dimensions,) == self.parameters.sd_a.value.shape
         else:
-            assert (self.num_subjects, dim_sd_a_dimensions) == self.parameters.sd_a.value.shape
+            assert (
+                self.num_subjects,
+                dim_sd_a_dimensions,
+            ) == self.parameters.sd_a.value.shape
 
     @abstractmethod
     def create_random_variables(self):
@@ -178,7 +200,9 @@ class GaussianLatentComponent(LatentComponent, ABC):
                 self.mean_a0_random_variable = self._create_initial_mean_variable()
 
             if self.sd_a_random_variable is None:
-                self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
+                self.sd_a_random_variable = (
+                    self._create_transition_standard_deviation_variable()
+                )
 
     def _create_initial_mean_variable(self) -> pm.Distribution:
         """
@@ -189,23 +213,29 @@ class GaussianLatentComponent(LatentComponent, ABC):
         @return: a latent variable with a Gaussian prior.
         """
 
-        dim_mean_a0_dimensions = 1 if self.share_mean_a0_across_dimensions else self.dimension_size
+        dim_mean_a0_dimensions = (
+            1 if self.share_mean_a0_across_dimensions else self.dimension_size
+        )
 
         with self.pymc_model:
             if self.share_mean_a0_across_subjects:
                 # When shared across subjects, only one parameter per dimension is needed.
-                mean_a0 = pm.Normal(name=self.parameters.mean_a0.uuid,
-                                    mu=self.parameters.mean_a0.prior.mean,
-                                    sigma=self.parameters.mean_a0.prior.sd,
-                                    size=dim_mean_a0_dimensions,
-                                    observed=self.parameters.mean_a0.value)
+                mean_a0 = pm.Normal(
+                    name=self.parameters.mean_a0.uuid,
+                    mu=self.parameters.mean_a0.prior.mean,
+                    sigma=self.parameters.mean_a0.prior.sd,
+                    size=dim_mean_a0_dimensions,
+                    observed=self.parameters.mean_a0.value,
+                )
             else:
                 # Different parameters per subject and dimension.
-                mean_a0 = pm.Normal(name=self.parameters.mean_a0.uuid,
-                                    mu=self.parameters.mean_a0.prior.mean,
-                                    sigma=self.parameters.mean_a0.prior.sd,
-                                    size=(self.num_subjects, dim_mean_a0_dimensions),
-                                    observed=self.parameters.mean_a0.value)
+                mean_a0 = pm.Normal(
+                    name=self.parameters.mean_a0.uuid,
+                    mu=self.parameters.mean_a0.prior.mean,
+                    sigma=self.parameters.mean_a0.prior.sd,
+                    size=(self.num_subjects, dim_mean_a0_dimensions),
+                    observed=self.parameters.mean_a0.value,
+                )
 
         return mean_a0
 
@@ -219,20 +249,26 @@ class GaussianLatentComponent(LatentComponent, ABC):
         """
 
         with self.pymc_model:
-            dim_sd_a_dimensions = 1 if self.share_sd_a_across_dimensions else self.dimension_size
+            dim_sd_a_dimensions = (
+                1 if self.share_sd_a_across_dimensions else self.dimension_size
+            )
 
             if self.share_sd_a_across_subjects:
                 # When shared across subjects, only one parameter per dimension is needed.
-                sd_a = pm.HalfNormal(name=self.parameters.sd_a.uuid,
-                                     sigma=self.parameters.sd_a.prior.sd,
-                                     size=dim_sd_a_dimensions,
-                                     observed=self.parameters.sd_a.value)
+                sd_a = pm.HalfNormal(
+                    name=self.parameters.sd_a.uuid,
+                    sigma=self.parameters.sd_a.prior.sd,
+                    size=dim_sd_a_dimensions,
+                    observed=self.parameters.sd_a.value,
+                )
             else:
                 # Different parameters per subject and dimension.
-                sd_a = pm.HalfNormal(name=self.parameters.sd_a.uuid,
-                                     sigma=self.parameters.sd_a.prior.sd,
-                                     size=(self.num_subjects, dim_sd_a_dimensions),
-                                     observed=self.parameters.sd_a.value)
+                sd_a = pm.HalfNormal(
+                    name=self.parameters.sd_a.uuid,
+                    sigma=self.parameters.sd_a.prior.sd,
+                    size=(self.num_subjects, dim_sd_a_dimensions),
+                    observed=self.parameters.sd_a.value,
+                )
 
             return sd_a
 
@@ -247,11 +283,13 @@ class GaussianLatentComponentParameters(ModuleParameters):
     This class stores values and hyper-priors of the parameters of a Gaussian latent component.
     """
 
-    def __init__(self,
-                 module_uuid: str,
-                 mean_mean_a0: np.ndarray,
-                 sd_mean_a0: np.ndarray,
-                 sd_sd_a: np.ndarray):
+    def __init__(
+        self,
+        module_uuid: str,
+        mean_mean_a0: np.ndarray,
+        sd_mean_a0: np.ndarray,
+        sd_sd_a: np.ndarray,
+    ):
         """
         Creates an object to store latent component parameter info.
 
@@ -263,10 +301,13 @@ class GaussianLatentComponentParameters(ModuleParameters):
         """
         super().__init__()
 
-        self.mean_a0 = Parameter(uuid=f"{module_uuid}_mean_a0",
-                                 prior=NormalParameterPrior(mean_mean_a0, sd_mean_a0))
-        self.sd_a = Parameter(uuid=f"{module_uuid}_sd_a",
-                              prior=HalfNormalParameterPrior(sd_sd_a))
+        self.mean_a0 = Parameter(
+            uuid=f"{module_uuid}_mean_a0",
+            prior=NormalParameterPrior(mean_mean_a0, sd_mean_a0),
+        )
+        self.sd_a = Parameter(
+            uuid=f"{module_uuid}_sd_a", prior=HalfNormalParameterPrior(sd_sd_a)
+        )
 
 
 class GaussianLatentComponentSamples(ModuleSamples):
@@ -274,9 +315,11 @@ class GaussianLatentComponentSamples(ModuleSamples):
     This class stores samples generated by a Gaussian latent component.
     """
 
-    def __init__(self,
-                 values: Union[List[np.ndarray], np.ndarray],
-                 time_steps_in_coordination_scale: Union[List[np.ndarray], np.ndarray]):
+    def __init__(
+        self,
+        values: Union[List[np.ndarray], np.ndarray],
+        time_steps_in_coordination_scale: Union[List[np.ndarray], np.ndarray],
+    ):
         """
         Creates an object to store samples.
 

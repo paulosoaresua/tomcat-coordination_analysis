@@ -3,17 +3,19 @@ from typing import List, Optional
 import numpy as np
 import pymc as pm
 
-from coordination.module.module import ModuleSamples
+from coordination.common.types import TensorTypes
 from coordination.model.model import Model
+from coordination.model.real.constants import (DEFAULT_NUM_SUBJECTS,
+                                               DEFAULT_NUM_TIME_STEPS,
+                                               VocalicConstants)
+from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
-from coordination.module.component_group import ComponentGroup
-from coordination.module.latent_component.serial_latent_component import SerialLatentComponent
-from coordination.module.observation.serial_gaussian_observation import SerialGaussianObservation
-from coordination.model.real.constants import (VocalicConstants,
-                                               DEFAULT_NUM_TIME_STEPS,
-                                               DEFAULT_NUM_SUBJECTS)
-from coordination.common.types import TensorTypes
+from coordination.module.latent_component.serial_latent_component import \
+    SerialLatentComponent
+from coordination.module.module import ModuleSamples
+from coordination.module.observation.serial_gaussian_observation import \
+    SerialGaussianObservation
 
 
 class VocalicModel(Model):
@@ -23,31 +25,32 @@ class VocalicModel(Model):
     """
 
     def __init__(
-            self,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
-            state_space_dimension_size: int = VocalicConstants.STATE_SPACE_DIM_SIZE,
-            state_space_dimension_names: List[str] = VocalicConstants.STATE_SPACE_DIM_NAMES,
-            self_dependent: bool = VocalicConstants.SELF_DEPENDENT_STATE_SPACE,
-            num_vocalic_features: int = VocalicConstants.NUM_VOCALIC_FEATURES,
-            vocalic_feature_names: List[str] = VocalicConstants.VOCALIC_FEATURE_NAMES,
-            sd_mean_uc0: float = VocalicConstants.SD_MEAN_UC0,
-            sd_sd_uc: float = VocalicConstants.SD_SD_UC,
-            mean_mean_a0: np.ndarray = VocalicConstants.MEAN_MEAN_A0,
-            sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
-            sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
-            sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
-            share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
-            share_mean_a0_across_dimensions: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS,
-            share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
-            share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
-            share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
-            share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
-            sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
-            allow_sampled_subject_repetition: bool = VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION,
-            fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
-            coordination_samples: Optional[ModuleSamples] = None):
+        self,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
+        state_space_dimension_size: int = VocalicConstants.STATE_SPACE_DIM_SIZE,
+        state_space_dimension_names: List[str] = VocalicConstants.STATE_SPACE_DIM_NAMES,
+        self_dependent: bool = VocalicConstants.SELF_DEPENDENT_STATE_SPACE,
+        num_vocalic_features: int = VocalicConstants.NUM_VOCALIC_FEATURES,
+        vocalic_feature_names: List[str] = VocalicConstants.VOCALIC_FEATURE_NAMES,
+        sd_mean_uc0: float = VocalicConstants.SD_MEAN_UC0,
+        sd_sd_uc: float = VocalicConstants.SD_SD_UC,
+        mean_mean_a0: np.ndarray = VocalicConstants.MEAN_MEAN_A0,
+        sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
+        sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
+        sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
+        share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
+        share_mean_a0_across_dimensions: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS,
+        share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
+        share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
+        share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
+        share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
+        sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
+        allow_sampled_subject_repetition: bool = VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION,
+        fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
+        coordination_samples: Optional[ModuleSamples] = None,
+    ):
         """
         Creates a vocalic model.
 
@@ -94,7 +97,7 @@ class VocalicModel(Model):
             pymc_model=pymc_model,
             sd_mean_uc0=sd_mean_uc0,
             sd_sd_uc=sd_sd_uc,
-            num_time_steps=num_time_steps_in_coordination_scale
+            num_time_steps=num_time_steps_in_coordination_scale,
         )
 
         # Save a direct reference to state_space and observation for easy access in the parameter
@@ -115,7 +118,7 @@ class VocalicModel(Model):
             dimension_names=state_space_dimension_names,
             sampling_time_scale_density=sampling_time_scale_density,
             allow_sampled_subject_repetition=allow_sampled_subject_repetition,
-            fix_sampled_subject_sequence=fix_sampled_subject_sequence
+            fix_sampled_subject_sequence=fix_sampled_subject_sequence,
         )
 
         self.observation = SerialGaussianObservation(
@@ -126,14 +129,14 @@ class VocalicModel(Model):
             dimension_names=vocalic_feature_names,
             sd_sd_o=sd_sd_o,
             share_sd_o_across_subjects=share_sd_o_across_subjects,
-            share_sd_o_across_dimensions=share_sd_o_across_dimensions
+            share_sd_o_across_dimensions=share_sd_o_across_dimensions,
         )
 
         group = ComponentGroup(
             uuid="group",
             pymc_model=pymc_model,
             latent_component=self.state_space,
-            observations=[self.observation]
+            observations=[self.observation],
         )
 
         super().__init__(
@@ -141,15 +144,17 @@ class VocalicModel(Model):
             pymc_model=pymc_model,
             coordination=coordination,
             component_groups=[group],
-            coordination_samples=coordination_samples
+            coordination_samples=coordination_samples,
         )
 
-    def prepare_for_sampling(self,
-                             mean_uc0: float = VocalicConstants.MEAN_UC0,
-                             sd_uc: float = VocalicConstants.SD_UC,
-                             initial_state: np.ndarray = VocalicConstants.MEAN_A0,
-                             sd_a: np.ndarray = VocalicConstants.SD_A,
-                             sd_o: np.ndarray = VocalicConstants.SD_O):
+    def prepare_for_sampling(
+        self,
+        mean_uc0: float = VocalicConstants.MEAN_UC0,
+        sd_uc: float = VocalicConstants.SD_UC,
+        initial_state: np.ndarray = VocalicConstants.MEAN_A0,
+        sd_a: np.ndarray = VocalicConstants.SD_A,
+        sd_o: np.ndarray = VocalicConstants.SD_O,
+    ):
         """
         Sets parameter values for sampling.
 
@@ -167,13 +172,15 @@ class VocalicModel(Model):
         self.state_space.parameters.sd_a.value = sd_a
         self.observation.parameters.sd_o.value = sd_o
 
-    def prepare_for_inference(self,
-                              num_time_steps_in_coordination_scale: int,
-                              time_steps_in_coordination_scale: np.array,
-                              subject_indices: np.ndarray,
-                              prev_time_same_subject: np.ndarray,
-                              prev_time_diff_subject: np.ndarray,
-                              observed_values: TensorTypes):
+    def prepare_for_inference(
+        self,
+        num_time_steps_in_coordination_scale: int,
+        time_steps_in_coordination_scale: np.array,
+        subject_indices: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        observed_values: TensorTypes,
+    ):
         """
         Sets metadata required for inference.
 
@@ -197,12 +204,16 @@ class VocalicModel(Model):
         """
 
         self.coordination.num_time_steps = num_time_steps_in_coordination_scale
-        self.state_space.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.state_space.time_steps_in_coordination_scale = (
+            time_steps_in_coordination_scale
+        )
         self.state_space.subject_indices = subject_indices
         self.state_space.prev_time_same_subject = prev_time_same_subject
         self.state_space.prev_time_diff_subject = prev_time_diff_subject
         self.observation.observed_values = observed_values
-        self.observation.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.observation.time_steps_in_coordination_scale = (
+            time_steps_in_coordination_scale
+        )
         self.observation.subject_indices = subject_indices
 
         self.create_random_variables()

@@ -1,28 +1,25 @@
 from __future__ import annotations
-from typing import Any, Optional
+
 from abc import ABC
+from typing import Optional
 
-import numpy as np
 import pymc as pm
-from scipy.stats import norm
 
-from coordination.common.functions import sigmoid
-from coordination.module.parametrization2 import Parameter, HalfNormalParameterPrior, \
-    NormalParameterPrior
-from coordination.common.utils import set_random_seed
-from coordination.module.module import ModuleSamples, Module, ModuleParameters
+from coordination.common.types import TensorTypes
+from coordination.module.module import Module, ModuleParameters
 
 
 class Coordination(ABC, Module):
-
     UUID = "coordination"
 
-    def __init__(self,
-                 pymc_model: pm.Model,
-                 parameters: ModuleParameters,
-                 num_time_steps: int,
-                 coordination_random_variable: Optional[pm.Distribution] = None,
-                 observed_values: Optional[TensorTypes] = None):
+    def __init__(
+        self,
+        pymc_model: pm.Model,
+        parameters: ModuleParameters,
+        num_time_steps: int,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        observed_values: Optional[TensorTypes] = None,
+    ):
         """
         Creates a coordination module.
 
@@ -38,7 +35,8 @@ class Coordination(ABC, Module):
             uuid=Coordination.UUID,
             pymc_model=pymc_model,
             parameters=parameters,
-            observed_values=observed_values)
+            observed_values=observed_values,
+        )
 
         self.num_time_steps = num_time_steps
         self.coordination_random_variable = coordination_random_variable

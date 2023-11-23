@@ -1,29 +1,28 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Tuple, Union
 
 from copy import deepcopy
+from typing import List, Optional
+
 import numpy as np
 import pymc as pm
-import logging
 import pytensor.tensor as ptt
 
-from coordination.common.types import TensorTypes
-from coordination.module.parametrization2 import (Parameter,
-                                                  HalfNormalParameterPrior,
-                                                  NormalParameterPrior)
-from coordination.module.module import Module, ModuleSamples, ModuleParameters
-from coordination.module.transformation.transformation import Transformation
-from coordination.module.constants import (DEFAULT_MLP_MEAN_WEIGHTS,
-                                           DEFAULT_MLP_SD_WEIGHTS,
-                                           DEFAULT_MLP_ACTIVATION,
+from coordination.module.constants import (DEFAULT_MLP_ACTIVATION,
+                                           DEFAULT_MLP_HIDDEN_DIMENSION_SIZE,
+                                           DEFAULT_MLP_MEAN_WEIGHTS,
                                            DEFAULT_MLP_NUM_HIDDEN_LAYERS,
-                                           DEFAULT_MLP_HIDDEN_DIMENSION_SIZE)
+                                           DEFAULT_MLP_SD_WEIGHTS)
+from coordination.module.module import ModuleParameters, ModuleSamples
+from coordination.module.parametrization2 import (NormalParameterPrior,
+                                                  Parameter)
+from coordination.module.transformation.transformation import Transformation
 
 ACTIVATIONS = {
     "linear": lambda x: x,
-    "relu": lambda x: np.maximum(x, 0) if isinstance(x, np.ndarray) else pm.math.maximum(x, 0),
-    "tanh": lambda x: np.tanh(x) if isinstance(x, np.ndarray) else pm.math.tanh(x)
+    "relu": lambda x: np.maximum(x, 0)
+    if isinstance(x, np.ndarray)
+    else pm.math.maximum(x, 0),
+    "tanh": lambda x: np.tanh(x) if isinstance(x, np.ndarray) else pm.math.tanh(x),
 }
 
 
@@ -32,20 +31,22 @@ class MLP(Transformation):
     This class represents a Multi-Layer Perceptron transformation.
     """
 
-    def __init__(self,
-                 uuid: str,
-                 pymc_model: pm.Model,
-                 output_dimension_size: int,
-                 mean_w0: float = DEFAULT_MLP_MEAN_WEIGHTS,
-                 sd_w0: float = DEFAULT_MLP_SD_WEIGHTS,
-                 num_hidden_layers: int = DEFAULT_MLP_NUM_HIDDEN_LAYERS,
-                 hidden_dimension_size: int = DEFAULT_MLP_HIDDEN_DIMENSION_SIZE,
-                 activation: str = DEFAULT_MLP_ACTIVATION,
-                 input_samples: Optional[ModuleSamples] = None,
-                 input_random_variable: Optional[pm.Distribution] = None,
-                 output_random_variable: Optional[pm.Distribution] = None,
-                 weight_random_variables: Optional[List[pm.Distribution]] = None,
-                 axis: int = 0):
+    def __init__(
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        output_dimension_size: int,
+        mean_w0: float = DEFAULT_MLP_MEAN_WEIGHTS,
+        sd_w0: float = DEFAULT_MLP_SD_WEIGHTS,
+        num_hidden_layers: int = DEFAULT_MLP_NUM_HIDDEN_LAYERS,
+        hidden_dimension_size: int = DEFAULT_MLP_HIDDEN_DIMENSION_SIZE,
+        activation: str = DEFAULT_MLP_ACTIVATION,
+        input_samples: Optional[ModuleSamples] = None,
+        input_random_variable: Optional[pm.Distribution] = None,
+        output_random_variable: Optional[pm.Distribution] = None,
+        weight_random_variables: Optional[List[pm.Distribution]] = None,
+        axis: int = 0,
+    ):
         """
         Creates an MLP.
 
@@ -90,15 +91,20 @@ class MLP(Transformation):
             input_random_variable=input_random_variable,
             output_random_variable=output_random_variable,
             observed_values=None,
-            axis=axis)
+            axis=axis,
+        )
 
         if num_hidden_layers < 0:
-            raise ValueError(f"The number of layers ({num_hidden_layers}) must be a non-negative "
-                             f"number.")
+            raise ValueError(
+                f"The number of layers ({num_hidden_layers}) must be a non-negative "
+                f"number."
+            )
 
         if activation not in ACTIVATIONS:
-            raise ValueError(f"The activations ({activation}) must be one of "
-                             f"{list(ACTIVATIONS.keys())}.")
+            raise ValueError(
+                f"The activations ({activation}) must be one of "
+                f"{list(ACTIVATIONS.keys())}."
+            )
 
         self.num_hidden_layers = num_hidden_layers
         self.hidden_dimension_size = hidden_dimension_size
@@ -154,38 +160,51 @@ class MLP(Transformation):
 
         # Weights in the input layer
         if self.parameters.weights[0].value is None:
-            raise ValueError(f"The value of {self.parameters.weights[0].uuid} is undefined.")
+            raise ValueError(
+                f"The value of {self.parameters.weights[0].uuid} is undefined."
+            )
 
-        next_dim = self.output_dimension_size if self.num_hidden_layers == 0 \
+        next_dim = (
+            self.output_dimension_size
+            if self.num_hidden_layers == 0
             else self.hidden_dimension_size
+        )
         input_dims = (self.input_samples.values[0].shape[self.axis], next_dim)
         if self.parameters.weights[0].value.shape != input_dims:
-            raise ValueError(f"Dimensions of {self.parameters.weights[0].uuid} "
-                             f"{self.parameters.weights[0].value.shape} must be {input_dims}.")
+            raise ValueError(
+                f"Dimensions of {self.parameters.weights[0].uuid} "
+                f"{self.parameters.weights[0].value.shape} must be {input_dims}."
+            )
 
         if self.num_hidden_layers > 0:
             # Hidden layer
             for h in range(1, self.num_hidden_layers + 1):
                 if self.parameters.weights[h].value is None:
-                    raise ValueError(f"The value of {self.parameters.weights[h].uuid} is "
-                                     f"undefined.")
+                    raise ValueError(
+                        f"The value of {self.parameters.weights[h].uuid} is "
+                        f"undefined."
+                    )
 
-                hidden_dims = (self.hidden_dimension_size,
-                               self.hidden_dimension_size)
+                hidden_dims = (self.hidden_dimension_size, self.hidden_dimension_size)
                 if self.parameters.weights[h].value.shape != hidden_dims:
-                    raise ValueError(f"Dimensions of {self.parameters.weights[h].uuid} "
-                                     f"{self.parameters.weights[h].value.shape} must be {hidden_dims}.")
+                    raise ValueError(
+                        f"Dimensions of {self.parameters.weights[h].uuid} "
+                        f"{self.parameters.weights[h].value.shape} must be {hidden_dims}."
+                    )
 
             # Output layer
             if self.parameters.weights[-1].value is None:
-                raise ValueError(f"The value of {self.parameters.weights[-1].uuid} is "
-                                 f"undefined.")
+                raise ValueError(
+                    f"The value of {self.parameters.weights[-1].uuid} is " f"undefined."
+                )
 
             out_dims = (self.hidden_dimension_size, self.output_dimension_size)
             if self.parameters.weights[-1].value.shape != out_dims:
-                raise ValueError(f"Dimensions of {self.parameters.weights[-1].uuid} "
-                                 f"{self.parameters.weights[-1].value.shape} must be "
-                                 f"{out_dims}.")
+                raise ValueError(
+                    f"Dimensions of {self.parameters.weights[-1].uuid} "
+                    f"{self.parameters.weights[-1].value.shape} must be "
+                    f"{out_dims}."
+                )
 
     def create_random_variables(self):
         """
@@ -201,17 +220,24 @@ class MLP(Transformation):
 
         with self.pymc_model:
             if self.weight_random_variables[0] is None:
-                next_dim = self.output_dimension_size if self.num_hidden_layers == 0 \
+                next_dim = (
+                    self.output_dimension_size
+                    if self.num_hidden_layers == 0
                     else self.hidden_dimension_size
+                )
                 self.weight_random_variables[0] = pm.Normal(
                     name=self.parameters.weights[0].uuid,
                     mu=self.parameters.weights[0].prior.mean,
                     sigma=self.parameters.weights[0].prior.sd,
                     size=(self.input_random_variable.shape[self.axis], next_dim),
-                    observed=self.parameters.weights[0].value)
+                    observed=self.parameters.weights[0].value,
+                )
 
-            z = ptt.tensordot(self.weight_random_variables[0], self.input_random_variable,
-                              axes=[[0], [self.axis]])
+            z = ptt.tensordot(
+                self.weight_random_variables[0],
+                self.input_random_variable,
+                axes=[[0], [self.axis]],
+            )
 
             if self.num_hidden_layers > 0:
                 a = ACTIVATIONS[self.activation](z)
@@ -221,11 +247,16 @@ class MLP(Transformation):
                             name=f"{self.parameters.weights[h].uuid}_{h}",
                             mu=self.parameters.weights[h].prior.mean,
                             sigma=self.parameters.weights[h].prior.sd,
-                            size=(self.hidden_dimension_size,
-                                  self.hidden_dimension_size),
-                            observed=self.parameters.weights[h].value)
+                            size=(
+                                self.hidden_dimension_size,
+                                self.hidden_dimension_size,
+                            ),
+                            observed=self.parameters.weights[h].value,
+                        )
 
-                    z = ptt.tensordot(self.weight_random_variables[h], a, axes=[[0], [self.axis]])
+                    z = ptt.tensordot(
+                        self.weight_random_variables[h], a, axes=[[0], [self.axis]]
+                    )
                     a = ACTIVATIONS[self.activation](z)
 
                 if self.weight_random_variables[-1] is None:
@@ -234,9 +265,12 @@ class MLP(Transformation):
                         mu=self.parameters.weights[-1].prior.mean,
                         sigma=self.parameters.weights[-1].prior.sd,
                         size=(self.hidden_dimension_size, self.output_dimension_size),
-                        observed=self.parameters.weights[-1].value)
+                        observed=self.parameters.weights[-1].value,
+                    )
 
-                z = ptt.tensordot(self.weight_random_variables[-1], a, axes=[[0], [self.axis]])
+                z = ptt.tensordot(
+                    self.weight_random_variables[-1], a, axes=[[0], [self.axis]]
+                )
 
             self.output_random_variable = z
 
@@ -249,37 +283,53 @@ class MLP(Transformation):
         """
 
         if len(self.weight_random_variables) != self.num_layers:
-            raise ValueError(f"The number of weights in weight_random_variables "
-                             f"({len(self.weight_random_variables)}) doesn't match the "
-                             f"number of layers in the model ({self.num_layers}).")
+            raise ValueError(
+                f"The number of weights in weight_random_variables "
+                f"({len(self.weight_random_variables)}) doesn't match the "
+                f"number of layers in the model ({self.num_layers})."
+            )
 
         if self.weight_random_variables[0] is not None:
-            next_dim = self.output_dimension_size if self.num_hidden_layers == 0 \
+            next_dim = (
+                self.output_dimension_size
+                if self.num_hidden_layers == 0
                 else self.hidden_dimension_size
+            )
             input_dims = [self.input_random_variable.shape[self.axis], next_dim]
             if ptt.neq(self.weight_random_variables[0].shape, input_dims).any().eval():
                 raise ValueError(
                     f"Dimensions of weight_random_variables[0] "
                     f"({self.weight_random_variables[0].shape.eval()}) must be "
-                    f"{[dim if isinstance(dim, int) else dim.eval() for dim in input_dims]}.")
+                    f"{[dim if isinstance(dim, int) else dim.eval() for dim in input_dims]}."
+                )
 
         if self.num_hidden_layers > 0:
             hidden_dims = [self.hidden_dimension_size, self.hidden_dimension_size]
             for h in range(1, self.num_hidden_layers + 1):
                 if self.weight_random_variables[h] is not None:
-                    if ptt.neq(self.weight_random_variables[h].shape, hidden_dims).any().eval():
+                    if (
+                        ptt.neq(self.weight_random_variables[h].shape, hidden_dims)
+                        .any()
+                        .eval()
+                    ):
                         raise ValueError(
                             f"Dimensions of weight_random_variables[{h}] "
                             f"({self.weight_random_variables[h].shape.eval()}) must be "
-                            f"{hidden_dims}.")
+                            f"{hidden_dims}."
+                        )
 
             if self.weight_random_variables[-1] is not None:
                 out_dims = [self.hidden_dimension_size, self.output_dimension_size]
-                if ptt.neq(self.weight_random_variables[-1].shape, out_dims).any().eval():
+                if (
+                    ptt.neq(self.weight_random_variables[-1].shape, out_dims)
+                    .any()
+                    .eval()
+                ):
                     raise ValueError(
                         f"Dimensions of weight_random_variables[-1] "
                         f"({self.weight_random_variables[-1].shape.eval()}) must be "
-                        f"{out_dims}.")
+                        f"{out_dims}."
+                    )
 
 
 ###################################################################################################
@@ -292,11 +342,9 @@ class MLPParameters(ModuleParameters):
     This class stores values and priors of the weights of an MLP.
     """
 
-    def __init__(self,
-                 module_uuid: str,
-                 num_hidden_layers: int,
-                 mean_w0: float,
-                 sd_w0: float):
+    def __init__(
+        self, module_uuid: str, num_hidden_layers: int, mean_w0: float, sd_w0: float
+    ):
         """
         Creates an object to store MLP parameter info.
 
@@ -317,5 +365,9 @@ class MLPParameters(ModuleParameters):
             else:
                 suffix = f"h{layer}"
 
-            self.weights.append(Parameter(uuid=f"{module_uuid}_weights_{suffix}",
-                                          prior=NormalParameterPrior(mean_w0, sd_w0)))
+            self.weights.append(
+                Parameter(
+                    uuid=f"{module_uuid}_weights_{suffix}",
+                    prior=NormalParameterPrior(mean_w0, sd_w0),
+                )
+            )

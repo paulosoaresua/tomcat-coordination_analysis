@@ -1,23 +1,25 @@
 from __future__ import annotations
+
 from typing import Callable, Dict, List, Optional
 
-import pymc as pm
-
-from coordination.module.coordination.coordination import Coordination
-from coordination.module.component_group import ComponentGroup, ComponentGroupSamples
-from coordination.module.module import Module, ModuleSamples
-from coordination.module.constants import (DEFAULT_SEED,
-                                           DEFAULT_NUM_SAMPLED_SERIES,
-                                           DEFAULT_BURN_IN,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS,
-                                           DEFAULT_INIT_METHOD,
-                                           DEFAULT_TARGET_ACCEPT)
-from coordination.entity.inference_data import InferenceData
-from coordination.common.plot import plot_series
+import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
+import pymc as pm
+
+from coordination.common.plot import plot_series
+from coordination.entity.inference_data import InferenceData
+from coordination.module.component_group import (ComponentGroup,
+                                                 ComponentGroupSamples)
+from coordination.module.constants import (DEFAULT_BURN_IN,
+                                           DEFAULT_INIT_METHOD,
+                                           DEFAULT_NUM_CHAINS,
+                                           DEFAULT_NUM_JOBS,
+                                           DEFAULT_NUM_SAMPLED_SERIES,
+                                           DEFAULT_NUM_SAMPLES, DEFAULT_SEED,
+                                           DEFAULT_TARGET_ACCEPT)
+from coordination.module.coordination.coordination import Coordination
+from coordination.module.module import Module, ModuleSamples
 
 
 class Model(Module):
@@ -26,12 +28,14 @@ class Model(Module):
     component groups with their associated latent components and observation variables.
     """
 
-    def __init__(self,
-                 name: str,
-                 pymc_model: pm.Model,
-                 coordination: Coordination,
-                 component_groups: List[ComponentGroup],
-                 coordination_samples: Optional[ModuleSamples] = None):
+    def __init__(
+        self,
+        name: str,
+        pymc_model: pm.Model,
+        coordination: Coordination,
+        component_groups: List[ComponentGroup],
+        coordination_samples: Optional[ModuleSamples] = None,
+    ):
         """
         Creates a model instance.
 
@@ -45,19 +49,18 @@ class Model(Module):
         """
 
         super().__init__(
-            uuid=name,
-            pymc_model=pymc_model,
-            parameters=None,
-            observed_values=None
+            uuid=name, pymc_model=pymc_model, parameters=None, observed_values=None
         )
 
         self.coordination = coordination
         self.component_groups = component_groups
         self.coordination_samples = coordination_samples
 
-    def draw_samples(self,
-                     seed: Optional[int] = DEFAULT_SEED,
-                     num_series: int = DEFAULT_NUM_SAMPLED_SERIES) -> ModelSamples:
+    def draw_samples(
+        self,
+        seed: Optional[int] = DEFAULT_SEED,
+        num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
+    ) -> ModelSamples:
         """
         Draws samples from the model using ancestral sampling and some blending strategy with
         coordination and different subjects.
@@ -80,7 +83,8 @@ class Model(Module):
             g.latent_component.coordination_samples = coordination_samples
             group_samples = g.draw_samples(None, num_series)
             component_group_samples[
-                g.latent_component.uuid] = group_samples.latent_component_samples
+                g.latent_component.uuid
+            ] = group_samples.latent_component_samples
             for obs_uuid, obs_samples in group_samples.observation_samples.items():
                 component_group_samples[obs_uuid] = obs_samples
 
@@ -94,19 +98,22 @@ class Model(Module):
 
         self.coordination.create_random_variables()
         for g in self.component_groups:
-            g.latent_component.coordination_random_variable = \
+            g.latent_component.coordination_random_variable = (
                 self.coordination.coordination_random_variable
+            )
             g.create_random_variables()
 
-    def fit(self,
-            seed: Optional[int] = DEFAULT_SEED,
-            burn_in: int = DEFAULT_BURN_IN,
-            num_samples: int = DEFAULT_NUM_SAMPLES,
-            num_chains: int = DEFAULT_NUM_CHAINS,
-            num_jobs: int = DEFAULT_NUM_JOBS,
-            init_method: str = DEFAULT_INIT_METHOD,
-            target_accept: float = DEFAULT_TARGET_ACCEPT,
-            **kwargs) -> InferenceData:
+    def fit(
+        self,
+        seed: Optional[int] = DEFAULT_SEED,
+        burn_in: int = DEFAULT_BURN_IN,
+        num_samples: int = DEFAULT_NUM_SAMPLES,
+        num_chains: int = DEFAULT_NUM_CHAINS,
+        num_jobs: int = DEFAULT_NUM_JOBS,
+        init_method: str = DEFAULT_INIT_METHOD,
+        target_accept: float = DEFAULT_TARGET_ACCEPT,
+        **kwargs,
+    ) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
 
@@ -123,20 +130,22 @@ class Model(Module):
         """
 
         with self.pymc_model:
-            idata = pm.sample(num_samples,
-                              init=init_method,
-                              tune=burn_in,
-                              chains=num_chains,
-                              random_seed=seed,
-                              cores=min(num_jobs, num_chains),
-                              target_accept=target_accept,
-                              **kwargs)
+            idata = pm.sample(
+                num_samples,
+                init=init_method,
+                tune=burn_in,
+                chains=num_chains,
+                random_seed=seed,
+                cores=min(num_jobs, num_chains),
+                target_accept=target_accept,
+                **kwargs,
+            )
 
         return InferenceData(idata)
 
-    def prior_predictive(self,
-                         seed: Optional[int] = DEFAULT_SEED,
-                         num_samples: int = DEFAULT_NUM_SAMPLES) -> az.InferenceData:
+    def prior_predictive(
+        self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
+    ) -> az.InferenceData:
         """
         Executes prior predictive checks in the model.
 
@@ -150,9 +159,9 @@ class Model(Module):
 
         return idata
 
-    def posterior_predictive(self,
-                             posterior_trace: az.InferenceData,
-                             seed: Optional[int] = DEFAULT_SEED) -> az.InferenceData:
+    def posterior_predictive(
+        self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
+    ) -> az.InferenceData:
         """
         Executes posterior predictive checks in the model.
 
@@ -163,7 +172,9 @@ class Model(Module):
         """
 
         with self.pymc_model:
-            idata = pm.sample_posterior_predictive(trace=posterior_trace, random_seed=seed)
+            idata = pm.sample_posterior_predictive(
+                trace=posterior_trace, random_seed=seed
+            )
 
         return idata
 
@@ -174,10 +185,11 @@ class Model(Module):
 
 
 class ModelSamples(ModuleSamples):
-
-    def __init__(self,
-                 coordination_samples: ModuleSamples,
-                 component_group_samples: Dict[str, ComponentGroupSamples]):
+    def __init__(
+        self,
+        coordination_samples: ModuleSamples,
+        component_group_samples: Dict[str, ComponentGroupSamples],
+    ):
         """
         Creates an object to store latent samples and samples from associates observations.
 
@@ -190,13 +202,15 @@ class ModelSamples(ModuleSamples):
         self.coordination_samples = coordination_samples
         self.component_group_samples = component_group_samples
 
-    def plot(self,
-             variable_uuid: str,
-             ax: Optional[plt.axis] = None,
-             series_idx: int = 0,
-             dimension_idx: int = 0,
-             subject_transformation: Callable = None,
-             **kwargs) -> plt.axis:
+    def plot(
+        self,
+        variable_uuid: str,
+        ax: Optional[plt.axis] = None,
+        series_idx: int = 0,
+        dimension_idx: int = 0,
+        subject_transformation: Callable = None,
+        **kwargs,
+    ) -> plt.axis:
         """
         Plots the time series of samples.
 
@@ -226,14 +240,16 @@ class ModelSamples(ModuleSamples):
         sampled_values = samples.values[series_idx]
         if len(sampled_values.shape) == 1:
             # Coordination plot
-            plot_series(x=time_steps,
-                        y=sampled_values,
-                        y_std=None,
-                        label=None,
-                        include_bands=False,
-                        value_bounds=None,
-                        ax=ax,
-                        **kwargs)
+            plot_series(
+                x=time_steps,
+                y=sampled_values,
+                y_std=None,
+                label=None,
+                include_bands=False,
+                value_bounds=None,
+                ax=ax,
+                **kwargs,
+            )
             ax.set_ylabel("Coordination")
         elif len(sampled_values.shape) == 2:
             # Serial variable
@@ -244,32 +260,36 @@ class ModelSamples(ModuleSamples):
                 idx = [i for i, subject in enumerate(subject_indices) if subject == s]
                 y = sampled_values[dimension_idx, idx]
                 y = subject_transformation(y, s) if subject_transformation else y
-                plot_series(x=time_steps[idx],
-                            y=y,
-                            y_std=None,
-                            label=f"Subject {s}",
-                            include_bands=False,
-                            value_bounds=None,
-                            ax=ax,
-                            **kwargs)
+                plot_series(
+                    x=time_steps[idx],
+                    y=y,
+                    y_std=None,
+                    label=f"Subject {s}",
+                    include_bands=False,
+                    value_bounds=None,
+                    ax=ax,
+                    **kwargs,
+                )
             ax.set_xlabel("Dimension")
         else:
             # Non-serial variable
             for s in range(sampled_values.shape[0]):
                 y = sampled_values[s, dimension_idx]
                 y = subject_transformation(y, s) if subject_transformation else y
-                plot_series(x=time_steps,
-                            y=y,
-                            y_std=None,
-                            label=f"Subject {s}",
-                            include_bands=False,
-                            value_bounds=None,
-                            ax=ax,
-                            **kwargs)
+                plot_series(
+                    x=time_steps,
+                    y=y,
+                    y_std=None,
+                    label=f"Subject {s}",
+                    include_bands=False,
+                    value_bounds=None,
+                    ax=ax,
+                    **kwargs,
+                )
 
             ax.set_xlabel("Dimension")
 
         ax.set_xlabel("Time Step")
-        ax.spines[['right', 'top']].set_visible(False)
+        ax.spines[["right", "top"]].set_visible(False)
 
         return ax

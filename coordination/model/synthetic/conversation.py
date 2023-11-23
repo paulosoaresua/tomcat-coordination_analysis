@@ -3,39 +3,28 @@ from typing import Optional
 import numpy as np
 import pymc as pm
 
-from coordination.module.module import ModuleSamples
+from coordination.common.types import TensorTypes
 from coordination.model.model import Model
+from coordination.model.synthetic.constants import (
+    ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL,
+    ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
+    DAMPENING_COEFFICIENTS_CONVERSATION_MODEL, DT_CONVERSATION_MODEL,
+    FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL,
+    INITIAL_STATE_CONVERSATION_MODEL, MEAN_MEAN_A0_CONVERSATION_MODEL,
+    MEAN_UC0, NUM_SUBJECTS, NUM_TIME_STEPS,
+    SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL, SD_A_CONVERSATION_MODEL,
+    SD_MEAN_A0_CONVERSATION_MODEL, SD_MEAN_UC0, SD_O_CONVERSATION_MODEL,
+    SD_SD_A, SD_SD_O, SD_SD_UC, SD_UC, SHARE_MEAN_A0_ACROSS_DIMENSIONS,
+    SHARE_MEAN_A0_ACROSS_SUBJECT, SHARE_SD_ACROSS_DIMENSIONS,
+    SHARE_SD_ACROSS_SUBJECTS)
+from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
-from coordination.module.component_group import ComponentGroup
 from coordination.module.latent_component.serial_mass_spring_damper_latent_component import \
     SerialMassSpringDamperLatentComponent
-from coordination.module.observation.serial_gaussian_observation import SerialGaussianObservation
-from coordination.model.synthetic.constants import (
-    NUM_SUBJECTS,
-    SUBJECT_NAMES_CONVERSATION_MODEL,
-    ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
-    DAMPENING_COEFFICIENTS_CONVERSATION_MODEL,
-    DT_CONVERSATION_MODEL,
-    INITIAL_STATE_CONVERSATION_MODEL,
-    SD_MEAN_UC0,
-    SD_SD_UC,
-    MEAN_MEAN_A0_CONVERSATION_MODEL,
-    SD_MEAN_A0_CONVERSATION_MODEL,
-    SD_SD_A,
-    SD_SD_O,
-    SHARE_MEAN_A0_ACROSS_SUBJECT,
-    SHARE_MEAN_A0_ACROSS_DIMENSIONS,
-    SHARE_SD_ACROSS_SUBJECTS,
-    SHARE_SD_ACROSS_DIMENSIONS,
-    SD_A_CONVERSATION_MODEL,
-    SD_O_CONVERSATION_MODEL,
-    SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL,
-    ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL,
-    FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL,
-    NUM_TIME_STEPS
-)
-from coordination.common.types import TensorTypes
+from coordination.module.module import ModuleSamples
+from coordination.module.observation.serial_gaussian_observation import \
+    SerialGaussianObservation
 
 
 class ConversationModel(Model):
@@ -50,29 +39,30 @@ class ConversationModel(Model):
     """
 
     def __init__(
-            self,
-            pymc_model: pm.Model,
-            num_subjects: int = NUM_SUBJECTS,
-            num_time_steps_in_coordination_scale: int = NUM_TIME_STEPS,
-            squared_angular_frequency: np.ndarray = ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
-            dampening_coefficient: np.ndarray = DAMPENING_COEFFICIENTS_CONVERSATION_MODEL,
-            dt: float = DT_CONVERSATION_MODEL,
-            sd_mean_uc0: float = SD_MEAN_UC0,
-            sd_sd_uc: float = SD_SD_UC,
-            mean_mean_a0: np.ndarray = MEAN_MEAN_A0_CONVERSATION_MODEL,
-            sd_mean_a0: np.ndarray = SD_MEAN_A0_CONVERSATION_MODEL,
-            sd_sd_a: np.ndarray = SD_SD_A,
-            sd_sd_o: np.ndarray = SD_SD_O,
-            share_mean_a0_across_subjects: bool = SHARE_MEAN_A0_ACROSS_SUBJECT,
-            share_mean_a0_across_dimensions: bool = SHARE_MEAN_A0_ACROSS_DIMENSIONS,
-            share_sd_a_across_subjects: bool = SHARE_SD_ACROSS_SUBJECTS,
-            share_sd_a_across_dimensions: bool = SHARE_SD_ACROSS_DIMENSIONS,
-            share_sd_o_across_subjects: bool = SHARE_SD_ACROSS_SUBJECTS,
-            share_sd_o_across_dimensions: bool = SHARE_SD_ACROSS_DIMENSIONS,
-            sampling_time_scale_density: float = SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL,
-            allow_sampled_subject_repetition: bool = ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL,
-            fix_sampled_subject_sequence: bool = FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL,
-            coordination_samples: Optional[ModuleSamples] = None):
+        self,
+        pymc_model: pm.Model,
+        num_subjects: int = NUM_SUBJECTS,
+        num_time_steps_in_coordination_scale: int = NUM_TIME_STEPS,
+        squared_angular_frequency: np.ndarray = ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
+        dampening_coefficient: np.ndarray = DAMPENING_COEFFICIENTS_CONVERSATION_MODEL,
+        dt: float = DT_CONVERSATION_MODEL,
+        sd_mean_uc0: float = SD_MEAN_UC0,
+        sd_sd_uc: float = SD_SD_UC,
+        mean_mean_a0: np.ndarray = MEAN_MEAN_A0_CONVERSATION_MODEL,
+        sd_mean_a0: np.ndarray = SD_MEAN_A0_CONVERSATION_MODEL,
+        sd_sd_a: np.ndarray = SD_SD_A,
+        sd_sd_o: np.ndarray = SD_SD_O,
+        share_mean_a0_across_subjects: bool = SHARE_MEAN_A0_ACROSS_SUBJECT,
+        share_mean_a0_across_dimensions: bool = SHARE_MEAN_A0_ACROSS_DIMENSIONS,
+        share_sd_a_across_subjects: bool = SHARE_SD_ACROSS_SUBJECTS,
+        share_sd_a_across_dimensions: bool = SHARE_SD_ACROSS_DIMENSIONS,
+        share_sd_o_across_subjects: bool = SHARE_SD_ACROSS_SUBJECTS,
+        share_sd_o_across_dimensions: bool = SHARE_SD_ACROSS_DIMENSIONS,
+        sampling_time_scale_density: float = SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL,
+        allow_sampled_subject_repetition: bool = ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL,  # noqa E501
+        fix_sampled_subject_sequence: bool = FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL,
+        coordination_samples: Optional[ModuleSamples] = None,
+    ):
         """
         Creates a conversational model.
 
@@ -116,7 +106,7 @@ class ConversationModel(Model):
             pymc_model=pymc_model,
             sd_mean_uc0=sd_mean_uc0,
             sd_sd_uc=sd_sd_uc,
-            num_time_steps=num_time_steps_in_coordination_scale
+            num_time_steps=num_time_steps_in_coordination_scale,
         )
 
         # Save a direct reference to state_space and observation for easy access in the parameter
@@ -139,7 +129,7 @@ class ConversationModel(Model):
             share_sd_a_across_dimensions=share_sd_a_across_dimensions,
             sampling_time_scale_density=sampling_time_scale_density,
             allow_sampled_subject_repetition=allow_sampled_subject_repetition,
-            fix_sampled_subject_sequence=fix_sampled_subject_sequence
+            fix_sampled_subject_sequence=fix_sampled_subject_sequence,
         )
 
         self.observation = SerialGaussianObservation(
@@ -149,14 +139,14 @@ class ConversationModel(Model):
             dimension_size=self.state_space.dimension_size,
             sd_sd_o=sd_sd_o,
             share_sd_o_across_subjects=share_sd_o_across_subjects,
-            share_sd_o_across_dimensions=share_sd_o_across_dimensions
+            share_sd_o_across_dimensions=share_sd_o_across_dimensions,
         )
 
         group = ComponentGroup(
             uuid="group",
             pymc_model=pymc_model,
             latent_component=self.state_space,
-            observations=[self.observation]
+            observations=[self.observation],
         )
 
         super().__init__(
@@ -164,15 +154,17 @@ class ConversationModel(Model):
             pymc_model=pymc_model,
             coordination=coordination,
             component_groups=[group],
-            coordination_samples=coordination_samples
+            coordination_samples=coordination_samples,
         )
 
-    def prepare_for_sampling(self,
-                             mean_uc0: float = MEAN_UC0,
-                             sd_uc: float = SD_UC,
-                             initial_state: np.ndarray = INITIAL_STATE_CONVERSATION_MODEL,
-                             sd_a: np.ndarray = SD_A_CONVERSATION_MODEL,
-                             sd_o: np.ndarray = SD_O_CONVERSATION_MODEL):
+    def prepare_for_sampling(
+        self,
+        mean_uc0: float = MEAN_UC0,
+        sd_uc: float = SD_UC,
+        initial_state: np.ndarray = INITIAL_STATE_CONVERSATION_MODEL,
+        sd_a: np.ndarray = SD_A_CONVERSATION_MODEL,
+        sd_o: np.ndarray = SD_O_CONVERSATION_MODEL,
+    ):
         """
         Sets parameter values for sampling.
 
@@ -190,13 +182,15 @@ class ConversationModel(Model):
         self.state_space.parameters.sd_a.value = sd_a
         self.observation.parameters.sd_o.value = sd_o
 
-    def prepare_for_inference(self,
-                              num_time_steps_in_coordination_scale: int,
-                              time_steps_in_coordination_scale: np.array,
-                              subject_indices: np.ndarray,
-                              prev_time_same_subject: np.ndarray,
-                              prev_time_diff_subject: np.ndarray,
-                              observed_values: TensorTypes):
+    def prepare_for_inference(
+        self,
+        num_time_steps_in_coordination_scale: int,
+        time_steps_in_coordination_scale: np.array,
+        subject_indices: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        observed_values: TensorTypes,
+    ):
         """
         Sets metadata required for inference.
 
@@ -220,12 +214,16 @@ class ConversationModel(Model):
         """
 
         self.coordination.num_time_steps = num_time_steps_in_coordination_scale
-        self.state_space.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.state_space.time_steps_in_coordination_scale = (
+            time_steps_in_coordination_scale
+        )
         self.state_space.subject_indices = subject_indices
         self.state_space.prev_time_same_subject = prev_time_same_subject
         self.state_space.prev_time_diff_subject = prev_time_diff_subject
         self.observation.observed_values = observed_values
-        self.observation.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.observation.time_steps_in_coordination_scale = (
+            time_steps_in_coordination_scale
+        )
         self.observation.subject_indices = subject_indices
 
         self.create_random_variables()
