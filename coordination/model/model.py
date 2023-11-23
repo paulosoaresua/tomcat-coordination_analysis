@@ -7,17 +7,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pymc as pm
 
+from coordination.common.constants import DEFAULT_SEED
 from coordination.common.plot import plot_series
 from coordination.entity.inference_data import InferenceData
+from coordination.model.constants import (DEFAULT_BURN_IN, DEFAULT_INIT_METHOD,
+                                          DEFAULT_NUM_CHAINS, DEFAULT_NUM_JOBS,
+                                          DEFAULT_NUM_SAMPLED_SERIES,
+                                          DEFAULT_NUM_SAMPLES,
+                                          DEFAULT_TARGET_ACCEPT)
 from coordination.module.component_group import (ComponentGroup,
                                                  ComponentGroupSamples)
-from coordination.module.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_INIT_METHOD,
-                                           DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS,
-                                           DEFAULT_NUM_SAMPLED_SERIES,
-                                           DEFAULT_NUM_SAMPLES, DEFAULT_SEED,
-                                           DEFAULT_TARGET_ACCEPT)
 from coordination.module.coordination.coordination import Coordination
 from coordination.module.module import Module, ModuleSamples
 
