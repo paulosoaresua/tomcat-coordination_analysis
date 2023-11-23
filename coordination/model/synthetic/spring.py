@@ -37,7 +37,7 @@ class SpringModel(Model):
 
     def __init__(
         self,
-        pymc_model: pm.Model,
+        pymc_model: Optional[pm.Model] = None,
         num_springs: int = NUM_SPRINGS,
         num_time_steps_in_coordination_scale: int = NUM_TIME_STEPS,
         spring_constant: np.ndarray = SPRING_CONSTANT_SPRING_MODEL,
@@ -62,7 +62,8 @@ class SpringModel(Model):
         """
         Creates a spring model.
 
-        @param pymc_model: a PyMC model instance where modules are to be created at.
+        @param pymc_model: a PyMC model instance where modules are to be created at. If not
+            provided, it will be created along with this model instance.
         @param num_springs: the number of springs in the model.
         @param num_time_steps_in_coordination_scale: size of the coordination series.
         @param spring_constant: spring constant per spring used to calculate the fundamental
@@ -95,6 +96,9 @@ class SpringModel(Model):
         @param coordination_samples: coordination samples. If not provided, coordination samples
             will be draw in a call to draw_samples.
         """
+
+        if not pymc_model:
+            pymc_model = pm.Model()
 
         coordination = SigmoidGaussianCoordination(
             pymc_model=pymc_model,

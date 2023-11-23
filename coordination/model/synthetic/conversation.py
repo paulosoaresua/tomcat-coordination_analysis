@@ -40,7 +40,7 @@ class ConversationModel(Model):
 
     def __init__(
         self,
-        pymc_model: pm.Model,
+        pymc_model: Optional[pm.Model] = None,
         num_subjects: int = NUM_SUBJECTS,
         num_time_steps_in_coordination_scale: int = NUM_TIME_STEPS,
         squared_angular_frequency: np.ndarray = ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
@@ -66,7 +66,8 @@ class ConversationModel(Model):
         """
         Creates a conversational model.
 
-        @param pymc_model: a PyMC model instance where modules are to be created at.
+        @param pymc_model: a PyMC model instance where modules are to be created at. If not
+            provided, it will be created along with this model instance.
         @param num_subjects: the number of subjects in the conversation.
         @param num_time_steps_in_coordination_scale: size of the coordination series.
         @param squared_angular_frequency: squared angular frequency of the oscillatory pattern.
@@ -101,6 +102,9 @@ class ConversationModel(Model):
         @param coordination_samples: coordination samples. If not provided, coordination samples
             will be draw in a call to draw_samples.
         """
+
+        if not pymc_model:
+            pymc_model = pm.Model()
 
         coordination = SigmoidGaussianCoordination(
             pymc_model=pymc_model,
