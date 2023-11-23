@@ -21,7 +21,7 @@ from coordination.module.latent_component.gaussian_latent_component import (
 from coordination.module.module import ModuleSamples
 
 
-class NonSerialLatentComponent(GaussianLatentComponent):
+class NonSerialGaussianLatentComponent(GaussianLatentComponent):
     """
     This class represents a latent component where there are observations for all the subjects at
     each time in the component's scale. A subject is then influenced by all the others.

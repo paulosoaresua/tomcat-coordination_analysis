@@ -23,7 +23,7 @@ from coordination.module.latent_component.gaussian_latent_component import (
 from coordination.module.module import ModuleSamples
 
 
-class SerialLatentComponent(GaussianLatentComponent):
+class SerialGaussianLatentComponent(GaussianLatentComponent):
     """
     This class represents a serial latent component where there's only one subject per observation
     at a time in the component's scale, and subjects are influenced in a pair-wised manner.
@@ -149,7 +149,7 @@ class SerialLatentComponent(GaussianLatentComponent):
 
     def draw_samples(
         self, seed: Optional[int], num_series: int
-    ) -> SerialLatentComponentSamples:
+    ) -> SerialGaussianLatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
         coordination and different subjects.
@@ -241,7 +241,7 @@ class SerialLatentComponent(GaussianLatentComponent):
             )
             sampled_values.append(values)
 
-        return SerialLatentComponentSamples(
+        return SerialGaussianLatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             subject_indices=sampled_subjects,
@@ -526,7 +526,7 @@ class SerialLatentComponent(GaussianLatentComponent):
 ###################################################################################################
 
 
-class SerialLatentComponentSamples(GaussianLatentComponentSamples):
+class SerialGaussianLatentComponentSamples(GaussianLatentComponentSamples):
     def __init__(
         self,
         values: List[np.ndarray],

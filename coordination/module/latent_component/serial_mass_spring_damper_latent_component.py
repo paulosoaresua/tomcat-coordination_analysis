@@ -20,12 +20,12 @@ from coordination.module.constants import (DEFAULT_DAMPENING_COEFFICIENT,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS,
                                            DEFAULT_SPRING_CONSTANT,
                                            DEFAULT_SUBJECT_REPETITION_FLAG)
-from coordination.module.latent_component.serial_latent_component import \
-    SerialLatentComponent
+from coordination.module.latent_component.serial_gaussian_latent_component import \
+    SerialGaussianLatentComponent
 from coordination.module.module import ModuleSamples
 
 
-class SerialMassSpringDamperLatentComponent(SerialLatentComponent):
+class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
     """
     This class represents a serial latent component with oscillatory dynamics and position coupling
     determined by coordination and no external force.

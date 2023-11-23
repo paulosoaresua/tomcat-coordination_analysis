@@ -12,8 +12,8 @@ from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_OBSERVATION_SD_PARAM,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS)
-from coordination.module.latent_component.serial_latent_component import \
-    SerialLatentComponentSamples
+from coordination.module.latent_component.serial_gaussian_latent_component import \
+    SerialGaussianLatentComponentSamples
 from coordination.module.module import ModuleSamples
 from coordination.module.observation.gaussian_observation import \
     GaussianObservation
@@ -37,7 +37,7 @@ class NonSerialGaussianObservation(GaussianObservation):
         dimension_names: Optional[List[str]] = None,
         subject_names: Optional[List[str]] = None,
         observation_random_variable: Optional[pm.Distribution] = None,
-        latent_component_samples: Optional[SerialLatentComponentSamples] = None,
+        latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
         latent_component_random_variable: Optional[pm.Distribution] = None,
         sd_o_random_variable: Optional[pm.Distribution] = None,
         observed_values: Optional[TensorTypes] = None,

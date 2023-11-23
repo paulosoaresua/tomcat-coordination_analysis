@@ -18,12 +18,12 @@ from coordination.module.constants import (DEFAULT_DAMPENING_COEFFICIENT,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS,
                                            DEFAULT_SPRING_CONSTANT)
-from coordination.module.latent_component.non_serial_latent_component import \
-    NonSerialLatentComponent
+from coordination.module.latent_component.non_serial_gaussian_latent_component import \
+    NonSerialGaussianLatentComponent
 from coordination.module.module import ModuleSamples
 
 
-class NonSerialMassSpringDamperLatentComponent(NonSerialLatentComponent):
+class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent):
     """
     This class represents a non-serial latent component with oscillatory dynamics and position
     coupling determined by coordination and no external force.
