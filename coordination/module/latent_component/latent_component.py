@@ -128,5 +128,7 @@ class LatentComponent(ABC, Module):
         """
         Adds relevant coordinates to the model.
         """
-        self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                  values=self.dimension_coordinates)
+
+        if self.dimension_size > 0:
+            self.pymc_model.add_coord(name=self.dimension_axis_name,
+                                      values=self.dimension_coordinates)

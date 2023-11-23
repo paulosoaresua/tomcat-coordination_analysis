@@ -146,7 +146,6 @@ class GaussianObservation(Observation, ABC):
                 raise ValueError("Latent component variable is undefined. Please set "
                                  "latent_component_random_variable before invoking the "
                                  "create_random_variables method.")
-        self._add_coordinates()
 
     def _create_emission_standard_deviation_variable(self) -> pm.Distribution:
         """

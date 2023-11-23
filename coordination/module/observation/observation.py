@@ -82,6 +82,15 @@ class Observation(ABC, Module):
         return np.arange(
             self.dimension_size) if self.dimension_names is None else self.dimension_names
 
+    @abstractmethod
+    def create_random_variables(self):
+        """
+        Updates model coordinates. The creation of random variables and parameters must be done by
+        the subclasses.
+        """
+        super().create_random_variables()
+        self._add_coordinates()
+
     def _add_coordinates(self):
         """
         Adds relevant coordinates to the model.

@@ -8,6 +8,7 @@ from coordination.model.model import Model
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
 from coordination.module.component_group import ComponentGroup
+from coordination.module.latent_component.null_latent_component import NullLatentComponent
 from coordination.module.latent_component.serial_latent_component import SerialLatentComponent
 from coordination.module.observation.serial_gaussian_observation import SerialGaussianObservation
 from coordination.module.observation.spike_observation import SpikeObservation
@@ -152,7 +153,7 @@ class VocalicSemanticLinkModel(Model):
         semantic_link_group = ComponentGroup(
             uuid="semantic_link_group",
             pymc_model=pymc_model,
-            latent_component=None,
+            latent_component=NullLatentComponent(),
             observations=[self.observed_semantic_links]
         )
 
@@ -224,12 +225,14 @@ class VocalicSemanticLinkModel(Model):
         """
 
         self.coordination.num_time_steps = num_time_steps_in_coordination_scale
-        self.state_space.time_steps_in_coordination_scale = vocalic_time_steps_in_coordination_scale
+        self.state_space.time_steps_in_coordination_scale = \
+            vocalic_time_steps_in_coordination_scale
         self.state_space.subject_indices = subject_indices
         self.state_space.prev_time_same_subject = prev_time_same_subject
         self.state_space.prev_time_diff_subject = prev_time_diff_subject
         self.observed_vocalics.observed_values = observed_vocalic_values
-        self.observed_vocalics.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.observed_vocalics.time_steps_in_coordination_scale = \
+            vocalic_time_steps_in_coordination_scale
         self.observed_vocalics.subject_indices = subject_indices
         self.observed_semantic_links.time_steps_in_coordination_scale = \
             semantic_link_time_steps_in_coordination_scale

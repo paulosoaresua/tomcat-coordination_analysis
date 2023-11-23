@@ -77,14 +77,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
             each index in the latent component scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
-        @raise ValueError: if the number of elements in dimension_names do not match the
-            dimension_size.
         """
-
-        if dimension_names is not None and len(dimension_names) != dimension_size:
-            raise ValueError(
-                f"The number of items in dimension_names ({len(dimension_names)}) must match the "
-                f"dimension_size ({dimension_size}).")
 
         super().__init__(uuid=uuid,
                          pymc_model=pymc_model,
@@ -147,24 +140,6 @@ class GaussianLatentComponent(LatentComponent, ABC):
         return np.arange(
             self.dimension_size) if self.dimension_names is None else self.dimension_names
 
-    @abstractmethod
-    def draw_samples(self, seed: Optional[int], num_series: int) -> GaussianLatentComponentSamples:
-        """
-        Draws latent component samples using ancestral sampling and some blending strategy with
-        coordination and different subjects. This method must be implemented by concrete
-        subclasses.
-
-        @param seed: random seed for reproducibility.
-        @param num_series: how many series of samples to generate.
-        @raise ValueError: if coordination_samples is None.
-        @return: latent component samples for each coordination series.
-        """
-        super().draw_samples(seed, num_series)
-
-        if self.coordination_samples is None:
-            raise ValueError("No coordination samples. Please set coordination_samples "
-                             "before invoking the draw_samples method.")
-
     def _check_parameter_dimensionality_consistency(self):
         """
         Check if their dimensionality is consistent with the sharing options.
@@ -195,8 +170,6 @@ class GaussianLatentComponent(LatentComponent, ABC):
     def create_random_variables(self):
         """
         Creates parameters and latent component variables in a PyMC model.
-
-        @raise ValueError: if coordination_random_variable is None.
         """
         super().create_random_variables()
 
@@ -206,20 +179,6 @@ class GaussianLatentComponent(LatentComponent, ABC):
 
             if self.sd_a_random_variable is None:
                 self.sd_a_random_variable = self._create_transition_standard_deviation_variable()
-
-        if self.coordination_random_variable is None:
-            raise ValueError("Coordination variable is undefined. Please set "
-                             "coordination_random_variable before invoking the "
-                             "create_random_variables method.")
-
-        self._add_coordinates()
-
-    def _add_coordinates(self):
-        """
-        Adds relevant coordinates to the model.
-        """
-        self.pymc_model.add_coord(name=self.dimension_axis_name,
-                                  values=self.dimension_coordinates)
 
     def _create_initial_mean_variable(self) -> pm.Distribution:
         """

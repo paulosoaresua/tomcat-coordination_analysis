@@ -133,25 +133,28 @@ class SpikeObservation(Observation):
                              "coordination_random_variable before invoking the "
                              "create_random_variables method.")
 
-        p = pm.Beta(name=self.parameters.p.uuid,
-                    alpha=self.parameters.p.prior.a,
-                    beta=self.parameters.p.prior.b,
-                    size=1,
-                    observed=self.parameters.p.value)
-
         if self.p_random_variable is not None:
             return
 
         if self.time_steps_in_coordination_scale is None:
             raise ValueError("time_steps_in_coordination_scale is undefined.")
 
-        adjusted_prob = pm.Deterministic(f"{self.uuid}_adjusted_p",
-                                         p * coordination[self.time_steps_in_coordination_scale])
+        with self.pymc_model:
+            self.p_random_variable = pm.Beta(name=self.parameters.p.uuid,
+                                             alpha=self.parameters.p.prior.a,
+                                             beta=self.parameters.p.prior.b,
+                                             size=1,
+                                             observed=self.parameters.p.value)
 
-        pm.Bernoulli(self.uuid,
-                     adjusted_prob,
-                     dims=self.time_axis_name,
-                     observed=self.observed_values)
+            adjusted_prob = pm.Deterministic(
+                f"{self.uuid}_adjusted_p",
+                self.p_random_variable * self.coordination_random_variable[
+                    self.time_steps_in_coordination_scale])
+
+            self.observation_random_variable = pm.Bernoulli(self.uuid,
+                                                            adjusted_prob,
+                                                            dims=self.time_axis_name,
+                                                            observed=self.observed_values)
 
     def _add_coordinates(self):
         """
