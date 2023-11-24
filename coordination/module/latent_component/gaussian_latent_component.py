@@ -197,20 +197,16 @@ class GaussianLatentComponent(LatentComponent, ABC):
 
         with self.pymc_model:
             if self.mean_a0_random_variable is None:
-                self.mean_a0_random_variable = self._create_initial_mean_variable()
+                self._create_initial_mean_variable()
 
             if self.sd_a_random_variable is None:
-                self.sd_a_random_variable = (
-                    self._create_transition_standard_deviation_variable()
-                )
+                self._create_transition_standard_deviation_variable()
 
-    def _create_initial_mean_variable(self) -> pm.Distribution:
+    def _create_initial_mean_variable(self):
         """
         Creates a latent variable for the mean of the initial state. We assume independence between
         the individual parameters per subject and dimension and sample them from a multivariate
         Gaussian.
-
-        @return: a latent variable with a Gaussian prior.
         """
 
         dim_mean_a0_dimensions = (
@@ -220,7 +216,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
         with self.pymc_model:
             if self.share_mean_a0_across_subjects:
                 # When shared across subjects, only one parameter per dimension is needed.
-                mean_a0 = pm.Normal(
+                self.mean_a0_random_variable = pm.Normal(
                     name=self.parameters.mean_a0.uuid,
                     mu=self.parameters.mean_a0.prior.mean,
                     sigma=self.parameters.mean_a0.prior.sd,
@@ -229,7 +225,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
                 )
             else:
                 # Different parameters per subject and dimension.
-                mean_a0 = pm.Normal(
+                self.mean_a0_random_variable = pm.Normal(
                     name=self.parameters.mean_a0.uuid,
                     mu=self.parameters.mean_a0.prior.mean,
                     sigma=self.parameters.mean_a0.prior.sd,
@@ -237,15 +233,11 @@ class GaussianLatentComponent(LatentComponent, ABC):
                     observed=self.parameters.mean_a0.value,
                 )
 
-        return mean_a0
-
-    def _create_transition_standard_deviation_variable(self) -> pm.Distribution:
+    def _create_transition_standard_deviation_variable(self):
         """
         Creates a latent variable for the standard deviation of the state transition (Gaussian
         random walk). We assume independence between the individual parameters per subject and
         dimension and sample them from a multivariate Half-Gaussian.
-
-        @return: a latent variable with a Half-Gaussian prior.
         """
 
         with self.pymc_model:
@@ -255,7 +247,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
 
             if self.share_sd_a_across_subjects:
                 # When shared across subjects, only one parameter per dimension is needed.
-                sd_a = pm.HalfNormal(
+                self.sd_a_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_a.uuid,
                     sigma=self.parameters.sd_a.prior.sd,
                     size=dim_sd_a_dimensions,
@@ -263,14 +255,12 @@ class GaussianLatentComponent(LatentComponent, ABC):
                 )
             else:
                 # Different parameters per subject and dimension.
-                sd_a = pm.HalfNormal(
+                self.sd_a_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_a.uuid,
                     sigma=self.parameters.sd_a.prior.sd,
                     size=(self.num_subjects, dim_sd_a_dimensions),
                     observed=self.parameters.sd_a.value,
                 )
-
-            return sd_a
 
 
 ###################################################################################################

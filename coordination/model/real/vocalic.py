@@ -21,7 +21,7 @@ class VocalicModel(Model):
     """
 
     def __init__(
-        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -90,7 +90,7 @@ class VocalicModel(Model):
         )
 
         self.coordination.parameters.mean_uc0.value = (
-            np.ones(1) * config_bundle.mean_uc0
+                np.ones(1) * config_bundle.mean_uc0
         )
         self.coordination.parameters.sd_uc.value = np.ones(1) * config_bundle.sd_uc
         self.state_space.parameters.mean_a0.value = config_bundle.mean_a0
@@ -110,74 +110,3 @@ class VocalicModel(Model):
             config_bundle.time_steps_in_coordination_scale
         )
         self.observation.subject_indices = config_bundle.subject_indices
-
-    # def prepare_for_sampling(
-    #     self,
-    #     mean_uc0: float = VocalicConstants.MEAN_UC0,
-    #     sd_uc: float = VocalicConstants.SD_UC,
-    #     initial_state: np.ndarray = VocalicConstants.MEAN_A0,
-    #     sd_a: np.ndarray = VocalicConstants.SD_A,
-    #     sd_o: np.ndarray = VocalicConstants.SD_O,
-    # ):
-    #     """
-    #     Sets parameter values for sampling.
-    #
-    #     @param mean_uc0: mean of the initial value of the unbounded coordination.
-    #     @param sd_uc: standard deviation of the initial value and random Gaussian walk of the
-    #         unbounded coordination.
-    #     @param initial_state: value of the latent component at t = 0.
-    #     @param sd_a: noise in the Gaussian random walk in the state space.
-    #     @param sd_o: noise in the observation.
-    #     """
-    #
-    #     self.coordination.parameters.mean_uc0.value = np.ones(1) * mean_uc0
-    #     self.coordination.parameters.sd_uc.value = np.ones(1) * sd_uc
-    #     self.state_space.parameters.mean_a0.value = initial_state
-    #     self.state_space.parameters.sd_a.value = sd_a
-    #     self.observation.parameters.sd_o.value = sd_o
-    #
-    # def prepare_for_inference(
-    #     self,
-    #     num_time_steps_in_coordination_scale: int,
-    #     time_steps_in_coordination_scale: np.array,
-    #     subject_indices: np.ndarray,
-    #     prev_time_same_subject: np.ndarray,
-    #     prev_time_diff_subject: np.ndarray,
-    #     observed_values: TensorTypes,
-    # ):
-    #     """
-    #     Sets metadata required for inference.
-    #
-    #     @param num_time_steps_in_coordination_scale: size of the coordination series.
-    #     @param time_steps_in_coordination_scale: time indexes in the coordination scale for
-    #         each index in the latent component scale.
-    #     @param subject_indices: array of numbers indicating which subject is associated to the
-    #         latent component at every time step (e.g. the current speaker for a speech component).
-    #         In serial components, only one user's latent component is observed at a time. This
-    #         array indicates which user that is. This array contains no gaps. The size of the array
-    #         is the number of observed latent component in time, i.e., latent component time
-    #         indices with an associated subject.
-    #     @param prev_time_same_subject: time indices indicating the previous observation of the
-    #         latent component produced by the same subject at a given time. For instance, the last
-    #         time when the current speaker talked. This variable must be set before a call to
-    #         update_pymc_model.
-    #     @param prev_time_diff_subject: similar to the above but it indicates the most recent time
-    #         when the latent component was observed for a different subject. This variable must be
-    #         set before a call to update_pymc_model.
-    #     @param observed_values: observations for the latent component random variable.
-    #     """
-    #
-    #     self.coordination.num_time_steps = num_time_steps_in_coordination_scale
-    #     self.state_space.time_steps_in_coordination_scale = (
-    #         time_steps_in_coordination_scale
-    #     )
-    #     self.state_space.subject_indices = subject_indices
-    #     self.state_space.prev_time_same_subject = prev_time_same_subject
-    #     self.state_space.prev_time_diff_subject = prev_time_diff_subject
-    #     self.observation.observed_values = observed_values
-    #     self.observation.time_steps_in_coordination_scale = (
-    #         time_steps_in_coordination_scale
-    #     )
-    #     self.observation.subject_indices = subject_indices
-    #
-    #     self.create_random_variables()

@@ -4,7 +4,7 @@ import numpy as np
 
 from coordination.common.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_NUM_TIME_STEPS)
-from coordination.config_bundle.bundle import ModelConfigBundle
+from coordination.model.config.bundle import ModelConfigBundle
 from coordination.model.real.constants import VocalicConstants
 from coordination.module.module import ModuleSamples
 

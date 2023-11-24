@@ -12,7 +12,7 @@ import xarray
 from coordination.common.functions import logit
 from coordination.model.vocalic_model import (VocalicPosteriorSamples,
                                               VocalicSeries)
-from coordination.module.coordination import (CoordinationSamples,
+from coordination.module.coordination_old import (CoordinationSamples,
                                               SigmoidGaussianCoordination)
 from coordination.module.serial_component import (SerialComponent,
                                                   SerialComponentSamples)

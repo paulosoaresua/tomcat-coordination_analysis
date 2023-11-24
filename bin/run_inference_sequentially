@@ -75,6 +75,8 @@ def infer(
             logger.error(
                 f"Dictionary of parameter values not found in {model_params_dict_filepath}."
             )
+            return
+
         with open(model_params_dict_filepath) as f:
             model_params_dict = json.load(f)
 
@@ -83,12 +85,11 @@ def infer(
             f"Mapping between evidence and model's parameter not found in "
             f"{data_mapping_filepath}."
         )
+        return
+
     with open(data_mapping_filepath) as f:
         data_mapping_dict = json.load(f)
         data_mapper = DataMapper(data_mapping_dict)
-
-    model = ModelBuilder.build(model_name=model_name, model_params_dict=model_params_dict)
-    model.create_random_variables()
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
@@ -121,7 +122,11 @@ def infer(
         # # Data transformation to correct biological differences captured in the signals from
         # different participants. evidence.normalize_per_subject()
 
-        data_mapper.update_config_bundle(model.config_bundle, row_df)
+        config_bundle = ModelBuilder.build_bundle(model_name)
+        config_bundle.update(model_params_dict)
+        data_mapper.update_config_bundle(config_bundle, row_df)
+        model = ModelBuilder.build_model(model_name=model_name, config_bundle=config_bundle)
+        model.create_random_variables()
 
         idata = None
         if do_prior:
@@ -149,15 +154,13 @@ def infer(
             idata.add(idata_posterior_predictive)
 
             # Log the percentage of divergences
-            num_total_samples = num_samples * num_chains
-            perc_divergences = 100.0 * num_divergences / num_total_samples
+            perc_divergences = 100.0 * idata.num_divergences / idata.num_posterior_samples
             logger.info(
-                f"{idata.num_divergences} divergences in {num_total_samples} samples --> "
-                f"{perc_divergences}%."
+                f"{idata.num_divergences} divergences in {idata.num_posterior_samples} samples "
+                f"--> {perc_divergences}%."
             )
 
-        with open(f"{experiment_out_dir}/inference_data.pkl", "wb") as f:
-            pickle.dump(idata, f)
+        idata.save(f"{experiment_out_dir}/inference_data")
 
 
 if __name__ == "__main__":

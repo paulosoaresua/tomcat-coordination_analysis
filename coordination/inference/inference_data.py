@@ -6,6 +6,7 @@ import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pickle
 
 from coordination.common.plot import plot_series
 
@@ -21,10 +22,21 @@ class InferenceData:
 
         @return: number of divergences.
         """
-        return self.trace.sample_stats.diverging.sum(dim=["chain", "draw"])
+        return int(self.trace.sample_stats.diverging.sum(dim=["chain", "draw"]))
 
     @property
-    def convergence_summary(self) -> pd.DataFrame:
+    def num_posterior_samples(self) -> int:
+        """
+        Gets total number of samples in the posterior inference.
+
+        @return: total number of samples.
+        """
+        num_chains = self.trace["posterior"].sizes["chain"]
+        num_samples_per_chain = self.trace["posterior"].sizes["draw"]
+
+        return num_chains * num_samples_per_chain
+
+    def generate_convergence_summary(self) -> pd.DataFrame:
         """
         Estimates Rhat distribution for the latent variables in the posterior inference data.
         @return: Rhat distribution per latent variable.
@@ -40,13 +52,13 @@ class InferenceData:
 
         return pd.DataFrame(data, columns=header)
 
-    def add(self, trace: InferenceData):
+    def add(self, inference_data: InferenceData):
         """
-        Adds another trace to the data.
+        Adds another inference data.
 
-        @param trace: inference trace.
+        @param inference_data: inference data.
         """
-        self.trace.extend(trace)
+        self.trace.extend(inference_data.trace)
 
     def plot_parameter_posterior(self):
         """
@@ -56,8 +68,13 @@ class InferenceData:
         # Get from the list of variables in the posterior trace that do not have a time dimension
         # attached to them.
         var_names = []
+        for var_name in self.trace["posterior"].data_vars:
+            var = self.trace["posterior"].data_vars[var_name]
+            if len([dim for dim in var.dims if "time" in dim])  == 0:
+                var_names.append(var_name)
 
         if len(var_names) > 0:
+            var_names = sorted(var_names)
             axes = az.plot_trace(self.trace, var_names=var_names)
             fig = axes.ravel()[0].figure
             fig.tight_layout()
@@ -177,3 +194,14 @@ class InferenceData:
         ax.spines[["right", "top"]].set_visible(False)
 
         return ax
+
+    def save(self, filepath: str):
+        """
+        Save inference data. We save the trace since that's more stable due to be a third-party
+        object. In other words, if we change the inference data class we don't lose the save data
+        because of incompatibility.
+
+        @param filepath: path of the file.
+        """
+        with open(f"{filepath}.pkl", "wb") as f:
+            pickle.dump(self.trace, f)

@@ -487,8 +487,17 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
     def _add_coordinates(self):
         """
         Adds relevant coordinates to the model. Overrides superclass.
+
+         @raise ValueError: if either subject_indices, time_steps_in_coordination_scale are
+            undefined.
         """
         super()._add_coordinates()
+
+        if self.subject_indices is None:
+            raise ValueError("subject_indices is undefined.")
+
+        if self.time_steps_in_coordination_scale is None:
+            raise ValueError("time_steps_in_coordination_scale is undefined.")
 
         # Add information about which subject is associated with each timestep in the time
         # coordinate.
