@@ -1,23 +1,17 @@
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 import pymc as pm
 
-from coordination.common.types import TensorTypes
+from coordination.model.config.vocalic import VocalicConfigBundle
 from coordination.model.model import Model
-from coordination.model.real.constants import VocalicConstants
-from coordination.common.constants import (DEFAULT_NUM_TIME_STEPS,
-                                           DEFAULT_NUM_SUBJECTS,
-                                           DEFAULT_SUBJECT_NAMES)
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponent
-from coordination.module.module import ModuleSamples
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
-from coordination.model.config.vocalic import VocalicConfigBundle
 
 
 class VocalicModel(Model):
@@ -27,9 +21,7 @@ class VocalicModel(Model):
     """
 
     def __init__(
-            self,
-            config_bundle: VocalicConfigBundle,
-            pymc_model: Optional[pm.Model] = None
+        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -97,12 +89,16 @@ class VocalicModel(Model):
             coordination_samples=config_bundle.coordination_samples,
         )
 
-        self.coordination.parameters.mean_uc0.value = np.ones(1) * config_bundle.mean_uc0
+        self.coordination.parameters.mean_uc0.value = (
+            np.ones(1) * config_bundle.mean_uc0
+        )
         self.coordination.parameters.sd_uc.value = np.ones(1) * config_bundle.sd_uc
         self.state_space.parameters.mean_a0.value = config_bundle.mean_a0
         self.state_space.parameters.sd_a.value = config_bundle.sd_a
         self.observation.parameters.sd_o.value = config_bundle.sd_o
-        self.coordination.num_time_steps = config_bundle.num_time_steps_in_coordination_scale
+        self.coordination.num_time_steps = (
+            config_bundle.num_time_steps_in_coordination_scale
+        )
         self.state_space.time_steps_in_coordination_scale = (
             config_bundle.time_steps_in_coordination_scale
         )

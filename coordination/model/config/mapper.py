@@ -1,11 +1,12 @@
 import json
-from typing import Dict, List
+from typing import Dict, List, Union
 
-from jsonschema import validate
+import numpy as np
 import pandas as pd
+from jsonschema import validate
 
-from coordination.model.config.bundle import ModelConfigBundle
 from coordination.common.types import ParameterValueType
+from coordination.model.config.bundle import ModelConfigBundle
 
 
 class DataMapper:
@@ -14,8 +15,10 @@ class DataMapper:
     bundle.
     """
 
-    def __init__(self,
-                 data_mapping: Dict[str, List[Dist[str, Union[ParameterValueType, List[str]]]]]):
+    def __init__(
+        self,
+        data_mapping: Dict[str, List[Dict[str, Union[ParameterValueType, List[str]]]]],
+    ):
         """
         Creates a data mapper.
 
@@ -61,10 +64,11 @@ class DataMapper:
         """
         for mapping in self.data_mapping["mappings"]:
             if not hasattr(config_bundle, mapping["bundle_param_name"]):
-                raise ValueError(f"Parameter {mapping['bundle_param_name']} does not exist in the "
-                                 f"model's config bundle.")
+                raise ValueError(
+                    f"Parameter {mapping['bundle_param_name']} does not exist in the "
+                    f"model's config bundle."
+                )
 
             for col in mapping["data_column_names"]:
                 if col not in data_columns:
-                    raise ValueError(
-                        f"Column {col} does not exist in the data.")
+                    raise ValueError(f"Column {col} does not exist in the data.")

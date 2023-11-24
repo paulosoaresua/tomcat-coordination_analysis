@@ -14,26 +14,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import logging
 
+from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
+                                           DEFAULT_NUM_JOBS,
+                                           DEFAULT_NUM_SAMPLES,
+                                           DEFAULT_NUM_SUBJECTS,
+                                           DEFAULT_NUTS_INIT_METHOD,
+                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.log import configure_log
+from coordination.common.types import ParameterValueType
 from coordination.common.utils import set_random_seed
+from coordination.model.builder import ModelBuilder
+from coordination.model.config.mapper import DataMapper
 from coordination.model.coordination_model import CoordinationPosteriorSamples
 from coordination.model.vocalic_model import (VOCALIC_FEATURES, VocalicModel,
                                               VocalicSeries)
 from coordination.model.vocalic_semantic_model import (VocalicSemanticModel,
                                                        VocalicSemanticSeries)
-from coordination.common.constants import (DEFAULT_SEED,
-                                           DEFAULT_NUM_SUBJECTS,
-                                           DEFAULT_BURN_IN,
-                                           DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_TARGET_ACCEPT)
-from coordination.model.builder import ModelBuilder
-from coordination.common.types import ParameterValueType
-from coordination.model.config.mapper import DataMapper
 
 """
 This script performs inferences in a subset of USAR experiments from a .csv file with vocalic and 

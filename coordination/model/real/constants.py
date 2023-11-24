@@ -1,5 +1,7 @@
 import numpy as np
 
+from coordination.common.constants import DEFAULT_NUM_SUBJECTS
+
 
 class VocalicConstants:
     """
@@ -23,8 +25,8 @@ class VocalicConstants:
     # For inference
     SD_MEAN_UC0 = 1
     SD_SD_UC = 1
-    MEAN_MEAN_A0 = np.zeros((NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
-    SD_MEAN_A0 = np.ones((NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
+    MEAN_MEAN_A0 = np.zeros((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
+    SD_MEAN_A0 = np.ones((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
     # Same variance across subjects but not dimensions
     SD_SD_A = np.ones(STATE_SPACE_DIM_SIZE)
     # Same variance across subjects and dimensions

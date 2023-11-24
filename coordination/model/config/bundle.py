@@ -1,3 +1,5 @@
+from typing import Dict
+
 from coordination.common.types import ParameterValueType
 
 
@@ -17,4 +19,3 @@ class ModelConfigBundle:
         for key, value in params_dict.itemm():
             if hasattr(self, key):
                 setattr(self, key, value)
-

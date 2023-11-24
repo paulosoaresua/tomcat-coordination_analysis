@@ -1,14 +1,13 @@
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
-import numpy as np
-
+from coordination.common.types import ParameterValueType
+from coordination.model.config.vocalic import VocalicConfigBundle
 from coordination.model.model import Model
+from coordination.model.real.vocalic import VocalicModel
+from coordination.model.real.vocalic_semantic_link import \
+    VocalicSemanticLinkModel
 from coordination.model.synthetic.conversation import ConversationModel
 from coordination.model.synthetic.spring import SpringModel
-from coordination.model.real.vocalic import VocalicModel
-from coordination.model.real.vocalic_semantic_link import VocalicSemanticLinkModel
-from coordination.model.config.vocalic import VocalicConfigBundle
-from coordination.common.types import ParameterValueType
 
 
 class ModelBuilder:
@@ -17,8 +16,10 @@ class ModelBuilder:
     """
 
     @staticmethod
-    def build(model_name: str,
-              model_params_dict: Optional[Dict[str, ParameterValueType]] = None) -> Model:
+    def build(
+        model_name: str,
+        model_params_dict: Optional[Dict[str, ParameterValueType]] = None,
+    ) -> Model:
         """
         Gets an instance of the model.
 
