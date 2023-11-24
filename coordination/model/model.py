@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pymc as pm
 
-from coordination.common.constants import (DEFAULT_SEED, DEFAULT_BURN_IN, DEFAULT_INIT_METHOD,
-                                           DEFAULT_NUM_CHAINS, DEFAULT_NUM_JOBS,
-                                           DEFAULT_NUM_SAMPLED_SERIES,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_TARGET_ACCEPT)
+from coordination.common.constants import DEFAULT_SEED
 from coordination.common.plot import plot_series
 from coordination.inference.inference_data import InferenceData
+from coordination.model.constants import (DEFAULT_BURN_IN, DEFAULT_INIT_METHOD,
+                                          DEFAULT_NUM_CHAINS, DEFAULT_NUM_JOBS,
+                                          DEFAULT_NUM_SAMPLED_SERIES,
+                                          DEFAULT_NUM_SAMPLES,
+                                          DEFAULT_TARGET_ACCEPT)
 from coordination.module.component_group import (ComponentGroup,
                                                  ComponentGroupSamples)
 from coordination.module.coordination.coordination import Coordination
@@ -27,12 +28,12 @@ class Model(Module):
     """
 
     def __init__(
-            self,
-            name: str,
-            pymc_model: pm.Model,
-            coordination: Coordination,
-            component_groups: List[ComponentGroup],
-            coordination_samples: Optional[ModuleSamples] = None,
+        self,
+        name: str,
+        pymc_model: pm.Model,
+        coordination: Coordination,
+        component_groups: List[ComponentGroup],
+        coordination_samples: Optional[ModuleSamples] = None,
     ):
         """
         Creates a model instance.
@@ -55,9 +56,9 @@ class Model(Module):
         self.coordination_samples = coordination_samples
 
     def draw_samples(
-            self,
-            seed: Optional[int] = DEFAULT_SEED,
-            num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
+        self,
+        seed: Optional[int] = DEFAULT_SEED,
+        num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
     ) -> ModelSamples:
         """
         Draws samples from the model using ancestral sampling and some blending strategy with
@@ -102,15 +103,15 @@ class Model(Module):
             g.create_random_variables()
 
     def fit(
-            self,
-            seed: Optional[int] = DEFAULT_SEED,
-            burn_in: int = DEFAULT_BURN_IN,
-            num_samples: int = DEFAULT_NUM_SAMPLES,
-            num_chains: int = DEFAULT_NUM_CHAINS,
-            num_jobs: int = DEFAULT_NUM_JOBS,
-            init_method: str = DEFAULT_INIT_METHOD,
-            target_accept: float = DEFAULT_TARGET_ACCEPT,
-            **kwargs,
+        self,
+        seed: Optional[int] = DEFAULT_SEED,
+        burn_in: int = DEFAULT_BURN_IN,
+        num_samples: int = DEFAULT_NUM_SAMPLES,
+        num_chains: int = DEFAULT_NUM_CHAINS,
+        num_jobs: int = DEFAULT_NUM_JOBS,
+        nuts_init_methods: str = DEFAULT_INIT_METHOD,
+        target_accept: float = DEFAULT_TARGET_ACCEPT,
+        **kwargs,
     ) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
@@ -120,7 +121,7 @@ class Model(Module):
         @param num_samples: number of samples from the posterior distribution.
         @param num_chains: number of parallel chains.
         @param num_jobs: number of jobs (typically equals the number of chains)
-        @param init_method: initialization method.
+        @param nuts_init_methods: initialization method of the NUTS algorithm.
         @param target_accept: target accept value. The higher, the smaller the number of
             divergences usually but it takes longer to converge.
         @param: **kwargs: extra parameters to pass to the PyMC sample function.
@@ -130,7 +131,7 @@ class Model(Module):
         with self.pymc_model:
             idata = pm.sample(
                 num_samples,
-                init=init_method,
+                init=nuts_init_methods,
                 tune=burn_in,
                 chains=num_chains,
                 random_seed=seed,
@@ -142,8 +143,8 @@ class Model(Module):
         return InferenceData(idata)
 
     def prior_predictive(
-            self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
-    ) -> az.InferenceData:
+        self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
+    ) -> InferenceData:
         """
         Executes prior predictive checks in the model.
 
@@ -155,11 +156,11 @@ class Model(Module):
         with self.pymc_model:
             idata = pm.sample_prior_predictive(samples=num_samples, random_seed=seed)
 
-        return idata
+        return InferenceData(idata)
 
     def posterior_predictive(
-            self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
-    ) -> az.InferenceData:
+        self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
+    ) -> InferenceData:
         """
         Executes posterior predictive checks in the model.
 
@@ -174,19 +175,7 @@ class Model(Module):
                 trace=posterior_trace, random_seed=seed
             )
 
-        return idata
-
-    def prepare_for_sampling(self, **kwargs):
-        """
-        Sets metadata required for inference. The concrete parameters are specified by subclasses.
-        """
-        pass
-
-    def prepare_for_inference(self, **kwargs):
-        """
-        Sets metadata required for inference. The concrete parameters are specified by subclasses.
-        """
-        pass
+        return InferenceData(idata)
 
 
 ###################################################################################################
@@ -196,49 +185,23 @@ class Model(Module):
 
 class ModelSamples(ModuleSamples):
     def __init__(
-            self,
-            coordination_samples: ModuleSamples,
-            component_group_samples: Dict[str, ComponentGroupSamples],
+        self,
+        coordination_samples: ModuleSamples,
+        component_group_samples: Dict[str, ComponentGroupSamples],
     ):
         """
-        Creates
-        an
-        object
-        to
-        store
-        latent
-        samples and samples
-        from associates observations.
+        Creates an object to store latent samples and samples from associates observations.
 
-        @param
+        @param coordination_samples: samples generated by the coordination module.
+        @param component_group_samples: a dictionary of samples from component group indexed by the
+            group's id.
+        """
+        super().__init__(values=None)
 
-        coordination_samples: samples
-        generated
-        by
-        the
-        coordination
-        module.
+        self.coordination_samples = coordination_samples
+        self.component_group_samples = component_group_samples
 
-        @param
-
-        component_group_samples: a
-        dictionary
-        of
-        samples
-        from component group
-        indexed
-        by
-        the
-        group
-        's id.
-
-    """
-    super().__init__(values=None)
-
-    self.coordination_samples = coordination_samples
-    self.component_group_samples = component_group_samples
-
-def plot(
+    def plot(
         self,
         variable_uuid: str,
         ax: Optional[plt.axis] = None,
@@ -246,153 +209,86 @@ def plot(
         dimension_idx: int = 0,
         subject_transformation: Callable = None,
         **kwargs,
-) -> plt.axis:
-    """
-    Plots
-    the
-    time
-    series
-    of
-    samples.
+    ) -> plt.axis:
+        """
+        Plots the time series of samples.
 
-    @param
+        @param variable_uuid: variable to plot.
+        @param ax: axis to plot on. It will be created if not provided.
+        @param series_idx: index of the series of samples to plot.
+        @param dimension_idx: index of the dimension axis to plot.
+        @param subject_transformation: function called per subject (series, subject) to transform
+            the subject series before plotting.
+        @param kwargs: extra parameters to pass to the plot function.
+        @return: plot axis.
+        """
 
-    variable_uuid: variable
-    to
-    plot.
+        if ax is None:
+            plt.figure()
+            ax = plt.gca()
 
-    @param
+        if variable_uuid == Coordination.UUID:
+            samples = self.coordination_samples
+        else:
+            samples = self.component_group_samples.get(variable_uuid, None)
 
-    ax: axis
-    to
-    plot
-    on.It
-    will
-    be
-    created if not provided.
+        if samples is None:
+            raise ValueError(f"Found no samples for the variable ({variable_uuid}).")
 
-    @param
+        time_steps = np.arange(samples.num_time_steps)
+        sampled_values = samples.values[series_idx]
+        if len(sampled_values.shape) == 1:
+            # Coordination plot
+            plot_series(
+                x=time_steps,
+                y=sampled_values,
+                y_std=None,
+                label=None,
+                include_bands=False,
+                value_bounds=None,
+                ax=ax,
+                **kwargs,
+            )
+            ax.set_ylabel("Coordination")
+        elif len(sampled_values.shape) == 2:
+            # Serial variable
+            subject_indices = samples.subject_indices[series_idx]
+            time_steps = samples.time_steps_in_coordination_scale[series_idx]
+            subjects = sorted(list(set(subject_indices)))
+            for s in subjects:
+                idx = [i for i, subject in enumerate(subject_indices) if subject == s]
+                y = sampled_values[dimension_idx, idx]
+                y = subject_transformation(y, s) if subject_transformation else y
+                plot_series(
+                    x=time_steps[idx],
+                    y=y,
+                    y_std=None,
+                    label=f"Subject {s}",
+                    include_bands=False,
+                    value_bounds=None,
+                    ax=ax,
+                    **kwargs,
+                )
+            ax.set_xlabel("Dimension")
+        else:
+            # Non-serial variable
+            for s in range(sampled_values.shape[0]):
+                y = sampled_values[s, dimension_idx]
+                y = subject_transformation(y, s) if subject_transformation else y
+                plot_series(
+                    x=time_steps,
+                    y=y,
+                    y_std=None,
+                    label=f"Subject {s}",
+                    include_bands=False,
+                    value_bounds=None,
+                    ax=ax,
+                    **kwargs,
+                )
 
-    series_idx: index
-    of
-    the
-    series
-    of
-    samples
-    to
-    plot.
+            ax.set_xlabel("Dimension")
 
-    @param
+        ax.set_xlabel("Time Step")
+        ax.spines[["right", "top"]].set_visible(False)
 
-    dimension_idx: index
-    of
-    the
-    dimension
-    axis
-    to
-    plot.
-
-    @param
-
-    subject_transformation: function
-    called
-    per
-    subject(series, subject)
-    to
-    transform
-    the
-    subject
-    series
-    before
-    plotting.
-
-
-@param
-
-
-kwargs: extra
-parameters
-to
-pass
-to
-the
-plot
-function.
-
-
-@
-
-
-return: plot
-axis.
-"""
-
-if ax is None:
-    plt.figure()
-    ax = plt.gca()
-
-if variable_uuid == Coordination.UUID:
-    samples = self.coordination_samples
-else:
-    samples = self.component_group_samples.get(variable_uuid, None)
-
-if samples is None:
-    raise ValueError(f"Found no samples for the variable ({variable_uuid}).")
-
-time_steps = np.arange(samples.num_time_steps)
-sampled_values = samples.values[series_idx]
-if len(sampled_values.shape) == 1:
-    # Coordination plot
-    plot_series(
-        x=time_steps,
-        y=sampled_values,
-        y_std=None,
-        label=None,
-        include_bands=False,
-        value_bounds=None,
-        ax=ax,
-        **kwargs,
-    )
-    ax.set_ylabel("Coordination")
-elif len(sampled_values.shape) == 2:
-    # Serial variable
-    subject_indices = samples.subject_indices[series_idx]
-    time_steps = samples.time_steps_in_coordination_scale[series_idx]
-    subjects = sorted(list(set(subject_indices)))
-    for s in subjects:
-        idx = [i for i, subject in enumerate(subject_indices) if subject == s]
-        y = sampled_values[dimension_idx, idx]
-        y = subject_transformation(y, s) if subject_transformation else y
-        plot_series(
-            x=time_steps[idx],
-            y=y,
-            y_std=None,
-            label=f"Subject {s}",
-            include_bands=False,
-            value_bounds=None,
-            ax=ax,
-            **kwargs,
-        )
-    ax.set_xlabel("Dimension")
-else:
-    # Non-serial variable
-    for s in range(sampled_values.shape[0]):
-        y = sampled_values[s, dimension_idx]
-        y = subject_transformation(y, s) if subject_transformation else y
-        plot_series(
-            x=time_steps,
-            y=y,
-            y_std=None,
-            label=f"Subject {s}",
-            include_bands=False,
-            value_bounds=None,
-            ax=ax,
-            **kwargs,
-        )
-
-    ax.set_xlabel("Dimension")
-
-ax.set_xlabel("Time Step")
-ax.spines[["right", "top"]].set_visible(False)
-
-return ax
+        return ax

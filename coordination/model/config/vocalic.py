@@ -2,9 +2,9 @@ from typing import List, Optional
 
 import numpy as np
 
-from coordination.model.real.constants import (DEFAULT_NUM_SUBJECTS,
-                                               DEFAULT_NUM_TIME_STEPS,
-                                               VocalicConstants)
+from coordination.model.real.constants import VocalicConstants
+from coordination.common.constants import (DEFAULT_NUM_TIME_STEPS,
+                                           DEFAULT_NUM_SUBJECTS)
 from coordination.config_bundle.bundle import ModelConfigBundle
 
 
@@ -37,6 +37,16 @@ class VocalicConfigBundle(ModelConfigBundle):
             sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
             allow_sampled_subject_repetition: bool = VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION,
             fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
+            mean_uc0: float = VocalicConstants.MEAN_UC0,
+            sd_uc: float = VocalicConstants.SD_UC,
+            mean_a0: np.ndarray = VocalicConstants.MEAN_A0,
+            sd_a: np.ndarray = VocalicConstants.SD_A,
+            sd_o: np.ndarray = VocalicConstants.SD_O,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.array] = None,
+            prev_time_same_subject: Optional[np.array] = None,
+            prev_time_diff_subject: Optional[np.array] = None,
+            observed_values: Optional[np.array] = None,
             coordination_samples: Optional[ModuleSamples] = None
     ):
         """
@@ -77,6 +87,28 @@ class VocalicConfigBundle(ModelConfigBundle):
             (0,1,2,...,0,1,2...) or randomized.
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
+        @param mean_uc0: mean of the initial value of the unbounded coordination.
+        @param sd_uc: standard deviation of the initial value and random Gaussian walk of the
+            unbounded coordination.
+        @param initial_state: value of the latent component at t = 0.
+        @param sd_a: noise in the Gaussian random walk in the state space.
+        @param sd_o: noise in the observation.
+        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
+            each index in the latent component scale.
+        @param subject_indices: array of numbers indicating which subject is associated to the
+            latent component at every time step (e.g. the current speaker for a speech component).
+            In serial components, only one user's latent component is observed at a time. This
+            array indicates which user that is. This array contains no gaps. The size of the array
+            is the number of observed latent component in time, i.e., latent component time
+            indices with an associated subject.
+        @param prev_time_same_subject: time indices indicating the previous observation of the
+            latent component produced by the same subject at a given time. For instance, the last
+            time when the current speaker talked. This variable must be set before a call to
+            update_pymc_model.
+        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
+            when the latent component was observed for a different subject. This variable must be
+            set before a call to update_pymc_model.
+        @param observed_values: observations vocalic feature values.
         @param coordination_samples: coordination samples. If not provided, coordination samples
             will be draw in a call to draw_samples.
         """
@@ -103,4 +135,14 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.sampling_time_scale_density = sampling_time_scale_density
         self.allow_sampled_subject_repetition = allow_sampled_subject_repetition
         self.fix_sampled_subject_sequence = fix_sampled_subject_sequence
+        self.mean_uc0 = mean_uc0
+        self.sd_uc = sd_uc
+        self.mean_a0 = mean_a0
+        self.sd_a = sd_a
+        self.sd_o = sd_o
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.subject_indices = subject_indices
+        self.prev_time_same_subject = prev_time_same_subject
+        self.prev_time_diff_subject = prev_time_diff_subject
+        self.observed_values = observed_values
         self.coordination_samples = coordination_samples

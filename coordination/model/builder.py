@@ -7,6 +7,8 @@ from coordination.model.synthetic.conversation import ConversationModel
 from coordination.model.synthetic.spring import SpringModel
 from coordination.model.real.vocalic import VocalicModel
 from coordination.model.real.vocalic_semantic_link import VocalicSemanticLinkModel
+from coordination.model.config.vocalic import VocalicConfigBundle
+from coordination.common.types import ParameterValueType
 
 
 class ModelBuilder:
@@ -16,8 +18,7 @@ class ModelBuilder:
 
     @staticmethod
     def build(model_name: str,
-              model_params_dict: Optional[
-                  Dict[str, Union[str, int, float, np.ndarray]]] = None) -> Model:
+              model_params_dict: Optional[Dict[str, ParameterValueType]] = None) -> Model:
         """
         Gets an instance of the model.
 
@@ -28,15 +29,18 @@ class ModelBuilder:
         """
 
         if model_name == "conversation":
-            return ConversationModel.__att(**model_params_dict)
+            return ConversationModel(**model_params_dict)
 
         if model_name == "spring":
-            return SpringModel.__att(**model_params_dict)
+            return SpringModel(**model_params_dict)
 
         if model_name == "vocalic":
-            return VocalicModel.__att(**model_params_dict)
+            config_bundle = VocalicConfigBundle()
+            if model_params_dict:
+                config_bundle.update(model_params_dict)
+            return VocalicModel(config_bundle=config_bundle)
 
         if model_name == "vocalic_semantic":
-            return VocalicSemanticLinkModel.__att(**model_params_dict)
+            return VocalicSemanticLinkModel(**model_params_dict)
 
         raise ValueError(f"Invalid model ({model_name}).")

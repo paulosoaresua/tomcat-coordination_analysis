@@ -3,6 +3,7 @@ from typing import Optional, Tuple, Union
 import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from coordination.common.plot import plot_series
 
@@ -10,6 +11,54 @@ from coordination.common.plot import plot_series
 class InferenceData:
     def __init__(self, trace: az.InferenceData):
         self.trace = trace
+
+    @property
+    def num_divergences(self) -> int:
+        """
+        Gets the number of divergences in a trace.
+
+        @return: number of divergences.
+        """
+        return self.trace.sample_stats.diverging.sum(dim=["chain", "draw"])
+
+    @property
+    def convergence_summary(self) -> pd.DataFrame:
+        """
+        Estimates Rhat distribution for the latent variables in the posterior inference data.
+        @return: Rhat distribution per latent variable.
+        """
+
+        header = ["variable", "mean_rhat", "std_rhat"]
+
+        rhat = az.rhat(self.trace)
+        data = []
+        for var, values in rhat.data_vars.items():
+            entry = [var, values.to_numpy().mean(), values.to_numpy().std()]
+            data.append(entry)
+
+        return pd.DataFrame(data, columns=header)
+
+    def add(self, trace: InferenceData):
+        """
+        Adds another trace to the data.
+
+        @param trace: inference trace.
+        """
+        self.trace.extend(trace)
+
+    def plot_parameter_posterior(self):
+        """
+        Plot posteriors of the latent parameters in the model.
+        """
+
+        # Get from the list of variables in the posterior trace that do not have a time dimension
+        # attached to them.
+        var_names = []
+
+        if len(var_names) > 0:
+            axes = az.plot_trace(self.trace, var_names=var_names)
+            fig = axes.ravel()[0].figure
+            fig.tight_layout()
 
     def average_samples(
         self, variable_uuid: str, return_std: bool
@@ -32,7 +81,7 @@ class InferenceData:
 
         return mean_values
 
-    def plot_average_samples(
+    def plot_time_series_posterior(
         self,
         variable_uuid: str,
         include_bands: bool,

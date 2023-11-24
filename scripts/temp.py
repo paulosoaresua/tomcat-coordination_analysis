@@ -613,7 +613,7 @@ def train(
     model.clear_parameter_values()  # so we can infer them
     _, idata = model.fit(
         evidence=evidence,
-        init_method=init_method,
+        nuts_init_methods=init_method,
         burn_in=burn_in,
         num_samples=num_samples,
         num_chains=num_chains,
