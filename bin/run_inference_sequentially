@@ -21,6 +21,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_NUTS_INIT_METHOD,
+                                           DEFAULT_PROGRESS_SAVING_FREQUENCY,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.log import configure_log
 from coordination.common.types import ParameterValueType
@@ -61,32 +62,26 @@ def infer(
         num_chains: int,
         num_jobs: int,
         nuts_init_method: str,
-        target_accept: float):
-    logger = logging.getLogger()
-
+        target_accept: float,
+        progress_saving_frequency: int):
     if not do_prior and not do_posterior:
-        logger.error(
-            "No inference to be performed. Set do_prior and/or do_posterior to True."
-        )
-        return
+        raise ValueError("No inference to be performed. Set do_prior and/or do_posterior to True.")
+
+    if not os.path.exists(evidence_filepath):
+        raise FileNotFoundError(f"Evidence not found in {evidence_filepath}.")
 
     model_params_dict = None
     if model_params_dict_filepath:
         if not os.path.exists(model_params_dict_filepath):
-            logger.error(
-                f"Dictionary of parameter values not found in {model_params_dict_filepath}."
-            )
-            return
+            raise FileNotFoundError(
+                f"Dictionary of parameter values not found in {model_params_dict_filepath}.")
 
         with open(model_params_dict_filepath) as f:
             model_params_dict = json.load(f)
 
     if not os.path.exists(data_mapping_filepath):
-        logger.error(
-            f"Mapping between evidence and model's parameter not found in "
-            f"{data_mapping_filepath}."
-        )
-        return
+        raise FileNotFoundError(f"Mapping between evidence and model's parameter not found in "
+                                f"{data_mapping_filepath}.")
 
     with open(data_mapping_filepath) as f:
         data_mapping_dict = json.load(f)
@@ -100,12 +95,11 @@ def infer(
         list(set(experiment_ids).difference(set(experiments_in_evidence))))
 
     experiment_list = "\n".join(experiments_in_evidence)
-    logger.info(f"\nRunning inference for experiments: {experiment_list}")
+    print(f"\nRunning inference for experiments:\n{experiment_list}\n")
 
     if len(experiments_not_in_evidence) > 0:
         experiment_list = "\n".join(experiments_not_in_evidence)
-        logger.info(
-            f"\nSkipping inference for experiments not in the evidence file: {experiment_list}")
+        print(f"\nSkipping inference for experiments not in the evidence file: {experiment_list}")
 
     for _, row_df in evidence_df.iterrows():
         experiment_id = row_df["experiment_id"]
@@ -144,7 +138,8 @@ def infer(
                 num_jobs=num_jobs,
                 nuts_init_method=nuts_init_method,
                 target_accept=target_accept,
-                callback=ProgressSaverCallback(out_dir=experiment_out_dir, saving_frequency=10))
+                callback=ProgressSaverCallback(out_dir=experiment_out_dir,
+                                               saving_frequency=progress_saving_frequency))
 
             if idata is None:
                 idata = idata_posterior
@@ -281,6 +276,14 @@ if __name__ == "__main__":
         help="Target acceptance probability used to control step size and reduce "
              "divergences during inference.",
     )
+    parser.add_argument(
+        "--progress_saving_frequency",
+        type=float,
+        required=False,
+        default=DEFAULT_PROGRESS_SAVING_FREQUENCY,
+        help="Frequency at which to save the progress in number of samples. For instance, if x, "
+             "progress will be saved at every x samples per chain.",
+    )
 
     args = parser.parse_args()
 
@@ -298,4 +301,5 @@ if __name__ == "__main__":
           num_chains=args.num_chains,
           num_jobs=args.num_jobs,
           nuts_init_method=args.nuts_init_method,
-          target_accept=args.target_accept)
+          target_accept=args.target_accept,
+          progress_saving_frequency=agrs.progress_saving_frequency)

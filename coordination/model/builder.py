@@ -1,4 +1,3 @@
-
 from coordination.model.config.bundle import ModelConfigBundle
 from coordination.model.config.vocalic import VocalicConfigBundle
 from coordination.model.model import Model
