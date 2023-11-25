@@ -14,3 +14,4 @@ flake8==6.1.0
 isort==5.12.0
 autoflake==2.2.1
 jsonschema==^4.17.3
+streamlit==^1.28.2

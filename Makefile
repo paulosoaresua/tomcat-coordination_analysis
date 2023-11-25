@@ -4,6 +4,10 @@ lint:
 	autoflake -r coordination --in-place --remove-all-unused-imports
 	flake8 coordination
 
+app:
+	PYTHONPATH="." streamlit run coordination/webapp/app.py --server.port=8080 \
+		--server.address=0.0.0.0
+
 vocalic_asist:
 	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data.csv" \
 		--model_name="vocalic" \
