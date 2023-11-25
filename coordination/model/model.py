@@ -113,6 +113,7 @@ class Model(Module):
             num_jobs: int = DEFAULT_NUM_JOBS,
             nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
             target_accept: float = DEFAULT_TARGET_ACCEPT,
+            callback: Callable = None,
             **kwargs,
     ) -> InferenceData:
         """
@@ -126,6 +127,7 @@ class Model(Module):
         @param nuts_init_methods: initialization method of the NUTS algorithm.
         @param target_accept: target accept value. The higher, the smaller the number of
             divergences usually but it takes longer to converge.
+        @param callback: functions to be called at every sample draw during model fit.
         @param: **kwargs: extra parameters to pass to the PyMC sample function.
         @return: inference data with posterior trace.
         """
@@ -139,6 +141,7 @@ class Model(Module):
                 random_seed=seed,
                 cores=min(num_jobs, num_chains),
                 target_accept=target_accept,
+                callback=callback,
                 **kwargs,
             )
 

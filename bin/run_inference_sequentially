@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from coordination.callback.progress_saver_callback import ProgressSaverCallback
+
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_NUM_SAMPLES,
@@ -142,7 +144,8 @@ def infer(
                 num_chains=num_chains,
                 num_jobs=num_jobs,
                 nuts_init_method=nuts_init_method,
-                target_accept=target_accept)
+                target_accept=target_accept,
+                callback=ProgressSaverCallback(out_dir=experiment_out_dir, saving_frequency=10))
 
             if idata is None:
                 idata = idata_posterior
