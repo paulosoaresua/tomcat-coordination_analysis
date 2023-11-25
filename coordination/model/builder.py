@@ -1,14 +1,8 @@
-from typing import Dict, Optional
 
-from coordination.common.types import ParameterValueType
-from coordination.model.config.vocalic import VocalicConfigBundle
 from coordination.model.config.bundle import ModelConfigBundle
+from coordination.model.config.vocalic import VocalicConfigBundle
 from coordination.model.model import Model
 from coordination.model.real.vocalic import VocalicModel
-from coordination.model.real.vocalic_semantic_link import \
-    VocalicSemanticLinkModel
-from coordination.model.synthetic.conversation import ConversationModel
-from coordination.model.synthetic.spring import SpringModel
 
 
 class ModelBuilder:

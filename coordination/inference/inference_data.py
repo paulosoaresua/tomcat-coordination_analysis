@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import pickle
 from typing import Optional, Tuple, Union
 
 import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pickle
 
 from coordination.common.plot import plot_series
 
@@ -70,7 +70,7 @@ class InferenceData:
         var_names = []
         for var_name in self.trace["posterior"].data_vars:
             var = self.trace["posterior"].data_vars[var_name]
-            if len([dim for dim in var.dims if "time" in dim])  == 0:
+            if len([dim for dim in var.dims if "time" in dim]) == 0:
                 var_names.append(var_name)
 
         if len(var_names) > 0:

@@ -1,10 +1,11 @@
 import json
+from ast import literal_eval
 from typing import Dict, List, Union
 
-from ast import literal_eval
 import numpy as np
 import pandas as pd
 from jsonschema import validate
+from pkg_resources import resource_string
 
 from coordination.common.types import ParameterValueType
 from coordination.model.config.bundle import ModelConfigBundle
@@ -28,8 +29,12 @@ class DataMapper:
         @param Exception: if data_mapping is not valid.
 
         """
-        with open("../coordination/schema/data_mapper_schema.json") as f:
-            validate(instance=data_mapping, schema=json.load(f))
+        schema = json.loads(
+            resource_string("coordination", "schema/data_mapper_schema.json").decode(
+                "utf-8"
+            )
+        )
+        validate(instance=data_mapping, schema=schema)
 
         self.data_mapping = data_mapping
 

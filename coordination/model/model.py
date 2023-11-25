@@ -7,16 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pymc as pm
 
-from coordination.common.constants import DEFAULT_SEED
-from coordination.common.plot import plot_series
-from coordination.inference.inference_data import InferenceData
-from coordination.common.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_NUM_CHAINS,
+from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_NUM_SAMPLED_SERIES,
                                            DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_TARGET_ACCEPT)
+                                           DEFAULT_NUTS_INIT_METHOD,
+                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
+from coordination.common.plot import plot_series
+from coordination.inference.inference_data import InferenceData
 from coordination.module.component_group import (ComponentGroup,
                                                  ComponentGroupSamples)
 from coordination.module.coordination.coordination import Coordination
@@ -30,12 +28,12 @@ class Model(Module):
     """
 
     def __init__(
-            self,
-            name: str,
-            pymc_model: pm.Model,
-            coordination: Coordination,
-            component_groups: List[ComponentGroup],
-            coordination_samples: Optional[ModuleSamples] = None,
+        self,
+        name: str,
+        pymc_model: pm.Model,
+        coordination: Coordination,
+        component_groups: List[ComponentGroup],
+        coordination_samples: Optional[ModuleSamples] = None,
     ):
         """
         Creates a model instance.
@@ -58,9 +56,9 @@ class Model(Module):
         self.coordination_samples = coordination_samples
 
     def draw_samples(
-            self,
-            seed: Optional[int] = DEFAULT_SEED,
-            num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
+        self,
+        seed: Optional[int] = DEFAULT_SEED,
+        num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
     ) -> ModelSamples:
         """
         Draws samples from the model using ancestral sampling and some blending strategy with
@@ -105,16 +103,16 @@ class Model(Module):
             g.create_random_variables()
 
     def fit(
-            self,
-            seed: Optional[int] = DEFAULT_SEED,
-            burn_in: int = DEFAULT_BURN_IN,
-            num_samples: int = DEFAULT_NUM_SAMPLES,
-            num_chains: int = DEFAULT_NUM_CHAINS,
-            num_jobs: int = DEFAULT_NUM_JOBS,
-            nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
-            target_accept: float = DEFAULT_TARGET_ACCEPT,
-            callback: Callable = None,
-            **kwargs,
+        self,
+        seed: Optional[int] = DEFAULT_SEED,
+        burn_in: int = DEFAULT_BURN_IN,
+        num_samples: int = DEFAULT_NUM_SAMPLES,
+        num_chains: int = DEFAULT_NUM_CHAINS,
+        num_jobs: int = DEFAULT_NUM_JOBS,
+        nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
+        target_accept: float = DEFAULT_TARGET_ACCEPT,
+        callback: Callable = None,
+        **kwargs,
     ) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
@@ -148,7 +146,7 @@ class Model(Module):
         return InferenceData(idata)
 
     def prior_predictive(
-            self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
+        self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
     ) -> InferenceData:
         """
         Executes prior predictive checks in the model.
@@ -164,7 +162,7 @@ class Model(Module):
         return InferenceData(idata)
 
     def posterior_predictive(
-            self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
+        self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
     ) -> InferenceData:
         """
         Executes posterior predictive checks in the model.
@@ -190,9 +188,9 @@ class Model(Module):
 
 class ModelSamples(ModuleSamples):
     def __init__(
-            self,
-            coordination_samples: ModuleSamples,
-            component_group_samples: Dict[str, ComponentGroupSamples],
+        self,
+        coordination_samples: ModuleSamples,
+        component_group_samples: Dict[str, ComponentGroupSamples],
     ):
         """
         Creates an object to store latent samples and samples from associates observations.
@@ -207,13 +205,13 @@ class ModelSamples(ModuleSamples):
         self.component_group_samples = component_group_samples
 
     def plot(
-            self,
-            variable_uuid: str,
-            ax: Optional[plt.axis] = None,
-            series_idx: int = 0,
-            dimension_idx: int = 0,
-            subject_transformation: Callable = None,
-            **kwargs,
+        self,
+        variable_uuid: str,
+        ax: Optional[plt.axis] = None,
+        series_idx: int = 0,
+        dimension_idx: int = 0,
+        subject_transformation: Callable = None,
+        **kwargs,
     ) -> plt.axis:
         """
         Plots the time series of samples.

@@ -1,7 +1,7 @@
 import json
-from pymc.sampling.parallel import Draw
+
 from pymc.backends.ndarray import NDArray
-from torch.utils.tensorboard import SummaryWriter
+from pymc.sampling.parallel import Draw
 
 
 class ProgressSaverCallback:

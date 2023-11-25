@@ -21,7 +21,7 @@ class VocalicModel(Model):
     """
 
     def __init__(
-            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -90,7 +90,7 @@ class VocalicModel(Model):
         )
 
         self.coordination.parameters.mean_uc0.value = (
-                np.ones(1) * config_bundle.mean_uc0
+            np.ones(1) * config_bundle.mean_uc0
         )
         self.coordination.parameters.sd_uc.value = np.ones(1) * config_bundle.sd_uc
         self.state_space.parameters.mean_a0.value = config_bundle.mean_a0

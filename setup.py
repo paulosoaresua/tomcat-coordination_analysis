@@ -2,4 +2,8 @@
 
 from setuptools import find_packages, setup
 
-setup(name="coordination", packages=find_packages(), package_data={"": []})
+setup(
+    name="coordination",
+    packages=find_packages(),
+    package_data={"coordination": ["schema/*.json"]},
+)

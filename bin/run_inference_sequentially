@@ -16,7 +16,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from coordination.callback.progress_saver_callback import ProgressSaverCallback
-
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_NUM_SAMPLES,
