@@ -1,66 +1,49 @@
 #!/usr/bin/env python
+"""
+This script divides the list of USAR experiments in a .csv dataset such that they can be processed
+in parallel. Since the parameters are not shared across experiments, we can perform inferences in
+multiple models in parallel if we have computing resources.
+
+Using the multiprocessing library to spawn an inference function in parallel in a single script
+results in a 'AssertionError: daemonic processes are not allowed to have children'. This is due to
+the multiple processes creates during inference (one per chain) and the impossibility of creating
+children processes from processes spawn with multiprocessing library. Therefore, we do this
+parallelization via shell commands. We split the experiments into different processes which are
+performed in different TMUX windows of the same TMUX session. If the tmux session does not exist,
+this script will create one named as the run ID. If the number of experiments is bigger than the
+number of processes they should be split into, some processes will be responsible for performing
+inference sequentially in the experiments assigned to them.
+
+Note:
+1. This script requires TMUX to be installed in the machine.
+2. This script requires Conda to be installed in the machine and have an environment called
+    'coordination' with the dependencies listed in requirements.txt installed.
+3. Before running this script for the first time, the user has to check if tmux initializes
+    conda when a new session or window is created. This is accomplished by copying the conda
+    initialization script, typically saved in the shell rc file (e.g., .bashrc), to their shell
+    profile file (e.g., .bash_profile).
+"""
 
 import argparse
 import json
-import logging
 import multiprocessing
 import os
-import pickle
-import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-import arviz as az
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
-from coordination.callback.progress_saver_callback import ProgressSaverCallback
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_PROGRESS_SAVING_FREQUENCY,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
-from coordination.common.log import configure_log
 from coordination.common.tmux import TMUX
-from coordination.common.types import ParameterValueType
-from coordination.common.utils import NumpyArrayEncoder, set_random_seed
+from coordination.common.utils import NumpyArrayEncoder
 from coordination.model.builder import ModelBuilder
 from coordination.model.config.mapper import DataMapper
-from coordination.model.coordination_model import CoordinationPosteriorSamples
-from coordination.model.vocalic_model import (VOCALIC_FEATURES, VocalicModel,
-                                              VocalicSeries)
-from coordination.model.vocalic_semantic_model import (VocalicSemanticModel,
-                                                       VocalicSemanticSeries)
-
-"""
-This script divides the list of USAR experiments in a .csv dataset such that they can be processed 
-in parallel. Since the parameters are not shared across experiments, we can perform inferences in 
-multiple models in parallel if we have computing resources.
-
-Using the multiprocessing library to spawn an inference function in parallel in a single script 
-results in a 'AssertionError: daemonic processes are not allowed to have children'. This is due to 
-the multiple processes creates during inference (one per chain) and the impossibility of creating
-children processes from processes spawn with multiprocessing library. Therefore, we do this 
-parallelization via shell commands. We split the experiments into different processes which are 
-performed in different TMUX windows of the same TMUX session. If the tmux session does not exist, 
-this script will create one named as the run ID. If the number of experiments is bigger than the 
-number of processes they should be split into, some processes will be responsible for performing 
-inference sequentially in the experiments assigned to them.
-
-Note: 
-1. This script requires TMUX to be installed in the machine.
-2. This script requires Conda to be installed in the machine and have an environment called 
-    'coordination' with the dependencies listed in requirements.txt installed.
-3. Before running this script for the first time, the user has to check if tmux initializes 
-    conda when a new session or window is created. This is accomplished by copying the conda 
-    initialization script, typically saved in the shell rc file (e.g., .bashrc), to their shell 
-    profile file (e.g., .bash_profile).
-"""
 
 
 def infer(out_dir: str,
@@ -185,13 +168,13 @@ def infer(out_dir: str,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Runs NUTS inference algorithm for multiple experiments in a .csv file in "
-                    "parallel. This script calls the bin/run_inference_sequentially multiple times "
-                    "with a series of experiments to be executed in sequence in each job. "
+                    "parallel. This script calls the bin/run_inference_sequentially multiple "
+                    "times with a series of experiments to be executed in sequence in each job. "
                     ""
                     "This script has an associated run_id (a timestamp) which names a folder that "
                     "is created under out_dir to store results and relevant data. A new TMUX "
-                    "session is created named as the run_id and each inference process will run in "
-                    "a separate tmux window of that session."
+                    "session is created named as the run_id and each inference process will run "
+                    "in a separate tmux window of that session."
                     ""
                     "Each experiment will spawn min(num_jobs, num_chains) jobs. Thus, the machine "
                     "needs num_inference_jobs * min(num_jobs, num_chains) available cores to "
