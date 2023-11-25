@@ -54,11 +54,9 @@ class ModelTemplate(Model, ABC):
         """
         Sets parameter values for sampling using values in the model's config bundle.
         """
-        pass
 
     @abstractmethod
     def prepare_for_inference(self):
         """
         Sets parameter values for inference using values in the model's config bundle.
         """
-        pass

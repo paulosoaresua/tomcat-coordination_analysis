@@ -21,7 +21,7 @@ class VocalicModel(ModelTemplate):
     """
 
     def __init__(
-            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -94,10 +94,13 @@ class VocalicModel(ModelTemplate):
         Sets parameter values for sampling using values in the model's config bundle.
         """
         self.coordination.parameters.mean_uc0.value = (
-            np.ones(1) * self.config_bundle.mean_uc0 if self.config_bundle.mean_uc0 else None
+            np.ones(1) * self.config_bundle.mean_uc0
+            if self.config_bundle.mean_uc0
+            else None
         )
-        self.coordination.parameters.sd_uc.value = np.ones(
-            1) * self.config_bundle.sd_uc if self.config_bundle.sd_uc else None
+        self.coordination.parameters.sd_uc.value = (
+            np.ones(1) * self.config_bundle.sd_uc if self.config_bundle.sd_uc else None
+        )
         self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0
         self.state_space.parameters.sd_a.value = self.config_bundle.sd_a
         self.observation.parameters.sd_o.value = self.config_bundle.sd_o
