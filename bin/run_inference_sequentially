@@ -121,6 +121,7 @@ def infer(
         config_bundle.update(model_params_dict)
         data_mapper.update_config_bundle(config_bundle, row_df)
         model = ModelBuilder.build_model(model_name=model_name, config_bundle=config_bundle)
+        model.prepare_for_inference()
         model.create_random_variables()
 
         idata = None
@@ -278,7 +279,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--progress_saving_frequency",
-        type=float,
+        type=int,
         required=False,
         default=DEFAULT_PROGRESS_SAVING_FREQUENCY,
         help="Frequency at which to save the progress in number of samples. For instance, if x, "
@@ -302,4 +303,4 @@ if __name__ == "__main__":
           num_jobs=args.num_jobs,
           nuts_init_method=args.nuts_init_method,
           target_accept=args.target_accept,
-          progress_saving_frequency=agrs.progress_saving_frequency)
+          progress_saving_frequency=args.progress_saving_frequency)

@@ -4,7 +4,7 @@ import numpy as np
 import pymc as pm
 
 from coordination.model.config.vocalic import VocalicConfigBundle
-from coordination.model.model import Model
+from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
@@ -14,14 +14,14 @@ from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
 
 
-class VocalicModel(Model):
+class VocalicModel(ModelTemplate):
     """
     This class represents a vocalic model where subjects are talking to each other and their
     speech vocalics are observed as they finish talking.
     """
 
     def __init__(
-        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -31,7 +31,6 @@ class VocalicModel(Model):
             provided, it will be created along with this model instance.
         """
 
-        self.config_bundle = config_bundle
         if not pymc_model:
             pymc_model = pm.Model()
 
@@ -84,29 +83,49 @@ class VocalicModel(Model):
         super().__init__(
             name="vocalic_model",
             pymc_model=pymc_model,
+            config_bundle=config_bundle,
             coordination=coordination,
             component_groups=[group],
             coordination_samples=config_bundle.coordination_samples,
         )
 
+    def prepare_for_sampling(self):
+        """
+        Sets parameter values for sampling using values in the model's config bundle.
+        """
         self.coordination.parameters.mean_uc0.value = (
-            np.ones(1) * config_bundle.mean_uc0
+            np.ones(1) * self.config_bundle.mean_uc0 if self.config_bundle.mean_uc0 else None
         )
-        self.coordination.parameters.sd_uc.value = np.ones(1) * config_bundle.sd_uc
-        self.state_space.parameters.mean_a0.value = config_bundle.mean_a0
-        self.state_space.parameters.sd_a.value = config_bundle.sd_a
-        self.observation.parameters.sd_o.value = config_bundle.sd_o
+        self.coordination.parameters.sd_uc.value = np.ones(
+            1) * self.config_bundle.sd_uc if self.config_bundle.sd_uc else None
+        self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0
+        self.state_space.parameters.sd_a.value = self.config_bundle.sd_a
+        self.observation.parameters.sd_o.value = self.config_bundle.sd_o
+
+    def prepare_for_inference(self):
+        """
+        Sets parameter values for inference using values in the model's config bundle.
+        """
+
+        # Fill parameter values from config bundle. If values are provided for a parameter, that
+        # parameter won't be latent.
+        self.prepare_for_sampling()
+
         self.coordination.num_time_steps = (
-            config_bundle.num_time_steps_in_coordination_scale
+            self.config_bundle.num_time_steps_in_coordination_scale
         )
         self.state_space.time_steps_in_coordination_scale = (
-            config_bundle.time_steps_in_coordination_scale
+            self.config_bundle.time_steps_in_coordination_scale
         )
-        self.state_space.subject_indices = config_bundle.subject_indices
-        self.state_space.prev_time_same_subject = config_bundle.prev_time_same_subject
-        self.state_space.prev_time_diff_subject = config_bundle.prev_time_diff_subject
-        self.observation.observed_values = config_bundle.observed_values
+        self.state_space.subject_indices = self.config_bundle.subject_indices
+        self.state_space.prev_time_same_subject = (
+            self.config_bundle.prev_time_same_subject
+        )
+        self.state_space.prev_time_diff_subject = (
+            self.config_bundle.prev_time_diff_subject
+        )
+        self.observation.observed_values = self.config_bundle.observed_values
         self.observation.time_steps_in_coordination_scale = (
-            config_bundle.time_steps_in_coordination_scale
+            self.config_bundle.time_steps_in_coordination_scale
         )
-        self.observation.subject_indices = config_bundle.subject_indices
+        self.observation.subject_indices = self.config_bundle.subject_indices

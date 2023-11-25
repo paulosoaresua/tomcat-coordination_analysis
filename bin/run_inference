@@ -307,7 +307,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--progress_saving_frequency",
-        type=float,
+        type=int,
         required=False,
         default=DEFAULT_PROGRESS_SAVING_FREQUENCY,
         help="Frequency at which to save the progress in number of samples. For instance, if x, "
@@ -331,4 +331,4 @@ if __name__ == "__main__":
           nuts_init_method=args.nuts_init_method,
           target_accept=args.target_accept,
           num_inference_jobs=args.num_inference_jobs,
-          progress_saving_frequency=agrs.progress_saving_frequency)
+          progress_saving_frequency=args.progress_saving_frequency)

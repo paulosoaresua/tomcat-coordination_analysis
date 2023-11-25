@@ -1,7 +1,7 @@
 from coordination.model.config.bundle import ModelConfigBundle
 from coordination.model.config.vocalic import VocalicConfigBundle
-from coordination.model.model import Model
 from coordination.model.real.vocalic import VocalicModel
+from coordination.model.template import ModelTemplate
 
 
 class ModelBuilder:
@@ -33,7 +33,7 @@ class ModelBuilder:
         raise ValueError(f"Invalid model ({model_name}).")
 
     @staticmethod
-    def build_model(model_name: str, config_bundle: ModelConfigBundle) -> Model:
+    def build_model(model_name: str, config_bundle: ModelConfigBundle) -> ModelTemplate:
         """
         Gets an instance of the model.
 
