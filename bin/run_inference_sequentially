@@ -49,6 +49,30 @@ def infer(
         nuts_init_method: str,
         target_accept: float,
         progress_saving_frequency: int):
+    """
+    Runs inference for multiple experiments in sequence.
+
+    @param out_dir: directory where results must be saved.
+    @param experiment_ids: a comma-separated list of experiment ids to run inference for.
+    @param evidence_filepath: path of the .csv file containing evidence for the model.
+    @param model_params_dict_filepath: path of the .json file containing values to replace model
+        parameter's default values.
+    @param data_mapping_filepath: path to the file containing a mapping between config bundle
+        attributes and columns in the evidence dataframe.
+    @param model_name: name of the model. One of ["vocalic, "vocalic_semantic"].
+    @param do_prior: whether to perform prior predictive checks.
+    @param do_posterior: whether to fit the model and perform posterior predictive checks.
+    @param seed: random seed for reproducibility.
+    @param burn_in: number of samples in the warm-up phase.
+    @param num_samples: number of samples from the posterior distribution.
+    @param num_chains: number of parallel chains.
+    @param num_jobs: number of jobs per inference up to the number of chains.
+    @param nuts_init_method: initialization method for the NUTS inference algorithm.
+    @param target_accept: acceptance probability.
+    @param progress_saving_frequency: frequency to save progress in number of samples drawn per
+        chain.
+    """
+
     if not do_prior and not do_posterior:
         raise ValueError("No inference to be performed. Set do_prior and/or do_posterior to True.")
 

@@ -62,6 +62,30 @@ def infer(out_dir: str,
           target_accept: float,
           num_inference_jobs: int,
           progress_saving_frequency: int):
+    """
+    Runs inference for multiple experiments in parallel.
+
+    @param out_dir: directory where results must be saved.
+    @param evidence_filepath: path of the .csv file containing evidence for the model.
+    @param model_params_dict_filepath: path of the .json file containing values to replace model
+        parameter's default values.
+    @param data_mapping_filepath: path to the file containing a mapping between config bundle
+        attributes and columns in the evidence dataframe.
+    @param model_name: name of the model. One of ["vocalic, "vocalic_semantic"].
+    @param do_prior: whether to perform prior predictive checks.
+    @param do_posterior: whether to fit the model and perform posterior predictive checks.
+    @param seed: random seed for reproducibility.
+    @param burn_in: number of samples in the warm-up phase.
+    @param num_samples: number of samples from the posterior distribution.
+    @param num_chains: number of parallel chains.
+    @param num_jobs_per_inference: number of jobs per inference up to the number of chains.
+    @param nuts_init_method: initialization method for the NUTS inference algorithm.
+    @param target_accept: acceptance probability.
+    @param num_inference_jobs: number of jobs to split the different experiments in the data into.
+        Each one of these jobs will spawn min(num_chain, num_jobs_per_inference) other processes.
+    @param progress_saving_frequency: frequency to save progress in number of samples drawn per
+        chain.
+    """
 
     # Parameters passed to this function relevant for post-analysis. We will save them to a file.
     execution_params = locals().copy()
