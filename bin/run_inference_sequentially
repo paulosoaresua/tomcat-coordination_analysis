@@ -111,8 +111,8 @@ def infer(
         experiment_list = "\n".join(experiments_not_in_evidence)
         print(f"\nSkipping inference for experiments not in the evidence file: {experiment_list}")
 
-    for _, row_df in evidence_df.iterrows():
-        experiment_id = row_df["experiment_id"]
+    for experiment_id in experiment_ids:
+        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id].iloc[0, :]
         experiment_out_dir = f"{out_dir}/{experiment_id}"
         os.makedirs(experiment_out_dir, exist_ok=True)
 
@@ -137,20 +137,27 @@ def infer(
         idata = None
         if do_prior:
             logger.info("Prior predictive check")
-            idata = model.prior_predictive(num_samples=num_samples, seed=seed)
+            try:
+                idata = model.prior_predictive(num_samples=num_samples, seed=seed)
+            except Exception as ex:
+                logger.error(ex)
 
         if do_posterior:
             logger.info("Fitting model...")
-            idata_posterior = model.fit(
-                seed=seed,
-                burn_in=burn_in,
-                num_samples=num_samples,
-                num_chains=num_chains,
-                num_jobs=num_jobs,
-                nuts_init_method=nuts_init_method,
-                target_accept=target_accept,
-                callback=ProgressSaverCallback(out_dir=experiment_out_dir,
-                                               saving_frequency=progress_saving_frequency))
+            try:
+                idata_posterior = model.fit(
+                    seed=seed,
+                    burn_in=burn_in,
+                    num_samples=num_samples,
+                    num_chains=num_chains,
+                    num_jobs=num_jobs,
+                    nuts_init_method=nuts_init_method,
+                    target_accept=target_accept,
+                    callback=ProgressSaverCallback(out_dir=experiment_out_dir,
+                                                   saving_frequency=progress_saving_frequency))
+            except Exception as ex:
+                logger.error(ex)
+                return
 
             if idata is None:
                 idata = idata_posterior
@@ -169,6 +176,7 @@ def infer(
             )
 
         idata.save(f"{experiment_out_dir}/inference_data")
+        logger.info("[SUCCESS]")
 
 
 if __name__ == "__main__":

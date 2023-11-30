@@ -5,7 +5,7 @@ import streamlit as st
 import os
 from collections import OrderedDict
 
-from coordination.webapp.constants import REFRESH_RATE, INFERENCE_PARAMETERS_DIR
+from coordination.webapp.constants import REFRESH_RATE, INFERENCE_PARAMETERS_DIR, RUN_DIR
 from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
@@ -13,6 +13,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_SEED,
                                            DEFAULT_TARGET_ACCEPT)
+import subprocess
 
 
 def create_run_page():
@@ -75,6 +76,9 @@ def _populate_inference_pane(inference_pane: st.container):
                 inference_execution_params["num_chains"] = st.number_input(
                     label="Number of chains",
                     value=default_parameters.get("num_chains", DEFAULT_NUM_CHAINS))
+                inference_execution_params["num_jobs_per_inference"] = st.number_input(
+                    label="Number of Jobs per Inference (typically = number of chains)",
+                    value=default_parameters.get("num_inference_jobs", DEFAULT_NUM_JOBS))
                 inference_execution_params["num_inference_jobs"] = st.number_input(
                     label="Number of Inference Jobs",
                     value=default_parameters.get("num_inference_jobs", DEFAULT_NUM_JOBS))
@@ -121,7 +125,48 @@ def _populate_inference_pane(inference_pane: st.container):
 
             st.divider()
             submit = st.button(label="Run Inference")
-            st.text_area(label="Terminal Output", disabled=True)
+            if submit:
+                # Save the parameter dictionaries in a tmp folder to that the inference script
+                # can read them.
+                os.makedirs(f"{RUN_DIR}/tmp/config", exist_ok=True)
+                with open(f"{RUN_DIR}/tmp/config/data_mapping.json", "w") as f:
+                    json.dump(json.loads(data_mapping), f)
+
+                with open(f"{RUN_DIR}/tmp/config/params_dict.json", "w") as f:
+                    json.dump(json.loads(model_params_dict), f)
+
+                out_dir = st.session_state["inference_results_dir"]
+                command = (
+                    'PYTHONPATH="." '
+                    './bin/run_inference '
+                    f'--out_dir="{out_dir}" '
+                    '--evidence_filepath="data/asist_data.csv" '
+                    '--model_name="vocalic" '
+                    f'--data_mapping_filepath="{RUN_DIR}/tmp/config/data_mapping.json" '
+                    f'--model_params_dict_filepath="{RUN_DIR}/tmp/config/params_dict.json" '
+                    f'--seed={inference_execution_params["seed"]} '
+                    f'--burn_in={inference_execution_params["burn_in"]} '
+                    f'--num_samples={inference_execution_params["num_samples"]} '
+                    f'--num_chains={inference_execution_params["num_chains"]} '
+                    f'--num_jobs_per_inference='
+                    f'{inference_execution_params["num_jobs_per_inference"]} '
+                    f'--num_inference_jobs={inference_execution_params["num_inference_jobs"]} '
+                    f'--nuts_init_method={inference_execution_params["nuts_init_method"]} '
+                    f'--target_accept={inference_execution_params["target_accept"]}'
+                )
+
+                with st.spinner('Wait for it...'):
+                    outputs = subprocess.Popen(
+                        command,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=True
+                    ).communicate()
+                    output = "".join([o.decode("utf-8") for o in outputs])
+            else:
+                output = ""
+
+            st.text_area(label="Terminal Output", disabled=True, value=output)
 
 
 async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int):
@@ -129,44 +174,113 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
     Populates the progress pane where one can see the progress of the different inference
     processes.
 
+    It's not possible to have widgets that require unique keys in this pane because the widget
+    keys are not cleared until the next run. We could keep creating different keys but this would
+    cause memory leakage as the keys would be accumulated in the run context.
+
     @param progress_pane: container to place the elements of the pane into.
     @param refresh_rate: number of seconds to wait before refreshing the pane.
     """
+
     while True:
         inference_dir = st.session_state["inference_results_dir"]
         with progress_pane:
             with st.container():
+                # The status contains a countdown showing how many seconds until the next refresh.
+                # It is properly filled in the end of this function.
                 status_text = st.empty()
+
                 if os.path.exists(inference_dir):
                     run_ids = [run_id for run_id in sorted(os.listdir(inference_dir), reverse=True)
-                               if
-                               os.path.isdir(f"{inference_dir}/{run_id}")]
+                               if os.path.isdir(f"{inference_dir}/{run_id}")]
                     for i, run_id in enumerate(run_ids):
-                        with open(f"{inference_dir}/{run_id}/execution_params.json", "r") as f:
-                            execution_params = json.load(f)
-                        total_samples_per_chain = execution_params["burn_in"] + execution_params[
-                            "num_samples"]
+                        execution_params_filepath = (
+                            f"{inference_dir}/{run_id}/execution_params.json")
+                        if not os.path.exists(execution_params_filepath):
+                            continue
 
+                        with open(execution_params_filepath, "r") as f:
+                            execution_params_dict = json.load(f)
+
+                        total_samples_per_chain = execution_params_dict["burn_in"] + \
+                                                  execution_params_dict["num_samples"]
                         with st.expander(run_id, expanded=(i == 0)):
-                            st.json(execution_params, expanded=False)
-                            for experiment_id in os.listdir(f"{inference_dir}/{run_id}"):
-                                if not os.path.isdir(f"{inference_dir}/{run_id}/{experiment_id}"):
+                            run_info_container = st.container()
+
+                            # Display progress of each experiment
+                            num_finished_experiments = 0
+                            num_experiments_with_error = 0
+                            experiment_ids = sorted(execution_params_dict["experiment_ids"])
+                            for experiment_id in experiment_ids:
+                                experiment_dir = f"{inference_dir}/{run_id}/{experiment_id}"
+
+                                # From the logs, see if the execution failed, finished
+                                # successfully, or it's still going on so we can put a mark beside
+                                # the experiment id on the screen.
+                                experiment_progress_emoji = ":hourglass:"
+                                log_filepath = f"{experiment_dir}/log.txt"
+                                logs = ""
+                                if os.path.exists(log_filepath):
+                                    with open(log_filepath, "r") as f:
+                                        # We read the log in memory since it's expected to be
+                                        # small.
+                                        logs = f.read()
+                                        if logs.find("ERROR") >= 0:
+                                            experiment_progress_emoji = ":x:"
+                                            num_experiments_with_error += 1
+                                        elif logs.find("SUCCESS") >= 0:
+                                            experiment_progress_emoji = ":white_check_mark:"
+                                            num_finished_experiments += 1
+
+                                st.write(f"## {experiment_id} {experiment_progress_emoji}")
+                                st.json({"logs": logs}, expanded=False)
+
+                                progress_filepath = f"{experiment_dir}/progress.json"
+                                if not os.path.exists(progress_filepath):
                                     continue
 
-                                with open(
-                                        f"{inference_dir}/{run_id}/{experiment_id}/progress.json",
-                                        "r") as f:
-                                    progress = json.load(f)
-
-                                st.write(f"## {experiment_id}")
-                                for key, value in OrderedDict(progress["samples"]).items():
+                                with open(progress_filepath, "r") as f:
+                                    progress_dict = json.load(f)
+                                for key, value in OrderedDict(progress_dict["step"]).items():
+                                    # Display progress bar for each chain.
                                     perc_value = value / total_samples_per_chain
-                                    text = f"{key} - {value} out of {total_samples_per_chain} - " \
-                                           f"{100.0 * perc_value}%"
+                                    text = (f"{key} - {value} out of {total_samples_per_chain} - "
+                                            f"{100.0 * perc_value}%")
                                     st.progress(perc_value, text=text)
+
+                            with run_info_container:
+                                perc_completion = num_finished_experiments / len(experiment_ids)
+                                if perc_completion < 1:
+                                    outputs = subprocess.Popen(
+                                        "tmux ls",
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        shell=True
+                                    ).communicate()
+                                    open_tmux_sessions = "".join(
+                                        [o.decode("utf-8") for o in outputs])
+                                    if open_tmux_sessions.find(
+                                            execution_params_dict["tmux_session_name"]) < 0:
+                                        st.write(
+                                            "**:red[No tmux session for the run found. The inference "
+                                            "process was killed]**.")
+
+                                if num_experiments_with_error > 0:
+                                    st.write(f":x: {num_experiments_with_error} experiments "
+                                             f"finished with an error.")
+
+                                # Percentage of completion
+                                text = (f"{num_finished_experiments} out of {len(experiment_ids)} "
+                                        f"experiments - {100.0 * perc_completion}%")
+                                st.progress(perc_completion, text=text)
+
+                                # Display collapsed json with the execution params
+                                st.json(execution_params_dict, expanded=False)
+
                 else:
                     st.write(f"The directory `{inference_dir}` does not exist.")
 
+                # Wait a few seconds and Update countdown
                 for i in range(refresh_rate, 0, -1):
                     status_text.write(f"**Refreshing in :red[{i} seconds].**")
                     await asyncio.sleep(1)

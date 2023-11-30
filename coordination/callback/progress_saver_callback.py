@@ -21,7 +21,7 @@ class ProgressSaverCallback:
         """
         self.out_dir = out_dir
         self.saving_frequency = saving_frequency
-        self._progress_file = open(f"{self.out_dir}/progress.json", "w")
+        self._progress_filepath = f"{self.out_dir}/progress.json"
         self.progress_dict = {"step": {}, "log_prob": {}}
 
     def __call__(self, trace: NDArray, draw: Draw):
@@ -35,8 +35,8 @@ class ProgressSaverCallback:
             key = f"chain{draw.chain}"
             self.progress_dict["step"][key] = len(trace)
             self.progress_dict["log_prob"][key] = float(draw.stats[0]["model_logp"])
-            self._progress_file.seek(0)
-            json.dump(self.progress_dict, self._progress_file)
 
-    def __del__(self):
-        self._progress_file.close()
+            with open(self._progress_filepath, "w") as f:
+                # We open the file every time something is written to it instead of keeping it
+                # open so we can erase the previous information recorded.
+                json.dump(self.progress_dict, f)

@@ -39,7 +39,9 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_PROGRESS_SAVING_FREQUENCY,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
+                                           DEFAULT_SEED,
+                                           DEFAULT_TARGET_ACCEPT,
+                                           DEFAULT_INFERENCE_RESULTS_DIR)
 from coordination.common.tmux import TMUX
 from coordination.common.utils import NumpyArrayEncoder
 from coordination.model.builder import ModelBuilder
@@ -96,7 +98,7 @@ def infer(out_dir: str,
     # Leave 20% of the cores free
     num_cores = int(multiprocessing.cpu_count() * 0.8)
     num_required_cores = min(num_chains, num_jobs_per_inference) * num_inference_jobs
-    if multiprocessing.cpu_count() < min(num_chains, num_jobs_per_inference) * num_inference_jobs:
+    if num_cores < num_required_cores:
         raise ValueError(f"The machine has {num_cores} cores but {num_required_cores} are "
                          f"required for full parallelization. Reduce the number of inference "
                          f"jobs or the number of jobs per inference and try again.")
@@ -121,9 +123,11 @@ def infer(out_dir: str,
                                 f"{data_mapping_filepath}.")
 
     run_id = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
-    execution_params["run_id"] = run_id
+    tmux = TMUX(run_id.replace(".", "_").replace("-", "_"))
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
+    experiment_ids = sorted(list(evidence_df["experiment_id"].unique()))
+
     config_bundle = ModelBuilder.build_bundle(model_name)
     with open(data_mapping_filepath) as f:
         data_mapping_dict = json.load(f)
@@ -133,8 +137,11 @@ def infer(out_dir: str,
     data_mapper.validate(config_bundle, evidence_df.columns)
 
     # Update execution params with model config bundle and data mapping.
+    execution_params["run_id"] = run_id
     execution_params["model_config_bundle"] = config_bundle.__dict__
     execution_params["data_mapper"] = data_mapping_dict
+    execution_params["tmux_session_name"] = tmux.session_name
+    execution_params["experiment_ids"] = experiment_ids
 
     results_folder = f"{out_dir}/{run_id}"
     os.makedirs(results_folder, exist_ok=True)
@@ -149,11 +156,9 @@ def infer(out_dir: str,
     # execute run_inference_sequentially.py from a tmux window.
     bin_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "."))
 
-    experiments = sorted(list(evidence_df["experiment_id"].unique()))
     experiment_blocks = np.array_split(
-        experiments, min(num_inference_jobs, len(experiments))
+        experiment_ids, min(num_inference_jobs, len(experiment_ids))
     )
-    tmux = TMUX(run_id.replace(".", "_").replace("-", "_"))
     for i, experiments_per_process in enumerate(experiment_blocks):
         # Start a new process in a tmux window for the experiments to be processed.
         experiment_ids = ",".join(experiments_per_process)
