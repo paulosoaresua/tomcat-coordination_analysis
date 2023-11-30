@@ -1,30 +1,29 @@
-from typing import Dict, List
+from typing import List
 
-from coordination.webapp.utils import (get_inference_run_ids,
-                                       create_dropdown_with_default_selection,
-                                       get_execution_params,
-                                       plot_curve)
-
-import streamlit as st
-from coordination.inference.inference_data import InferenceData
 import numpy as np
-import plotly.graph_objs as go
 import plotly.figure_factory as ff
+import streamlit as st
+
+from coordination.inference.inference_data import InferenceData
+from coordination.webapp.utils import (create_dropdown_with_default_selection,
+                                       get_execution_params,
+                                       get_inference_run_ids, plot_curve)
 
 
 def create_visualization_page():
     run_id = create_dropdown_with_default_selection(
         label="Inference run ID",
         key="inference_run_id_single_visualization",
-        values=get_inference_run_ids()
+        values=get_inference_run_ids(),
     )
 
     if not run_id:
         return
 
     execution_params_dict = get_execution_params(run_id)
-    selected_experiment_ids = st.multiselect("Experiment IDs",
-                                             options=execution_params_dict["experiment_ids"])
+    selected_experiment_ids = st.multiselect(
+        "Experiment IDs", options=execution_params_dict["experiment_ids"]
+    )
 
     # Tab 1 contains coordination plots and convergence data.
     # Tab 2 contains plots for any variable the user wants to see.
@@ -37,7 +36,7 @@ def create_visualization_page():
         model_variable = create_dropdown_with_default_selection(
             label="Variable",
             key="model_variable_visualization",
-            values=get_inference_run_ids()
+            values=get_inference_run_ids(),
         )
 
     st.divider()
@@ -45,11 +44,13 @@ def create_visualization_page():
     tab1, tab2 = st.columns(2)
     if execution_params_dict:
         with tab1:
-            _populate_coordination_pane(run_id=run_id,
-                                        experiment_ids=selected_experiment_ids)
+            _populate_coordination_pane(
+                run_id=run_id, experiment_ids=selected_experiment_ids
+            )
         with tab2:
-            _populate_model_variable_pane(run_id=run_id,
-                                          experiment_ids=selected_experiment_ids)
+            _populate_model_variable_pane(
+                run_id=run_id, experiment_ids=selected_experiment_ids
+            )
 
 
 def _populate_coordination_pane(run_id: str, experiment_ids: List[str]):
@@ -79,9 +80,9 @@ def _populate_coordination_pane(run_id: str, experiment_ids: List[str]):
             margin_settings=dict(
                 l=0,  # Adjust the left margin
                 r=0,  # Adjust the right margin
-                b=50, # Adjust the bottom margin
-                t=0   # Adjust the top margin
-            )
+                b=50,  # Adjust the bottom margin
+                t=0,  # Adjust the top margin
+            ),
         )
 
         if st.checkbox("Show stats", key=f"check_stats_coordination_{experiment_id}"):
@@ -92,11 +93,14 @@ def _populate_coordination_pane(run_id: str, experiment_ids: List[str]):
             st.write("Convergence:")
             st.write(idata.generate_convergence_summary())
 
-            fig = ff.create_distplot([means], bin_size=.01,
-                                     show_rug=False,
-                                     group_labels=["Coordination"],
-                                     colors=["rgb(76, 111, 237)"])
-            fig.update_layout(title_text='Distribution of mean coordination')
+            fig = ff.create_distplot(
+                [means],
+                bin_size=0.01,
+                show_rug=False,
+                group_labels=["Coordination"],
+                colors=["rgb(76, 111, 237)"],
+            )
+            fig.update_layout(title_text="Distribution of mean coordination")
             fig.update_layout()
             st.plotly_chart(fig, use_container_width=True)
 

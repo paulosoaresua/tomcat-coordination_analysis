@@ -15,13 +15,14 @@ from typing import List, Optional
 import pandas as pd
 
 from coordination.callback.progress_saver_callback import ProgressSaverCallback
-from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
+from coordination.common.constants import (DEFAULT_BURN_IN,
+                                           DEFAULT_INFERENCE_RESULTS_DIR,
+                                           DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_PROGRESS_SAVING_FREQUENCY,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_INFERENCE_RESULTS_DIR)
+                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.log import configure_log
 from coordination.model.builder import ModelBuilder
 from coordination.model.config.mapper import DataMapper

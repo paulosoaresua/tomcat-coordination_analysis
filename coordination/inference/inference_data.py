@@ -11,7 +11,6 @@ import pandas as pd
 
 from coordination.common.plot import plot_series
 
-
 TRACE_FILENAME = "inference_data.pkl"
 
 
@@ -222,5 +221,5 @@ class InferenceData:
         try:
             with open(filepath, "rb") as f:
                 return cls(pickle.load(f))
-        except:
+        except Exception:
             return None

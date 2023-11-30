@@ -1,23 +1,22 @@
-import json
-
 import asyncio
-import streamlit as st
+import json
 import os
+import subprocess
 from collections import OrderedDict
 
-from coordination.webapp.constants import REFRESH_RATE, INFERENCE_PARAMETERS_DIR, RUN_DIR
-from coordination.common.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_NUM_CHAINS,
+import streamlit as st
+
+from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_SEED,
-                                           DEFAULT_TARGET_ACCEPT)
-import subprocess
-from coordination.webapp.utils import (get_inference_run_ids,
-                                       get_saved_execution_parameter_files,
-                                       create_dropdown_with_default_selection,
-                                       get_execution_params)
+                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
+from coordination.webapp.constants import (INFERENCE_PARAMETERS_DIR,
+                                           REFRESH_RATE, RUN_DIR)
+from coordination.webapp.utils import (create_dropdown_with_default_selection,
+                                       get_execution_params,
+                                       get_inference_run_ids,
+                                       get_saved_execution_parameter_files)
 
 
 def create_run_page():
@@ -45,19 +44,27 @@ def _populate_inference_pane(inference_pane: st.container):
         with st.container():
             saved_params_list = [None]
             if os.path.exists(INFERENCE_PARAMETERS_DIR):
-                saved_params_list.extend(sorted(
-                    [f for f in os.listdir(INFERENCE_PARAMETERS_DIR) if
-                     os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")]))
+                saved_params_list.extend(
+                    sorted(
+                        [
+                            f
+                            for f in os.listdir(INFERENCE_PARAMETERS_DIR)
+                            if os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")
+                        ]
+                    )
+                )
 
             default_parameter_file = create_dropdown_with_default_selection(
                 label="Default execution parameters",
                 key="inference_default_exec_params",
-                values=get_saved_execution_parameter_files()
+                values=get_saved_execution_parameter_files(),
             )
 
             default_parameters = {}
             if default_parameter_file:
-                with open(f"{INFERENCE_PARAMETERS_DIR}/{default_parameter_file}", "r") as f:
+                with open(
+                    f"{INFERENCE_PARAMETERS_DIR}/{default_parameter_file}", "r"
+                ) as f:
                     default_parameters = json.load(f)
 
             tab1, tab2 = st.columns(2)
@@ -65,63 +72,95 @@ def _populate_inference_pane(inference_pane: st.container):
 
             with tab1:
                 inference_execution_params["seed"] = st.number_input(
-                    label="Seed",
-                    value=default_parameters.get("seed", DEFAULT_SEED))
+                    label="Seed", value=default_parameters.get("seed", DEFAULT_SEED)
+                )
                 inference_execution_params["burn_in"] = st.number_input(
                     label="Burn-in",
-                    value=default_parameters.get("burn_in", DEFAULT_BURN_IN))
+                    value=default_parameters.get("burn_in", DEFAULT_BURN_IN),
+                )
                 inference_execution_params["num_samples"] = st.number_input(
                     label="Number of samples",
-                    value=default_parameters.get("num_samples", DEFAULT_NUM_SAMPLES))
+                    value=default_parameters.get("num_samples", DEFAULT_NUM_SAMPLES),
+                )
                 inference_execution_params["num_chains"] = st.number_input(
                     label="Number of chains",
-                    value=default_parameters.get("num_chains", DEFAULT_NUM_CHAINS))
+                    value=default_parameters.get("num_chains", DEFAULT_NUM_CHAINS),
+                )
                 inference_execution_params["num_jobs_per_inference"] = st.number_input(
                     label="Number of Jobs per Inference (typically = number of chains)",
-                    value=default_parameters.get("num_inference_jobs", DEFAULT_NUM_JOBS))
+                    value=default_parameters.get(
+                        "num_inference_jobs", DEFAULT_NUM_JOBS
+                    ),
+                )
                 inference_execution_params["num_inference_jobs"] = st.number_input(
                     label="Number of Inference Jobs",
-                    value=default_parameters.get("num_inference_jobs", DEFAULT_NUM_JOBS))
+                    value=default_parameters.get(
+                        "num_inference_jobs", DEFAULT_NUM_JOBS
+                    ),
+                )
                 inference_execution_params["nuts_init_method"] = st.text_input(
                     label="NUTS init method",
-                    value=default_parameters.get("nuts_init_method", DEFAULT_NUTS_INIT_METHOD))
+                    value=default_parameters.get(
+                        "nuts_init_method", DEFAULT_NUTS_INIT_METHOD
+                    ),
+                )
                 inference_execution_params["target_accept"] = st.number_input(
                     label="Target accept",
-                    value=default_parameters.get("target_accept", DEFAULT_TARGET_ACCEPT))
+                    value=default_parameters.get(
+                        "target_accept", DEFAULT_TARGET_ACCEPT
+                    ),
+                )
 
             with tab2:
                 model_params_dict = st.text_area(
                     label="Model parameters",
-                    value=json.dumps(default_parameters.get("model_params", {}), indent=4))
+                    value=json.dumps(
+                        default_parameters.get("model_params", {}), indent=4
+                    ),
+                )
                 data_mapping = st.text_area(
                     label="Data mapping",
-                    value=json.dumps(default_parameters.get("data_mapping", {}), indent=4))
+                    value=json.dumps(
+                        default_parameters.get("data_mapping", {}), indent=4
+                    ),
+                )
 
                 st.divider()
-                filename = st.text_input(label="Filename",
-                                         placeholder="Enter a filename without extension")
+                filename = st.text_input(
+                    label="Filename", placeholder="Enter a filename without extension"
+                )
                 save_parameters = st.button(label="Save parameters")
 
                 if save_parameters:
                     if filename and len(filename) > 0:
                         try:
                             inference_execution_params["model_params"] = json.loads(
-                                model_params_dict)
-                        except:
-                            st.error("Invalid model parameters. Make sure to enter a valid json "
-                                     "object.")
+                                model_params_dict
+                            )
+                        except Exception:
+                            st.error(
+                                "Invalid model parameters. Make sure to enter a valid json "
+                                "object."
+                            )
 
                         try:
-                            inference_execution_params["data_mapping"] = json.loads(data_mapping)
-                        except:
+                            inference_execution_params["data_mapping"] = json.loads(
+                                data_mapping
+                            )
+                        except Exception:
                             st.error(
-                                "Invalid data mapping. Make sure to enter a valid json object.")
+                                "Invalid data mapping. Make sure to enter a valid json object."
+                            )
 
-                        with open(f"{INFERENCE_PARAMETERS_DIR}/{filename}.json", "w") as f:
+                        with open(
+                            f"{INFERENCE_PARAMETERS_DIR}/{filename}.json", "w"
+                        ) as f:
                             json.dump(inference_execution_params, f)
                     else:
-                        st.error("Please, provide a valid filename before saving the inference "
-                                 "execution parameters.")
+                        st.error(
+                            "Please, provide a valid filename before saving the inference "
+                            "execution parameters."
+                        )
 
             st.divider()
             submit = st.button(label="Run Inference")
@@ -138,7 +177,7 @@ def _populate_inference_pane(inference_pane: st.container):
                 out_dir = st.session_state["inference_results_dir"]
                 command = (
                     'PYTHONPATH="." '
-                    './bin/run_inference '
+                    "./bin/run_inference "
                     f'--out_dir="{out_dir}" '
                     '--evidence_filepath="data/asist_data.csv" '
                     '--model_name="vocalic" '
@@ -148,19 +187,19 @@ def _populate_inference_pane(inference_pane: st.container):
                     f'--burn_in={inference_execution_params["burn_in"]} '
                     f'--num_samples={inference_execution_params["num_samples"]} '
                     f'--num_chains={inference_execution_params["num_chains"]} '
-                    f'--num_jobs_per_inference='
+                    f"--num_jobs_per_inference="
                     f'{inference_execution_params["num_jobs_per_inference"]} '
                     f'--num_inference_jobs={inference_execution_params["num_inference_jobs"]} '
                     f'--nuts_init_method={inference_execution_params["nuts_init_method"]} '
                     f'--target_accept={inference_execution_params["target_accept"]}'
                 )
 
-                with st.spinner('Wait for it...'):
+                with st.spinner("Wait for it..."):
                     outputs = subprocess.Popen(
                         command,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        shell=True
+                        shell=True,
                     ).communicate()
                     output = "".join([o.decode("utf-8") for o in outputs])
             else:
@@ -196,17 +235,23 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
                         if not execution_params_dict:
                             continue
 
-                        total_samples_per_chain = execution_params_dict["burn_in"] + \
-                                                  execution_params_dict["num_samples"]
+                        total_samples_per_chain = (
+                            execution_params_dict["burn_in"]
+                            + execution_params_dict["num_samples"]
+                        )
                         with st.expander(run_id, expanded=(i == 0)):
                             run_info_container = st.container()
 
                             # Display progress of each experiment
                             num_finished_experiments = 0
                             num_experiments_with_error = 0
-                            experiment_ids = sorted(execution_params_dict["experiment_ids"])
+                            experiment_ids = sorted(
+                                execution_params_dict["experiment_ids"]
+                            )
                             for experiment_id in experiment_ids:
-                                experiment_dir = f"{inference_dir}/{run_id}/{experiment_id}"
+                                experiment_dir = (
+                                    f"{inference_dir}/{run_id}/{experiment_id}"
+                                )
 
                                 # From the logs, see if the execution failed, finished
                                 # successfully, or it's still going on so we can put a mark beside
@@ -223,10 +268,14 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
                                             experiment_progress_emoji = ":x:"
                                             num_experiments_with_error += 1
                                         elif logs.find("SUCCESS") >= 0:
-                                            experiment_progress_emoji = ":white_check_mark:"
+                                            experiment_progress_emoji = (
+                                                ":white_check_mark:"
+                                            )
                                             num_finished_experiments += 1
 
-                                st.write(f"## {experiment_id} {experiment_progress_emoji}")
+                                st.write(
+                                    f"## {experiment_id} {experiment_progress_emoji}"
+                                )
                                 st.json({"logs": logs}, expanded=False)
 
                                 progress_filepath = f"{experiment_dir}/progress.json"
@@ -235,37 +284,53 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
 
                                 with open(progress_filepath, "r") as f:
                                     progress_dict = json.load(f)
-                                for key, value in OrderedDict(progress_dict["step"]).items():
+                                for key, value in OrderedDict(
+                                    progress_dict["step"]
+                                ).items():
                                     # Display progress bar for each chain.
                                     perc_value = value / total_samples_per_chain
-                                    text = (f"{key} - {value} out of {total_samples_per_chain} - "
-                                            f"{100.0 * perc_value}%")
+                                    text = (
+                                        f"{key} - {value} out of {total_samples_per_chain} - "
+                                        f"{100.0 * perc_value}%"
+                                    )
                                     st.progress(perc_value, text=text)
 
                             with run_info_container:
-                                perc_completion = num_finished_experiments / len(experiment_ids)
+                                perc_completion = num_finished_experiments / len(
+                                    experiment_ids
+                                )
                                 if perc_completion < 1:
                                     outputs = subprocess.Popen(
                                         "tmux ls",
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
-                                        shell=True
+                                        shell=True,
                                     ).communicate()
                                     open_tmux_sessions = "".join(
-                                        [o.decode("utf-8") for o in outputs])
-                                    if open_tmux_sessions.find(
-                                            execution_params_dict["tmux_session_name"]) < 0:
+                                        [o.decode("utf-8") for o in outputs]
+                                    )
+                                    if (
+                                        open_tmux_sessions.find(
+                                            execution_params_dict["tmux_session_name"]
+                                        )
+                                        < 0
+                                    ):
                                         st.write(
-                                            "**:red[No tmux session for the run found. The inference "
-                                            "process was killed]**.")
+                                            "**:red[No tmux session for the run found. The "
+                                            "inference process was killed]**."
+                                        )
 
                                 if num_experiments_with_error > 0:
-                                    st.write(f":x: {num_experiments_with_error} experiments "
-                                             f"finished with an error.")
+                                    st.write(
+                                        f":x: {num_experiments_with_error} experiments "
+                                        f"finished with an error."
+                                    )
 
                                 # Percentage of completion
-                                text = (f"{num_finished_experiments} out of {len(experiment_ids)} "
-                                        f"experiments - {100.0 * perc_completion}%")
+                                text = (
+                                    f"{num_finished_experiments} out of {len(experiment_ids)} "
+                                    f"experiments - {100.0 * perc_completion}%"
+                                )
                                 st.progress(perc_completion, text=text)
 
                                 # Display collapsed json with the execution params
