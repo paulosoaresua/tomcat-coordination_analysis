@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import pickle
 from typing import Optional, Tuple, Union
 
@@ -9,6 +10,9 @@ import numpy as np
 import pandas as pd
 
 from coordination.common.plot import plot_series
+
+
+TRACE_FILENAME = "inference_data.pkl"
 
 
 class InferenceData:
@@ -60,7 +64,7 @@ class InferenceData:
         """
         self.trace.extend(inference_data.trace)
 
-    def plot_parameter_posterior(self):
+    def plot_parameter_posterior(self) -> Optional[plt.Figure]:
         """
         Plot posteriors of the latent parameters in the model.
         """
@@ -78,6 +82,9 @@ class InferenceData:
             axes = az.plot_trace(self.trace, var_names=var_names)
             fig = axes.ravel()[0].figure
             fig.tight_layout()
+            return fig
+
+        return None
 
     def average_samples(
         self, variable_uuid: str, return_std: bool
@@ -92,10 +99,10 @@ class InferenceData:
         """
 
         samples = self.trace.posterior[variable_uuid]
-        mean_values = samples.mean(dim=["chain", "draw"])
+        mean_values = samples.mean(dim=["chain", "draw"]).to_numpy()
 
         if return_std:
-            std_values = samples.std(dim=["chain", "draw"])
+            std_values = samples.std(dim=["chain", "draw"]).to_numpy()
             return mean_values, std_values
 
         return mean_values
@@ -195,13 +202,25 @@ class InferenceData:
 
         return ax
 
-    def save(self, filepath: str):
+    def save_to_directory(self, directory: str):
         """
         Save inference data. We save the trace since that's more stable due to be a third-party
         object. In other words, if we change the inference data class we don't lose the save data
         because of incompatibility.
 
-        @param filepath: path of the file.
+        @param directory: directory where the trace file must be saved.
         """
-        with open(f"{filepath}.pkl", "wb") as f:
+        with open(f"{directory}/{TRACE_FILENAME}", "wb") as f:
             pickle.dump(self.trace, f)
+
+    @classmethod
+    def from_trace_file_in_directory(cls, directory: str) -> Optional[InferenceData]:
+        filepath = f"{directory}/{TRACE_FILENAME}"
+        if not os.path.exists(directory):
+            return None
+
+        try:
+            with open(filepath, "rb") as f:
+                return cls(pickle.load(f))
+        except:
+            return None

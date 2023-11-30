@@ -175,7 +175,7 @@ def infer(
                 f"--> {perc_divergences}%."
             )
 
-        idata.save(f"{experiment_out_dir}/inference_data")
+        idata.save_to_directory(experiment_out_dir)
         logger.info("[SUCCESS]")
 
 

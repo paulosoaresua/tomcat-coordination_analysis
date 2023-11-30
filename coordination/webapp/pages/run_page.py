@@ -14,6 +14,10 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_SEED,
                                            DEFAULT_TARGET_ACCEPT)
 import subprocess
+from coordination.webapp.utils import (get_inference_run_ids,
+                                       get_saved_execution_parameter_files,
+                                       create_dropdown_with_default_selection,
+                                       get_execution_params)
 
 
 def create_run_page():
@@ -21,19 +25,14 @@ def create_run_page():
     Creates the run page layout.
     """
 
-    inference_results = st.text_input(label="Inference Results Directory",
-                                      value=st.session_state["inference_results_dir"])
-    submit = st.button(label="Update Directory")
-    if submit:
-        st.session_state["inference_results_dir"] = inference_results
-
     st.header("Trigger Inference")
     inference_pane = st.empty()
     _populate_inference_pane(inference_pane)
 
     st.header("Progress")
-    progress_pane = st.empty()
-    asyncio.run(_populate_progress_pane(progress_pane, refresh_rate=REFRESH_RATE))
+    if st.checkbox("Monitor progress"):
+        progress_pane = st.empty()
+        asyncio.run(_populate_progress_pane(progress_pane, refresh_rate=REFRESH_RATE))
 
 
 def _populate_inference_pane(inference_pane: st.container):
@@ -49,11 +48,12 @@ def _populate_inference_pane(inference_pane: st.container):
                 saved_params_list.extend(sorted(
                     [f for f in os.listdir(INFERENCE_PARAMETERS_DIR) if
                      os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")]))
-            default_parameter_file = st.selectbox(
-                "Default parameters",
-                options=saved_params_list,
-                format_func=lambda
-                    x: x if x else "-- Select a json file with default parameters for inference --")
+
+            default_parameter_file = create_dropdown_with_default_selection(
+                label="Default execution parameters",
+                key="inference_default_exec_params",
+                values=get_saved_execution_parameter_files()
+            )
 
             default_parameters = {}
             if default_parameter_file:
@@ -181,7 +181,6 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
     @param progress_pane: container to place the elements of the pane into.
     @param refresh_rate: number of seconds to wait before refreshing the pane.
     """
-
     while True:
         inference_dir = st.session_state["inference_results_dir"]
         with progress_pane:
@@ -190,17 +189,12 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
                 # It is properly filled in the end of this function.
                 status_text = st.empty()
 
-                if os.path.exists(inference_dir):
-                    run_ids = [run_id for run_id in sorted(os.listdir(inference_dir), reverse=True)
-                               if os.path.isdir(f"{inference_dir}/{run_id}")]
+                run_ids = get_inference_run_ids()
+                if len(run_ids) > 0:
                     for i, run_id in enumerate(run_ids):
-                        execution_params_filepath = (
-                            f"{inference_dir}/{run_id}/execution_params.json")
-                        if not os.path.exists(execution_params_filepath):
+                        execution_params_dict = get_execution_params(run_id)
+                        if not execution_params_dict:
                             continue
-
-                        with open(execution_params_filepath, "r") as f:
-                            execution_params_dict = json.load(f)
 
                         total_samples_per_chain = execution_params_dict["burn_in"] + \
                                                   execution_params_dict["num_samples"]
@@ -276,9 +270,6 @@ async def _populate_progress_pane(progress_pane: st.container, refresh_rate: int
 
                                 # Display collapsed json with the execution params
                                 st.json(execution_params_dict, expanded=False)
-
-                else:
-                    st.write(f"The directory `{inference_dir}` does not exist.")
 
                 # Wait a few seconds and Update countdown
                 for i in range(refresh_rate, 0, -1):

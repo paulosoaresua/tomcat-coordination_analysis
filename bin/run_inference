@@ -180,6 +180,7 @@ def infer(out_dir: str,
             f'--seed={seed} '
             f'--burn_in={burn_in} '
             f'--num_samples={num_samples} '
+            f'--num_chains={num_chains} '
             f'--num_jobs={num_jobs_per_inference} '
             f'--nuts_init_method="{nuts_init_method}" '
             f'--target_accept={target_accept} '

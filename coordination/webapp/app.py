@@ -2,6 +2,7 @@ import os
 
 import streamlit as st
 
+from coordination.webapp.pages.header import create_header
 from coordination.webapp.pages.run_page import create_run_page
 from coordination.webapp.pages.visualization_page import create_visualization_page
 
@@ -30,12 +31,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# create_header()
+create_header()
 
-tab1, tab2 = st.tabs(["Run", "Visualization"])
+tab1, tab2 = st.tabs(["Visualization", "Run"])
 
 with tab1:
-    create_run_page()
+    create_visualization_page()
 
 with tab2:
-    create_visualization_page()
+    create_run_page()
