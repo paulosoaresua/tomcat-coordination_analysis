@@ -42,7 +42,7 @@ class ModelVariableDropDownOption(DropDownOption):
         self.dimension_names = dimension_names
 
 
-def create_visualization_page():
+def create_visualization_per_run_page():
     run_id = create_dropdown_with_default_selection(
         label="Inference run ID",
         key="inference_run_id_single_visualization",
@@ -309,7 +309,7 @@ def _add_coordination_stats(inference_data: InferenceData):
             go.Box(y=log_probabilities[chain],
                    name=f"Chain {chain + 1}",
                    fillcolor=color,
-                   line=dict(color=color))
+                   line=dict(color="black"))
         )
     fig.update_layout(title_text="Distribution of Log-probabilities")
     st.plotly_chart(fig, use_container_width=True)

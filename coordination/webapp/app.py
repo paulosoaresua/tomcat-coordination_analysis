@@ -6,7 +6,7 @@ from coordination.common.constants import DEFAULT_INFERENCE_RESULTS_DIR
 from coordination.webapp.pages.header import create_header
 from coordination.webapp.pages.run_page import create_run_page
 from coordination.webapp.pages.visualization_page import \
-    create_visualization_page
+    create_visualization_per_run_page
 
 st.set_page_config(
     page_title="Coordination Processes",
@@ -36,10 +36,14 @@ st.markdown(
 
 create_header()
 
-tab1, tab2 = st.tabs(["Visualization", "Run"])
+tab1, tab2, tab3 = st.tabs(["Visualization per Run", "Run vs Run", "Run"])
 
 with tab1:
-    create_visualization_page()
+    create_visualization_per_run_page()
 
 with tab2:
+    st.write("Not implemented yet")
+    # create_run_vs_run_page()
+
+with tab3:
     create_run_page()
