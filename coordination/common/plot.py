@@ -1,13 +1,14 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from xarray import DataArray
 
 
 def plot_series(
-    x: np.ndarray,
-    y: np.ndarray,
-    y_std: np.ndarray = None,
+    x: Union[np.ndarray, DataArray],
+    y: Union[np.ndarray, DataArray],
+    y_std: Union[np.ndarray, DataArray] = None,
     label: str = "",
     include_bands: bool = False,
     value_bounds: Optional[Tuple[float, float]] = None,

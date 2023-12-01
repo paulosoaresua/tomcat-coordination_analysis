@@ -8,6 +8,7 @@ import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xarray
 
 from coordination.common.plot import plot_series
 
@@ -39,6 +40,61 @@ class InferenceData:
 
         return num_chains * num_samples_per_chain
 
+    @property
+    def posterior_latent_variables(self) -> List[str]:
+        """
+        Gets names of latent variables that were sampled inferred during model fit.
+
+         We consider latent variables those that are in the list of latent variables and that have
+         a time dimension attached to them. The remaining latent variables are considered latent
+         parameters and can be retrieved with the method posterior_latent_parameters.
+
+        @return: list of latent variable names
+        """
+        var_names = []
+        for var_name in self.trace["posterior"].data_vars:
+            var = self.trace["posterior"].data_vars[var_name]
+            if len([dim for dim in var.dims if "time" in dim]) > 0:
+                var_names.append(var_name)
+
+        return var_names
+
+    @property
+    def observed_variables(self) -> List[str]:
+        """
+        Gets names of variables that were observed during model fit.
+
+         We consider observed variables those that are in the list of observed variables and that
+         have a time dimension attached to them. The remaining observed variables are considered
+         parameters parameters and can be retrieved from the model config bundle in the execution
+         params of an inference run.
+
+        @return: list of latent variable names
+        """
+        var_names = []
+        for var_name in self.trace.observed_data.data_vars:
+            var = self.trace.observed_data.data_vars[var_name]
+            if len([dim for dim in var.dims if "time" in dim]) > 0:
+                var_names.append(var_name)
+
+        return var_names
+
+    def posterior_latent_parameters(self) -> List[str]:
+        """
+        Gets names of latent parameter variables that were inferred during model fit.
+
+        We consider parameter variables those that do not have a time dimension attached to them.
+
+        @return: list of latent parameter variable names.
+        """
+        var_names = []
+        for var_name in self.trace["posterior"].data_vars:
+            var = self.trace["posterior"].data_vars[var_name]
+            if len([dim for dim in var.dims if "time" in dim]) == 0:
+                var_names.append(var_name)
+
+        return var_names
+
     def generate_convergence_summary(self) -> pd.DataFrame:
         """
         Estimates Rhat distribution for the latent variables in the posterior inference data.
@@ -68,14 +124,7 @@ class InferenceData:
         Plot posteriors of the latent parameters in the model.
         """
 
-        # Get from the list of variables in the posterior trace that do not have a time dimension
-        # attached to them.
-        var_names = []
-        for var_name in self.trace["posterior"].data_vars:
-            var = self.trace["posterior"].data_vars[var_name]
-            if len([dim for dim in var.dims if "time" in dim]) == 0:
-                var_names.append(var_name)
-
+        var_names = self.posterior_latent_parameters()
         if len(var_names) > 0:
             var_names = sorted(var_names)
             axes = az.plot_trace(self.trace, var_names=var_names)
@@ -87,24 +136,40 @@ class InferenceData:
 
     def average_samples(
         self, variable_uuid: str, return_std: bool
-    ) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior distribution.
 
         @param variable_uuid: unique identifier of the variable with the samples to average.
         @param return_std: whether to return a tuple with the mean values and standard deviation or
             just the mean values.
+        @raise ValueError: if the variable is not in the inference data as latent or observed.
         @return: variable's posterior mean and optionally standard deviation per time step.
         """
 
-        samples = self.trace.posterior[variable_uuid]
-        mean_values = samples.mean(dim=["chain", "draw"]).to_numpy()
+        if variable_uuid in self.trace.posterior:
+            samples = self.trace.posterior[variable_uuid]
 
-        if return_std:
-            std_values = samples.std(dim=["chain", "draw"]).to_numpy()
-            return mean_values, std_values
+            mean_values = samples.mean(dim=["chain", "draw"])
 
-        return mean_values
+            if return_std:
+                std_values = samples.std(dim=["chain", "draw"])
+                return mean_values, std_values
+
+            return mean_values
+        elif variable_uuid in self.trace.observed_data:
+            samples = self.trace.observed_data[variable_uuid]
+
+            mean_values = samples
+
+            if return_std:
+                # There's no std in observed data. It's a given series with no uncertainty.
+                std_values = xarray.zeros_like(mean_values)
+                return mean_values, std_values
+
+            return mean_values
+        else:
+            raise ValueError(f"Variable ({variable_uuid}) not found in the inference data.")
 
     def plot_time_series_posterior(
         self,
