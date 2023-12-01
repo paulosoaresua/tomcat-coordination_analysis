@@ -49,9 +49,9 @@ def plot_series(
         if value_bounds is not None and value_bounds[0] is not None:
             lower_band = np.maximum(lower_band, value_bounds[0])
 
-        upper_band = np.minimum(y + y_std, 1)
+        upper_band = y + y_std
         if value_bounds is not None and value_bounds[1] is not None:
-            upper_band = np.maximum(upper_band, value_bounds[1])
+            upper_band = np.minimum(upper_band, value_bounds[1])
 
         ax.fill_between(x, lower_band, upper_band, alpha=0.5)  # , cmap=colormap)
 

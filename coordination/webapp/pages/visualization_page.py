@@ -8,16 +8,34 @@ from coordination.inference.inference_data import InferenceData
 from coordination.webapp.utils import (create_dropdown_with_default_selection,
                                        get_execution_params,
                                        get_inference_run_ids, plot_curve, get_model_variables)
+from coordination.webapp.utils import DropDownOption
 
 COORDINATION_STATS_VARIABLE = "coordination_stats"
 LATENT_PARAMETERS_VARIABLE = "latent_parameters"
+
+
+class DropDownOptionWithInferenceMode(DropDownOption):
+    """
+    This class represents a dropdown option extended with an extra inference mode parameter.
+    """
+
+    def __init__(self, name: str, inference_mode: str, prefix: Optional[str] = None):
+        """
+        Creates a dropdown option.
+
+        @param name: option name.
+        @param inference mode. One of posterior, prior_check or posterior_predictive.
+        @param prefix: prefix to be prepended to the option.
+        """
+        super().__init__(name, prefix)
+        self.inference_mode = inference_mode
 
 
 def create_visualization_page():
     run_id = create_dropdown_with_default_selection(
         label="Inference run ID",
         key="inference_run_id_single_visualization",
-        values=get_inference_run_ids(),
+        options=get_inference_run_ids(),
     )
 
     if not run_id:
@@ -33,27 +51,62 @@ def create_visualization_page():
     # plots.
     # Get a sample idata to see what variables are available as latent and observation.
     model_variables = get_model_variables(run_id)
-    variable_names = [("[LATENT]", v) for v in model_variables["latent"]]
-    variable_names += [("[OBSERVED]", v) for v in model_variables["observed"]]
-    variable_names += [("[EXTRA]", COORDINATION_STATS_VARIABLE),
-                       ("[EXTRA]", LATENT_PARAMETERS_VARIABLE)]
-    variable_names.sort()
+
+    # Create a dictionary with the variable names and associated dimensions to choose from if they
+    # have more than one.
+    variable_dimension_dict = {COORDINATION_STATS_VARIABLE: [], LATENT_PARAMETERS_VARIABLE: []}
+    variable_dimension_dict.update(
+        {var: dims for var, dims in model_variables["latent"]}
+    )
+    variable_dimension_dict.update(
+        {var: dims for var, dims in model_variables["observed"]}
+    )
+
+    # Prefix + (variable name, mode)
+    variable_names = [DropDownOptionWithInferenceMode(v[0], "posterior", "[LATENT]") for v in
+                      model_variables["latent"]]
+    variable_names += [DropDownOptionWithInferenceMode(v[0], "posterior", "[OBSERVED]") for v in
+                       model_variables["observed"]]
+    variable_names += [
+        DropDownOptionWithInferenceMode(v[0], "posterior_predictive", "[POSTERIOR_PREDICTIVE]") for
+        v in
+        model_variables["posterior_predictive"]]
+    variable_names += [
+        DropDownOptionWithInferenceMode(COORDINATION_STATS_VARIABLE, "posterior", "[EXTRA]"),
+        DropDownOptionWithInferenceMode(LATENT_PARAMETERS_VARIABLE, "posterior", "[EXTRA]")]
+    variable_names.sort(key=lambda x: x.name)
     tab1, tab2 = st.columns(2)
     with tab1:
         st.write("## Model variable")
         model_variable_left = create_dropdown_with_default_selection(
             label="Variable",
             key="model_variable_visualization_left",
-            values=variable_names
+            options=variable_names
         )
+
+        model_variable_dimension_left = 0
+        if model_variable_left and len(variable_dimension_dict[model_variable_left.name]) > 1:
+            model_variable_dimension_left = st.selectbox(
+                "Dimension",
+                key="model_variable_visualization_left_dimension",
+                options=variable_dimension_dict[model_variable_left.name]
+            )
 
     with tab2:
         st.write("## Model variable")
         model_variable_right = create_dropdown_with_default_selection(
             label="Variable",
             key="model_variable_visualization_right",
-            values=variable_names
+            options=variable_names
         )
+
+        model_variable_dimension_right = 0
+        if model_variable_right and len(variable_dimension_dict[model_variable_right.name]) > 1:
+            model_variable_dimension_right = st.selectbox(
+                "Dimension",
+                key="model_variable_visualization_right_dimension",
+                options=variable_dimension_dict[model_variable_right.name]
+            )
 
     st.divider()
 
@@ -61,30 +114,40 @@ def create_visualization_page():
         for experiment_id in selected_experiment_ids:
             tab1, tab2 = st.columns(2)
             with tab1:
-                _populate_variable_pane(
-                    run_id=run_id,
-                    experiment_id=experiment_id,
-                    variable_name=model_variable_left
-                )
+                if model_variable_left:
+                    _populate_variable_pane(
+                        run_id=run_id,
+                        experiment_id=experiment_id,
+                        variable_name=model_variable_left.name,
+                        variable_dimension=model_variable_dimension_left,
+                        mode=model_variable_left.inference_mode
+                    )
             with tab2:
-                _populate_variable_pane(
-                    run_id=run_id,
-                    experiment_id=experiment_id,
-                    variable_name=model_variable_right
-                )
+                if model_variable_right:
+                    _populate_variable_pane(
+                        run_id=run_id,
+                        experiment_id=experiment_id,
+                        variable_name=model_variable_right.name,
+                        variable_dimension=model_variable_dimension_right,
+                        mode=model_variable_right.inference_mode
+                    )
 
 
-def _populate_variable_pane(run_id: str, experiment_id: str, variable_name: Optional[str]):
+def _populate_variable_pane(run_id: str,
+                            experiment_id: str,
+                            variable_name: str,
+                            variable_dimension: str,
+                            mode: str):
     """
-    Populates pane with a list of coordination plots and convergence table from a list of
-    experiments.
+    Populates pane with a list of inference plots for a model variable/parameters, or general
+    coordination statistics.
 
     @param run_id: ID of the inference run.
     @param experiment_id: experiment ID in the run to analyze.
+    @param variable_name: name of the variable to plot.
+    @param variable_dimension: the dimension to plot if there's more than one.
+    @param mode: inference mode: posterior, prior_check or posterior_predictive
     """
-    if not variable_name:
-        return
-
     inference_dir = st.session_state["inference_results_dir"]
     st.write(f"### {experiment_id}")
 
@@ -96,7 +159,7 @@ def _populate_variable_pane(run_id: str, experiment_id: str, variable_name: Opti
         return
 
     if variable_name == COORDINATION_STATS_VARIABLE:
-        means = idata.average_samples("coordination", return_std=False)
+        means = idata.average_posterior_samples("coordination", return_std=False)
         means = means.to_numpy()
 
         st.write("#### Stats")
@@ -119,13 +182,16 @@ def _populate_variable_pane(run_id: str, experiment_id: str, variable_name: Opti
     elif variable_name == LATENT_PARAMETERS_VARIABLE:
         st.pyplot(idata.plot_parameter_posterior(), clear_figure=True)
     else:
-        plot_curve(
+        fig = plot_curve(
             variable_name=variable_name,
+            dimension=variable_dimension,
             inference_data=idata,
-            margin_settings=dict(
-                l=0,  # Adjust the left margin
-                r=0,  # Adjust the right margin
-                b=50,  # Adjust the bottom margin
-                t=0,  # Adjust the top margin
-            ),
+            mode=mode
         )
+        # margin_settings = dict(
+        #     l=0,  # Adjust the left margin
+        #     r=0,  # Adjust the right margin
+        #     b=50,  # Adjust the bottom margin
+        #     t=0,  # Adjust the top margin
+        # ),
+        # fig.update_layout(margin=margin_settings)

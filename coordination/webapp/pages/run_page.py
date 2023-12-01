@@ -57,7 +57,7 @@ def _populate_inference_pane(inference_pane: st.container):
             default_parameter_file = create_dropdown_with_default_selection(
                 label="Default execution parameters",
                 key="inference_default_exec_params",
-                values=get_saved_execution_parameter_files(),
+                options=get_saved_execution_parameter_files(),
             )
 
             default_parameters = {}
