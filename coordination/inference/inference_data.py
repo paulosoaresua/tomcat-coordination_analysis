@@ -41,46 +41,55 @@ class InferenceData:
         return num_chains * num_samples_per_chain
 
     @property
-    def posterior_latent_variables(self) -> List[str]:
+    def posterior_latent_data_variables(self) -> List[str]:
         """
-        Gets names of latent variables that were sampled during model fit.
+        Gets names of latent data variables that were sampled during model fit.
 
-        We consider latent variables those that are in the list of latent variables and that have
-        a time dimension attached to them. The remaining latent variables are considered latent
-        parameters and can be retrieved with the method posterior_latent_parameters.
+        We consider latent data variables those that are in the list of latent variables and that
+        have a time dimension attached to them. The remaining latent variables are considered
+        latent parameter.
 
         @return: list of latent variable names
         """
-        return self._get_vars(mode="posterior", with_time_dimension=True)
+        return self._get_vars(inference_mode="posterior", with_time_dimension=True)
+
+    @property
+    def prior_predictive_variables(self) -> List[str]:
+        """
+        Gets names of data and parameter variables that were sampled during prior predictive check.
+
+        @return: list of posterior predictive variable names
+        """
+        data_variables = self._get_vars(inference_mode="prior_predictive", with_time_dimension=True)
+        parameter_variables = self._get_vars(inference_mode="prior_predictive", with_time_dimension=False)
+        return data_variables + parameter_variables
 
     @property
     def posterior_predictive_variables(self) -> List[str]:
         """
-        Gets names of variables that were sampled during posterior predictive check.
-
-        We consider variables those that are in the list of posterior predictive variables and
-        that have a time dimension attached to them. The remaining latent variables are considered
-        latent parameters and can be retrieved with the method posterior_predictive_parameters.
+        Gets names of variables and parameters that were sampled during posterior predictive check.
 
         @return: list of posterior predictive variable names
         """
-        return self._get_vars(mode="posterior_predictive", with_time_dimension=True)
+        data_variables = self._get_vars(inference_mode="posterior_predictive", with_time_dimension=True)
+        parameter_variables = self._get_vars(inference_mode="posterior_predictive",
+                                             with_time_dimension=False)
+        return data_variables + parameter_variables
 
     @property
-    def observed_variables(self) -> List[str]:
+    def observed_data_variables(self) -> List[str]:
         """
         Gets names of variables that were observed during model fit.
 
-         We consider observed variables those that are in the list of observed variables and that
-         have a time dimension attached to them. The remaining observed variables are considered
-         parameters parameters and can be retrieved from the model config bundle in the execution
-         params of an inference run.
+         We consider observed data variables those that are in the list of observed variables and
+         that have a time dimension attached to them. The remaining observed variables are
+         considered observed parameter variables.
 
-        @return: list of latent variable names
+        @return: list of observed data variable names
         """
-        return self._get_vars(mode="observed_data", with_time_dimension=True)
+        return self._get_vars(inference_mode="observed_data", with_time_dimension=True)
 
-    def posterior_latent_parameters(self) -> List[str]:
+    def posterior_latent_parameter_variables(self) -> List[str]:
         """
         Gets names of latent parameter variables that were inferred during model fit.
 
@@ -88,32 +97,53 @@ class InferenceData:
 
         @return: list of latent parameter variable names.
         """
-        return self._get_vars(mode="posterior", with_time_dimension=False)
+        return self._get_vars(inference_mode="posterior", with_time_dimension=False)
 
-    def _get_vars(self, mode: str, with_time_dimension: bool) -> List[str]:
+    def _get_vars(self, inference_mode: str, with_time_dimension: bool) -> List[str]:
         """
         Gets a list of variable names from a specific mode with or without an associated time
         dimension.
 
-        @param mode: @param mode: one of the following modes in the trace "posterior",
-            "prior_check", "posterior_predictive", "observed_data".
+        @param inference_mode: one of the posterior, prior_predictive, or posterior_predictive.
         @param with_time_dimension: whether the variable has a time dimension associated to it.
         @return: list of variable names.
         """
-        if mode not in self.trace:
+        if inference_mode not in self.trace:
             return []
 
         var_names = []
-        for var_name in self.trace[mode].data_vars:
-            var = self.trace[mode].data_vars[var_name]
+        for var_name in self.trace[inference_mode].data_vars:
             if with_time_dimension:
-                if len([dim for dim in var.dims if "time" in dim]) > 0:
+                if not self.is_parameter(inference_mode, var_name):
                     var_names.append(var_name)
-            else:
-                if len([dim for dim in var.dims if "time" in dim]) == 0:
-                    var_names.append(var_name)
+            elif self.is_parameter(inference_mode, var_name):
+                var_names.append(var_name)
 
         return var_names
+
+    def is_parameter(self, inference_mode: str, variable_name: str) -> bool:
+        """
+        Checks is a variable is a parameter or not. We consider a variable as a parameter if it
+        does not have a time dimension associated to it.
+
+        @param inference_mode: one of the posterior, prior_predictive, or posterior_predictive.
+        @param variable_name: name of the variable.
+        @return:
+        """
+        if inference_mode in self.trace:
+            if variable_name in self.trace[inference_mode].data_vars:
+                var = self.trace[inference_mode].data_vars[variable_name]
+                return len([dim for dim in var.dims if "time" in dim]) == 0
+            elif variable_name in self.trace.observed_data.data_vars:
+                # Look in the list of observed variables
+                var = self.trace.observed_data.data_vars[variable_name]
+                return len([dim for dim in var.dims if "time" in dim]) == 0
+            else:
+                raise ValueError(
+                    f"Variable ({variable_name}) not found for inference mode ({inference_mode}).")
+        else:
+            raise ValueError(
+                f"Inference modee ({inference_mode}) not found in the trace.")
 
     def generate_convergence_summary(self) -> pd.DataFrame:
         """
@@ -144,7 +174,7 @@ class InferenceData:
         Plot posteriors of the latent parameters in the model.
         """
 
-        var_names = self.posterior_latent_parameters()
+        var_names = self.posterior_latent_parameter_variables()
         if len(var_names) > 0:
             var_names = sorted(var_names)
             axes = az.plot_trace(self.trace, var_names=var_names)
@@ -155,55 +185,72 @@ class InferenceData:
         return None
 
     def average_posterior_samples(
-            self, variable_uuid: str, return_std: bool
+            self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior distribution.
 
-        @param variable_uuid: unique identifier of the variable with the samples to average.
+        @param variable_name: name of the variable with the samples to average.
         @param return_std: whether to return a tuple with the mean values and standard deviation or
             just the mean values.
         @raise ValueError: if the variable is not in the inference data as latent or observed.
-        @return: variable's posterior mean and optionally standard deviation per time step.
+        @return: variable's posterior mean and optionally standard deviation (per time step if it
+            is a data variable).
         """
 
-        return self._average_samples(variable_uuid, return_std, "posterior")
+        return self._average_samples(variable_name, return_std, "posterior")
+
+    def average_prior_predictive_samples(
+            self, variable_name: str, return_std: bool
+    ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
+        """
+        Gets the mean values from the samples of a variable's prior predictive distribution.
+
+        @param variable_name: name of the variable with the samples to average.
+        @param return_std: whether to return a tuple with the mean values and standard deviation or
+            just the mean values.
+        @raise ValueError: if the variable is not in the inference data as latent or observed.
+        @return: variable's posterior mean and optionally standard deviation (per time step if it
+            is a data variable).
+        """
+
+        return self._average_samples(variable_name, return_std, "prior_predictive")
 
     def average_posterior_predictive_samples(
-            self, variable_uuid: str, return_std: bool
+            self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior predictive distribution.
 
-        @param variable_uuid: unique identifier of the variable with the samples to average.
+        @param variable_name: name of the variable with the samples to average.
         @param return_std: whether to return a tuple with the mean values and standard deviation or
             just the mean values.
         @raise ValueError: if the variable is not in the inference data as latent or observed.
-        @return: variable's posterior mean and optionally standard deviation per time step.
+        @return: variable's posterior mean and optionally standard deviation (per time step if it
+            is a data variable).
         """
 
-        return self._average_samples(variable_uuid, return_std, "posterior_predictive")
+        return self._average_samples(variable_name, return_std, "posterior_predictive")
 
     def _average_samples(
-            self, variable_uuid: str, return_std: bool, mode: str
+            self, variable_name: str, return_std: bool, inference_mode: str
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples in the trace.
 
-        @param variable_uuid: unique identifier of the variable with the samples to average.
+        @param variable_name: name of the variable with the samples to average.
         @param return_std: whether to return a tuple with the mean values and standard deviation or
             just the mean values.
-        @param mode: one of the following modes in the trace "posterior", "prior_check",
-            "posterior_predictive".
-        @raise ValueError: if the mode is not in the inference data.
+        @param inference_mode: one of the posterior, prior_predictive, or posterior_predictive.
+        @raise ValueError: if the inference mode is not in the inference data.
         @raise ValueError: if the variable is not in the inference data as latent or observed.
         @return: variable's posterior mean and optionally standard deviation per time step.
         """
-        if mode not in self.trace:
-            raise ValueError(f"{mode} samples not found in the inference data.")
+        if inference_mode not in self.trace:
+            raise ValueError(f"{inference_mode} samples not found in the inference data.")
 
-        if variable_uuid in self.trace[mode]:
-            samples = self.trace[mode][variable_uuid]
+        if variable_name in self.trace[inference_mode]:
+            samples = self.trace[inference_mode][variable_name]
 
             mean_values = samples.mean(dim=["chain", "draw"])
 
@@ -212,8 +259,8 @@ class InferenceData:
                 return mean_values, std_values
 
             return mean_values
-        elif variable_uuid in self.trace.observed_data:
-            samples = self.trace.observed_data[variable_uuid]
+        elif variable_name in self.trace.observed_data:
+            samples = self.trace.observed_data[variable_name]
 
             mean_values = samples
 
@@ -223,11 +270,11 @@ class InferenceData:
             return mean_values
         else:
             raise ValueError(
-                f"Variable ({variable_uuid}) not found in the inference data (mode = {mode}).")
+                f"Variable ({variable_name}) not found in the inference mode ({inference_mode}).")
 
     def plot_time_series_posterior(
             self,
-            variable_uuid: str,
+            variable_name: str,
             include_bands: bool,
             value_bounds: Optional[Tuple[float, float]] = None,
             ax: Optional[plt.axis] = None,
@@ -237,7 +284,7 @@ class InferenceData:
         """
         Plots the time series of samples draw from the posterior distribution.
 
-        @param variable_uuid: variable to plot.
+        @param variable_name: name of the variable to plot.
         @param include_bands: whether to include error bands.
         @param value_bounds: minimum and maximum values to limit values to a range.
         @param ax: axis to plot on. It will be created if not provided.
@@ -251,7 +298,7 @@ class InferenceData:
             ax = plt.gca()
 
         means, stds = self.average_posterior_samples(
-            variable_uuid=variable_uuid, return_std=True
+            variable_name=variable_name, return_std=True
         )
 
         time_steps = np.arange(means.shape[-1])
@@ -273,13 +320,13 @@ class InferenceData:
             subject_indices = np.array(
                 [
                     int(x.split("#")[0])
-                    for x in getattr(means, f"{variable_uuid}_time").data
+                    for x in getattr(means, f"{variable_name}_time").data
                 ]
             )
             time_steps = np.array(
                 [
                     int(x.split("#")[1])
-                    for x in getattr(means, f"{variable_uuid}_time").data
+                    for x in getattr(means, f"{variable_name}_time").data
                 ]
             )
             subjects = sorted(list(set(subject_indices)))
@@ -300,7 +347,7 @@ class InferenceData:
                     **kwargs,
                 )
             ax.set_ylabel(
-                getattr(means, f"{variable_uuid}_dimension").data[dimension_idx]
+                getattr(means, f"{variable_name}_dimension").data[dimension_idx]
             )
         else:
             # Non-serial variable
@@ -319,7 +366,7 @@ class InferenceData:
                     **kwargs,
                 )
             ax.set_ylabel(
-                getattr(means, f"{variable_uuid}_dimension").data[dimension_idx]
+                getattr(means, f"{variable_name}_dimension").data[dimension_idx]
             )
 
         ax.set_xlabel("Time Step")
@@ -373,4 +420,4 @@ class InferenceData:
 
         @return: a matrix of log-probabilities.
         """
-        self.trace.sample_stats.lp.to_numpy()
+        return self.trace.sample_stats.lp.to_numpy()

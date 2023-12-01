@@ -7,7 +7,7 @@ import plotly.graph_objs as go
 import streamlit as st
 import xarray
 
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR
+from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, DEFAULT_COLOR_PALETTE
 from coordination.inference.inference_data import InferenceData
 
 import plotly.express as px
@@ -139,11 +139,11 @@ def get_model_variables(run_id: str) -> Dict[str, List[str]]:
     """
     Gets a dictionary with a list of tuples containing model variable names and associated list of
     dimension coordinates from the inference data available for any experiment id in an inference
-    run. We divide the lists into "latent" and "observed" variables. They are indexed by the keys
-    "latent" and "observed" in the dictionary respectively.
+    run. We divide the lists into latent, observed, prior and posterior predictive variables, which
+    determines the keys of the dictionary.
 
     @param run_id: ID of the inference run.
-    @return: list of model variables.
+    @return: dictionary with list of variables sampled during inference.
     """
     execution_params_dict = get_execution_params(run_id)
 
@@ -156,30 +156,37 @@ def get_model_variables(run_id: str) -> Dict[str, List[str]]:
         experiment_dir = f"{inference_dir}/{run_id}/{experiment_id}"
         idata = InferenceData.from_trace_file_in_directory(experiment_dir)
         if idata:
-            # Found one idata. That suffices to get the list of variables since the model is the
+            # Found an idata. That suffices to get the list of variables since the model is the
             # same per run ID.
             break
 
     if not idata:
         return []
 
-    latent_variable_names = idata.posterior_latent_variables
-    observed_variable_names = idata.observed_variables
+    latent_variable_names = idata.posterior_latent_data_variables
+    latent_parameter_variable_names = idata.posterior_latent_parameter_variables()
+    observed_variable_names = idata.observed_data_variables
+    prior_predictive = idata.prior_predictive_variables
     posterior_predictive = idata.posterior_predictive_variables
 
-    return {"latent": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
-                       latent_variable_names],
-            "observed": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
-                         observed_variable_names],
-            "posterior_predictive": [(var_name, idata.get_dimension_coordinates(var_name)) for
-                                     var_name in posterior_predictive]
-            }
+    return {
+        "latent": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
+                   latent_variable_names],
+        "observed": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
+                     observed_variable_names],
+        "latent_parameter": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
+                             latent_parameter_variable_names],
+        "prior_predictive": [(var_name, idata.get_dimension_coordinates(var_name)) for
+                             var_name in prior_predictive],
+        "posterior_predictive": [(var_name, idata.get_dimension_coordinates(var_name)) for
+                                 var_name in posterior_predictive],
+    }
 
 
 def plot_curve(
         variable_name: str,
         inference_data: InferenceData,
-        mode: str,
+        inference_mode: str,
         dimension: Union[int, str] = 0
 ) -> go.Figure:
     """
@@ -187,22 +194,24 @@ def plot_curve(
 
     @param variable_name: variable to plot.
     @param inference_data: object with the samples.
-    @param mode: inference mode: one of prior_check, posterior or posterior_predictive.
+    @param inference_mode: one of prior_check, posterior or posterior_predictive.
     @param dimension: index or name of the dimension axis to plot.
     @raise ValueError: if the mode was not found in the inference data.
     @return: a figure with new plots added to it.
     """
 
-    if mode == "posterior":
+    color_palette_iterator = itertools.cycle(DEFAULT_COLOR_PALETTE)
+    if inference_mode == "posterior":
         means, stds = inference_data.average_posterior_samples(variable_name,
                                                                return_std=True)
-    elif mode == "posterior_predictive":
+    elif inference_mode == "prior_predictive":
+        means, stds = inference_data.average_prior_predictive_samples(variable_name,
+                                                                      return_std=True)
+    elif inference_mode == "posterior_predictive":
         means, stds = inference_data.average_posterior_predictive_samples(variable_name,
                                                                           return_std=True)
     else:
-        raise ValueError(f"Invalid inference mode ({mode}).")
-
-    color_palette_iterator = itertools.cycle(px.colors.qualitative.Pastel1)
+        raise ValueError(f"Invalid inference mode ({inference_mode}).")
 
     if len(means.shape) == 1:
         # The series only has a time axis.
@@ -236,7 +245,8 @@ def plot_curve(
         fig = None
         for s in subjects:
             idx = [i for i, subject in enumerate(subject_indices) if subject == s]
-            y = means.loc[dimension][idx] if isinstance(dimension, str) else means[dimension, idx]
+            y = means.loc[dimension][idx] if isinstance(dimension, str) else means[
+                dimension, idx]
             if stds is None:
                 y_std = None
             else:
@@ -256,6 +266,7 @@ def plot_curve(
 
     fig.update_layout(xaxis_title="Time Step",
                       yaxis_title=yaxis_title)
+
     st.plotly_chart(fig, use_container_width=True)
 
     return fig

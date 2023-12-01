@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import plotly.figure_factory as ff
+import plotly.graph_objects as go
 import streamlit as st
 
 from coordination.inference.inference_data import InferenceData
@@ -9,26 +10,36 @@ from coordination.webapp.utils import (create_dropdown_with_default_selection,
                                        get_execution_params,
                                        get_inference_run_ids, plot_curve, get_model_variables)
 from coordination.webapp.utils import DropDownOption
+import plotly.express as px
+import itertools
+from coordination.webapp.constants import DEFAULT_COLOR_PALETTE
 
 COORDINATION_STATS_VARIABLE = "coordination_stats"
 LATENT_PARAMETERS_VARIABLE = "latent_parameters"
 
 
-class DropDownOptionWithInferenceMode(DropDownOption):
+class ModelVariableDropDownOption(DropDownOption):
     """
-    This class represents a dropdown option extended with an extra inference mode parameter.
+    This class represents a dropdown option for a model variable. It contains extra parameters
+    other than the variable name and prefix.
     """
 
-    def __init__(self, name: str, inference_mode: str, prefix: Optional[str] = None):
+    def __init__(self,
+                 name: str,
+                 inference_mode: str,
+                 prefix: str,
+                 dimension_names: Optional[List[str]] = None):
         """
         Creates a dropdown option.
 
         @param name: option name.
         @param inference mode. One of posterior, prior_check or posterior_predictive.
         @param prefix: prefix to be prepended to the option.
+        @param dimension_names: an optional list of dimension names for multidimensional variables.
         """
         super().__init__(name, prefix)
         self.inference_mode = inference_mode
+        self.dimension_names = dimension_names
 
 
 def create_visualization_page():
@@ -42,102 +53,53 @@ def create_visualization_page():
         return
 
     execution_params_dict = get_execution_params(run_id)
+    if not execution_params_dict:
+        return
+
+    st.json(execution_params_dict, expanded=False)
     selected_experiment_ids = st.multiselect(
         "Experiment IDs", options=execution_params_dict["experiment_ids"]
     )
 
-    # Each tab can contain information about one variable of the model for quick comparison
-    # Two extra variables are added: one for coordination stats and another one for parameter
-    # plots.
-    # Get a sample idata to see what variables are available as latent and observation.
-    model_variables = get_model_variables(run_id)
-
-    # Create a dictionary with the variable names and associated dimensions to choose from if they
-    # have more than one.
-    variable_dimension_dict = {COORDINATION_STATS_VARIABLE: [], LATENT_PARAMETERS_VARIABLE: []}
-    variable_dimension_dict.update(
-        {var: dims for var, dims in model_variables["latent"]}
-    )
-    variable_dimension_dict.update(
-        {var: dims for var, dims in model_variables["observed"]}
-    )
-
-    # Prefix + (variable name, mode)
-    variable_names = [DropDownOptionWithInferenceMode(v[0], "posterior", "[LATENT]") for v in
-                      model_variables["latent"]]
-    variable_names += [DropDownOptionWithInferenceMode(v[0], "posterior", "[OBSERVED]") for v in
-                       model_variables["observed"]]
-    variable_names += [
-        DropDownOptionWithInferenceMode(v[0], "posterior_predictive", "[POSTERIOR_PREDICTIVE]") for
-        v in
-        model_variables["posterior_predictive"]]
-    variable_names += [
-        DropDownOptionWithInferenceMode(COORDINATION_STATS_VARIABLE, "posterior", "[EXTRA]"),
-        DropDownOptionWithInferenceMode(LATENT_PARAMETERS_VARIABLE, "posterior", "[EXTRA]")]
-    variable_names.sort(key=lambda x: x.name)
     tab1, tab2 = st.columns(2)
     with tab1:
-        st.write("## Model variable")
-        model_variable_left = create_dropdown_with_default_selection(
-            label="Variable",
-            key="model_variable_visualization_left",
-            options=variable_names
-        )
-
-        model_variable_dimension_left = 0
-        if model_variable_left and len(variable_dimension_dict[model_variable_left.name]) > 1:
-            model_variable_dimension_left = st.selectbox(
-                "Dimension",
-                key="model_variable_visualization_left_dimension",
-                options=variable_dimension_dict[model_variable_left.name]
-            )
-
+        left_variable_option, left_dimension_name = _add_variable_selector(run_id, "vis_left")
     with tab2:
-        st.write("## Model variable")
-        model_variable_right = create_dropdown_with_default_selection(
-            label="Variable",
-            key="model_variable_visualization_right",
-            options=variable_names
-        )
-
-        model_variable_dimension_right = 0
-        if model_variable_right and len(variable_dimension_dict[model_variable_right.name]) > 1:
-            model_variable_dimension_right = st.selectbox(
-                "Dimension",
-                key="model_variable_visualization_right_dimension",
-                options=variable_dimension_dict[model_variable_right.name]
-            )
+        right_variable_option, right_dimension_name = _add_variable_selector(run_id, "vis_right")
 
     st.divider()
 
-    if execution_params_dict:
-        for experiment_id in selected_experiment_ids:
-            tab1, tab2 = st.columns(2)
-            with tab1:
-                if model_variable_left:
-                    _populate_variable_pane(
-                        run_id=run_id,
-                        experiment_id=experiment_id,
-                        variable_name=model_variable_left.name,
-                        variable_dimension=model_variable_dimension_left,
-                        mode=model_variable_left.inference_mode
-                    )
-            with tab2:
-                if model_variable_right:
-                    _populate_variable_pane(
-                        run_id=run_id,
-                        experiment_id=experiment_id,
-                        variable_name=model_variable_right.name,
-                        variable_dimension=model_variable_dimension_right,
-                        mode=model_variable_right.inference_mode
-                    )
+    # Show plots for each selected experiment
+    for experiment_id in selected_experiment_ids:
+        tab1, tab2 = st.columns(2)
+        with tab1:
+            if left_variable_option:
+                _populate_plots_pane(
+                    run_id=run_id,
+                    experiment_id=experiment_id,
+                    variable_name=left_variable_option.name,
+                    dimension_name=left_dimension_name,
+                    inference_mode=left_variable_option.inference_mode,
+                    key_suffix="vis_left"
+                )
+        with tab2:
+            if right_variable_option:
+                _populate_plots_pane(
+                    run_id=run_id,
+                    experiment_id=experiment_id,
+                    variable_name=right_variable_option.name,
+                    dimension_name=right_dimension_name,
+                    inference_mode=right_variable_option.inference_mode,
+                    key_suffix="vis_right"
+                )
 
 
-def _populate_variable_pane(run_id: str,
-                            experiment_id: str,
-                            variable_name: str,
-                            variable_dimension: str,
-                            mode: str):
+def _populate_plots_pane(run_id: str,
+                         experiment_id: str,
+                         variable_name: str,
+                         dimension_name: str,
+                         inference_mode: str,
+                         key_suffix: str):
     """
     Populates pane with a list of inference plots for a model variable/parameters, or general
     coordination statistics.
@@ -145,12 +107,15 @@ def _populate_variable_pane(run_id: str,
     @param run_id: ID of the inference run.
     @param experiment_id: experiment ID in the run to analyze.
     @param variable_name: name of the variable to plot.
-    @param variable_dimension: the dimension to plot if there's more than one.
-    @param mode: inference mode: posterior, prior_check or posterior_predictive
+    @param dimension_name: the dimension of the variable tensor to plot if there's more than one.
+    @param inference_mode: posterior, prior_check or posterior_predictive.
+    @param key_suffix: a suffix to add to the final key of the dropdown widgets in case this
+        function is called multiple times to add multiple variable selectors to the screen.
     """
-    inference_dir = st.session_state["inference_results_dir"]
+
     st.write(f"### {experiment_id}")
 
+    inference_dir = st.session_state["inference_results_dir"]
     experiment_dir = f"{inference_dir}/{run_id}/{experiment_id}"
     idata = InferenceData.from_trace_file_in_directory(experiment_dir)
 
@@ -159,39 +124,202 @@ def _populate_variable_pane(run_id: str,
         return
 
     if variable_name == COORDINATION_STATS_VARIABLE:
-        means = idata.average_posterior_samples("coordination", return_std=False)
-        means = means.to_numpy()
-
-        st.write("#### Stats")
-        st.write(f"Average mean: {means.mean():.4f}")
-        st.write(f"Average median: {np.median(means):.4f}")
-        st.write(f"Std. of the mean: {means.std():.4f}")
-        st.write("Convergence:")
-        st.write(idata.generate_convergence_summary())
-
-        fig = ff.create_distplot(
-            [means],
-            bin_size=0.01,
-            show_rug=False,
-            group_labels=["Coordination"],
-            colors=["rgb(76, 111, 237)"],
-        )
-        fig.update_layout(title_text="Distribution of mean coordination")
-        fig.update_layout()
-        st.plotly_chart(fig, use_container_width=True)
+        _add_coordination_stats(idata)
     elif variable_name == LATENT_PARAMETERS_VARIABLE:
+        # Add the matplotlib plot generated by a trace directly to the screen.
         st.pyplot(idata.plot_parameter_posterior(), clear_figure=True)
     else:
-        fig = plot_curve(
-            variable_name=variable_name,
-            dimension=variable_dimension,
-            inference_data=idata,
-            mode=mode
+        if idata.is_parameter(inference_mode, variable_name):
+            _plot_parameter_histogram(inference_data=idata,
+                                      inference_mode=inference_mode,
+                                      variable_name=variable_name,
+                                      key_suffix=f"{run_id}_{experiment_id}_{key_suffix}")
+        else:
+            plot_curve(
+                variable_name=variable_name,
+                dimension=dimension_name,
+                inference_data=idata,
+                inference_mode=inference_mode
+            )
+            # margin_settings = dict(
+            #     l=0,  # Adjust the left margin
+            #     r=0,  # Adjust the right margin
+            #     b=50,  # Adjust the bottom margin
+            #     t=0,  # Adjust the top margin
+            # ),
+            # fig.update_layout(margin=margin_settings)
+
+
+def _plot_parameter_histogram(inference_data: InferenceData,
+                              inference_mode: str,
+                              variable_name: str,
+                              key_suffix: str):
+    """
+    Plots histograms for a parameter variable. A parameter variable has no time dimension
+    associated with it. We plot histograms instead. We overlay histograms of the chains.
+
+    @param inference_data: inference data with the samples.
+    @param variable_name: name of the variable to plot.
+    @param inference_mode: posterior, prior_check or posterior_predictive.
+    @param key_suffix: a suffix to add to the final key of the dropdown widgets in case this
+        function is called multiple times to add multiple variable selectors to the screen.
+    """
+
+    # Axes = (chain, draw, dim1, dim2...)
+    if variable_name in inference_data.trace[inference_mode]:
+        samples = inference_data.trace[inference_mode][variable_name]
+    elif variable_name in inference_data.trace.observed_data:
+        samples = inference_data.trace.observed_data[variable_name]
+    else:
+        raise ValueError(
+            f"Variable ({variable_name}) not found in inference mode ({inference_mode}).")
+
+    # Add dropdowns to choose the dimensions to index such that we only produce one histogram per
+    # chain at a time.
+    dim_indices = []
+    # The first two axis are chain and draw.
+    for i, num_dimensions_in_axis in enumerate(samples.shape[2:]):
+        dim_indices.append(
+            st.selectbox(
+                f"Dimension {i + 1}",
+                key=f"dim{i}_selector_{key_suffix}",
+                options=range(num_dimensions_in_axis)
+            )
         )
-        # margin_settings = dict(
-        #     l=0,  # Adjust the left margin
-        #     r=0,  # Adjust the right margin
-        #     b=50,  # Adjust the bottom margin
-        #     t=0,  # Adjust the top margin
-        # ),
-        # fig.update_layout(margin=margin_settings)
+
+    if len([idx for idx in dim_indices if idx is None]) == 0:
+        # All dimensions selected
+        for dim_idx in dim_indices:
+            samples = samples[:, :, dim_idx]
+
+        color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
+        colors = [next(color_palette_iter) for _ in range(samples.shape[0])]
+        labels = [f"Chain {chain + 1}" for chain in range(samples.shape[0])]
+        fig = ff.create_distplot(
+            samples.to_numpy(),
+            bin_size=0.01,
+            show_rug=False,
+            group_labels=labels,
+            colors=colors
+        )
+        fig.update_layout(title_text=variable_name)
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def _add_variable_selector(
+        run_id: str,
+        key_suffix: str) -> Tuple[ModelVariableDropDownOption, str]:
+    """
+    Adds a dropdown for selection of a model variable and a dropdown for selection of a dimension
+    for multidimensional variables.
+
+    @param run_id: ID of the inference run.
+    @param key_suffix: a suffix to add to the final key of the dropdown widgets in case this
+        function is called multiple times to add multiple variable selectors to the screen.
+    @return: a tuple containing the model variable option selected and the dimension name selected.
+    """
+
+    st.write("## Model variable")
+    selected_variable = create_dropdown_with_default_selection(
+        label="Variable",
+        key=f"model_variable_selector_{key_suffix}",
+        options=_get_drop_down_model_variable_options(run_id)
+    )
+
+    dimension_name = None
+    if selected_variable and selected_variable.dimension_names and len(
+            selected_variable.dimension_names) > 1:
+        # Selector for dimension if the variable has multiple dimensions.
+        dimension_name = st.selectbox(
+            "Dimension",
+            key=f"dimension_name_selector_{key_suffix}",
+            options=selected_variable.dimension_names
+        )
+
+    return selected_variable, dimension_name
+
+
+def _get_drop_down_model_variable_options(run_id: str) -> List[ModelVariableDropDownOption]:
+    """
+    Gets a list of dropdown options for model variables containing name and extra information
+    like the named list of dimensions for multidimensional variables.
+
+    @param run_id: ID iof the inference run.
+    @return: list of model variables as dropdown options.
+    """
+    model_variables_dict = get_model_variables(run_id)
+
+    model_variable_options = []
+    for prefix, variables in model_variables_dict.items():
+        for variable_name, dimension_names in variables:
+            inference_mode = "posterior" if "predictive" not in prefix else prefix
+
+            model_variable_options.append(
+                ModelVariableDropDownOption(
+                    name=variable_name,
+                    prefix=f"[{prefix.upper()}]",
+                    inference_mode=inference_mode,
+                    dimension_names=dimension_names
+                )
+            )
+
+    # Extra options to the dropdown that are not actual individual variables of the model.
+    model_variable_options.append(
+        ModelVariableDropDownOption(
+            name=COORDINATION_STATS_VARIABLE,
+            prefix="[EXTRA]",
+            inference_mode="posterior",
+            dimension_names=None
+        )
+    )
+    model_variable_options.append(
+        ModelVariableDropDownOption(
+            name=LATENT_PARAMETERS_VARIABLE,
+            prefix="[EXTRA]",
+            inference_mode="posterior",
+            dimension_names=None
+        )
+    )
+    model_variable_options.sort(key=lambda x: (x.prefix, x.name))
+    return model_variable_options
+
+
+def _add_coordination_stats(inference_data: InferenceData):
+    """
+    Adds coordination statistics from the posterior samples to the screen.
+
+    @param inference_data: inference data with the posterior samples.
+    """
+    means = inference_data.average_posterior_samples("coordination", return_std=False)
+    means = means.to_numpy()
+
+    st.write("#### Stats")
+    st.write(f"Average mean: {means.mean():.4f}")
+    st.write(f"Average median: {np.median(means):.4f}")
+    st.write(f"Std. of the mean: {means.std():.4f}")
+    st.write("Convergence:")
+    st.write(inference_data.generate_convergence_summary())
+
+    color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
+    log_probabilities = inference_data.get_log_probs()  # chain x draw
+    fig = go.Figure()
+    for chain in range(log_probabilities.shape[0]):
+        color = next(color_palette_iter)
+        fig.add_trace(
+            go.Box(y=log_probabilities[chain],
+                   name=f"Chain {chain + 1}",
+                   fillcolor=color,
+                   line=dict(color=color))
+        )
+    fig.update_layout(title_text="Distribution of Log-probabilities")
+    st.plotly_chart(fig, use_container_width=True)
+
+    fig = ff.create_distplot(
+        [means],
+        bin_size=0.01,
+        show_rug=False,
+        group_labels=["All Chains"],
+        colors=[next(color_palette_iter)]
+    )
+    fig.update_layout(title_text="Distribution of mean coordination")
+    st.plotly_chart(fig, use_container_width=True)
