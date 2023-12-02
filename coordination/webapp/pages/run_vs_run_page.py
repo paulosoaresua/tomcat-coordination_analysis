@@ -6,6 +6,7 @@ from coordination.webapp.component.experiment_id_multi_selection_component impor
     ExperimentIDMultiSelectionComponent
 from coordination.webapp.component.model_variable_selection_component import \
     ModelVariableSelectionComponent
+from coordination.webapp.component.inference_results_component import InferenceResultsComponent
 
 
 class RunVsRunPage:
@@ -51,3 +52,11 @@ class RunVsRunPage:
             inference_run=inference_run_component.selected_inference_run_
         )
         model_variable_component.create_component()
+
+        for experiment_id in experiment_ids_component.selected_experiment_ids_:
+            inference_results_component = InferenceResultsComponent(
+                component_key=f"{column_key}_{experiment_id}_inference_results",
+                inference_run=inference_run_component.selected_inference_run_,
+                experiment_id=experiment_id,
+                model_variable_info=model_variable_component.selected_model_variable_)
+            inference_results_component.create_component()

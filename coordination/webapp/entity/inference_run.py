@@ -55,12 +55,21 @@ class InferenceRun:
         @return: inference data.
         """
         for experiment_id in self.experiment_ids:
-            experiment_dir = f"{self.inference_dir}/{self.run_id}/{experiment_id}"
-            idata = InferenceData.from_trace_file_in_directory(experiment_dir)
+            idata = self.get_inference_data(experiment_id)
             if idata:
                 return idata
 
         return None
+
+    def get_inference_data(self, experiment_id: str) -> Optional[InferenceData]:
+        """
+        Gets inference data of an experiment.
+
+        @param experiment_id: IF of the experiment.
+        @return: inference data
+        """
+        experiment_dir = f"{self.inference_dir}/{self.run_id}/{experiment_id}"
+        return InferenceData.from_trace_file_in_directory(experiment_dir)
 
     @property
     def model_variables(self) -> Dict[str, ModelVariableInfo]:
