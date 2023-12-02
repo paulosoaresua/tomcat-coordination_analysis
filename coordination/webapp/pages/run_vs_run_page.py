@@ -58,5 +58,6 @@ class RunVsRunPage:
                 component_key=f"{column_key}_{experiment_id}_inference_results",
                 inference_run=inference_run_component.selected_inference_run_,
                 experiment_id=experiment_id,
-                model_variable_info=model_variable_component.selected_model_variable_)
+                model_variable_info=model_variable_component.selected_model_variable_,
+                model_variable_dimension=model_variable_component.selected_dimension_name_)
             inference_results_component.create_component()

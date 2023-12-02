@@ -6,7 +6,7 @@ from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 from coordination.inference.inference_data import InferenceData
-from coordination.webapp.constants import DEFAULT_COLOR_PALETTE
+from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_BOTTOM_MARGIN
 import itertools
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
@@ -75,8 +75,11 @@ class InferenceStatsComponent:
             colors=colors
         )
         fig.update_layout(title_text="Coordination distribution",
+                          xaxis_title="Coordination",
+                          yaxis_title="Density",
                           # Preserve legend order
-                          legend={"traceorder": "normal"})
+                          legend={"traceorder": "normal"},
+                          margin=dict(l=0, r=0, t=0, b=DEFAULT_PLOT_BOTTOM_MARGIN))
         st.plotly_chart(fig, use_container_width=True)
 
     def _plot_log_probability_distribution(self):
@@ -99,6 +102,9 @@ class InferenceStatsComponent:
                        line=dict(color="black"))
             )
         fig.update_layout(title_text="Distribution of log-probabilities",
+                          xaxis_title="Log-probability",
+                          yaxis_title="Density",
                           # Preserve legend order
-                          legend={"traceorder": "normal"})
+                          legend={"traceorder": "normal"},
+                          margin=dict(l=0, r=0, t=0, b=DEFAULT_PLOT_BOTTOM_MARGIN))
         st.plotly_chart(fig, use_container_width=True)

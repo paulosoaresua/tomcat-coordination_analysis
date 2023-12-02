@@ -45,14 +45,14 @@ class ModelVariableSelectionComponent:
         options.append(ModelVariableDropDownOption(
             prefix="[EXTRA]",
             model_variable_info=ModelVariableInfo(
-                name="Inference Stats",
+                variable_name="Inference Stats",
                 inference_mode="inference_stats",
                 dimension_names=[]
             )))
         options.append(ModelVariableDropDownOption(
             prefix="[EXTRA]",
             model_variable_info=ModelVariableInfo(
-                name="Parameter Trace Plot",
+                variable_name="Parameter Trace Plot",
                 inference_mode="parameter_trace",
                 dimension_names=[]
             )))
@@ -96,5 +96,5 @@ class ModelVariableDropDownOption(DropDownOption):
         @param model_variable_info: a model variable object with extra information about a
             variable.
         """
-        super().__init__(model_variable_info.name, prefix)
+        super().__init__(model_variable_info.variable_name, prefix)
         self.model_variable_info = model_variable_info

@@ -94,7 +94,7 @@ class InferenceRun:
             "prior_predictive": [],
             "posterior_predictive": []
         }
-        for mode in ["prior_predictive", "posterior", "posterior_predictive"]:
+        for mode in ["prior_predictive", "posterior", "posterior_predictive", "observed_data"]:
             if mode not in idata.trace:
                 continue
 
@@ -103,38 +103,36 @@ class InferenceRun:
                 dim_names = idata.trace[mode][dim_coordinate].data.tolist() if \
                     dim_coordinate in idata.trace[mode] else []
 
-                if idata.is_parameter(mode, var_name):
-                    variables_dict["latent_parameter"].append(
-                        ModelVariableInfo(
-                            name=var_name,
-                            inference_mode=mode,
-                            dimension_names=dim_names
-                        )
-                    )
-                else:
-                    # This is how the dimension coordinate is defined in Module.dimension_axis_name
-                    variables_dict["latent"].append(
-                        ModelVariableInfo(
-                            name=var_name,
-                            inference_mode=mode,
-                            dimension_names=dim_names
-                        )
-                    )
-
-        for var_name in idata.trace.observed_data.data_vars:
-            # Observed parameters can be retrieved from the inference run execution params.
-            # We only include observed data variables here.
-            dim_coordinate = f"{var_name}_dimension"
-            dim_names = idata.trace.observed_data[dim_coordinate].data.tolist() if \
-                dim_coordinate in idata.trace.observed_data else []
-
-            if not idata.is_parameter("observed_data", var_name):
-                variables_dict["observed"].append(
-                    ModelVariableInfo(
-                        name=var_name,
-                        inference_mode="observed_data",
-                        dimension_names=dim_names
-                    )
+                var_info = ModelVariableInfo(
+                    variable_name=var_name,
+                    inference_mode=mode,
+                    dimension_names=dim_names
                 )
+
+                if mode == "posterior":
+                    if idata.is_parameter(mode, var_name):
+                        variables_dict["latent_parameter"].append(var_info)
+                    else:
+                        variables_dict["latent"].append(var_info)
+                elif mode == "observed_data":
+                    variables_dict["observed"].append(var_info)
+                else:
+                    variables_dict[mode].append(var_info)
+
+        # for var_name in idata.trace.observed_data.data_vars:
+        #     # Observed parameters can be retrieved from the inference run execution params.
+        #     # We only include observed data variables here.
+        #     dim_coordinate = f"{var_name}_dimension"
+        #     dim_names = idata.trace.observed_data[dim_coordinate].data.tolist() if \
+        #         dim_coordinate in idata.trace.observed_data else []
+        #
+        #     if not idata.is_parameter("observed_data", var_name):
+        #         variables_dict["observed"].append(
+        #             ModelVariableInfo(
+        #                 variable_name=var_name,
+        #                 inference_mode="observed_data",
+        #                 dimension_names=dim_names
+        #             )
+        #         )
 
         return variables_dict

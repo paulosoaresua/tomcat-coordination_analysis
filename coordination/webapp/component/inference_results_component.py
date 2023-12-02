@@ -5,6 +5,8 @@ from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 from coordination.webapp.component.inference_stats_component import InferenceStatsComponent
+from coordination.webapp.component.model_variable_inference_results_component import \
+    ModelVariableInferenceResultsComponent
 
 
 class InferenceResultsComponent:
@@ -14,7 +16,7 @@ class InferenceResultsComponent:
     """
 
     def __init__(self, component_key: str, inference_run: InferenceRun, experiment_id: str,
-                 model_variable_info: ModelVariableInfo):
+                 model_variable_info: ModelVariableInfo, model_variable_dimension: str):
         """
         Creates the component.
 
@@ -22,11 +24,14 @@ class InferenceResultsComponent:
         @param inference_run: object containing info about an inference run.
         @param experiment_id: experiment id from the inference run.
         @param model_variable_info: object containing info about the model variable.
+        @param model_variable_dimension: dimension if the variable has more than one to choose
+            from.
         """
         self.component_key = component_key
         self.inference_run = inference_run
         self.experiment_id = experiment_id
         self.model_variable_info = model_variable_info
+        self.model_variable_dimension = model_variable_dimension
 
     def create_component(self):
         """
@@ -55,4 +60,9 @@ class InferenceResultsComponent:
             st.pyplot(idata.plot_parameter_posterior(), clear_figure=True,
                       use_container_width=True)
         else:
-            pass
+            model_variable_inference_results_component = ModelVariableInferenceResultsComponent(
+                component_key=f"{self.component_key}_model_variable_inference_results",
+                model_variable_info=self.model_variable_info,
+                dimension=self.model_variable_dimension,
+                inference_data=idata)
+            model_variable_inference_results_component.create_component()
