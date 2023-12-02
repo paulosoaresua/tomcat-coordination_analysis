@@ -41,6 +41,23 @@ class ModelVariableSelectionComponent:
                 options.append(ModelVariableDropDownOption(prefix=f"[{group.upper()}]",
                                                            model_variable_info=var_info))
 
+        # Add extra options for inference stats and parameter trace plot image
+        options.append(ModelVariableDropDownOption(
+            prefix="[EXTRA]",
+            model_variable_info=ModelVariableInfo(
+                name="Inference Stats",
+                inference_mode="inference_stats",
+                dimension_names=[]
+            )))
+        options.append(ModelVariableDropDownOption(
+            prefix="[EXTRA]",
+            model_variable_info=ModelVariableInfo(
+                name="Parameter Trace Plot",
+                inference_mode="parameter_trace",
+                dimension_names=[]
+            )))
+        options.sort(key=lambda x: (x.prefix, x.name))
+
         selected_option = DropDown(
             label="Variable",
             key=f"{self.component_key}_model_variable_dropdown",

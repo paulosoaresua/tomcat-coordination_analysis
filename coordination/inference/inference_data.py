@@ -175,7 +175,7 @@ class InferenceData:
         Plot posteriors of the latent parameters in the model.
         """
 
-        var_names = self.posterior_latent_parameter_variables()
+        var_names = self.posterior_latent_parameter_variables
         if len(var_names) > 0:
             var_names = sorted(var_names)
             axes = az.plot_trace(self.trace, var_names=var_names)
