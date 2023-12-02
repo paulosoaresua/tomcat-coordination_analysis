@@ -1,11 +1,14 @@
+import time
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+import subprocess
 
 import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.entity.inference_run import InferenceRun
 import os
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR
+from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, INFERENCE_TMP_DIR, \
+    INFERENCE_RESULTS_DIR_STATE_KEY
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
@@ -14,6 +17,9 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_INFERENCE_JOBS)
 from copy import deepcopy
 from coordination.model.config.mapper import DataMapper
+from pkg_resources import resource_string
+from coordination.model.builder import ModelBuilder
+import json
 
 
 class InferenceExecution:
@@ -30,6 +36,7 @@ class InferenceExecution:
         @param inference_dir: directory where inference runs were saved.
         """
         self.component_key = component_key
+        self.inference_dir = inference_dir
 
     def create_component(self):
         """
@@ -53,16 +60,11 @@ class InferenceExecution:
 
         st.divider()
 
-        filename = st.text_input(
-            label="Filename",
-            key=f"{self.component_key}_execution_params_filename",
-            placeholder="Enter a filename without extension"
-        )
-        save_execution_params_button = st.button(label="Save Parameters")
-        if save_execution_params_button:
-            InferenceExecution._save_execution_params(execution_params, filename)
-
-        st.divider()
+        col_left, col_right = st.columns(2)
+        with col_left:
+            self._create_inference_triggering_area(execution_params)
+        with col_right
+            self._create_execution_params_saving_area(execution_params)
 
     @staticmethod
     def _get_saved_execution_parameter_files() -> List[str]:
@@ -109,6 +111,8 @@ class InferenceExecution:
                                 num_inference_jobs=DEFAULT_NUM_INFERENCE_JOBS,
                                 nuts_init_method=DEFAULT_NUTS_INIT_METHOD,
                                 target_accept=DEFAULT_TARGET_ACCEPT,
+                                model=None,
+                                data_filepath=None,
                                 model_params={},
                                 data_mapping={"mappings": []})
 
@@ -156,7 +160,7 @@ class InferenceExecution:
                 key=f"{self.component_key}_num_inference_jobs",
                 value=default_execution_params["num_inference_jobs"]
             )
-            execution_params["nuts_init_method"] = st.number_input(
+            execution_params["nuts_init_method"] = st.text_input(
                 label="NUTS Initialization Method",
                 key=f"{self.component_key}_nuts_init_method",
                 value=default_execution_params["nuts_init_method"]
@@ -168,16 +172,40 @@ class InferenceExecution:
             )
 
         with tab2:
-            execution_params["model_params"] = st.number_input(
+            model_options = sorted(list(ModelBuilder.MODELS))
+            selected_model_index = model_options.index(
+                default_execution_params["model"]) if default_execution_params["model"] else 0
+            execution_params["model"] = st.selectbox(
+                label="Model",
+                key=f"{self.component_key}_model",
+                index=selected_model_index,
+                options=model_options
+            )
+            execution_params["data_filepath"] = st.text_input(
+                label="Data Filepath",
+                key=f"{self.component_key}_data_filepath",
+                value=default_execution_params["data_filepath"]
+            )
+            execution_params["model_params"] = st.text_area(
                 label="Model Parameters",
                 key=f"{self.component_key}_model_params",
-                value=default_execution_params["model_params"]
+                value=json.dumps(default_execution_params["model_params"], indent=4),
+                height=10
             )
-            execution_params["data_mapping"] = st.number_input(
+            execution_params["data_mapping"] = st.text_area(
                 label="Data Mapping",
                 key=f"{self.component_key}_data_mapping",
-                value=default_execution_params["data_mapping"]
+                value=json.dumps(default_execution_params["data_mapping"], indent=4),
+                height=10
             )
+            # Show data mapping schema below the text area for context
+            schema = json.loads(
+                resource_string("coordination", "schema/data_mapper_schema.json").decode(
+                    "utf-8"
+                )
+            )
+            st.write("Data Mapping Schema:")
+            st.json(schema, expanded=False)
 
         return execution_params
 
@@ -188,6 +216,8 @@ class InferenceExecution:
 
         @param execution_params: a dictionary with values of execution parameters.
         @param filename: name of the file to save the execution parameters in.
+        @raise Exception: if either the json provided as model parameters or data mapping is
+            invalid.
         """
         execution_params_copy = deepcopy(execution_params)
         if filename and len(filename) > 0:
@@ -196,24 +226,96 @@ class InferenceExecution:
                 execution_params_copy["model_params"] = json.loads(
                     execution_params["model_params"]
                 )
-            except Exception as ex:
-                st.error(
-                    f"Invalid model parameters. Make sure to enter a valid json object. {ex}"
-                )
+            except Exception:
+                raise Exception(
+                    f"Invalid model parameters. Make sure to enter a valid json object.")
 
             try:
                 execution_params_copy["data_mapping"] = json.loads(
                     execution_params["data_mapping"]
                 )
                 DataMapper(execution_params_copy["data_mapping"])
-            except Exception as ex:
-                st.error(
-                    f"Invalid data mapping. Make sure to enter a valid json object. {ex}"
-                )
+            except Exception:
+                raise Exception(f"Invalid data mapping. Make sure to enter a valid json object.")
 
+            os.makedirs(INFERENCE_PARAMETERS_DIR, exist_ok=True)
             with open(f"{INFERENCE_PARAMETERS_DIR}/{filename}.json", "w") as f:
                 json.dump(execution_params_copy, f)
         else:
-            st.error(
-                "Please, provide a valid filename before saving the parameters."
+            raise Exception("Please, provide a valid filename before saving the parameters.")
+
+    def _create_execution_params_saving_area(self, execution_params: Dict[str, Any]):
+        """
+        Creates area with an input field to enter a name to save the execution parameters on the
+        screen and a button to save them for later usage.
+
+        @param execution_params: execution parameters for the inference run.
+        """
+
+        filename = st.text_input(
+            label="Filename",
+            key=f"{self.component_key}_execution_params_filename",
+            placeholder="Enter a filename without extension"
+        )
+        if st.button(label="Save Parameters"):
+            try:
+                InferenceExecution._save_execution_params(execution_params, filename)
+                with st.spinner("Saving..."):
+                    # Wait a bit so there's has time for the file to be saved and loaded in the
+                    # dropdown when the page refreshes.
+                    time.sleep(2)
+                st.success(f"Execution parameters ({filename}) were saved successfully.")
+
+            except Exception as ex:
+                st.error(ex)
+
+    def _create_inference_triggering_area(self, execution_params: Dict[str, Any]):
+        """
+        Creates area with a button to trigger an inference run with some execution parameters.
+
+        @param execution_params: execution parameters for the inference run.
+        """
+
+        if st.button(label="Run Inference"):
+            # Save the model parameters and data mapping dictionaries to a temporary folder so
+            # that the inference script can read them.
+            os.makedirs(f"{INFERENCE_TMP_DIR}", exist_ok=True)
+
+            model_params_filepath = f"{INFERENCE_TMP_DIR}/params_dict.json"
+            with open(model_params_filepath, "w") as f:
+                json.dump(json.loads(execution_params["model_params"]), f)
+
+            data_mapping_filepath = f"{INFERENCE_TMP_DIR}/data_mapping.json"
+            with open(data_mapping_filepath, "w") as f:
+                json.dump(json.loads(execution_params["data_mapping"]), f)
+
+            command = (
+                'PYTHONPATH="." '
+                "./bin/run_inference "
+                f'--out_dir="{self.inference_dir}" '
+                f'--evidence_filepath="{execution_params["data_filepath"]}" '
+                f'--model_name="{execution_params["model"]}" '
+                f'--data_mapping_filepath="{data_mapping_filepath}" '
+                f'--model_params_dict_filepath="{model_params_filepath}" '
+                f'--seed={execution_params["seed"]} '
+                f'--burn_in={execution_params["burn_in"]} '
+                f'--num_samples={execution_params["num_samples"]} '
+                f'--num_chains={execution_params["num_chains"]} '
+                f'--num_jobs_per_inference={execution_params["num_jobs_per_inference"]} '
+                f'--num_inference_jobs={execution_params["num_inference_jobs"]} '
+                f'--nuts_init_method="{execution_params["nuts_init_method"]}" '
+                f'--target_accept={execution_params["target_accept"]}'
             )
+
+            with st.spinner("Wait for it..."):
+                outputs = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=True,
+                ).communicate()
+                output = "".join([o.decode("utf-8") for o in outputs])
+        else:
+            output = ""
+
+        st.text_area(label="Terminal Output", disabled=True, value=output)

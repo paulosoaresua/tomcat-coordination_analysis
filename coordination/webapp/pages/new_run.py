@@ -9,6 +9,7 @@ from coordination.webapp.component.model_variable_selection import \
 from coordination.webapp.component.inference_results import InferenceResults
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
+from coordination.webapp.component.inference_execution import InferenceExecution
 
 
 class NewRun:
@@ -30,11 +31,16 @@ class NewRun:
         """
         Creates the page by adding different components to the screen.
         """
-        st.header("Trigger Inference")
-        inference_pane = st.empty()
-        _populate_inference_pane(inference_pane)
+        inference_execution_component = InferenceExecution(
+            component_key=f"{self.page_key}_inference_execution",
+            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
+        inference_execution_component.create_component()
+        #
+        # st.header("Trigger Inference")
+        # inference_pane = st.empty()
+        # _populate_inference_pane(inference_pane)
 
-        st.header("Progress")
-        if st.checkbox("Monitor progress"):
-            progress_pane = st.empty()
-            asyncio.run(_populate_progress_pane(progress_pane, refresh_rate=REFRESH_RATE))
+        # st.header("Progress")
+        # if st.checkbox("Monitor progress"):
+        #     progress_pane = st.empty()
+        #     asyncio.run(_populate_progress_pane(progress_pane, refresh_rate=REFRESH_RATE))

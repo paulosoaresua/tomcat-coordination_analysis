@@ -9,14 +9,19 @@ class ModelBuilder:
     This class is responsible from instantiating a concrete model object from its name.
     """
 
+    MODELS = {"conversation", "spring", "vocalic", "vocalic_semantic"}
+
     @staticmethod
     def build_bundle(model_name: str) -> ModelConfigBundle:
         """
         Gets an instance of a model config bundle.
 
         @param model_name: name of the model.
+        @raise ValueError: if the model name is not in the list of valid models.
         @return: an instance of the model config bundle.
         """
+        if model_name not in ModelBuilder.MODELS:
+            raise ValueError(f"Invalid model ({model_name}).")
 
         if model_name == "conversation":
             return None
@@ -30,8 +35,6 @@ class ModelBuilder:
         if model_name == "vocalic_semantic":
             return None
 
-        raise ValueError(f"Invalid model ({model_name}).")
-
     @staticmethod
     def build_model(model_name: str, config_bundle: ModelConfigBundle) -> ModelTemplate:
         """
@@ -39,8 +42,11 @@ class ModelBuilder:
 
         @param model_name: name of the model.
         @param config_bundle: a config bundle containing model's parameter values.
+        @raise ValueError: if the model name is not in the list of valid models.
         @return: an instance of the model.
         """
+        if model_name not in ModelBuilder.MODELS:
+            raise ValueError(f"Invalid model ({model_name}).")
 
         if model_name == "conversation":
             return None
@@ -53,5 +59,3 @@ class ModelBuilder:
 
         if model_name == "vocalic_semantic":
             return None
-
-        raise ValueError(f"Invalid model ({model_name}).")

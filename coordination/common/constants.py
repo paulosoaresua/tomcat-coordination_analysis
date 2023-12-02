@@ -1,3 +1,5 @@
+import os
+
 DEFAULT_SEED = 0
 DEFAULT_NUM_TIME_STEPS = 100
 DEFAULT_SUBJECT_NAMES = ["S1", "S2", "S3"]
@@ -12,4 +14,6 @@ DEFAULT_NUTS_INIT_METHOD = "jitter+adapt_diag"
 DEFAULT_TARGET_ACCEPT = 0.9
 DEFAULT_PROGRESS_SAVING_FREQUENCY = 100
 
-DEFAULT_INFERENCE_RESULTS_DIR = "/Users/paulosoares/code/tomcat-coordination/.run/inferences"
+DEFAULT_INFERENCE_RESULTS_DIR = os.getenv(
+    "INFERENCE_DIR",
+    "/Users/paulosoares/code/tomcat-coordination/.run/inferences")

@@ -1,0 +1,1 @@
+{"seed": 0, "burn_in": 2000, "num_samples": 2000, "num_chains": 4, "num_jobs_per_inference": 4, "num_inference_jobs": 1, "nuts_init_method": "jitter+adapt_diag", "target_accept": 0.9, "model": "conversation", "data_filepath": null, "model_params": {}, "data_mapping": {"mappings": []}}
