@@ -9,7 +9,7 @@ class ModelVariableInfo:
     def __init__(self,
                  name: str,
                  inference_mode: str,
-                 dimension_names: Optional[List[str]]):
+                 dimension_names: List[str]):
         """
         Creates a model variable info object.
 
@@ -20,3 +20,12 @@ class ModelVariableInfo:
         self.name = name
         self.inference_mode = inference_mode
         self.dimension_names = dimension_names
+
+    @property
+    def num_named_dimensions(self) -> int:
+        """
+        Gets the number of named dimensions of the variable.
+
+        @return: number of named dimensions.
+        """
+        return len(self.dimension_names)

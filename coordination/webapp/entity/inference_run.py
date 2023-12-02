@@ -1,6 +1,9 @@
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 from coordination.inference.inference_data import InferenceData
+import os
+import json
+
 
 class InferenceRun:
     """
@@ -18,12 +21,20 @@ class InferenceRun:
         """
         self.inference_dir = inference_dir
         self.run_id = run_id
-        self.execution_params_dict = None
 
-        execution_params_filepath = f"{inference_dir}/{run_id}/execution_params.json"
+    @property
+    def execution_params_dict(self) -> Optional[Dict[str, Any]]:
+        """
+        Gets a dictionary of execution params for an inference run if it exists.
+
+        @return: dictionary of execution params.
+        """
+        execution_params_filepath = f"{self.inference_dir}/{self.run_id}/execution_params.json"
         if os.path.exists(execution_params_filepath):
             with open(execution_params_filepath, "r") as f:
-                self.execution_params_dict = json.load(f)
+                return json.load(f)
+
+        return None
 
     @property
     def experiment_ids(self) -> List[str]:
@@ -32,7 +43,8 @@ class InferenceRun:
 
         @return: list of experiment IDs
         """
-        return self.execution_params_dict["experiment_ids"] if self.execution_params_dict else None
+
+        return self.execution_params_dict["experiment_ids"] if self.execution_params_dict else []
 
     @property
     def sample_inference_data(self) -> Optional[InferenceData]:
@@ -43,7 +55,7 @@ class InferenceRun:
         @return: inference data.
         """
         for experiment_id in self.experiment_ids:
-            experiment_dir = f"{inference_dir}/{run_id}/{experiment_id}"
+            experiment_dir = f"{self.inference_dir}/{self.run_id}/{experiment_id}"
             idata = InferenceData.from_trace_file_in_directory(experiment_dir)
             if idata:
                 return idata
@@ -51,7 +63,7 @@ class InferenceRun:
         return None
 
     @property
-    def model_variables(self) -> Optional[Dict[str, ModelVariableInfo]]:
+    def model_variables(self) -> Dict[str, ModelVariableInfo]:
         """
         Gets a dictionary of model variables where the key is one of the following groups:
         - latent: latent data variables in the model.
@@ -64,7 +76,7 @@ class InferenceRun:
         """
         idata = self.sample_inference_data
         if not idata:
-            return None
+            return {}
 
         variables_dict = {
             "latent": [],
@@ -77,40 +89,42 @@ class InferenceRun:
             if mode not in idata.trace:
                 continue
 
-            for var_name in idata.trace["mode"].data_vars:
-                if self.is_parameter(mode, var_name):
+            for var_name in idata.trace[mode].data_vars:
+                dim_coordinate = f"{var_name}_dimension"
+                dim_names = idata.trace[mode][dim_coordinate].data.tolist() if \
+                    dim_coordinate in idata.trace[mode] else []
+
+                if idata.is_parameter(mode, var_name):
                     variables_dict["latent_parameter"].append(
                         ModelVariableInfo(
                             name=var_name,
                             inference_mode=mode,
-                            # A parameter variable can be multidimensional but they don't have named
-                            # dimensions.
-                            dimension_names=None
+                            dimension_names=dim_names
                         )
                     )
                 else:
                     # This is how the dimension coordinate is defined in Module.dimension_axis_name
-                    dim_coordinate = f"{variable_name}_dimension"
                     variables_dict["latent"].append(
                         ModelVariableInfo(
                             name=var_name,
                             inference_mode=mode,
-                            # A parameter variable can be multidimensional but they don't have named
-                            # dimensions.
-                            dimension_names=idata.trace[mode][dim_coordinate].data.tolist()
+                            dimension_names=dim_names
                         )
                     )
 
         for var_name in idata.trace.observed_data.data_vars:
             # Observed parameters can be retrieved from the inference run execution params.
             # We only include observed data variables here.
-            dim_coordinate = f"{variable_name}_dimension"
-            if not self.is_parameter("observed_data", var_name):
+            dim_coordinate = f"{var_name}_dimension"
+            dim_names = idata.trace.observed_data[dim_coordinate].data.tolist() if \
+                dim_coordinate in idata.trace.observed_data else []
+
+            if not idata.is_parameter("observed_data", var_name):
                 variables_dict["observed"].append(
                     ModelVariableInfo(
                         name=var_name,
                         inference_mode="observed_data",
-                        dimension_names=idata.trace.posterior[dim_coordinate].data.tolist()
+                        dimension_names=dim_names
                     )
                 )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import uuid
+import streamlit as st
 
 
 class DropDown:
@@ -13,16 +14,19 @@ class DropDown:
 
     def __init__(self,
                  label: str,
+                 key: str,
                  options: List[DropDownOption],
                  default_selection_text: str = DEFAULT_SELECTION_TEXT):
         """
         Creates a drop down widget.
 
         @param label: label of the widget.
+        @param key: unique identifies of the component in the page.
         @param options: list of options to choose from.
         @param default_selection_text: text to show with the default option (first in the list).
         """
         self.label = label
+        self.key = key
         self.options = options
         self.default_selection_text = default_selection_text
 
@@ -45,8 +49,8 @@ class DropDown:
                 return self.default_selection_text
 
         return st.selectbox(
-            label,
-            key=str(uuid.uuid4()),
+            self.label,
+            key=self.key,
             options=[None] + self.options,
             format_func=format_func
         )

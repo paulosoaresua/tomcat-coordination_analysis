@@ -4,6 +4,7 @@ import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.utils import get_inference_run_ids
 from coordination.webapp.component.inference_run_selection_component import InferenceRunSelectionComponent
+from coordination.webapp.entity.inference_run import InferenceRun
 
 
 class InferenceRunResultsComponent:

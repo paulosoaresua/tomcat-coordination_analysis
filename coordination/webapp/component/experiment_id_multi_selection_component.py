@@ -1,4 +1,5 @@
 import uuid
+from typing import List
 
 import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
@@ -10,12 +11,14 @@ class ExperimentIDMultiSelectionComponent:
     for multi-selection.
     """
 
-    def __init__(self, all_experiment_ids: List[str]):
+    def __init__(self, component_key: str, all_experiment_ids: List[str]):
         """
         Creates the component.
 
+        @param component_key: unique identifier for the component in a page.
         @param all_experiment_ids: list of all experiment IDs to display for selection.
         """
+        self.component_key = component_key
         self.all_experiment_ids = all_experiment_ids
 
         # Values saved within page loading and available to the next components to be loaded.
@@ -24,10 +27,10 @@ class ExperimentIDMultiSelectionComponent:
 
     def create_component(self):
         """
-        Creates area in the screen for selection of multiple experiment ids.
+        Creates a multi-selector in the screen for selection of multiple experiment ids.
         """
-        self.all_experiment_ids = st.multiselect(
+        self.selected_experiment_ids_ = st.multiselect(
             label="Experiment IDs",
-            key=str(uuid.uuid4()),
+            key=f"{self.component_key}_experiment_ids_multiselect",
             options=self.all_experiment_ids
         )

@@ -14,18 +14,20 @@ class ModelVariableSelectionComponent:
     variable selector for further filtering.
     """
 
-    def __init__(self, inference_run: InferenceRun):
+    def __init__(self, component_key: str, inference_run: InferenceRun):
         """
         Creates the component.
 
+        @param component_key: unique identifier for the component in a page.
         @param inference_run: object containing info about an inference run.
         """
+        self.component_key = component_key
         self.inference_run = inference_run
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
         self.selected_model_variable_: ModelVariableInfo = None
-        self.execution_params_dict_ = None
+        self.selected_dimension_name_ = None
 
     def create_component(self):
         """
@@ -33,57 +35,31 @@ class ModelVariableSelectionComponent:
         dimensions.
         """
         st.write("## Model variable")
-        options = [
-            ModelVariableDropDownOption(f"{group.upper}", var_info) for group, var_info in
-            self.inference_run.model_variables.items()
-        ]
-        self.selected_model_variable_ = DropDown(
+        options = []
+        for group, variables in self.inference_run.model_variables.items():
+            for var_info in variables:
+                options.append(ModelVariableDropDownOption(prefix=f"[{group.upper()}]",
+                                                           model_variable_info=var_info))
+
+        selected_option = DropDown(
             label="Variable",
+            key=f"{self.component_key}_model_variable_dropdown",
             options=options
-        ).model_variable_info
+        ).create()
 
-        create_dropdown_with_default_selection(
-            label="Variable",
-            key=f"model_variable_selector_{key_suffix}",
-            options=_get_drop_down_model_variable_options(run_id)
-        )
+        self.selected_model_variable_ = selected_option.model_variable_info if \
+            selected_option else None
 
-    dimension_name = None
-    if selected_variable and selected_variable.dimension_names and len(
-            selected_variable.dimension_names) > 1:
-        # Selector for dimension if the variable has multiple dimensions.
-        dimension_name = st.selectbox(
-            "Dimension",
-            key=f"dimension_name_selector_{key_suffix}",
-            options=selected_variable.dimension_names
-        )
-
-    self.selected_run_id_ = DropDown(
-        label="Inference run ID",
-        options=self._get_inference_run_ids()
-    ).create()
-
-    if self.selected_run_id_:
-        # Display the execution params for the inference run
-        self.execution_params_dict_ = get_execution_params(self.selected_run_id_)
-        if self.execution_params_dict_:
-            st.json(self.execution_params_dict_, expanded=False)
-
-
-def _get_inference_run_ids() -> List[str]:
-    """
-    Gets a list of inference run IDs from the list of directories under an inference folder.
-
-    @return: list of inference run ids.
-    """
-    if os.path.exists(self.inference_dir):
-        run_ids = [run_id for run_id in os.listdir(inference_dir) if
-                   os.path.isdir(f"{self.inference_dir}/{run_id}")]
-
-        # Display on the screen from the most recent to the oldest.
-        return sorted(run_ids, reverse=True)
-
-    return []
+        if self.selected_model_variable_:
+            self.selected_dimension_name_ = None
+            if self.selected_model_variable_ and \
+                    self.selected_model_variable_.num_named_dimensions > 1:
+                # Selector for dimension if the variable has multiple dimensions.
+                self.selected_dimension_name_ = st.selectbox(
+                    "Dimension",
+                    key=f"{self.component_key}_model_variable_dimension_dropdown",
+                    options=self.selected_model_variable_.dimension_names
+                )
 
 
 class ModelVariableDropDownOption(DropDownOption):
@@ -97,7 +73,7 @@ class ModelVariableDropDownOption(DropDownOption):
                  prefix: str,
                  model_variable_info: ModelVariableInfo):
         """
-        Creates a dropdown option.
+        Creates a dropdown option for model variable selection.
 
         @param prefix: a prefix to add before each variable name for better identification.
         @param model_variable_info: a model variable object with extra information about a
