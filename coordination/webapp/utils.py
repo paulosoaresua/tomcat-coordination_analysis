@@ -14,6 +14,34 @@ import plotly.express as px
 import itertools
 
 
+def get_inference_run_ids() -> List[str]:
+    """
+    Gets a list of inference run IDs from the list of directories under an inference folder.
+
+    @return: list of inference run ids.
+    """
+    inference_dir = st.session_state["inference_results_dir"]
+    if os.path.exists(inference_dir):
+        run_ids = [
+            run_id
+            for run_id in sorted(os.listdir(inference_dir), reverse=True)
+            if os.path.isdir(f"{inference_dir}/{run_id}")
+        ]
+        return run_ids
+
+    return []
+
+
+
+
+
+
+
+
+
+
+
+
 class DropDownOption:
     """
     This class represents a dropdown option with an optional text prefix.
@@ -99,22 +127,7 @@ def create_dropdown_with_default_selection(
     return value
 
 
-def get_inference_run_ids() -> List[str]:
-    """
-    Gets a list of inference run IDs from the list of directories under an inference folder.
 
-    @return: list of inference run ids.
-    """
-    inference_dir = st.session_state["inference_results_dir"]
-    if os.path.exists(inference_dir):
-        run_ids = [
-            run_id
-            for run_id in sorted(os.listdir(inference_dir), reverse=True)
-            if os.path.isdir(f"{inference_dir}/{run_id}")
-        ]
-        return run_ids
-
-    return []
 
 
 def get_execution_params(run_id: str) -> Optional[Dict[str, Any]]:
@@ -164,7 +177,7 @@ def get_model_variables(run_id: str) -> Dict[str, List[str]]:
         return []
 
     latent_variable_names = idata.posterior_latent_data_variables
-    latent_parameter_variable_names = idata.posterior_latent_parameter_variables()
+    latent_parameter_variable_names = idata.posterior_latent_parameter_variables
     observed_variable_names = idata.observed_data_variables
     prior_predictive = idata.prior_predictive_variables
     posterior_predictive = idata.posterior_predictive_variables

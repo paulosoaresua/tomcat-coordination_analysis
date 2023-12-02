@@ -89,6 +89,7 @@ class InferenceData:
         """
         return self._get_vars(inference_mode="observed_data", with_time_dimension=True)
 
+    @property
     def posterior_latent_parameter_variables(self) -> List[str]:
         """
         Gets names of latent parameter variables that were inferred during model fit.
