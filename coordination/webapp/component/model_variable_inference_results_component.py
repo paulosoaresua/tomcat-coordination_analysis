@@ -6,7 +6,7 @@ from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 from coordination.webapp.component.inference_stats_component import InferenceStatsComponent
 from coordination.inference.inference_data import InferenceData
-from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_BOTTOM_MARGIN
+from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_MARGINS
 from coordination.webapp.utils import plot_series
 import itertools
 from typing import Optional
@@ -104,7 +104,7 @@ class ModelVariableInferenceResultsComponent:
                                   yaxis_title="Density",
                                   # Preserve legend order
                                   legend={"traceorder": "normal"},
-                                  margin=dict(l=0, r=0, t=0, b=DEFAULT_PLOT_BOTTOM_MARGIN))
+                                  margin=DEFAULT_PLOT_MARGINS)
                 st.plotly_chart(fig, use_container_width=True)
 
     def _display_data_variable_time_series_curve(self):
@@ -191,6 +191,6 @@ class ModelVariableInferenceResultsComponent:
                               yaxis_title=yaxis_label,
                               # Preserve legend order
                               legend={"traceorder": "normal"},
-                              margin=dict(l=0, r=0, t=0, b=DEFAULT_PLOT_BOTTOM_MARGIN))
+                              margin=DEFAULT_PLOT_MARGINS)
 
             st.plotly_chart(fig, use_container_width=True)

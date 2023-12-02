@@ -7,7 +7,7 @@ from coordination.webapp.component.experiment_id_multi_selection_component impor
 from coordination.webapp.component.model_variable_selection_component import \
     ModelVariableSelectionComponent
 from coordination.webapp.component.inference_results_component import InferenceResultsComponent
-
+import asyncio
 
 class RunVsRunPage:
 
@@ -26,13 +26,13 @@ class RunVsRunPage:
         """
         tab_left, tab_right = st.columns(2)
         with tab_left:
-            RunVsRunPage._populate_column(column_key=f"{self.page_key}_left_col")
+            asyncio.run(RunVsRunPage._populate_column(column_key=f"{self.page_key}_left_col"))
 
         with tab_right:
-            RunVsRunPage._populate_column(column_key=f"{self.page_key}_right_col")
+            asyncio.run(RunVsRunPage._populate_column(column_key=f"{self.page_key}_right_col"))
 
     @staticmethod
-    def _populate_column(column_key: str):
+    async def _populate_column(column_key: str):
         inference_run_component = InferenceRunSelectionComponent(
             component_key=f"{column_key}_inference_run_selector",
             inference_dir=st.session_state["inference_results_dir"])

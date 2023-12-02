@@ -1,12 +1,13 @@
 import uuid
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 from coordination.inference.inference_data import InferenceData
-from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_BOTTOM_MARGIN
+from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_MARGINS
 import itertools
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
@@ -17,15 +18,20 @@ class InferenceStatsComponent:
     Represents a component that displays coordination statistics for an inference.
     """
 
-    def __init__(self, component_key: str, inference_data: InferenceData):
+    def __init__(self, component_key: str, inference_data: InferenceData,
+                 convergence_report: pd.DataFrame):
         """
         Creates the component.
 
         @param component_key: unique identifier for the component in a page.
         @param inference_data: object containing results on an inference.
+        @param convergence_report: a convergence report for the inference. We can call this
+            directly from the idata object, but we have it here as a parameter so we can cache it
+            using the streamlit @st.cache_data annotation.
         """
         self.component_key = component_key
         self.inference_data = inference_data
+        self.convergence_report = convergence_report
 
     def create_component(self):
         """
@@ -38,7 +44,8 @@ class InferenceStatsComponent:
         means = means.to_numpy()
 
         st.write("#### Coordination stats")
-        st.write("*:blue[Statistics computed over the mean posterior coordination per time step.]*")
+        st.write(
+            "*:blue[Statistics computed over the mean posterior coordination per time step.]*")
         st.write(f"Mean: {means.mean():.4f}")
         st.write(f"Median: {np.median(means):.4f}")
         st.write(f"Std: {means.std():.4f}")
@@ -47,7 +54,7 @@ class InferenceStatsComponent:
 
         st.write("#### Model stats")
         st.write("**Convergence**")
-        st.dataframe(self.inference_data.generate_convergence_summary(), use_container_width=True)
+        st.dataframe(self.convergence_report, se_container_width=True)
 
         self._plot_log_probability_distribution()
 
@@ -79,7 +86,7 @@ class InferenceStatsComponent:
                           yaxis_title="Density",
                           # Preserve legend order
                           legend={"traceorder": "normal"},
-                          margin=dict(l=0, r=0, t=0, b=DEFAULT_PLOT_BOTTOM_MARGIN))
+                          margin=DEFAULT_PLOT_MARGINS)
         st.plotly_chart(fig, use_container_width=True)
 
     def _plot_log_probability_distribution(self):
@@ -106,5 +113,5 @@ class InferenceStatsComponent:
                           yaxis_title="Density",
                           # Preserve legend order
                           legend={"traceorder": "normal"},
-                          margin=dict(l=0, r=0, t=0, b=DEFAULT_PLOT_BOTTOM_MARGIN))
+                          margin=DEFAULT_PLOT_MARGINS)
         st.plotly_chart(fig, use_container_width=True)
