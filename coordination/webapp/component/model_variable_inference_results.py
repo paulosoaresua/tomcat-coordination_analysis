@@ -4,7 +4,7 @@ import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
-from coordination.webapp.component.inference_stats_component import InferenceStatsComponent
+from coordination.webapp.component.inference_stats import InferenceStats
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_MARGINS
 from coordination.webapp.utils import plot_series
@@ -14,7 +14,7 @@ import numpy as np
 import plotly.figure_factory as ff
 
 
-class ModelVariableInferenceResultsComponent:
+class ModelVariableInferenceResults:
     """
     Represents a component that displays inference results for a model variable in an experiment
     from a particular inference run.

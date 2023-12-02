@@ -13,7 +13,7 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 
 
-class InferenceStatsComponent:
+class InferenceStats:
     """
     Represents a component that displays coordination statistics for an inference.
     """

@@ -1,16 +1,17 @@
 import streamlit as st
 
-from coordination.webapp.component.inference_run_selection_component import \
-    InferenceRunSelectionComponent
-from coordination.webapp.component.experiment_id_multi_selection_component import \
-    ExperimentIDMultiSelectionComponent
-from coordination.webapp.component.model_variable_selection_component import \
-    ModelVariableSelectionComponent
-from coordination.webapp.component.inference_results_component import InferenceResultsComponent
+from coordination.webapp.component.inference_run_selection import \
+    InferenceRunSelection
+from coordination.webapp.component.experiment_id_multi_selection import \
+    ExperimentIDMultiSelection
+from coordination.webapp.component.model_variable_selection import \
+    ModelVariableSelection
+from coordination.webapp.component.inference_results import InferenceResults
 from coordination.webapp.entity.inference_run import InferenceRun
+from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
 
 
-class SingleRunPage:
+class SingleRun:
     """
     This class represents a page to analyze a single inference run. It is comprised of two columns
     where one can compare two different variables of an experiment side by side.
@@ -29,12 +30,12 @@ class SingleRunPage:
         """
         Creates the page by adding different components to the screen.
         """
-        inference_run_component = InferenceRunSelectionComponent(
+        inference_run_component = InferenceRunSelection(
             component_key=f"{self.page_key}_inference_run_selector",
-            inference_dir=st.session_state["inference_results_dir"])
+            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
         inference_run_component.create_component()
 
-        experiment_ids_component = ExperimentIDMultiSelectionComponent(
+        experiment_ids_component = ExperimentIDMultiSelection(
             component_key=f"{self.page_key}_experiments_selector",
             all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids)
         experiment_ids_component.create_component()
@@ -45,14 +46,14 @@ class SingleRunPage:
 
         col_left, col_right = st.columns(2)
         with col_left:
-            model_variable_component_left = ModelVariableSelectionComponent(
+            model_variable_component_left = ModelVariableSelection(
                 component_key=f"{self.page_key}_left_col_model_variable_selector",
                 inference_run=inference_run_component.selected_inference_run_
             )
             model_variable_component_left.create_component()
 
         with col_right:
-            model_variable_component_right = ModelVariableSelectionComponent(
+            model_variable_component_right = ModelVariableSelection(
                 component_key=f"{self.page_key}_right_model_variable_selector",
                 inference_run=inference_run_component.selected_inference_run_
             )
@@ -63,7 +64,7 @@ class SingleRunPage:
             # have results with different sizes on the screen.
             col_left, col_right = st.columns(2)
             with col_left:
-                inference_results_component = InferenceResultsComponent(
+                inference_results_component = InferenceResults(
                     component_key=f"{self.page_key}_left_col_{experiment_id}_inference_results",
                     inference_run=inference_run_component.selected_inference_run_,
                     experiment_id=experiment_id,
@@ -72,7 +73,7 @@ class SingleRunPage:
                 inference_results_component.create_component()
 
             with col_right:
-                inference_results_component = InferenceResultsComponent(
+                inference_results_component = InferenceResults(
                     component_key=f"{self.page_key}_left_col_{experiment_id}_inference_results",
                     inference_run=inference_run_component.selected_inference_run_,
                     experiment_id=experiment_id,

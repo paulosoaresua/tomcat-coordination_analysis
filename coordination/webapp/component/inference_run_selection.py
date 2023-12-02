@@ -7,7 +7,7 @@ from coordination.webapp.entity.inference_run import InferenceRun
 import os
 
 
-class InferenceRunSelectionComponent:
+class InferenceRunSelection:
     """
     Represents a component that displays a collection of inference runs to choose from and the
     associated exec params json object one an inference run is selected.

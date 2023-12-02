@@ -18,7 +18,7 @@ from coordination.callback.progress_saver_callback import ProgressSaverCallback
 from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_INFERENCE_RESULTS_DIR,
                                            DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS,
+                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_PROGRESS_SAVING_FREQUENCY,
@@ -278,7 +278,7 @@ if __name__ == "__main__":
         "--num_jobs",
         type=int,
         required=False,
-        default=DEFAULT_NUM_JOBS,
+        default=DEFAULT_NUM_JOBS_PER_INFERENCE,
         help="Number of jobs to use per inference process. The effective number of jobs is "
              "min(num_jobs, num_chains).",
     )

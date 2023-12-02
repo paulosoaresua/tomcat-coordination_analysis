@@ -7,12 +7,12 @@ from collections import OrderedDict
 import streamlit as st
 
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS,
+                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.webapp.constants import (INFERENCE_PARAMETERS_DIR,
-                                           REFRESH_RATE, RUN_DIR)
+                                           REFRESH_RATE, APP_RUN_DIR)
 from coordination.webapp.utils import (create_dropdown_with_default_selection,
                                        get_execution_params,
                                        get_inference_run_ids,
@@ -89,13 +89,13 @@ def _populate_inference_pane(inference_pane: st.container):
                 inference_execution_params["num_jobs_per_inference"] = st.number_input(
                     label="Number of Jobs per Inference (typically = number of chains)",
                     value=default_parameters.get(
-                        "num_inference_jobs", DEFAULT_NUM_JOBS
+                        "num_inference_jobs", DEFAULT_NUM_JOBS_PER_INFERENCE
                     ),
                 )
                 inference_execution_params["num_inference_jobs"] = st.number_input(
                     label="Number of Inference Jobs",
                     value=default_parameters.get(
-                        "num_inference_jobs", DEFAULT_NUM_JOBS
+                        "num_inference_jobs", DEFAULT_NUM_JOBS_PER_INFERENCE
                     ),
                 )
                 inference_execution_params["nuts_init_method"] = st.text_input(
@@ -167,11 +167,11 @@ def _populate_inference_pane(inference_pane: st.container):
             if submit:
                 # Save the parameter dictionaries in a tmp folder to that the inference script
                 # can read them.
-                os.makedirs(f"{RUN_DIR}/tmp/config", exist_ok=True)
-                with open(f"{RUN_DIR}/tmp/config/data_mapping.json", "w") as f:
+                os.makedirs(f"{APP_RUN_DIR}/tmp/config", exist_ok=True)
+                with open(f"{APP_RUN_DIR}/tmp/config/data_mapping.json", "w") as f:
                     json.dump(json.loads(data_mapping), f)
 
-                with open(f"{RUN_DIR}/tmp/config/params_dict.json", "w") as f:
+                with open(f"{APP_RUN_DIR}/tmp/config/params_dict.json", "w") as f:
                     json.dump(json.loads(model_params_dict), f)
 
                 out_dir = st.session_state["inference_results_dir"]
@@ -181,8 +181,8 @@ def _populate_inference_pane(inference_pane: st.container):
                     f'--out_dir="{out_dir}" '
                     '--evidence_filepath="data/asist_data.csv" '
                     '--model_name="vocalic" '
-                    f'--data_mapping_filepath="{RUN_DIR}/tmp/config/data_mapping.json" '
-                    f'--model_params_dict_filepath="{RUN_DIR}/tmp/config/params_dict.json" '
+                    f'--data_mapping_filepath="{APP_RUN_DIR}/tmp/config/data_mapping.json" '
+                    f'--model_params_dict_filepath="{APP_RUN_DIR}/tmp/config/params_dict.json" '
                     f'--seed={inference_execution_params["seed"]} '
                     f'--burn_in={inference_execution_params["burn_in"]} '
                     f'--num_samples={inference_execution_params["num_samples"]} '

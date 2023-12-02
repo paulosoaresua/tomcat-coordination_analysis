@@ -8,7 +8,7 @@ import numpy as np
 import pymc as pm
 
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS,
+                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLED_SERIES,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
@@ -108,7 +108,7 @@ class Model(Module):
         burn_in: int = DEFAULT_BURN_IN,
         num_samples: int = DEFAULT_NUM_SAMPLES,
         num_chains: int = DEFAULT_NUM_CHAINS,
-        num_jobs: int = DEFAULT_NUM_JOBS,
+        num_jobs: int = DEFAULT_NUM_JOBS_PER_INFERENCE,
         nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
         target_accept: float = DEFAULT_TARGET_ACCEPT,
         callback: Callable = None,

@@ -6,7 +6,7 @@ from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 
 
-class ModelVariableSelectionComponent:
+class ModelVariableSelection:
     """
     Represents a component that displays a collection of model variables collected from the
     inference data of some experiment in an inference run. If a variable has more than one

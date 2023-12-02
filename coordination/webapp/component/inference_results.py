@@ -5,12 +5,12 @@ import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
-from coordination.webapp.component.inference_stats_component import InferenceStatsComponent
-from coordination.webapp.component.model_variable_inference_results_component import \
-    ModelVariableInferenceResultsComponent
+from coordination.webapp.component.inference_stats import InferenceStats
+from coordination.webapp.component.model_variable_inference_results import \
+    ModelVariableInferenceResults
 
 
-class InferenceResultsComponent:
+class InferenceResults:
     """
     Represents a component that displays inference results for a model variable in an experiment
     from a particular inference run.
@@ -52,9 +52,9 @@ class InferenceResultsComponent:
             return
 
         if self.model_variable_info.inference_mode == "inference_stats":
-            convergence_report = InferenceResultsComponent._read_convergence_report(
+            convergence_report = InferenceResults._read_convergence_report(
                 self.inference_run, self.experiment_id)
-            inference_stats_component = InferenceStatsComponent(
+            inference_stats_component = InferenceStats(
                 component_key=f"{self.component_key}_inference_stats",
                 inference_data=idata,
                 convergence_report=convergence_report)
@@ -64,7 +64,7 @@ class InferenceResultsComponent:
             st.pyplot(idata.plot_parameter_posterior(), clear_figure=True,
                       use_container_width=True)
         else:
-            model_variable_inference_results_component = ModelVariableInferenceResultsComponent(
+            model_variable_inference_results_component = ModelVariableInferenceResults(
                 component_key=f"{self.component_key}_model_variable_inference_results",
                 model_variable_info=self.model_variable_info,
                 dimension=self.model_variable_dimension,

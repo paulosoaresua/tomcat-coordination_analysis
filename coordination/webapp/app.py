@@ -3,12 +3,13 @@ import os
 import streamlit as st
 
 from coordination.common.constants import DEFAULT_INFERENCE_RESULTS_DIR
-from coordination.webapp.pages.header import create_header
+
 from coordination.webapp.pages.run_page import create_run_page
 from coordination.webapp.pages.visualization_page import \
     create_visualization_per_run_page
-from coordination.webapp.pages.run_vs_run_page import RunVsRunPage
-from coordination.webapp.pages.single_run_page import SingleRunPage
+from coordination.webapp.pages.run_vs_run import RunVsRun
+from coordination.webapp.pages.single_run import SingleRun
+from coordination.webapp.component.header import Header
 
 st.set_page_config(
     page_title="Coordination Processes",
@@ -36,15 +37,15 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-create_header()
+Header().create_component()
 
 tab1, tab2, tab3 = st.tabs(["Single Run", "Run vs Run", "New Run"])
 
 with tab1:
-    SingleRunPage(page_key="single_run_tab").create_page()
+    SingleRun(page_key="single_run_tab").create_page()
 
 with tab2:
-    RunVsRunPage(page_key="run_vs_run_tab").create_page()
+    RunVsRun(page_key="run_vs_run_tab").create_page()
 
 with tab3:
     pass

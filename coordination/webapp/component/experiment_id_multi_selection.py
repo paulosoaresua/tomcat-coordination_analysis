@@ -5,7 +5,7 @@ import streamlit as st
 from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 
 
-class ExperimentIDMultiSelectionComponent:
+class ExperimentIDMultiSelection:
     """
     Represents a component that displays a collection of experiments for a given inference run
     for multi-selection.
