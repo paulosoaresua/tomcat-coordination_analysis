@@ -7,13 +7,16 @@ from coordination.webapp.component.experiment_id_multi_selection_component impor
 from coordination.webapp.component.model_variable_selection_component import \
     ModelVariableSelectionComponent
 from coordination.webapp.component.inference_results_component import InferenceResultsComponent
-import asyncio
+
 
 class RunVsRunPage:
+    """
+    This class represents a page to compare two inference runs side by side.
+    """
 
     def __init__(self, page_key: str):
         """
-        Creates a Rux vs Run page.
+        Creates the page object.
 
         @param page_key: unique identifier for the page. Components of the page will append to
             this key to form their keys.
@@ -22,17 +25,24 @@ class RunVsRunPage:
 
     def create_page(self):
         """
-        Creates a run x run page for comparison of experiments across two different inference runs.
+        Creates the page by adding different components to the screen.
         """
-        tab_left, tab_right = st.columns(2)
-        with tab_left:
-            asyncio.run(RunVsRunPage._populate_column(column_key=f"{self.page_key}_left_col"))
+        col_left, col_right = st.columns(2)
+        with col_left:
+            RunVsRunPage._populate_column(column_key=f"{self.page_key}_left_col")
 
-        with tab_right:
-            asyncio.run(RunVsRunPage._populate_column(column_key=f"{self.page_key}_right_col"))
+        with col_right:
+            RunVsRunPage._populate_column(column_key=f"{self.page_key}_right_col")
 
     @staticmethod
-    async def _populate_column(column_key: str):
+    def _populate_column(column_key: str):
+        """
+        Populates a column where one can choose an inference run, experiment ids and
+            associated variables to see inference results for them.
+
+        @param column_key: unique identifier for the column. Components of the column will append
+            to this key to form their keys.
+        """
         inference_run_component = InferenceRunSelectionComponent(
             component_key=f"{column_key}_inference_run_selector",
             inference_dir=st.session_state["inference_results_dir"])

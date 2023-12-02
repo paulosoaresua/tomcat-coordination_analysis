@@ -8,6 +8,7 @@ from coordination.webapp.pages.run_page import create_run_page
 from coordination.webapp.pages.visualization_page import \
     create_visualization_per_run_page
 from coordination.webapp.pages.run_vs_run_page import RunVsRunPage
+from coordination.webapp.pages.single_run_page import SingleRunPage
 
 st.set_page_config(
     page_title="Coordination Processes",
@@ -37,11 +38,10 @@ st.markdown(
 
 create_header()
 
-tab1, tab2, tab3 = st.tabs(["Visualization per Run", "Run vs Run", "Run"])
+tab1, tab2, tab3 = st.tabs(["Single Run", "Run vs Run", "New Run"])
 
 with tab1:
-    # create_visualization_per_run_page()
-    pass
+    SingleRunPage(page_key="single_run_tab").create_page()
 
 with tab2:
     RunVsRunPage(page_key="run_vs_run_tab").create_page()

@@ -54,7 +54,7 @@ class InferenceStatsComponent:
 
         st.write("#### Model stats")
         st.write("**Convergence**")
-        st.dataframe(self.convergence_report, se_container_width=True)
+        st.dataframe(self.convergence_report, use_container_width=True)
 
         self._plot_log_probability_distribution()
 
