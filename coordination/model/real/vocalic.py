@@ -12,6 +12,7 @@ from coordination.module.latent_component.serial_gaussian_latent_component impor
     SerialGaussianLatentComponent
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
+from coordination.module.transformation.mlp import MLP
 
 
 class VocalicModel(ModelTemplate):
@@ -21,7 +22,7 @@ class VocalicModel(ModelTemplate):
     """
 
     def __init__(
-        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -62,6 +63,24 @@ class VocalicModel(ModelTemplate):
             fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
         )
 
+        self.transformation = None
+        if config_bundle.activation != "linear" or (
+                config_bundle.state_space_dimension_size < config_bundle.observed_values):
+            # Transform latent samples before passing to the observation module to account for
+            # non-linearity and/or different dimensions between the latent component and
+            # associated observation
+            self.transformation = MLP(
+                uuid="state_space_to_speech_vocalics_mlp",
+                pymc_model=self.pymc_model,
+                output_dimension_size=config_bundle.num_vocalic_features,
+                mean_w0=config_bundle.mean_w0,
+                sd_w0=config_bundle.sd_w0,
+                num_hidden_layers=config_bundle.num_hidden_layers_mlp,
+                hidden_dimension_size=config_bundle.hidden_dimension_size_mlp,
+                activation=config_bundle.activation,
+                axis=0  # Vocalic features axis
+            )
+
         self.observation = SerialGaussianObservation(
             uuid="speech_vocalics",
             pymc_model=pymc_model,
@@ -78,6 +97,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
+            transformations=[self.transformation] if self.transformation else None
         )
 
         super().__init__(
@@ -104,6 +124,10 @@ class VocalicModel(ModelTemplate):
         self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0
         self.state_space.parameters.sd_a.value = self.config_bundle.sd_a
         self.observation.parameters.sd_o.value = self.config_bundle.sd_o
+
+        if self.transformation:
+            for i, w in enumerate(self.transformation.parameters.weights):
+                w.value = self.config_bundle.weights[i]
 
     def prepare_for_inference(self):
         """

@@ -43,6 +43,19 @@ class VocalicConstants:
     ALLOW_SAMPLED_SUBJECT_REPETITION = False
     FIX_SAMPLED_SUBJECT_SEQUENCE = True
 
+    # Transformations.
+    # With the values below, if the dimension of the state space is smaller than the dimension of
+    # the observations, the MLP will learn a single matrix of values that transforms the state
+    # space vector to a vector with the dimensions in the observed space by linear combination.
+    # If the dimension of the state space is 1, the matrix becomes a vector that can be
+    # interpreted as the mean of the observations which are scaled by the value in the state space.
+    NUM_HIDDEN_LAYERS = 0
+    HIDDEN_DIMENSION_SIZE = 0
+    ACTIVATION = "linear"
+    WEIGHTS = np.ones(STATE_SPACE_DIM_SIZE, NUM_VOCALIC_FEATURES)
+    MEAN_W0 = 0
+    SD_W0 = 0
+
 
 class SemanticLinkConstants:
     A_P = 1

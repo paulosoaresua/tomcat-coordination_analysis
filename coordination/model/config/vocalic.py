@@ -15,40 +15,46 @@ class VocalicConfigBundle(ModelConfigBundle):
     """
 
     def __init__(
-        self,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
-        state_space_dimension_size: int = VocalicConstants.STATE_SPACE_DIM_SIZE,
-        state_space_dimension_names: List[str] = VocalicConstants.STATE_SPACE_DIM_NAMES,
-        self_dependent: bool = VocalicConstants.SELF_DEPENDENT_STATE_SPACE,
-        num_vocalic_features: int = VocalicConstants.NUM_VOCALIC_FEATURES,
-        vocalic_feature_names: List[str] = VocalicConstants.VOCALIC_FEATURE_NAMES,
-        sd_mean_uc0: float = VocalicConstants.SD_MEAN_UC0,
-        sd_sd_uc: float = VocalicConstants.SD_SD_UC,
-        mean_mean_a0: np.ndarray = VocalicConstants.MEAN_MEAN_A0,
-        sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
-        sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
-        sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
-        share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
-        share_mean_a0_across_dimensions: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
-        share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
-        share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
-        sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION,
-        fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
-        mean_uc0: float = VocalicConstants.MEAN_UC0,
-        sd_uc: float = VocalicConstants.SD_UC,
-        mean_a0: np.ndarray = VocalicConstants.MEAN_A0,
-        sd_a: np.ndarray = VocalicConstants.SD_A,
-        sd_o: np.ndarray = VocalicConstants.SD_O,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.array] = None,
-        prev_time_same_subject: Optional[np.array] = None,
-        prev_time_diff_subject: Optional[np.array] = None,
-        observed_values: Optional[np.array] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
+            self,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
+            state_space_dimension_size: int = VocalicConstants.STATE_SPACE_DIM_SIZE,
+            state_space_dimension_names: List[str] = VocalicConstants.STATE_SPACE_DIM_NAMES,
+            self_dependent: bool = VocalicConstants.SELF_DEPENDENT_STATE_SPACE,
+            num_vocalic_features: int = VocalicConstants.NUM_VOCALIC_FEATURES,
+            vocalic_feature_names: List[str] = VocalicConstants.VOCALIC_FEATURE_NAMES,
+            sd_mean_uc0: float = VocalicConstants.SD_MEAN_UC0,
+            sd_sd_uc: float = VocalicConstants.SD_SD_UC,
+            mean_mean_a0: np.ndarray = VocalicConstants.MEAN_MEAN_A0,
+            sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
+            sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
+            sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
+            share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
+            share_mean_a0_across_dimensions: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
+            share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
+            share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
+            sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
+            allow_sampled_subject_repetition: bool = VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION,
+            fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
+            mean_uc0: float = VocalicConstants.MEAN_UC0,
+            sd_uc: float = VocalicConstants.SD_UC,
+            mean_a0: np.ndarray = VocalicConstants.MEAN_A0,
+            sd_a: np.ndarray = VocalicConstants.SD_A,
+            sd_o: np.ndarray = VocalicConstants.SD_O,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.array] = None,
+            prev_time_same_subject: Optional[np.array] = None,
+            prev_time_diff_subject: Optional[np.array] = None,
+            observed_values: Optional[np.array] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            num_hidden_layers: int = VocalicConstants.NUM_HIDDEN_LAYERS,
+            hidden_dimension_size: int = VocalicConstants.HIDDEN_DIMENSION_SIZE,
+            activation: str = VocalicConstants.ACTIVATION,
+            weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
+            mean_w0: float = VocalicConstants.MEAN_W0,
+            sd_w0: float = VocalicConstants.SD_W0,
     ):
         """
         Creates a config bundle for the vocalic model.
@@ -112,6 +118,11 @@ class VocalicConfigBundle(ModelConfigBundle):
         @param observed_values: observations vocalic feature values.
         @param coordination_samples: coordination samples. If not provided, coordination samples
             will be draw in a call to draw_samples.
+        @param num_hidden_layers: number of hidden layers in the transformation (MLP) from the
+            state space to the observed vocalics.
+        @param hidden_dimension_size: dimension of each hidden layer in the transformation.
+        @param activation: activation used in the transformation.
+        @param weights: a list of weights used in the transformation. One matrix per layer.
         """
 
         self.num_subjects: int = num_subjects
@@ -147,3 +158,7 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.prev_time_diff_subject = prev_time_diff_subject
         self.observed_values = observed_values
         self.coordination_samples = coordination_samples
+        self.num_hidden_layers = num_hidden_layers
+        self.hidden_dimension_size = hidden_dimension_size
+        self.activation = activation
+        self.weights = weights
