@@ -29,7 +29,7 @@ import json
 import multiprocessing
 import os
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -50,6 +50,7 @@ from coordination.model.config.mapper import DataMapper
 
 
 def infer(out_dir: str,
+          experiment_ids: Optional[List[str]],
           evidence_filepath: str,
           model_params_dict_filepath: Optional[str],
           data_mapping_filepath: str,
@@ -69,6 +70,8 @@ def infer(out_dir: str,
     Runs inference for multiple experiments in parallel.
 
     @param out_dir: directory where results must be saved.
+    @param experiment_ids: an optional comma-separated list of experiment ids to run inference
+        for. If undefined, inference will be executed for all the experiments in the dataset.
     @param evidence_filepath: path of the .csv file containing evidence for the model.
     @param model_params_dict_filepath: path of the .json file containing values to replace model
         parameter's default values.
@@ -127,7 +130,26 @@ def infer(out_dir: str,
     tmux = TMUX(run_id.replace(".", "_").replace("-", "_"))
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
-    experiment_ids = sorted(list(evidence_df["experiment_id"].unique()))
+
+    # Define the list of experiments to run inference for based on the experiments in the dataset
+    # and optionally the ones provided to the function.
+    available_experiment_ids = evidence_df["experiment_id"].unique()
+    if experiment_ids:
+        valid_experiment_ids = set(available_experiment_ids).intersection(set(experiment_ids))
+        if len(valid_experiment_ids) == 0:
+            raise ValueError(f"The entered experiments IDs ({experiment_ids}) are not part of the "
+                             f"dataset provided.")
+        elif len(valid_experiment_ids) < len(experiment_ids):
+            invalid_experiment_ids = set(experiment_ids).difference(set(valid_experiment_ids))
+            invalid_experiment_ids_str = '\n'.join(invalid_experiment_ids)
+            print(f"Inference won't be executed for the following experiment IDs which are not "
+                  f"part of the dataset provided: {invalid_experiment_ids_str}")
+
+        experiment_ids = list(valid_experiment_ids)
+    else:
+        experiment_ids = list(available_experiment_ids)
+
+    experiment_ids.sort()
 
     config_bundle = ModelBuilder.build_bundle(model_name)
     with open(data_mapping_filepath) as f:
@@ -147,19 +169,20 @@ def infer(out_dir: str,
     results_folder = f"{out_dir}/{run_id}"
     os.makedirs(results_folder, exist_ok=True)
 
-    print(f"\nInferences will be saved in {results_folder}.")
-
-    # Save execution parameters
-    with open(f"{results_folder}/execution_params.json", "w") as f:
-        json.dump(execution_params, f, indent=4, cls=NumpyArrayEncoder)
-
     # Get absolute path to the bin directory in the project's root folder. We will use it to
     # execute run_inference_sequentially.py from a tmux window.
     bin_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "."))
 
-    experiment_blocks = np.array_split(
-        experiment_ids, min(num_inference_jobs, len(experiment_ids))
-    )
+    # Adjust the number of jobs if the number of experiments is small enough for parallelization.
+    num_inference_jobs = min(num_inference_jobs, len(experiment_ids))
+    execution_params["num_inference_jobs"] = num_inference_jobs
+    experiment_blocks = np.array_split(experiment_ids, num_inference_jobs)
+
+    # Save execution parameters
+    print(f"\nInferences will be saved in {results_folder}.")
+    with open(f"{results_folder}/execution_params.json", "w") as f:
+        json.dump(execution_params, f, indent=4, cls=NumpyArrayEncoder)
+
     for i, experiments_per_process in enumerate(experiment_blocks):
         # Start a new process in a tmux window for the experiments to be processed.
         experiment_ids = ",".join(experiments_per_process)
@@ -218,6 +241,14 @@ if __name__ == "__main__":
         default=os.getenv("INFERENCE_RESULTS_DIR", DEFAULT_INFERENCE_RESULTS_DIR),
         required=False,
         help="Directory where artifacts must be saved.",
+    )
+    parser.add_argument(
+        "--experiment_ids",
+        type=str,
+        required=False,
+        help="A list of experiment ids separated by comma for which we want to perform inference. "
+             "If no experiments are informed, inference will be executed for all the experiments "
+             "in the dataset.",
     )
     parser.add_argument(
         "--evidence_filepath",
@@ -331,6 +362,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     infer(out_dir=args.out_dir,
+          experiment_ids=args.experiment_ids.split(",") if args.experiment_ids else None,
           evidence_filepath=args.evidence_filepath,
           model_params_dict_filepath=args.model_params_dict_filepath,
           data_mapping_filepath=args.data_mapping_filepath,

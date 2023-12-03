@@ -5,6 +5,7 @@ import time
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
 import streamlit as st
 from pkg_resources import resource_string
 
@@ -17,7 +18,8 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
 from coordination.model.builder import ModelBuilder
 from coordination.model.config.mapper import DataMapper
 from coordination.webapp.constants import (INFERENCE_PARAMETERS_DIR,
-                                           INFERENCE_TMP_DIR)
+                                           INFERENCE_TMP_DIR,
+                                           AVAILABLE_EXPERIMENTS_STATE_KEY)
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -119,6 +121,7 @@ class InferenceExecution:
             target_accept=DEFAULT_TARGET_ACCEPT,
             model=None,
             data_filepath=None,
+            experiment_ids=[],
             model_params={},
             data_mapping={"mappings": []},
         )
@@ -191,11 +194,27 @@ class InferenceExecution:
                 index=selected_model_index,
                 options=model_options,
             )
+
+            def update_experiment_list():
+                data_filepath = st.session_state[f"{self.component_key}_data_filepath"]
+                InferenceExecution._load_available_experiment_list(data_filepath)
+
             execution_params["data_filepath"] = st.text_input(
                 label="Data Filepath",
                 key=f"{self.component_key}_data_filepath",
                 value=default_execution_params["data_filepath"],
+                on_change=update_experiment_list
             )
+            InferenceExecution._load_available_experiment_list(execution_params["data_filepath"])
+
+            execution_params["experiment_ids"] = st.multiselect(
+                label="Experiments",
+                key=f"{self.component_key}_experiments",
+                default=default_execution_params["experiment_ids"],
+                options=st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY],
+            )
+            if len(execution_params["experiment_ids"]) == 0:
+                st.write("*:blue[All experiments in the dataset selected.]*")
             execution_params["model_params"] = st.text_area(
                 label="Model Parameters",
                 key=f"{self.component_key}_model_params",
@@ -293,7 +312,8 @@ class InferenceExecution:
         @param execution_params: execution parameters for the inference run.
         """
 
-        if st.button(label="Run Inference"):
+        if st.button(label="Run Inference",
+                     disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.
             os.makedirs(f"{INFERENCE_TMP_DIR}", exist_ok=True)
@@ -306,11 +326,20 @@ class InferenceExecution:
             with open(data_mapping_filepath, "w") as f:
                 json.dump(json.loads(execution_params["data_mapping"]), f)
 
+            if len(execution_params["experiment_ids"]) > 0:
+                experiment_ids_str = ",".join(execution_params["experiment_ids"])
+                experiment_ids_arg = f'--experiment_ids="{experiment_ids_str}" '
+            else:
+                # It will default to None in the ./bin/run_inference script which means inference
+                # will execute over the full list of experiments in the dataset.
+                experiment_ids_arg = ""
+
             command = (
                 'PYTHONPATH="." '
                 "./bin/run_inference "
                 f'--out_dir="{self.inference_dir}" '
                 f'--evidence_filepath="{execution_params["data_filepath"]}" '
+                f'{experiment_ids_arg}'
                 f'--model_name="{execution_params["model"]}" '
                 f'--data_mapping_filepath="{data_mapping_filepath}" '
                 f'--model_params_dict_filepath="{model_params_filepath}" '
@@ -336,3 +365,22 @@ class InferenceExecution:
             output = ""
 
         st.text_area(label="Terminal Output", disabled=True, value=output)
+
+    @staticmethod
+    def _load_available_experiment_list(data_filepath: str):
+        """
+        Loads to the session a list of available experiments in a dataset.
+
+        @param data_filepath: path of the dataset file.
+        """
+        if not data_filepath:
+            return
+
+        if os.path.exists(data_filepath):
+            try:
+                df = pd.read_csv(data_filepath)
+                st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = sorted(
+                    list(df["experiment_id"]))
+            except:
+                st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = []
+                pass
