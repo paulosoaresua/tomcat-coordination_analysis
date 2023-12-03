@@ -14,32 +14,21 @@ import plotly.express as px
 import itertools
 
 
-def get_inference_run_ids() -> List[str]:
+def get_inference_run_ids(inference_dir: str) -> List[str]:
     """
     Gets a list of inference run IDs from the list of directories under an inference folder.
 
+    @param inference_dir: directory where inference runs were saved.
     @return: list of inference run ids.
     """
-    inference_dir = st.session_state["inference_results_dir"]
     if os.path.exists(inference_dir):
-        run_ids = [
-            run_id
-            for run_id in sorted(os.listdir(inference_dir), reverse=True)
-            if os.path.isdir(f"{inference_dir}/{run_id}")
-        ]
-        return run_ids
+        run_ids = [run_id for run_id in os.listdir(inference_dir)
+                   if os.path.isdir(f"{inference_dir}/{run_id}")]
+
+        # Display on the screen from the most recent to the oldest.
+        return sorted(run_ids, reverse=True)
 
     return []
-
-
-
-
-
-
-
-
-
-
 
 
 class DropDownOption:
@@ -125,9 +114,6 @@ def create_dropdown_with_default_selection(
         return value[1]
 
     return value
-
-
-
 
 
 def get_execution_params(run_id: str) -> Optional[Dict[str, Any]]:

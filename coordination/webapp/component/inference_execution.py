@@ -63,7 +63,7 @@ class InferenceExecution:
         col_left, col_right = st.columns(2)
         with col_left:
             self._create_inference_triggering_area(execution_params)
-        with col_right
+        with col_right:
             self._create_execution_params_saving_area(execution_params)
 
     @staticmethod

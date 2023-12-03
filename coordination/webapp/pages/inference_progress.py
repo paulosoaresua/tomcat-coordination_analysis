@@ -8,14 +8,14 @@ from coordination.webapp.component.model_variable_selection import \
     ModelVariableSelection
 from coordination.webapp.component.inference_results import InferenceResults
 from coordination.webapp.entity.inference_run import InferenceRun
-from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
-from coordination.webapp.component.inference_execution import InferenceExecution
+from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY, REFRESH_RATE
+from coordination.webapp.component.inference_progress import InferenceProgress
+import asyncio
 
 
-class NewRun:
+class Progress:
     """
-    This class represents a page to start a new inference run in a tmux session in the machine
-    where the app is running.
+    This class represents a page to monitor the progress of different inference runs.
     """
 
     def __init__(self, page_key: str):
@@ -31,7 +31,11 @@ class NewRun:
         """
         Creates the page by adding different components to the screen.
         """
-        inference_execution_component = InferenceExecution(
-            component_key=f"{self.page_key}_inference_execution",
-            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
-        inference_execution_component.create_component()
+        inference_progress_component = InferenceProgress(
+            component_key=f"{self.page_key}_inference_progress",
+            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
+            refresh_rate=REFRESH_RATE
+        )
+
+        if st.checkbox("Monitor progress"):
+            inference_progress_component.create_component()
