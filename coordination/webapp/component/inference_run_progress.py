@@ -1,29 +1,8 @@
-import time
-import uuid
-from typing import Any, Dict, List, Optional
-import subprocess
-
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
+
+from coordination.webapp.component.experiment_progress import \
+    ExperimentProgress
 from coordination.webapp.entity.inference_run import InferenceRun
-import os
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, INFERENCE_TMP_DIR, \
-    INFERENCE_RESULTS_DIR_STATE_KEY
-from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_NUM_INFERENCE_JOBS)
-from copy import deepcopy
-from coordination.model.config.mapper import DataMapper
-from pkg_resources import resource_string
-from coordination.model.builder import ModelBuilder
-import json
-import asyncio
-from coordination.webapp.utils import get_inference_run_ids
-from collections import OrderedDict
-from coordination.webapp.component.experiment_progress import ExperimentProgress
 from coordination.webapp.widget.progress_bar import ProgressBar
 
 
@@ -59,8 +38,9 @@ class InferenceRunProgress:
         num_experiments_failed = 0
         experiment_ids = sorted(self.inference_run.experiment_ids)
         for experiment_id in experiment_ids:
-            experiment_progress_component = ExperimentProgress(inference_run=self.inference_run,
-                                                               experiment_id=experiment_id)
+            experiment_progress_component = ExperimentProgress(
+                inference_run=self.inference_run, experiment_id=experiment_id
+            )
             experiment_progress_component.create_component()
             num_experiments_succeeded += experiment_progress_component.succeeded
             num_experiments_in_progress += experiment_progress_component.in_progress
@@ -94,7 +74,7 @@ class InferenceRunProgress:
                 ProgressBar(
                     items_name="experiments",
                     current_value=num_experiments_succeeded,
-                    maximum_value=len(experiment_ids)
+                    maximum_value=len(experiment_ids),
                 ).create()
 
             # Fail
@@ -105,7 +85,7 @@ class InferenceRunProgress:
                 ProgressBar(
                     items_name="experiments",
                     current_value=num_experiments_failed,
-                    maximum_value=len(experiment_ids)
+                    maximum_value=len(experiment_ids),
                 ).create()
 
             # In Progress
@@ -116,7 +96,9 @@ class InferenceRunProgress:
                 ProgressBar(
                     items_name="experiments",
                     current_value=num_experiments_in_progress,
-                    maximum_value=self.inference_run.execution_params["num_inference_jobs"]
+                    maximum_value=self.inference_run.execution_params[
+                        "num_inference_jobs"
+                    ],
                 ).create()
 
             # Not Started
@@ -127,5 +109,5 @@ class InferenceRunProgress:
                 ProgressBar(
                     items_name="experiments",
                     current_value=num_experiments_not_started,
-                    maximum_value=len(experiment_ids)
+                    maximum_value=len(experiment_ids),
                 ).create()

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 
 class ModelVariableInfo:
@@ -6,10 +6,9 @@ class ModelVariableInfo:
     Represents a container to store information pertaining to a model variable.
     """
 
-    def __init__(self,
-                 variable_name: str,
-                 inference_mode: str,
-                 dimension_names: List[str]):
+    def __init__(
+        self, variable_name: str, inference_mode: str, dimension_names: List[str]
+    ):
         """
         Creates a model variable info object.
 

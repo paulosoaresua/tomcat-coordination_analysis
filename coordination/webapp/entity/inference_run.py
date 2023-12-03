@@ -1,11 +1,13 @@
 from __future__ import annotations
-from typing import Any, List, Optional, Dict
-from coordination.webapp.entity.model_variable import ModelVariableInfo
-from coordination.inference.inference_data import InferenceData
-import os
+
 import json
-from dataclasses import dataclass
+import os
 import subprocess
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+from coordination.inference.inference_data import InferenceData
+from coordination.webapp.entity.model_variable import ModelVariableInfo
 
 
 # Need to add this such that an inference run object can be cached with @st.cache_data
@@ -15,9 +17,7 @@ class InferenceRun:
     Represents a container for information related to an inference run.
     """
 
-    def __init__(self,
-                 inference_dir: str,
-                 run_id: str):
+    def __init__(self, inference_dir: str, run_id: str):
         """
         Creates an inference run object.
 
@@ -98,21 +98,29 @@ class InferenceRun:
             "latent_parameter": [],
             "observed": [],
             "prior_predictive": [],
-            "posterior_predictive": []
+            "posterior_predictive": [],
         }
-        for mode in ["prior_predictive", "posterior", "posterior_predictive", "observed_data"]:
+        for mode in [
+            "prior_predictive",
+            "posterior",
+            "posterior_predictive",
+            "observed_data",
+        ]:
             if mode not in idata.trace:
                 continue
 
             for var_name in idata.trace[mode].data_vars:
                 dim_coordinate = f"{var_name}_dimension"
-                dim_names = idata.trace[mode][dim_coordinate].data.tolist() if \
-                    dim_coordinate in idata.trace[mode] else []
+                dim_names = (
+                    idata.trace[mode][dim_coordinate].data.tolist()
+                    if dim_coordinate in idata.trace[mode]
+                    else []
+                )
 
                 var_info = ModelVariableInfo(
                     variable_name=var_name,
                     inference_mode=mode,
-                    dimension_names=dim_names
+                    dimension_names=dim_names,
                 )
 
                 if mode == "posterior":
@@ -139,8 +147,6 @@ class InferenceRun:
             stderr=subprocess.PIPE,
             shell=True,
         ).communicate()
-        open_tmux_sessions = "".join(
-            [o.decode("utf-8") for o in outputs]
-        )
+        open_tmux_sessions = "".join([o.decode("utf-8") for o in outputs])
 
         return open_tmux_sessions.find(self.execution_params["tmux_session_name"]) > 0

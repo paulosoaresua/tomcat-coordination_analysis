@@ -1,8 +1,6 @@
-import uuid
 from typing import List
 
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
 
 
 class ExperimentIDMultiSelection:
@@ -32,5 +30,5 @@ class ExperimentIDMultiSelection:
         self.selected_experiment_ids_ = st.multiselect(
             label="Experiment IDs",
             key=f"{self.component_key}_experiment_ids_multiselect",
-            options=self.all_experiment_ids
+            options=self.all_experiment_ids,
         )

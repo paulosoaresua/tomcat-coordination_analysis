@@ -60,8 +60,12 @@ class InferenceData:
 
         @return: list of posterior predictive variable names
         """
-        data_variables = self._get_vars(inference_mode="prior_predictive", with_time_dimension=True)
-        parameter_variables = self._get_vars(inference_mode="prior_predictive", with_time_dimension=False)
+        data_variables = self._get_vars(
+            inference_mode="prior_predictive", with_time_dimension=True
+        )
+        parameter_variables = self._get_vars(
+            inference_mode="prior_predictive", with_time_dimension=False
+        )
         return data_variables + parameter_variables
 
     @property
@@ -71,9 +75,12 @@ class InferenceData:
 
         @return: list of posterior predictive variable names
         """
-        data_variables = self._get_vars(inference_mode="posterior_predictive", with_time_dimension=True)
-        parameter_variables = self._get_vars(inference_mode="posterior_predictive",
-                                             with_time_dimension=False)
+        data_variables = self._get_vars(
+            inference_mode="posterior_predictive", with_time_dimension=True
+        )
+        parameter_variables = self._get_vars(
+            inference_mode="posterior_predictive", with_time_dimension=False
+        )
         return data_variables + parameter_variables
 
     @property
@@ -141,10 +148,12 @@ class InferenceData:
                 return len([dim for dim in var.dims if "time" in dim]) == 0
             else:
                 raise ValueError(
-                    f"Variable ({variable_name}) not found for inference mode ({inference_mode}).")
+                    f"Variable ({variable_name}) not found for inference mode ({inference_mode})."
+                )
         else:
             raise ValueError(
-                f"Inference modee ({inference_mode}) not found in the trace.")
+                f"Inference modee ({inference_mode}) not found in the trace."
+            )
 
     def generate_convergence_summary(self) -> pd.DataFrame:
         """
@@ -186,7 +195,7 @@ class InferenceData:
         return None
 
     def average_posterior_samples(
-            self, variable_name: str, return_std: bool
+        self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior distribution.
@@ -202,7 +211,7 @@ class InferenceData:
         return self._average_samples(variable_name, return_std, "posterior")
 
     def average_prior_predictive_samples(
-            self, variable_name: str, return_std: bool
+        self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's prior predictive distribution.
@@ -218,7 +227,7 @@ class InferenceData:
         return self._average_samples(variable_name, return_std, "prior_predictive")
 
     def average_posterior_predictive_samples(
-            self, variable_name: str, return_std: bool
+        self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior predictive distribution.
@@ -234,7 +243,7 @@ class InferenceData:
         return self._average_samples(variable_name, return_std, "posterior_predictive")
 
     def _average_samples(
-            self, variable_name: str, return_std: bool, inference_mode: str
+        self, variable_name: str, return_std: bool, inference_mode: str
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples in the trace.
@@ -248,7 +257,9 @@ class InferenceData:
         @return: variable's posterior mean and optionally standard deviation per time step.
         """
         if inference_mode not in self.trace:
-            raise ValueError(f"{inference_mode} samples not found in the inference data.")
+            raise ValueError(
+                f"{inference_mode} samples not found in the inference data."
+            )
 
         if variable_name in self.trace[inference_mode]:
             samples = self.trace[inference_mode][variable_name]
@@ -271,16 +282,17 @@ class InferenceData:
             return mean_values
         else:
             raise ValueError(
-                f"Variable ({variable_name}) not found in the inference mode ({inference_mode}).")
+                f"Variable ({variable_name}) not found in the inference mode ({inference_mode})."
+            )
 
     def plot_time_series_posterior(
-            self,
-            variable_name: str,
-            include_bands: bool,
-            value_bounds: Optional[Tuple[float, float]] = None,
-            ax: Optional[plt.axis] = None,
-            dimension: Union[int, str] = 0,
-            **kwargs,
+        self,
+        variable_name: str,
+        include_bands: bool,
+        value_bounds: Optional[Tuple[float, float]] = None,
+        ax: Optional[plt.axis] = None,
+        dimension: Union[int, str] = 0,
+        **kwargs,
     ) -> plt.axis:
         """
         Plots the time series of samples draw from the posterior distribution.
@@ -333,10 +345,16 @@ class InferenceData:
             subjects = sorted(list(set(subject_indices)))
             for s in subjects:
                 idx = [i for i, subject in enumerate(subject_indices) if subject == s]
-                y = means.loc[dimension][idx] if isinstance(dimension, str) else means[
-                    dimension, idx]
-                y_std = stds.loc[dimension][idx] if isinstance(dimension, str) else stds[
-                    dimension, idx]
+                y = (
+                    means.loc[dimension][idx]
+                    if isinstance(dimension, str)
+                    else means[dimension, idx]
+                )
+                y_std = (
+                    stds.loc[dimension][idx]
+                    if isinstance(dimension, str)
+                    else stds[dimension, idx]
+                )
                 plot_series(
                     x=time_steps[idx],
                     y=y,
@@ -347,15 +365,20 @@ class InferenceData:
                     ax=ax,
                     **kwargs,
                 )
-            ax.set_ylabel(
-                getattr(means, f"{variable_name}_dimension").data[dimension_idx]
-            )
+            ax.set_ylabel(getattr(means, f"{variable_name}_dimension").data[dimension])
         else:
             # Non-serial variable
             for s in range(means.shape[0]):
-                y = means[s].loc[dimension] if isinstance(dimension, str) else means[s, dimension]
-                y_std = stds[s].loc[dimension] if isinstance(dimension, str) else stds[
-                    s, dimension]
+                y = (
+                    means[s].loc[dimension]
+                    if isinstance(dimension, str)
+                    else means[s, dimension]
+                )
+                y_std = (
+                    stds[s].loc[dimension]
+                    if isinstance(dimension, str)
+                    else stds[s, dimension]
+                )
                 plot_series(
                     x=time_steps,
                     y=y,
@@ -366,9 +389,7 @@ class InferenceData:
                     ax=ax,
                     **kwargs,
                 )
-            ax.set_ylabel(
-                getattr(means, f"{variable_name}_dimension").data[dimension_idx]
-            )
+            ax.set_ylabel(getattr(means, f"{variable_name}_dimension").data[dimension])
 
         ax.set_xlabel("Time Step")
         ax.spines[["right", "top"]].set_visible(False)

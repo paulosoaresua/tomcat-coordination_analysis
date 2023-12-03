@@ -1,11 +1,8 @@
-import uuid
-from typing import List
-
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
+
 from coordination.webapp.entity.inference_run import InferenceRun
-import os
 from coordination.webapp.utils import get_inference_run_ids
+from coordination.webapp.widget.drop_down import DropDown
 
 
 class InferenceRunSelection:
@@ -36,7 +33,8 @@ class InferenceRunSelection:
         run_id = DropDown(
             label="Inference run ID",
             key=f"{self.component_key}_run_id_dropdown",
-            options=get_inference_run_ids(self.inference_dir)).create()
+            options=get_inference_run_ids(self.inference_dir),
+        ).create()
 
         if run_id:
             self.selected_inference_run_ = InferenceRun(self.inference_dir, run_id)

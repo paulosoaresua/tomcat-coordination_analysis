@@ -1,9 +1,8 @@
-import uuid
-
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
+
 from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.entity.model_variable import ModelVariableInfo
+from coordination.webapp.widget.drop_down import DropDown, DropDownOption
 
 
 class ModelVariableSelection:
@@ -38,44 +37,56 @@ class ModelVariableSelection:
         options = []
         for group, variables in self.inference_run.model_variables.items():
             for var_info in variables:
-                options.append(ModelVariableDropDownOption(prefix=f"[{group.upper()}]",
-                                                           model_variable_info=var_info))
+                options.append(
+                    ModelVariableDropDownOption(
+                        prefix=f"[{group.upper()}]", model_variable_info=var_info
+                    )
+                )
 
         # Add extra options for inference stats and parameter trace plot image
-        options.append(ModelVariableDropDownOption(
-            prefix="[EXTRA]",
-            model_variable_info=ModelVariableInfo(
-                variable_name="Inference Stats",
-                inference_mode="inference_stats",
-                dimension_names=[]
-            )))
-        options.append(ModelVariableDropDownOption(
-            prefix="[EXTRA]",
-            model_variable_info=ModelVariableInfo(
-                variable_name="Parameter Trace Plot",
-                inference_mode="parameter_trace",
-                dimension_names=[]
-            )))
+        options.append(
+            ModelVariableDropDownOption(
+                prefix="[EXTRA]",
+                model_variable_info=ModelVariableInfo(
+                    variable_name="Inference Stats",
+                    inference_mode="inference_stats",
+                    dimension_names=[],
+                ),
+            )
+        )
+        options.append(
+            ModelVariableDropDownOption(
+                prefix="[EXTRA]",
+                model_variable_info=ModelVariableInfo(
+                    variable_name="Parameter Trace Plot",
+                    inference_mode="parameter_trace",
+                    dimension_names=[],
+                ),
+            )
+        )
         options.sort(key=lambda x: (x.prefix, x.name))
 
         selected_option = DropDown(
             label="Variable",
             key=f"{self.component_key}_model_variable_dropdown",
-            options=options
+            options=options,
         ).create()
 
-        self.selected_model_variable_ = selected_option.model_variable_info if \
-            selected_option else None
+        self.selected_model_variable_ = (
+            selected_option.model_variable_info if selected_option else None
+        )
 
         if self.selected_model_variable_:
             self.selected_dimension_name_ = None
-            if self.selected_model_variable_ and \
-                    self.selected_model_variable_.num_named_dimensions > 1:
+            if (
+                self.selected_model_variable_
+                and self.selected_model_variable_.num_named_dimensions > 1
+            ):
                 # Selector for dimension if the variable has multiple dimensions.
                 self.selected_dimension_name_ = st.selectbox(
                     "Dimension",
                     key=f"{self.component_key}_model_variable_dimension_dropdown",
-                    options=self.selected_model_variable_.dimension_names
+                    options=self.selected_model_variable_.dimension_names,
                 )
 
 
@@ -86,9 +97,7 @@ class ModelVariableDropDownOption(DropDownOption):
     dropdown.
     """
 
-    def __init__(self,
-                 prefix: str,
-                 model_variable_info: ModelVariableInfo):
+    def __init__(self, prefix: str, model_variable_info: ModelVariableInfo):
         """
         Creates a dropdown option for model variable selection.
 

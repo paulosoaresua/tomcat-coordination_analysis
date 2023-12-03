@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -7,11 +8,9 @@ import plotly.graph_objs as go
 import streamlit as st
 import xarray
 
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, DEFAULT_COLOR_PALETTE
 from coordination.inference.inference_data import InferenceData
-
-import plotly.express as px
-import itertools
+from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
+                                           INFERENCE_PARAMETERS_DIR)
 
 
 def get_inference_run_ids(inference_dir: str) -> List[str]:
@@ -22,8 +21,11 @@ def get_inference_run_ids(inference_dir: str) -> List[str]:
     @return: list of inference run ids.
     """
     if os.path.exists(inference_dir):
-        run_ids = [run_id for run_id in os.listdir(inference_dir)
-                   if os.path.isdir(f"{inference_dir}/{run_id}")]
+        run_ids = [
+            run_id
+            for run_id in os.listdir(inference_dir)
+            if os.path.isdir(f"{inference_dir}/{run_id}")
+        ]
 
         # Display on the screen from the most recent to the oldest.
         return sorted(run_ids, reverse=True)
@@ -78,7 +80,7 @@ def get_saved_execution_parameter_files() -> List[str]:
 
 
 def create_dropdown_with_default_selection(
-        label: str, key: str, options: List[DropDownOption]
+    label: str, key: str, options: List[DropDownOption]
 ) -> Optional[str]:
     """
     Creates a dropdown with an extra value for default selection.
@@ -106,7 +108,7 @@ def create_dropdown_with_default_selection(
         key=key,
         options=[None] + options,
         # If it's a tuple, add the first item as prefix of the value name in the second item.
-        format_func=format_func
+        format_func=format_func,
     )
 
     if isinstance(value, tuple):
@@ -169,24 +171,34 @@ def get_model_variables(run_id: str) -> Dict[str, List[str]]:
     posterior_predictive = idata.posterior_predictive_variables
 
     return {
-        "latent": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
-                   latent_variable_names],
-        "observed": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
-                     observed_variable_names],
-        "latent_parameter": [(var_name, idata.get_dimension_coordinates(var_name)) for var_name in
-                             latent_parameter_variable_names],
-        "prior_predictive": [(var_name, idata.get_dimension_coordinates(var_name)) for
-                             var_name in prior_predictive],
-        "posterior_predictive": [(var_name, idata.get_dimension_coordinates(var_name)) for
-                                 var_name in posterior_predictive],
+        "latent": [
+            (var_name, idata.get_dimension_coordinates(var_name))
+            for var_name in latent_variable_names
+        ],
+        "observed": [
+            (var_name, idata.get_dimension_coordinates(var_name))
+            for var_name in observed_variable_names
+        ],
+        "latent_parameter": [
+            (var_name, idata.get_dimension_coordinates(var_name))
+            for var_name in latent_parameter_variable_names
+        ],
+        "prior_predictive": [
+            (var_name, idata.get_dimension_coordinates(var_name))
+            for var_name in prior_predictive
+        ],
+        "posterior_predictive": [
+            (var_name, idata.get_dimension_coordinates(var_name))
+            for var_name in posterior_predictive
+        ],
     }
 
 
 def plot_curve(
-        variable_name: str,
-        inference_data: InferenceData,
-        inference_mode: str,
-        dimension: Union[int, str] = 0
+    variable_name: str,
+    inference_data: InferenceData,
+    inference_mode: str,
+    dimension: Union[int, str] = 0,
 ) -> go.Figure:
     """
     Plots the time series of samples drawn from the posterior distribution.
@@ -201,14 +213,17 @@ def plot_curve(
 
     color_palette_iterator = itertools.cycle(DEFAULT_COLOR_PALETTE)
     if inference_mode == "posterior":
-        means, stds = inference_data.average_posterior_samples(variable_name,
-                                                               return_std=True)
+        means, stds = inference_data.average_posterior_samples(
+            variable_name, return_std=True
+        )
     elif inference_mode == "prior_predictive":
-        means, stds = inference_data.average_prior_predictive_samples(variable_name,
-                                                                      return_std=True)
+        means, stds = inference_data.average_prior_predictive_samples(
+            variable_name, return_std=True
+        )
     elif inference_mode == "posterior_predictive":
-        means, stds = inference_data.average_posterior_predictive_samples(variable_name,
-                                                                          return_std=True)
+        means, stds = inference_data.average_posterior_predictive_samples(
+            variable_name, return_std=True
+        )
     else:
         raise ValueError(f"Invalid inference mode ({inference_mode}).")
 
@@ -222,35 +237,35 @@ def plot_curve(
             y=means,
             y_std=stds,
             value_bounds=bounds,
-            color=next(color_palette_iterator)
+            color=next(color_palette_iterator),
         )
 
         yaxis_title = variable_name
     else:  # len(means.shape) == 2:
         # Serial variable: the first axis is the dimension of the latent component.
         subject_indices = np.array(
-            [
-                int(x.split("#")[0])
-                for x in getattr(means, f"{variable_name}_time").data
-            ]
+            [int(x.split("#")[0]) for x in getattr(means, f"{variable_name}_time").data]
         )
         time_steps = np.array(
-            [
-                int(x.split("#")[1])
-                for x in getattr(means, f"{variable_name}_time").data
-            ]
+            [int(x.split("#")[1]) for x in getattr(means, f"{variable_name}_time").data]
         )
         subjects = sorted(list(set(subject_indices)))
         fig = None
         for s in subjects:
             idx = [i for i, subject in enumerate(subject_indices) if subject == s]
-            y = means.loc[dimension][idx] if isinstance(dimension, str) else means[
-                dimension, idx]
+            y = (
+                means.loc[dimension][idx]
+                if isinstance(dimension, str)
+                else means[dimension, idx]
+            )
             if stds is None:
                 y_std = None
             else:
-                y_std = stds.loc[dimension][idx] if isinstance(dimension, str) else stds[
-                    dimension, idx]
+                y_std = (
+                    stds.loc[dimension][idx]
+                    if isinstance(dimension, str)
+                    else stds[dimension, idx]
+                )
 
             fig = plot_series(
                 x=time_steps[idx],
@@ -258,13 +273,12 @@ def plot_curve(
                 y_std=y_std,
                 label=f"Subject {s}",
                 figure=fig,
-                color=next(color_palette_iterator)
+                color=next(color_palette_iterator),
             )
 
         yaxis_title = f"{variable_name} - {dimension}"
 
-    fig.update_layout(xaxis_title="Time Step",
-                      yaxis_title=yaxis_title)
+    fig.update_layout(xaxis_title="Time Step", yaxis_title=yaxis_title)
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -272,13 +286,13 @@ def plot_curve(
 
 
 def plot_series(
-        x: Union[np.ndarray, xarray.DataArray],
-        y: Union[np.ndarray, xarray.DataArray],
-        y_std: Union[np.ndarray, xarray.DataArray] = None,
-        label: Optional[str] = None,
-        value_bounds: Optional[Tuple[float, float]] = None,
-        figure: Optional[go.Figure] = None,
-        color: Optional[str] = None
+    x: Union[np.ndarray, xarray.DataArray],
+    y: Union[np.ndarray, xarray.DataArray],
+    y_std: Union[np.ndarray, xarray.DataArray] = None,
+    label: Optional[str] = None,
+    value_bounds: Optional[Tuple[float, float]] = None,
+    figure: Optional[go.Figure] = None,
+    color: Optional[str] = None,
 ) -> go.Figure:
     """
     Plots a time series with optional error bands.

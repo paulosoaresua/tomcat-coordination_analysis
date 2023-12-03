@@ -1,15 +1,8 @@
 import streamlit as st
 
-from coordination.webapp.component.inference_run_selection import \
-    InferenceRunSelection
-from coordination.webapp.component.experiment_id_multi_selection import \
-    ExperimentIDMultiSelection
-from coordination.webapp.component.model_variable_selection import \
-    ModelVariableSelection
-from coordination.webapp.component.inference_results import InferenceResults
-from coordination.webapp.entity.inference_run import InferenceRun
+from coordination.webapp.component.inference_execution import \
+    InferenceExecution
 from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
-from coordination.webapp.component.inference_execution import InferenceExecution
 
 
 class NewRun:
@@ -33,5 +26,6 @@ class NewRun:
         """
         inference_execution_component = InferenceExecution(
             component_key=f"{self.page_key}_inference_execution",
-            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
+            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
+        )
         inference_execution_component.create_component()

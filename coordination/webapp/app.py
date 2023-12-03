@@ -3,15 +3,11 @@ import os
 import streamlit as st
 
 from coordination.common.constants import DEFAULT_INFERENCE_RESULTS_DIR
-
-from coordination.webapp.pages.run_page import create_run_page
-from coordination.webapp.pages.visualization_page import \
-    create_visualization_per_run_page
-from coordination.webapp.pages.run_vs_run import RunVsRun
-from coordination.webapp.pages.single_run import SingleRun
 from coordination.webapp.component.header import Header
 from coordination.webapp.pages.new_run import NewRun
 from coordination.webapp.pages.progress import Progress
+from coordination.webapp.pages.run_vs_run import RunVsRun
+from coordination.webapp.pages.single_run import SingleRun
 
 st.set_page_config(
     page_title="Coordination Processes",

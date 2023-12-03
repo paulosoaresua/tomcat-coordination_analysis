@@ -1,4 +1,5 @@
 import streamlit as st
+
 from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
 
 
@@ -8,6 +9,7 @@ class Header:
     inference directory. It saves the inference directory to the state variable so it can be
     directly accessed by any component of the page.
     """
+
     def create_component(self):
         """
         Creates an input field for entering an inference directory.

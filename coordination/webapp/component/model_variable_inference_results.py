@@ -1,17 +1,15 @@
-import uuid
-
-import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
-from coordination.webapp.entity.inference_run import InferenceRun
-from coordination.webapp.entity.model_variable import ModelVariableInfo
-from coordination.webapp.component.inference_stats import InferenceStats
-from coordination.inference.inference_data import InferenceData
-from coordination.webapp.constants import DEFAULT_COLOR_PALETTE, DEFAULT_PLOT_MARGINS
-from coordination.webapp.utils import plot_series
 import itertools
 from typing import Optional
+
 import numpy as np
 import plotly.figure_factory as ff
+import streamlit as st
+
+from coordination.inference.inference_data import InferenceData
+from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
+                                           DEFAULT_PLOT_MARGINS)
+from coordination.webapp.entity.model_variable import ModelVariableInfo
+from coordination.webapp.utils import plot_series
 
 
 class ModelVariableInferenceResults:
@@ -20,10 +18,13 @@ class ModelVariableInferenceResults:
     from a particular inference run.
     """
 
-    def __init__(self, component_key: str,
-                 model_variable_info: ModelVariableInfo,
-                 dimension: Optional[str],
-                 inference_data: InferenceData):
+    def __init__(
+        self,
+        component_key: str,
+        model_variable_info: ModelVariableInfo,
+        dimension: Optional[str],
+        inference_data: InferenceData,
+    ):
         """
         Creates the component.
 
@@ -48,8 +49,10 @@ class ModelVariableInferenceResults:
         if not self.inference_data:
             return
 
-        if self.inference_data.is_parameter(self.model_variable_info.inference_mode,
-                                            self.model_variable_info.variable_name):
+        if self.inference_data.is_parameter(
+            self.model_variable_info.inference_mode,
+            self.model_variable_info.variable_name,
+        ):
             self._display_parameter_variable_histogram()
         else:
             self._display_data_variable_time_series_curve()
@@ -62,7 +65,8 @@ class ModelVariableInferenceResults:
         # Axes = (chain, draw, dim1, dim2...) or (dim1, dim2, ...) if inference mode is
         # observed_data
         samples = self.inference_data.trace[self.model_variable_info.inference_mode][
-            self.model_variable_info.variable_name]
+            self.model_variable_info.variable_name
+        ]
 
         if self.model_variable_info.inference_mode == "observed_data":
             # A single tensor value
@@ -77,7 +81,7 @@ class ModelVariableInferenceResults:
                     st.selectbox(
                         f"Dimension {i + 1}",
                         key=f"{self.component_key}_parameter_variable_dimension_selector_{i}",
-                        options=range(num_dimensions_in_axis)
+                        options=range(num_dimensions_in_axis),
                     )
                 )
 
@@ -88,23 +92,28 @@ class ModelVariableInferenceResults:
 
                 samples = samples.to_numpy()
                 # Add the average across all chains to the list
-                samples = np.concatenate([np.mean(samples, axis=0, keepdims=True), samples])
+                samples = np.concatenate(
+                    [np.mean(samples, axis=0, keepdims=True), samples]
+                )
                 color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
                 colors = [next(color_palette_iter) for _ in range(samples.shape[0])]
-                labels = ["All chains"] + [f"Chain {chain + 1}" for chain in
-                                           range(samples.shape[0] - 1)]
+                labels = ["All chains"] + [
+                    f"Chain {chain + 1}" for chain in range(samples.shape[0] - 1)
+                ]
                 fig = ff.create_distplot(
                     samples,
                     # bin_size=0.01,
                     show_rug=False,
                     group_labels=labels,
-                    colors=colors
+                    colors=colors,
                 )
-                fig.update_layout(xaxis_title=self.model_variable_info.variable_name,
-                                  yaxis_title="Density",
-                                  # Preserve legend order
-                                  legend={"traceorder": "normal"},
-                                  margin=DEFAULT_PLOT_MARGINS)
+                fig.update_layout(
+                    xaxis_title=self.model_variable_info.variable_name,
+                    yaxis_title="Density",
+                    # Preserve legend order
+                    legend={"traceorder": "normal"},
+                    margin=DEFAULT_PLOT_MARGINS,
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
     def _display_data_variable_time_series_curve(self):
@@ -116,28 +125,33 @@ class ModelVariableInferenceResults:
         if self.model_variable_info.inference_mode == "observed_data":
             # There's no notion of chain or draw for observed data. That is given, not sampled.
             means = self.inference_data.trace[self.model_variable_info.inference_mode][
-                self.model_variable_info.variable_name]
+                self.model_variable_info.variable_name
+            ]
             stds = None
         else:
             means = self.inference_data.trace[self.model_variable_info.inference_mode][
-                self.model_variable_info.variable_name].mean(
-                dim=["chain", "draw"])
+                self.model_variable_info.variable_name
+            ].mean(dim=["chain", "draw"])
             stds = self.inference_data.trace[self.model_variable_info.inference_mode][
-                self.model_variable_info.variable_name].std(
-                dim=["chain", "draw"])
+                self.model_variable_info.variable_name
+            ].std(dim=["chain", "draw"])
 
         fig = None
         color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
         if len(means.shape) == 1:
             # The series only has a time axis.
             time_steps = np.arange(len(means))
-            bounds = [0, 1] if self.model_variable_info.variable_name == "coordination" else None
+            bounds = (
+                [0, 1]
+                if self.model_variable_info.variable_name == "coordination"
+                else None
+            )
             fig = plot_series(
                 x=time_steps,
                 y=means,
                 y_std=stds,
                 value_bounds=bounds,
-                color=next(color_palette_iter)
+                color=next(color_palette_iter),
             )
             yaxis_label = self.model_variable_info.variable_name
         else:  # len(means.shape) == 2:
@@ -152,13 +166,17 @@ class ModelVariableInferenceResults:
             subject_indices = np.array(
                 [
                     int(x.split("#")[0])
-                    for x in getattr(means, f"{self.model_variable_info.variable_name}_time").data
+                    for x in getattr(
+                        means, f"{self.model_variable_info.variable_name}_time"
+                    ).data
                 ]
             )
             time_steps = np.array(
                 [
                     int(x.split("#")[1])
-                    for x in getattr(means, f"{self.model_variable_info.variable_name}_time").data
+                    for x in getattr(
+                        means, f"{self.model_variable_info.variable_name}_time"
+                    ).data
                 ]
             )
             unique_subjects = sorted(list(set(subject_indices)))
@@ -166,14 +184,19 @@ class ModelVariableInferenceResults:
                 # Get the indices in the time series belonging to subject "s". In a serial module,
                 # only one subject is observed at a time.
                 idx = [i for i, subject in enumerate(subject_indices) if subject == s]
-                y = means.loc[self.dimension][idx] if isinstance(self.dimension, str) else means[
-                    self.dimension, idx]
+                y = (
+                    means.loc[self.dimension][idx]
+                    if isinstance(self.dimension, str)
+                    else means[self.dimension, idx]
+                )
                 if stds is None:
                     y_std = None
                 else:
-                    y_std = stds.loc[self.dimension][idx] if isinstance(self.dimension, str) else \
-                        stds[
-                            self.dimension, idx]
+                    y_std = (
+                        stds.loc[self.dimension][idx]
+                        if isinstance(self.dimension, str)
+                        else stds[self.dimension, idx]
+                    )
 
                 fig = plot_series(
                     x=time_steps[idx],
@@ -181,16 +204,18 @@ class ModelVariableInferenceResults:
                     y_std=y_std,
                     label=f"Subject {s}",
                     figure=fig,
-                    color=next(color_palette_iter)
+                    color=next(color_palette_iter),
                 )
 
             yaxis_label = f"{self.model_variable_info.variable_name} - {self.dimension}"
 
         if fig:
-            fig.update_layout(xaxis_title="Time Step",
-                              yaxis_title=yaxis_label,
-                              # Preserve legend order
-                              legend={"traceorder": "normal"},
-                              margin=DEFAULT_PLOT_MARGINS)
+            fig.update_layout(
+                xaxis_title="Time Step",
+                yaxis_title=yaxis_label,
+                # Preserve legend order
+                legend={"traceorder": "normal"},
+                margin=DEFAULT_PLOT_MARGINS,
+            )
 
             st.plotly_chart(fig, use_container_width=True)

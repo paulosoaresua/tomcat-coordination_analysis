@@ -1,28 +1,11 @@
-import time
-import uuid
-from typing import Any, Dict, List, Optional
-import subprocess
+import json
+import os
+from collections import OrderedDict
+from typing import Dict, Optional
 
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
+
 from coordination.webapp.entity.inference_run import InferenceRun
-import os
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, INFERENCE_TMP_DIR, \
-    INFERENCE_RESULTS_DIR_STATE_KEY
-from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_NUM_INFERENCE_JOBS)
-from copy import deepcopy
-from coordination.model.config.mapper import DataMapper
-from pkg_resources import resource_string
-from coordination.model.builder import ModelBuilder
-import json
-import asyncio
-from coordination.webapp.utils import get_inference_run_ids
-from collections import OrderedDict
 from coordination.webapp.widget.progress_bar import ProgressBar
 
 
@@ -101,9 +84,7 @@ class ExperimentProgress:
         else:
             progress_emoji = ":question:"
 
-        st.write(
-            f"## {self.experiment_id} {progress_emoji}"
-        )
+        st.write(f"## {self.experiment_id} {progress_emoji}")
         col1, col2 = st.columns([0.03, 0.97])
         with col1:
             st.write("**Logs:**")
@@ -120,14 +101,14 @@ class ExperimentProgress:
         # Use an OrderedDict such that the chains show up in order of their numbers. For instance,
         # chain1, chain 2, chain 3...
         total_samples_per_chain = (
-                self.inference_run.execution_params["burn_in"]
-                + self.inference_run.execution_params["num_samples"]
+            self.inference_run.execution_params["burn_in"]
+            + self.inference_run.execution_params["num_samples"]
         )
         for key, value in OrderedDict(progress_info["step"]).items():
             ProgressBar(
                 items_name="samples",
                 current_value=value,
-                maximum_value=total_samples_per_chain
+                maximum_value=total_samples_per_chain,
             ).create()
 
     def _read_logs(self) -> Optional[str]:

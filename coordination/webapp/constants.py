@@ -1,6 +1,5 @@
 import os
 
-from coordination.common.constants import DEFAULT_INFERENCE_RESULTS_DIR
 import plotly.express as px
 
 REFRESH_RATE = 10  # in seconds

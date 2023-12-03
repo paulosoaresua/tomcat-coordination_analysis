@@ -1,13 +1,12 @@
 import streamlit as st
 
-from coordination.webapp.component.inference_run_selection import \
-    InferenceRunSelection
 from coordination.webapp.component.experiment_id_multi_selection import \
     ExperimentIDMultiSelection
+from coordination.webapp.component.inference_results import InferenceResults
+from coordination.webapp.component.inference_run_selection import \
+    InferenceRunSelection
 from coordination.webapp.component.model_variable_selection import \
     ModelVariableSelection
-from coordination.webapp.component.inference_results import InferenceResults
-from coordination.webapp.entity.inference_run import InferenceRun
 from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
 
 
@@ -32,7 +31,8 @@ class SingleRun:
         """
         inference_run_component = InferenceRunSelection(
             component_key=f"{self.page_key}_inference_run_selector",
-            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
+            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
+        )
         inference_run_component.create_component()
 
         if not inference_run_component.selected_inference_run_:
@@ -41,21 +41,22 @@ class SingleRun:
 
         experiment_ids_component = ExperimentIDMultiSelection(
             component_key=f"{self.page_key}_experiments_selector",
-            all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids)
+            all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids,
+        )
         experiment_ids_component.create_component()
 
         col_left, col_right = st.columns(2)
         with col_left:
             model_variable_component_left = ModelVariableSelection(
                 component_key=f"{self.page_key}_left_col_model_variable_selector",
-                inference_run=inference_run_component.selected_inference_run_
+                inference_run=inference_run_component.selected_inference_run_,
             )
             model_variable_component_left.create_component()
 
         with col_right:
             model_variable_component_right = ModelVariableSelection(
                 component_key=f"{self.page_key}_right_model_variable_selector",
-                inference_run=inference_run_component.selected_inference_run_
+                inference_run=inference_run_component.selected_inference_run_,
             )
             model_variable_component_right.create_component()
 
@@ -69,7 +70,10 @@ class SingleRun:
                     inference_run=inference_run_component.selected_inference_run_,
                     experiment_id=experiment_id,
                     model_variable_info=model_variable_component_left.selected_model_variable_,
-                    model_variable_dimension=model_variable_component_left.selected_dimension_name_)
+                    model_variable_dimension=(
+                        model_variable_component_left.selected_dimension_name_
+                    ),
+                )
                 inference_results_component.create_component()
 
             with col_right:
@@ -78,5 +82,8 @@ class SingleRun:
                     inference_run=inference_run_component.selected_inference_run_,
                     experiment_id=experiment_id,
                     model_variable_info=model_variable_component_right.selected_model_variable_,
-                    model_variable_dimension=model_variable_component_right.selected_dimension_name_)
+                    model_variable_dimension=(
+                        model_variable_component_right.selected_dimension_name_
+                    ),
+                )
                 inference_results_component.create_component()

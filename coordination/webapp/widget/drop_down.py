@@ -1,5 +1,7 @@
 from __future__ import annotations
-import uuid
+
+from typing import List, Optional
+
 import streamlit as st
 
 
@@ -12,11 +14,13 @@ class DropDown:
 
     DEFAULT_SELECTION_TEXT = "-- Select a value --"
 
-    def __init__(self,
-                 label: str,
-                 key: str,
-                 options: List[DropDownOption],
-                 default_selection_text: str = DEFAULT_SELECTION_TEXT):
+    def __init__(
+        self,
+        label: str,
+        key: str,
+        options: List[DropDownOption],
+        default_selection_text: str = DEFAULT_SELECTION_TEXT,
+    ):
         """
         Creates a drop down widget.
 
@@ -36,6 +40,7 @@ class DropDown:
 
         @return: selected option.
         """
+
         def format_func(option: DropDownOption):
             """
             Define which text to display for an option in a dropdown.
@@ -52,7 +57,7 @@ class DropDown:
             self.label,
             key=self.key,
             options=[None] + self.options,
-            format_func=format_func
+            format_func=format_func,
         )
 
 

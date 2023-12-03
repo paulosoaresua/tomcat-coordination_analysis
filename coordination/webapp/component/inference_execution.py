@@ -1,25 +1,24 @@
-import time
-import uuid
-from typing import Any, Dict, List, Optional
+import json
+import os
 import subprocess
+import time
+from copy import deepcopy
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
-from coordination.webapp.entity.inference_run import InferenceRun
-import os
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, INFERENCE_TMP_DIR, \
-    INFERENCE_RESULTS_DIR_STATE_KEY
+from pkg_resources import resource_string
+
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
+                                           DEFAULT_NUM_INFERENCE_JOBS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_NUM_INFERENCE_JOBS)
-from copy import deepcopy
-from coordination.model.config.mapper import DataMapper
-from pkg_resources import resource_string
+                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.model.builder import ModelBuilder
-import json
+from coordination.model.config.mapper import DataMapper
+from coordination.webapp.constants import (INFERENCE_PARAMETERS_DIR,
+                                           INFERENCE_TMP_DIR)
+from coordination.webapp.widget.drop_down import DropDown
 
 
 class InferenceExecution:
@@ -48,13 +47,16 @@ class InferenceExecution:
         selected_default_execution_params_file = DropDown(
             label="Default Execution Parameters",
             key=f"{self.component_key}_default_execution_parameters_dropdown",
-            options=InferenceExecution._get_saved_execution_parameter_files()
+            options=InferenceExecution._get_saved_execution_parameter_files(),
         ).create()
         execution_params = InferenceExecution._load_saved_execution_params(
-            selected_default_execution_params_file)
+            selected_default_execution_params_file
+        )
 
         if not execution_params:
-            execution_params = InferenceExecution._assemble_default_execution_params_dict()
+            execution_params = (
+                InferenceExecution._assemble_default_execution_params_dict()
+            )
 
         execution_params = self._create_execution_params_area(execution_params)
 
@@ -75,8 +77,11 @@ class InferenceExecution:
         """
         if os.path.exists(INFERENCE_PARAMETERS_DIR):
             saved_params_list = sorted(
-                [f for f in os.listdir(INFERENCE_PARAMETERS_DIR) if
-                 os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")]
+                [
+                    f
+                    for f in os.listdir(INFERENCE_PARAMETERS_DIR)
+                    if os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")
+                ]
             )
             return saved_params_list
 
@@ -103,18 +108,20 @@ class InferenceExecution:
 
         @return: a dictionary of execution params.
         """
-        execution_params = dict(seed=DEFAULT_SEED,
-                                burn_in=DEFAULT_BURN_IN,
-                                num_samples=DEFAULT_NUM_SAMPLES,
-                                num_chains=DEFAULT_NUM_CHAINS,
-                                num_jobs_per_inference=DEFAULT_NUM_JOBS_PER_INFERENCE,
-                                num_inference_jobs=DEFAULT_NUM_INFERENCE_JOBS,
-                                nuts_init_method=DEFAULT_NUTS_INIT_METHOD,
-                                target_accept=DEFAULT_TARGET_ACCEPT,
-                                model=None,
-                                data_filepath=None,
-                                model_params={},
-                                data_mapping={"mappings": []})
+        execution_params = dict(
+            seed=DEFAULT_SEED,
+            burn_in=DEFAULT_BURN_IN,
+            num_samples=DEFAULT_NUM_SAMPLES,
+            num_chains=DEFAULT_NUM_CHAINS,
+            num_jobs_per_inference=DEFAULT_NUM_JOBS_PER_INFERENCE,
+            num_inference_jobs=DEFAULT_NUM_INFERENCE_JOBS,
+            nuts_init_method=DEFAULT_NUTS_INIT_METHOD,
+            target_accept=DEFAULT_TARGET_ACCEPT,
+            model=None,
+            data_filepath=None,
+            model_params={},
+            data_mapping={"mappings": []},
+        )
 
         return execution_params
 
@@ -133,76 +140,79 @@ class InferenceExecution:
             execution_params["seed"] = st.number_input(
                 label="Seed",
                 key=f"{self.component_key}_seed",
-                value=default_execution_params["seed"]
+                value=default_execution_params["seed"],
             )
             execution_params["burn_in"] = st.number_input(
                 label="Burn-in",
                 key=f"{self.component_key}_burn_in",
-                value=default_execution_params["burn_in"]
+                value=default_execution_params["burn_in"],
             )
             execution_params["num_samples"] = st.number_input(
                 label="Number of Samples",
                 key=f"{self.component_key}_num_samples",
-                value=default_execution_params["num_samples"]
+                value=default_execution_params["num_samples"],
             )
             execution_params["num_chains"] = st.number_input(
                 label="Number of Chains",
                 key=f"{self.component_key}_num_chains",
-                value=default_execution_params["num_chains"]
+                value=default_execution_params["num_chains"],
             )
             execution_params["num_jobs_per_inference"] = st.number_input(
                 label="Number of Jobs per Inference (typically = number of chains)",
                 key=f"{self.component_key}_num_jobs_per_inference",
-                value=default_execution_params["num_jobs_per_inference"]
+                value=default_execution_params["num_jobs_per_inference"],
             )
             execution_params["num_inference_jobs"] = st.number_input(
                 label="Number of Inference Jobs (how many experiment batches in parallel)",
                 key=f"{self.component_key}_num_inference_jobs",
-                value=default_execution_params["num_inference_jobs"]
+                value=default_execution_params["num_inference_jobs"],
             )
             execution_params["nuts_init_method"] = st.text_input(
                 label="NUTS Initialization Method",
                 key=f"{self.component_key}_nuts_init_method",
-                value=default_execution_params["nuts_init_method"]
+                value=default_execution_params["nuts_init_method"],
             )
             execution_params["target_accept"] = st.number_input(
                 label="Target Accept",
                 key=f"{self.component_key}_target_accept",
-                value=default_execution_params["target_accept"]
+                value=default_execution_params["target_accept"],
             )
 
         with tab2:
             model_options = sorted(list(ModelBuilder.MODELS))
-            selected_model_index = model_options.index(
-                default_execution_params["model"]) if default_execution_params["model"] else 0
+            selected_model_index = (
+                model_options.index(default_execution_params["model"])
+                if default_execution_params["model"]
+                else 0
+            )
             execution_params["model"] = st.selectbox(
                 label="Model",
                 key=f"{self.component_key}_model",
                 index=selected_model_index,
-                options=model_options
+                options=model_options,
             )
             execution_params["data_filepath"] = st.text_input(
                 label="Data Filepath",
                 key=f"{self.component_key}_data_filepath",
-                value=default_execution_params["data_filepath"]
+                value=default_execution_params["data_filepath"],
             )
             execution_params["model_params"] = st.text_area(
                 label="Model Parameters",
                 key=f"{self.component_key}_model_params",
                 value=json.dumps(default_execution_params["model_params"], indent=4),
-                height=10
+                height=10,
             )
             execution_params["data_mapping"] = st.text_area(
                 label="Data Mapping",
                 key=f"{self.component_key}_data_mapping",
                 value=json.dumps(default_execution_params["data_mapping"], indent=4),
-                height=10
+                height=10,
             )
             # Show data mapping schema below the text area for context
             schema = json.loads(
-                resource_string("coordination", "schema/data_mapper_schema.json").decode(
-                    "utf-8"
-                )
+                resource_string(
+                    "coordination", "schema/data_mapper_schema.json"
+                ).decode("utf-8")
             )
             st.write("Data Mapping Schema:")
             st.json(schema, expanded=False)
@@ -228,7 +238,8 @@ class InferenceExecution:
                 )
             except Exception:
                 raise Exception(
-                    f"Invalid model parameters. Make sure to enter a valid json object.")
+                    "Invalid model parameters. Make sure to enter a valid json object."
+                )
 
             try:
                 execution_params_copy["data_mapping"] = json.loads(
@@ -236,13 +247,17 @@ class InferenceExecution:
                 )
                 DataMapper(execution_params_copy["data_mapping"])
             except Exception:
-                raise Exception(f"Invalid data mapping. Make sure to enter a valid json object.")
+                raise Exception(
+                    "Invalid data mapping. Make sure to enter a valid json object."
+                )
 
             os.makedirs(INFERENCE_PARAMETERS_DIR, exist_ok=True)
             with open(f"{INFERENCE_PARAMETERS_DIR}/{filename}.json", "w") as f:
                 json.dump(execution_params_copy, f)
         else:
-            raise Exception("Please, provide a valid filename before saving the parameters.")
+            raise Exception(
+                "Please, provide a valid filename before saving the parameters."
+            )
 
     def _create_execution_params_saving_area(self, execution_params: Dict[str, Any]):
         """
@@ -255,7 +270,7 @@ class InferenceExecution:
         filename = st.text_input(
             label="Filename",
             key=f"{self.component_key}_execution_params_filename",
-            placeholder="Enter a filename without extension"
+            placeholder="Enter a filename without extension",
         )
         if st.button(label="Save Parameters"):
             try:
@@ -264,7 +279,9 @@ class InferenceExecution:
                     # Wait a bit so there's has time for the file to be saved and loaded in the
                     # dropdown when the page refreshes.
                     time.sleep(2)
-                st.success(f"Execution parameters ({filename}) were saved successfully.")
+                st.success(
+                    f"Execution parameters ({filename}) were saved successfully."
+                )
 
             except Exception as ex:
                 st.error(ex)

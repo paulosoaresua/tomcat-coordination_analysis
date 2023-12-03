@@ -37,12 +37,12 @@ import pandas as pd
 from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_INFERENCE_RESULTS_DIR,
                                            DEFAULT_NUM_CHAINS,
+                                           DEFAULT_NUM_INFERENCE_JOBS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_PROGRESS_SAVING_FREQUENCY,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_NUM_INFERENCE_JOBS)
+                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.tmux import TMUX
 from coordination.common.utils import NumpyArrayEncoder
 from coordination.model.builder import ModelBuilder

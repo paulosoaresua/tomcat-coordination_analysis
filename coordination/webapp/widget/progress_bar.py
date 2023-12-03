@@ -1,5 +1,5 @@
 from __future__ import annotations
-import uuid
+
 import streamlit as st
 
 
@@ -8,10 +8,7 @@ class ProgressBar:
     Creates a progress bar with numerical information about the progress.
     """
 
-    def __init__(self,
-                 items_name: str,
-                 current_value: int,
-                 maximum_value: int):
+    def __init__(self, items_name: str, current_value: int, maximum_value: int):
         """
         Creates a progress bar widget.
 
@@ -28,6 +25,8 @@ class ProgressBar:
         Creates the widget.
         """
         perc_completion = self.current_value / self.maximum_value
-        text = f"{self.current_value} out of {self.maximum_value} {self.items_name} - " \
-               f"{100.0 * perc_completion:.2f}%"
+        text = (
+            f"{self.current_value} out of {self.maximum_value} {self.items_name} - "
+            f"{100.0 * perc_completion:.2f}%"
+        )
         st.progress(perc_completion, text=text)

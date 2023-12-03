@@ -1,12 +1,12 @@
 import streamlit as st
 
-from coordination.webapp.component.inference_run_selection import \
-    InferenceRunSelection
 from coordination.webapp.component.experiment_id_multi_selection import \
     ExperimentIDMultiSelection
+from coordination.webapp.component.inference_results import InferenceResults
+from coordination.webapp.component.inference_run_selection import \
+    InferenceRunSelection
 from coordination.webapp.component.model_variable_selection import \
     ModelVariableSelection
-from coordination.webapp.component.inference_results import InferenceResults
 from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
 
 
@@ -46,7 +46,8 @@ class RunVsRun:
         """
         inference_run_component = InferenceRunSelection(
             component_key=f"{column_key}_inference_run_selector",
-            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
+            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
+        )
         inference_run_component.create_component()
 
         if not inference_run_component.selected_inference_run_:
@@ -55,12 +56,13 @@ class RunVsRun:
 
         experiment_ids_component = ExperimentIDMultiSelection(
             component_key=f"{column_key}_experiments_selector",
-            all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids)
+            all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids,
+        )
         experiment_ids_component.create_component()
 
         model_variable_component = ModelVariableSelection(
             component_key=f"{column_key}_model_variable_selector",
-            inference_run=inference_run_component.selected_inference_run_
+            inference_run=inference_run_component.selected_inference_run_,
         )
         model_variable_component.create_component()
 
@@ -70,5 +72,6 @@ class RunVsRun:
                 inference_run=inference_run_component.selected_inference_run_,
                 experiment_id=experiment_id,
                 model_variable_info=model_variable_component.selected_model_variable_,
-                model_variable_dimension=model_variable_component.selected_dimension_name_)
+                model_variable_dimension=model_variable_component.selected_dimension_name_,
+            )
             inference_results_component.create_component()

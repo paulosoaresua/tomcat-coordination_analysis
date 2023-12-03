@@ -1,29 +1,11 @@
-import time
-import uuid
-from typing import Any, Dict, List, Optional
-import subprocess
+import asyncio
 
 import streamlit as st
-from coordination.webapp.widget.drop_down import DropDownOption, DropDown
+
+from coordination.webapp.component.inference_run_progress import \
+    InferenceRunProgress
 from coordination.webapp.entity.inference_run import InferenceRun
-import os
-from coordination.webapp.constants import INFERENCE_PARAMETERS_DIR, INFERENCE_TMP_DIR, \
-    INFERENCE_RESULTS_DIR_STATE_KEY
-from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_NUM_INFERENCE_JOBS)
-from copy import deepcopy
-from coordination.model.config.mapper import DataMapper
-from pkg_resources import resource_string
-from coordination.model.builder import ModelBuilder
-import json
-import asyncio
 from coordination.webapp.utils import get_inference_run_ids
-from collections import OrderedDict
-from coordination.webapp.component.inference_run_progress import InferenceRunProgress
 
 
 class InferenceProgress:
@@ -77,15 +59,17 @@ class InferenceProgress:
 
                     for i, run_id in enumerate(run_ids):
                         inference_run = InferenceRun(
-                            inference_dir=self.inference_dir,
-                            run_id=run_id)
+                            inference_dir=self.inference_dir, run_id=run_id
+                        )
 
                         if not inference_run.execution_params:
                             continue
 
                         # Pre-expand just the first run in the list
                         with st.expander(run_id, expanded=(i == 0)):
-                            inference_progress_component = InferenceRunProgress(inference_run)
+                            inference_progress_component = InferenceRunProgress(
+                                inference_run
+                            )
                             inference_progress_component.create_component()
 
             await self._wait(status_text)
