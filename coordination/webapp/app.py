@@ -11,7 +11,7 @@ from coordination.webapp.pages.run_vs_run import RunVsRun
 from coordination.webapp.pages.single_run import SingleRun
 from coordination.webapp.component.header import Header
 from coordination.webapp.pages.new_run import NewRun
-from coordination.webapp.pages.inference_progress import Progress
+from coordination.webapp.pages.progress import Progress
 
 st.set_page_config(
     page_title="Coordination Processes",

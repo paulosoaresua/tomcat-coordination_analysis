@@ -22,17 +22,28 @@ class InferenceRunSelection:
         @param inference_dir: directory where inference runs were saved.
         """
         self.component_key = component_key
+        self.inference_dir = inference_dir
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
-        self.selected_inference_run_ = InferenceRun(inference_dir=inference_dir, run_id=None)
+        self.selected_inference_run_ = None
 
     def create_component(self):
         """
         Creates area in the screen for selection of an inference run id. Below is presented a json
         object with the execution params of the run once one is chosen from the list.
         """
-        self.selected_inference_run_.run_id = DropDown(
+        run_id = DropDown(
             label="Inference run ID",
             key=f"{self.component_key}_run_id_dropdown",
-            options=get_inference_run_ids(self.selected_inference_run_.inference_dir)).create()
+            options=get_inference_run_ids(self.inference_dir)).create()
+
+        if run_id:
+            self.selected_inference_run_ = InferenceRun(self.inference_dir, run_id)
+
+            # Display execution parameter under the drop down
+            col1, col2 = st.columns([0.12, 0.88])
+            with col1:
+                st.write("**Execution Parameters:**")
+            with col2:
+                st.json(self.selected_inference_run_.execution_params, expanded=False)

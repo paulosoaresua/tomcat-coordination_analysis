@@ -5,6 +5,7 @@ from coordination.inference.inference_data import InferenceData
 import os
 import json
 from dataclasses import dataclass
+import subprocess
 
 
 # Need to add this such that an inference run object can be cached with @st.cache_data
@@ -26,19 +27,20 @@ class InferenceRun:
         self.inference_dir = inference_dir
         self.run_id = run_id
 
-    @property
-    def execution_params_dict(self) -> Optional[Dict[str, Any]]:
-        """
-        Gets a dictionary of execution params for an inference run if it exists.
-
-        @return: dictionary of execution params.
-        """
-        execution_params_filepath = f"{self.inference_dir}/{self.run_id}/execution_params.json"
+        # Load execution parameters for the run
+        execution_params_filepath = f"{inference_dir}/{run_id}/execution_params.json"
         if os.path.exists(execution_params_filepath):
             with open(execution_params_filepath, "r") as f:
-                return json.load(f)
+                self.execution_params = json.load(f)
 
-        return None
+    @property
+    def run_dir(self) -> str:
+        """
+        Gets the directory of the inference run.
+
+        @return: directory of the inference run.
+        """
+        return f"{self.inference_dir}/{self.run_id}"
 
     @property
     def experiment_ids(self) -> List[str]:
@@ -48,7 +50,7 @@ class InferenceRun:
         @return: list of experiment IDs
         """
 
-        return self.execution_params_dict["experiment_ids"] if self.execution_params_dict else []
+        return self.execution_params["experiment_ids"] if self.execution_params else []
 
     @property
     def sample_inference_data(self) -> Optional[InferenceData]:
@@ -124,3 +126,21 @@ class InferenceRun:
                     variables_dict[mode].append(var_info)
 
         return variables_dict
+
+    def has_active_tmux_session(self) -> bool:
+        """
+        Checks whether there's an active TMUX session for the run.
+
+        @return: True if theres an active TMUX session for the run.
+        """
+        outputs = subprocess.Popen(
+            "tmux ls",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        ).communicate()
+        open_tmux_sessions = "".join(
+            [o.decode("utf-8") for o in outputs]
+        )
+
+        return open_tmux_sessions.find(self.execution_params["tmux_session_name"]) > 0

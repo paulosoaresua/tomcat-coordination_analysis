@@ -35,14 +35,14 @@ class SingleRun:
             inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
         inference_run_component.create_component()
 
+        if not inference_run_component.selected_inference_run_:
+            # Do not render anything below this until an inference run is selected.
+            return
+
         experiment_ids_component = ExperimentIDMultiSelection(
             component_key=f"{self.page_key}_experiments_selector",
             all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids)
         experiment_ids_component.create_component()
-
-        if not inference_run_component.selected_inference_run_.run_id:
-            # Do not render anything below this until an inference run is selected.
-            return
 
         col_left, col_right = st.columns(2)
         with col_left:

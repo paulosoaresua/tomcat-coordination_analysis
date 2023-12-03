@@ -49,14 +49,14 @@ class RunVsRun:
             inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY])
         inference_run_component.create_component()
 
+        if not inference_run_component.selected_inference_run_:
+            # Do not render anything below this until an inference run is selected.
+            return
+
         experiment_ids_component = ExperimentIDMultiSelection(
             component_key=f"{column_key}_experiments_selector",
             all_experiment_ids=inference_run_component.selected_inference_run_.experiment_ids)
         experiment_ids_component.create_component()
-
-        if not inference_run_component.selected_inference_run_.run_id:
-            # Do not render anything below this until an inference run is selected.
-            return
 
         model_variable_component = ModelVariableSelection(
             component_key=f"{column_key}_model_variable_selector",
