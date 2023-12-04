@@ -201,7 +201,7 @@ class SerialGaussianObservation(GaussianObservation):
         normalized_values = np.zeros_like(self.observed_values)
         for subject in range(self.num_subjects):
             # Get observed values for a specific subject across time.
-            idx = (self.subject_indices == subject)
+            idx = (np.array(self.subject_indices) == subject)
             obs_per_subject = self.observed_values[:, idx]
             mean = np.mean(obs_per_subject, axis=-1, keepdims=True)  # mean across time
             std = np.std(obs_per_subject, axis=-1, keepdims=True)

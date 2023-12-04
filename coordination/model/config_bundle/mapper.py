@@ -62,7 +62,7 @@ class DataMapper:
                         #  because observations still keep the feature dimension even if is a
                         #  single one.
                         # Drop the first dimension and keep only the time series.
-                        value = values[0]
+                        value = np.array(values[0])
 
                 else:
                     value = data[mapping["data_column_names"][0]]
