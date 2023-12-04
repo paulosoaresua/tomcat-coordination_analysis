@@ -58,8 +58,12 @@ class DataMapper:
                         # Subject indices come first and dimensions come in second.
                         value = value.swapaxis(0, 1)
                     elif len(mapping["data_column_names"]) == 1:
+                        # TODO: check this, I believe this breaks if we use only one feature
+                        #  because observations still keep the feature dimension even if is a
+                        #  single one.
                         # Drop the first dimension and keep only the time series.
                         value = values[0]
+
                 else:
                     value = data[mapping["data_column_names"][0]]
 

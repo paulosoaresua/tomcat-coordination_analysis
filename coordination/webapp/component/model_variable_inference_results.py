@@ -157,7 +157,7 @@ class ModelVariableInferenceResults:
         else:  # len(means.shape) == 2:
             # Serial variable: the first axis is the dimension and the second is the time.
 
-            if not self.dimension:
+            if self.dimension is None:
                 return
 
             # Get subject indices and time indices from the coded coordinates of the data along

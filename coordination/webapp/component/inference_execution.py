@@ -301,6 +301,7 @@ class InferenceExecution:
                 st.success(
                     f"Execution parameters ({filename}) were saved successfully."
                 )
+                st.experimental_rerun()
 
             except Exception as ex:
                 st.error(ex)

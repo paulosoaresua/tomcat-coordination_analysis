@@ -118,6 +118,7 @@ class MLP(Transformation):
 
         @return: number of layers in the model.
         """
+        # TODO: I believe this should be self.num_hidden_layers + 1 always
         return 1 if self.num_hidden_layers == 0 else self.num_hidden_layers + 2
 
     def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:

@@ -80,7 +80,7 @@ class ModelVariableSelection:
             self.selected_dimension_name_ = None
             if (
                 self.selected_model_variable_
-                and self.selected_model_variable_.num_named_dimensions > 1
+                and self.selected_model_variable_.num_named_dimensions > 0
             ):
                 # Selector for dimension if the variable has multiple dimensions.
                 self.selected_dimension_name_ = st.selectbox(
