@@ -23,4 +23,4 @@ class Header:
         submit = st.button(label="Update Directory")
         if submit:
             st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY] = inference_results
-            st.experimental_rerun()
+            st.rerun()

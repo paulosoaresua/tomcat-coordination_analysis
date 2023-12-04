@@ -297,11 +297,12 @@ class InferenceExecution:
                 with st.spinner("Saving..."):
                     # Wait a bit so there's has time for the file to be saved and loaded in the
                     # dropdown when the page refreshes.
-                    time.sleep(2)
+                    time.sleep(1)
                 st.success(
                     f"Execution parameters ({filename}) were saved successfully."
                 )
-                st.experimental_rerun()
+                time.sleep(1)
+                st.rerun()
 
             except Exception as ex:
                 st.error(ex)
