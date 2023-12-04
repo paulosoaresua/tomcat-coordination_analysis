@@ -24,7 +24,7 @@ class VocalicConstants:
     SHARE_SD_O_ACROSS_DIMENSIONS = True
 
     # For inference
-    SD_MEAN_UC0 = 1
+    SD_MEAN_UC0 = 5
     SD_SD_UC = 1
     MEAN_MEAN_A0 = np.zeros((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
     SD_MEAN_A0 = np.ones((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
