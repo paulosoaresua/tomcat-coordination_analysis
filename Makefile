@@ -5,7 +5,7 @@ lint:
 	flake8 coordination
 
 app:
-	PYTHONPATH="." streamlit run coordination/webapp/app.py --server.port=8080 \
+	PYTHONPATH="." streamlit run coordination/webapp/app.py --server.port=$APP_PORT \
 		--server.address=0.0.0.0
 
 vocalic_asist:
