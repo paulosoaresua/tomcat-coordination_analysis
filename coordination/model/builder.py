@@ -1,5 +1,5 @@
-from coordination.model.config.bundle import ModelConfigBundle
-from coordination.model.config.vocalic import VocalicConfigBundle
+from coordination.model.config_bundle.bundle import ModelConfigBundle
+from coordination.model.config_bundle.vocalic import VocalicConfigBundle
 from coordination.model.real.vocalic import VocalicModel
 from coordination.model.template import ModelTemplate
 

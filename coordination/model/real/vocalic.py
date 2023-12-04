@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 import pymc as pm
 
-from coordination.model.config.vocalic import VocalicConfigBundle
+from coordination.model.config_bundle.vocalic import VocalicConfigBundle
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
@@ -90,6 +90,7 @@ class VocalicModel(ModelTemplate):
             sd_sd_o=config_bundle.sd_sd_o,
             share_sd_o_across_subjects=config_bundle.share_sd_o_across_subjects,
             share_sd_o_across_dimensions=config_bundle.share_sd_o_across_dimensions,
+            normalize_observed_values=config_bundle.normalize_observed_values
         )
 
         group = ComponentGroup(

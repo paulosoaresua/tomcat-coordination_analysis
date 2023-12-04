@@ -8,7 +8,7 @@ from jsonschema import validate
 from pkg_resources import resource_string
 
 from coordination.common.types import ParameterValueType
-from coordination.model.config.bundle import ModelConfigBundle
+from coordination.model.config_bundle.bundle import ModelConfigBundle
 
 
 class DataMapper:

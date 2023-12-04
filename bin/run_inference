@@ -46,7 +46,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
 from coordination.common.tmux import TMUX
 from coordination.common.utils import NumpyArrayEncoder
 from coordination.model.builder import ModelBuilder
-from coordination.model.config.mapper import DataMapper
+from coordination.model.config_bundle.mapper import DataMapper
 
 
 def infer(out_dir: str,

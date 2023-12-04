@@ -4,7 +4,7 @@ import numpy as np
 
 from coordination.common.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_NUM_TIME_STEPS)
-from coordination.model.config.bundle import ModelConfigBundle
+from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.real.constants import VocalicConstants
 from coordination.module.module import ModuleSamples
 
@@ -55,6 +55,7 @@ class VocalicConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
             mean_w0: float = VocalicConstants.MEAN_W0,
             sd_w0: float = VocalicConstants.SD_W0,
+            normalize_observed_values: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION
     ):
         """
         Creates a config bundle for the vocalic model.
@@ -125,6 +126,8 @@ class VocalicConfigBundle(ModelConfigBundle):
         @param weights: a list of weights used in the transformation. One matrix per layer.
         @param mean_w0: mean of the weights in the transformation.
         @param sd_w0: standard deviation of the weights in the transformation.
+        @param normalize_observed_values: whether to normalize observed_values before inference to
+            have mean 0 and standard deviation 1 across time per subject and variable dimension.
         """
 
         self.num_subjects: int = num_subjects
@@ -166,3 +169,4 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.weights = weights
         self.mean_w0 = mean_w0
         self.sd_w0 = sd_w0
+        self.normalize_observed_values = normalize_observed_values

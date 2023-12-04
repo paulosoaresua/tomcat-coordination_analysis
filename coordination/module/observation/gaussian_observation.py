@@ -31,6 +31,7 @@ class GaussianObservation(Observation, ABC):
         sd_sd_o: np.ndarray,
         share_sd_o_across_subjects: bool,
         share_sd_o_across_dimensions: bool,
+        normalize_observed_values: bool,
         dimension_names: Optional[List[str]] = None,
         latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
         latent_component_random_variable: Optional[pm.Distribution] = None,
@@ -49,6 +50,8 @@ class GaussianObservation(Observation, ABC):
             distribution).
         @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
+        @param normalize_observed_values: whether to normalize observed_values before inference to
+            have mean 0 and standard deviation 1 across time per subject and variable dimension.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
@@ -61,6 +64,8 @@ class GaussianObservation(Observation, ABC):
             create_random_variables. If not set, it will be created in such a call.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param normalize_observed_values: whether to normalize observed_values before inference to
+            have mean 0 and standard deviation 1 across time per subject and variable dimension.
         """
 
         # No need to set coordination terms because a Gaussian observation only depends on the
@@ -71,6 +76,7 @@ class GaussianObservation(Observation, ABC):
             parameters=GaussianObservationParameters(module_uuid=uuid, sd_sd_o=sd_sd_o),
             num_subjects=num_subjects,
             dimension_size=dimension_size,
+            normalize_observed_values=normalize_observed_values,
             dimension_names=dimension_names,
             observation_random_variable=observation_random_variable,
             latent_component_samples=latent_component_samples,

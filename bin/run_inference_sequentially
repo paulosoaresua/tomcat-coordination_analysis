@@ -25,7 +25,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.log import configure_log
 from coordination.model.builder import ModelBuilder
-from coordination.model.config.mapper import DataMapper
+from coordination.model.config_bundle.mapper import DataMapper
 
 # PyMC 5.0.2 prints some warnings when we use GaussianRandomWalk. The snippet below silences them.
 if not sys.warnoptions:

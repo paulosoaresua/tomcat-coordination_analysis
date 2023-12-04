@@ -16,7 +16,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.model.builder import ModelBuilder
-from coordination.model.config.mapper import DataMapper
+from coordination.model.config_bundle.mapper import DataMapper
 from coordination.webapp.constants import (INFERENCE_PARAMETERS_DIR,
                                            INFERENCE_TMP_DIR,
                                            AVAILABLE_EXPERIMENTS_STATE_KEY)

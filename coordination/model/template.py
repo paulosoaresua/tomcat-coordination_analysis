@@ -3,7 +3,7 @@ from typing import List, Optional
 
 import pymc as pm
 
-from coordination.model.config.bundle import ModelConfigBundle
+from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.model import Model
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.coordination import Coordination
