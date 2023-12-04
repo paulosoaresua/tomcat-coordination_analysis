@@ -5,8 +5,8 @@ lint:
 	flake8 coordination
 
 app:
-	PYTHONPATH="." streamlit run coordination/webapp/app.py --server.port=$APP_PORT \
-		--server.address=0.0.0.0
+	PYTHONPATH="." streamlit run coordination/webapp/app.py --server.port=${APP_PORT} \
+		--server.address=localhost
 
 vocalic_asist:
 	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data.csv" \
