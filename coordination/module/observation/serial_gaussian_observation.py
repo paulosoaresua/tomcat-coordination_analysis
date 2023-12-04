@@ -207,6 +207,8 @@ class SerialGaussianObservation(GaussianObservation):
             std = np.std(obs_per_subject, axis=-1, keepdims=True)
             normalized_values[:, idx] = (obs_per_subject - mean) / std
 
+        return normalized_values
+
 
 ###################################################################################################
 # AUXILIARY CLASSES
