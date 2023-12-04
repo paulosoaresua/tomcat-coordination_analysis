@@ -149,4 +149,4 @@ class InferenceRun:
         ).communicate()
         open_tmux_sessions = "".join([o.decode("utf-8") for o in outputs])
 
-        return open_tmux_sessions.find(self.execution_params["tmux_session_name"]) > 0
+        return open_tmux_sessions.find(self.execution_params["tmux_session_name"]) >= 0

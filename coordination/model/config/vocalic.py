@@ -123,6 +123,8 @@ class VocalicConfigBundle(ModelConfigBundle):
         @param hidden_dimension_size: dimension of each hidden layer in the transformation.
         @param activation: activation used in the transformation.
         @param weights: a list of weights used in the transformation. One matrix per layer.
+        @param mean_w0: mean of the weights in the transformation.
+        @param sd_w0: standard deviation of the weights in the transformation.
         """
 
         self.num_subjects: int = num_subjects
@@ -162,3 +164,5 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.hidden_dimension_size = hidden_dimension_size
         self.activation = activation
         self.weights = weights
+        self.mean_w0 = mean_w0
+        self.sd_w0 = sd_w0

@@ -104,10 +104,11 @@ class ExperimentProgress:
             self.inference_run.execution_params["burn_in"]
             + self.inference_run.execution_params["num_samples"]
         )
-        for key, value in OrderedDict(progress_info["step"]).items():
+        sorted_chain_names = sorted(list(progress_info["step"].keys()))
+        for chain in sorted_chain_names:
             ProgressBar(
-                items_name="samples",
-                current_value=value,
+                items_name=f"samples in {chain}",
+                current_value=progress_info["step"][chain],
                 maximum_value=total_samples_per_chain,
             ).create()
 

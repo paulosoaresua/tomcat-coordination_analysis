@@ -52,9 +52,9 @@ class VocalicConstants:
     NUM_HIDDEN_LAYERS = 0
     HIDDEN_DIMENSION_SIZE = 0
     ACTIVATION = "linear"
-    WEIGHTS = np.ones((STATE_SPACE_DIM_SIZE, NUM_VOCALIC_FEATURES))
+    WEIGHTS = np.ones((NUM_HIDDEN_LAYERS + 1, STATE_SPACE_DIM_SIZE, NUM_VOCALIC_FEATURES))
     MEAN_W0 = 0
-    SD_W0 = 0
+    SD_W0 = 1
 
 
 class SemanticLinkConstants:

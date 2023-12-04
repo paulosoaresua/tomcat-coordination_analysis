@@ -65,18 +65,18 @@ class VocalicModel(ModelTemplate):
 
         self.transformation = None
         if config_bundle.activation != "linear" or (
-                config_bundle.state_space_dimension_size < config_bundle.observed_values):
+                config_bundle.state_space_dimension_size < config_bundle.num_vocalic_features):
             # Transform latent samples before passing to the observation module to account for
             # non-linearity and/or different dimensions between the latent component and
             # associated observation
             self.transformation = MLP(
                 uuid="state_space_to_speech_vocalics_mlp",
-                pymc_model=self.pymc_model,
+                pymc_model=pymc_model,
                 output_dimension_size=config_bundle.num_vocalic_features,
                 mean_w0=config_bundle.mean_w0,
                 sd_w0=config_bundle.sd_w0,
-                num_hidden_layers=config_bundle.num_hidden_layers_mlp,
-                hidden_dimension_size=config_bundle.hidden_dimension_size_mlp,
+                num_hidden_layers=config_bundle.num_hidden_layers,
+                hidden_dimension_size=config_bundle.hidden_dimension_size,
                 activation=config_bundle.activation,
                 axis=0  # Vocalic features axis
             )

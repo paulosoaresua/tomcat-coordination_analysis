@@ -127,57 +127,60 @@ def infer(
 
         # # Data transformation to correct biological differences captured in the signals from
         # different participants. evidence.normalize_per_subject()
+        try:
+            config_bundle = ModelBuilder.build_bundle(model_name)
+            config_bundle.update(model_params_dict)
+            data_mapper.update_config_bundle(config_bundle, row_df)
+            model = ModelBuilder.build_model(model_name=model_name, config_bundle=config_bundle)
+            model.prepare_for_inference()
+            model.create_random_variables()
 
-        config_bundle = ModelBuilder.build_bundle(model_name)
-        config_bundle.update(model_params_dict)
-        data_mapper.update_config_bundle(config_bundle, row_df)
-        model = ModelBuilder.build_model(model_name=model_name, config_bundle=config_bundle)
-        model.prepare_for_inference()
-        model.create_random_variables()
+            idata = None
+            if do_prior:
+                logger.info("Prior predictive check")
+                try:
+                    idata = model.prior_predictive(num_samples=num_samples, seed=seed)
+                except Exception as ex:
+                    logger.error(ex)
 
-        idata = None
-        if do_prior:
-            logger.info("Prior predictive check")
-            try:
-                idata = model.prior_predictive(num_samples=num_samples, seed=seed)
-            except Exception as ex:
-                logger.error(ex)
+            if do_posterior:
+                logger.info("Fitting model...")
+                try:
+                    idata_posterior = model.fit(
+                        seed=seed,
+                        burn_in=burn_in,
+                        num_samples=num_samples,
+                        num_chains=num_chains,
+                        num_jobs=num_jobs,
+                        nuts_init_method=nuts_init_method,
+                        target_accept=target_accept,
+                        callback=ProgressSaverCallback(out_dir=experiment_out_dir,
+                                                       saving_frequency=progress_saving_frequency))
+                except Exception as ex:
+                    logger.error(ex)
+                    return
 
-        if do_posterior:
-            logger.info("Fitting model...")
-            try:
-                idata_posterior = model.fit(
-                    seed=seed,
-                    burn_in=burn_in,
-                    num_samples=num_samples,
-                    num_chains=num_chains,
-                    num_jobs=num_jobs,
-                    nuts_init_method=nuts_init_method,
-                    target_accept=target_accept,
-                    callback=ProgressSaverCallback(out_dir=experiment_out_dir,
-                                                   saving_frequency=progress_saving_frequency))
-            except Exception as ex:
-                logger.error(ex)
-                return
+                if idata is None:
+                    idata = idata_posterior
+                else:
+                    idata.add(idata_posterior)
 
-            if idata is None:
-                idata = idata_posterior
-            else:
-                idata.add(idata_posterior)
+                idata_posterior_predictive = model.posterior_predictive(posterior_trace=idata.trace,
+                                                                        seed=seed)
+                idata.add(idata_posterior_predictive)
 
-            idata_posterior_predictive = model.posterior_predictive(posterior_trace=idata.trace,
-                                                                    seed=seed)
-            idata.add(idata_posterior_predictive)
+                # Log the percentage of divergences
+                perc_divergences = 100.0 * idata.num_divergences / idata.num_posterior_samples
+                logger.info(
+                    f"{idata.num_divergences} divergences in {idata.num_posterior_samples} samples "
+                    f"--> {perc_divergences}%."
+                )
 
-            # Log the percentage of divergences
-            perc_divergences = 100.0 * idata.num_divergences / idata.num_posterior_samples
-            logger.info(
-                f"{idata.num_divergences} divergences in {idata.num_posterior_samples} samples "
-                f"--> {perc_divergences}%."
-            )
-
-        idata.save_to_directory(experiment_out_dir)
-        logger.info("[SUCCESS]")
+            idata.save_to_directory(experiment_out_dir)
+            logger.info("[SUCCESS]")
+        except Exception as ex:
+            logger.error(ex)
+            raise ex
 
 
 if __name__ == "__main__":
