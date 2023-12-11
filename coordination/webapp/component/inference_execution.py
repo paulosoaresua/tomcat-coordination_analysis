@@ -17,9 +17,9 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.model.builder import ModelBuilder
 from coordination.model.config_bundle.mapper import DataMapper
-from coordination.webapp.constants import (INFERENCE_PARAMETERS_DIR,
-                                           INFERENCE_TMP_DIR,
-                                           AVAILABLE_EXPERIMENTS_STATE_KEY)
+from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
+                                           INFERENCE_PARAMETERS_DIR,
+                                           INFERENCE_TMP_DIR)
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -203,9 +203,11 @@ class InferenceExecution:
                 label="Data Filepath",
                 key=f"{self.component_key}_data_filepath",
                 value=default_execution_params["data_filepath"],
-                on_change=update_experiment_list
+                on_change=update_experiment_list,
             )
-            InferenceExecution._load_available_experiment_list(execution_params["data_filepath"])
+            InferenceExecution._load_available_experiment_list(
+                execution_params["data_filepath"]
+            )
 
             execution_params["experiment_ids"] = st.multiselect(
                 label="Experiments",
@@ -314,8 +316,10 @@ class InferenceExecution:
         @param execution_params: execution parameters for the inference run.
         """
 
-        if st.button(label="Run Inference",
-                     disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0):
+        if st.button(
+            label="Run Inference",
+            disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
+        ):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.
             os.makedirs(f"{INFERENCE_TMP_DIR}", exist_ok=True)
@@ -341,7 +345,7 @@ class InferenceExecution:
                 "./bin/run_inference "
                 f'--out_dir="{self.inference_dir}" '
                 f'--evidence_filepath="{execution_params["data_filepath"]}" '
-                f'{experiment_ids_arg}'
+                f"{experiment_ids_arg}"
                 f'--model_name="{execution_params["model"]}" '
                 f'--data_mapping_filepath="{data_mapping_filepath}" '
                 f'--model_params_dict_filepath="{model_params_filepath}" '
@@ -382,7 +386,7 @@ class InferenceExecution:
             try:
                 df = pd.read_csv(data_filepath)
                 st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = sorted(
-                    list(df["experiment_id"]))
-            except:
+                    list(df["experiment_id"])
+                )
+            except Exception:
                 st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = []
-                pass

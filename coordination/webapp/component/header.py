@@ -18,7 +18,9 @@ class Header:
             label="Inference Results Directory",
             value=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
         )
-        st.write(f"In use: *:blue[{st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY]}]*")
+        st.write(
+            f"In use: *:blue[{st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY]}]*"
+        )
 
         submit = st.button(label="Update Directory")
         if submit:

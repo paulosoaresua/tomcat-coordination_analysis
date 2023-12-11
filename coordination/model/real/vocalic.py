@@ -22,7 +22,7 @@ class VocalicModel(ModelTemplate):
     """
 
     def __init__(
-            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -65,7 +65,9 @@ class VocalicModel(ModelTemplate):
 
         self.transformation = None
         if config_bundle.activation != "linear" or (
-                config_bundle.state_space_dimension_size < config_bundle.num_vocalic_features):
+            config_bundle.state_space_dimension_size
+            < config_bundle.num_vocalic_features
+        ):
             # Transform latent samples before passing to the observation module to account for
             # non-linearity and/or different dimensions between the latent component and
             # associated observation
@@ -78,7 +80,7 @@ class VocalicModel(ModelTemplate):
                 num_hidden_layers=config_bundle.num_hidden_layers,
                 hidden_dimension_size=config_bundle.hidden_dimension_size,
                 activation=config_bundle.activation,
-                axis=0  # Vocalic features axis
+                axis=0,  # Vocalic features axis
             )
 
         self.observation = SerialGaussianObservation(
@@ -90,7 +92,7 @@ class VocalicModel(ModelTemplate):
             sd_sd_o=config_bundle.sd_sd_o,
             share_sd_o_across_subjects=config_bundle.share_sd_o_across_subjects,
             share_sd_o_across_dimensions=config_bundle.share_sd_o_across_dimensions,
-            normalize_observed_values=config_bundle.normalize_observed_values
+            normalize_observed_values=config_bundle.normalize_observed_values,
         )
 
         group = ComponentGroup(
@@ -98,7 +100,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
-            transformations=[self.transformation] if self.transformation else None
+            transformations=[self.transformation] if self.transformation else None,
         )
 
         super().__init__(

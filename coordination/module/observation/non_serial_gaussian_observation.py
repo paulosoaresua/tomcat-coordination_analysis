@@ -9,10 +9,10 @@ from scipy.stats import norm
 from coordination.common.types import TensorTypes
 from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_OBSERVATION_DIMENSION_SIZE,
+                                           DEFAULT_OBSERVATION_NORMALIZATION,
                                            DEFAULT_OBSERVATION_SD_PARAM,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
-                                           DEFAULT_SHARING_ACROSS_SUBJECTS,
-                                           DEFAULT_OBSERVATION_NORMALIZATION)
+                                           DEFAULT_SHARING_ACROSS_SUBJECTS)
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponentSamples
 from coordination.module.module import ModuleSamples
@@ -27,22 +27,22 @@ class NonSerialGaussianObservation(GaussianObservation):
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
-            sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
-            share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            normalize_observed_values: bool = DEFAULT_OBSERVATION_NORMALIZATION,
-            dimension_names: Optional[List[str]] = None,
-            subject_names: Optional[List[str]] = None,
-            observation_random_variable: Optional[pm.Distribution] = None,
-            latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            sd_o_random_variable: Optional[pm.Distribution] = None,
-            observed_values: Optional[TensorTypes] = None
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
+        sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
+        share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        normalize_observed_values: bool = DEFAULT_OBSERVATION_NORMALIZATION,
+        dimension_names: Optional[List[str]] = None,
+        subject_names: Optional[List[str]] = None,
+        observation_random_variable: Optional[pm.Distribution] = None,
+        latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        sd_o_random_variable: Optional[pm.Distribution] = None,
+        observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a non-serial Gaussian observation.
@@ -86,7 +86,7 @@ class NonSerialGaussianObservation(GaussianObservation):
             latent_component_samples=latent_component_samples,
             latent_component_random_variable=latent_component_random_variable,
             sd_o_random_variable=sd_o_random_variable,
-            observed_values=observed_values
+            observed_values=observed_values,
         )
 
         self.subject_names = subject_names
@@ -145,8 +145,11 @@ class NonSerialGaussianObservation(GaussianObservation):
             sd_o = self.sd_o_random_variable[:, :, None]
 
         with self.pymc_model:
-            observation = self._normalize_observation() if self.normalize_observed_values \
+            observation = (
+                self._normalize_observation()
+                if self.normalize_observed_values
                 else self.observed_values
+            )
             self.observation_random_variable = pm.Normal(
                 name=self.uuid,
                 mu=self.latent_component_random_variable,
