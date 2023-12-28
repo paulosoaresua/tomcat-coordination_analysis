@@ -88,7 +88,7 @@ class Vocalic2DConstants:
     SD_SD_O = np.ones(1)
 
     # For sample generation
-    MEAN_UC0 = 0
+    MEAN_UC0 = 0.0
     SD_UC = 0.5  # this is fixed during inference as well
     MEAN_A0 = np.zeros_like(MEAN_MEAN_A0)
     SD_A = np.ones_like(SD_SD_A) * 0.1
@@ -107,7 +107,9 @@ class Vocalic2DConstants:
     NUM_HIDDEN_LAYERS = 0
     HIDDEN_DIMENSION_SIZE = 0
     ACTIVATION = "linear"
-    WEIGHTS = np.ones((NUM_HIDDEN_LAYERS + 1, 2, NUM_VOCALIC_FEATURES))
+    WEIGHTS = np.vstack(
+        [np.ones(NUM_VOCALIC_FEATURES), np.zeros(NUM_VOCALIC_FEATURES)]
+    )[None, :]
     MEAN_W0 = 0
     SD_W0 = 1
 
@@ -115,4 +117,4 @@ class Vocalic2DConstants:
 class SemanticLinkConstants:
     A_P = 1
     B_P = 1
-    P = 1
+    P = np.array([1])

@@ -4,15 +4,15 @@ import numpy as np
 import pymc as pm
 
 from coordination.model.config_bundle.vocalic_semantic_link import \
-    VocalicSemanticLinkConfigBundle
+    Vocalic2DSemanticLinkConfigBundle
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
 from coordination.module.latent_component.null_latent_component import \
     NullLatentComponent
-from coordination.module.latent_component.serial_gaussian_latent_component import \
-    SerialGaussianLatentComponent
+from coordination.module.latent_component.serial_first_derivative_latent_component import \
+    SerialFirstDerivativeLatentComponent
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
 from coordination.module.observation.spike_observation import SpikeObservation
@@ -23,12 +23,13 @@ class VocalicSemanticLinkModel(ModelTemplate):
     """
     This class represents a model where subjects are talking to each other and their speech
     vocalics are observed as they finish talking as well as semantic links between subsequent
-    utterances from different subjects.
+    utterances from different subjects. It uses a 2D latent component comprised of a position and
+    a speed dimension for the vocalic component.
     """
 
     def __init__(
         self,
-        config_bundle: VocalicSemanticLinkConfigBundle,
+        config_bundle: Vocalic2DSemanticLinkConfigBundle,
         pymc_model: Optional[pm.Model] = None,
     ):
         """
@@ -52,12 +53,10 @@ class VocalicSemanticLinkModel(ModelTemplate):
 
         # Save a direct reference to state_space and observation for easy access in the parameter
         # setting functions in this class.
-        self.state_space = SerialGaussianLatentComponent(
+        self.state_space = SerialFirstDerivativeLatentComponent(
             uuid="state_space",
             pymc_model=pymc_model,
             num_subjects=config_bundle.num_subjects,
-            dimension_size=config_bundle.state_space_dimension_size,
-            self_dependent=config_bundle.self_dependent,
             mean_mean_a0=config_bundle.mean_mean_a0,
             sd_mean_a0=config_bundle.sd_mean_a0,
             sd_sd_a=config_bundle.sd_sd_a,
@@ -65,31 +64,22 @@ class VocalicSemanticLinkModel(ModelTemplate):
             share_sd_a_across_subjects=config_bundle.share_sd_a_across_subjects,
             share_mean_a0_across_dimensions=config_bundle.share_mean_a0_across_dimensions,
             share_sd_a_across_dimensions=config_bundle.share_sd_a_across_dimensions,
-            dimension_names=config_bundle.state_space_dimension_names,
             sampling_time_scale_density=config_bundle.sampling_time_scale_density,
             allow_sampled_subject_repetition=config_bundle.allow_sampled_subject_repetition,
             fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
         )
 
-        self.transformation = None
-        if config_bundle.activation != "linear" or (
-            config_bundle.state_space_dimension_size
-            < config_bundle.num_vocalic_features
-        ):
-            # Transform latent samples before passing to the observation module to account for
-            # non-linearity and/or different dimensions between the latent component and
-            # associated observation
-            self.transformation = MLP(
-                uuid="state_space_to_speech_vocalics_mlp",
-                pymc_model=pymc_model,
-                output_dimension_size=config_bundle.num_vocalic_features,
-                mean_w0=config_bundle.mean_w0,
-                sd_w0=config_bundle.sd_w0,
-                num_hidden_layers=config_bundle.num_hidden_layers,
-                hidden_dimension_size=config_bundle.hidden_dimension_size,
-                activation=config_bundle.activation,
-                axis=0,  # Vocalic features axis
-            )
+        self.transformation = MLP(
+            uuid="state_space_to_speech_vocalics_mlp",
+            pymc_model=pymc_model,
+            output_dimension_size=config_bundle.num_vocalic_features,
+            mean_w0=config_bundle.mean_w0,
+            sd_w0=config_bundle.sd_w0,
+            num_hidden_layers=config_bundle.num_hidden_layers,
+            hidden_dimension_size=config_bundle.hidden_dimension_size,
+            activation=config_bundle.activation,
+            axis=0,  # Vocalic features axis
+        )
 
         self.observed_vocalics = SerialGaussianObservation(
             uuid="speech_vocalics",
@@ -108,7 +98,7 @@ class VocalicSemanticLinkModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observed_vocalics],
-            transformations=[self.transformation] if self.transformation else None,
+            transformations=[self.transformation],
         )
 
         self.observed_semantic_links = SpikeObservation(
@@ -187,7 +177,6 @@ class VocalicSemanticLinkModel(ModelTemplate):
             self.config_bundle.vocalics_time_steps_in_coordination_scale
         )
         self.observed_vocalics.subject_indices = self.config_bundle.subject_indices
-
         self.observed_semantic_links.time_steps_in_coordination_scale = (
             self.config_bundle.semantic_link_time_steps_in_coordination_scale
         )

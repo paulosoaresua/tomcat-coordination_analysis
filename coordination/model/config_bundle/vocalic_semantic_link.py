@@ -5,14 +5,15 @@ import numpy as np
 from coordination.common.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_NUM_TIME_STEPS)
 from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.model.real.constants import (Vocalic2DConstants,
+from coordination.model.real.constants import (SemanticLinkConstants,
+                                               Vocalic2DConstants,
                                                VocalicConstants)
 from coordination.module.module import ModuleSamples
 
 
-class VocalicConfigBundle(ModelConfigBundle):
+class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
     """
-    Container for the different parameters of the vocalic model.
+    Container for the different parameters of the vocalic + semantic link model.
     """
 
     def __init__(
@@ -30,25 +31,33 @@ class VocalicConfigBundle(ModelConfigBundle):
         sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
         sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
         sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
+        a_p: float = SemanticLinkConstants.A_P,
+        b_p: float = SemanticLinkConstants.B_P,
         share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
-        share_mean_a0_across_dimensions: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS,
+        share_mean_a0_across_dimensions: bool = (
+            VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS
+        ),
         share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
         share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
         share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
         share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
         sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION,
+        allow_sampled_subject_repetition: bool = (
+            VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION
+        ),
         fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
         mean_uc0: float = VocalicConstants.MEAN_UC0,
         sd_uc: float = VocalicConstants.SD_UC,
         mean_a0: np.ndarray = VocalicConstants.MEAN_A0,
         sd_a: np.ndarray = VocalicConstants.SD_A,
         sd_o: np.ndarray = VocalicConstants.SD_O,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
+        p: float = SemanticLinkConstants.P,
+        vocalics_time_steps_in_coordination_scale: Optional[np.array] = None,
+        semantic_link_time_steps_in_coordination_scale: Optional[np.array] = None,
         subject_indices: Optional[np.array] = None,
         prev_time_same_subject: Optional[np.array] = None,
         prev_time_diff_subject: Optional[np.array] = None,
-        observed_values: Optional[np.array] = None,
+        observed_vocalic_values: Optional[np.array] = None,
         coordination_samples: Optional[ModuleSamples] = None,
         num_hidden_layers: int = VocalicConstants.NUM_HIDDEN_LAYERS,
         hidden_dimension_size: int = VocalicConstants.HIDDEN_DIMENSION_SIZE,
@@ -59,7 +68,7 @@ class VocalicConfigBundle(ModelConfigBundle):
         normalize_observed_values: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
     ):
         """
-        Creates a config bundle for the vocalic model.
+        Creates a config bundle for the vocalic + semantic model.
 
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects in the conversation.
@@ -82,6 +91,10 @@ class VocalicConfigBundle(ModelConfigBundle):
         the latent component).
         @param sd_sd_o: std of the hyper-prior of sigma_o (std of the Gaussian emission
             distribution).
+        @param a_p: parameter a of the hyper-prior of p (Bernoulli parameter of the semantic link
+            component).
+        @param b_p: parameter b of the hyper-prior of p (Bernoulli parameter of the semantic link
+            component).
         @param share_mean_a0_across_subjects: whether to use the same mu_a0 for all subjects.
         @param share_mean_a0_across_dimensions: whether to use the same mu_a0 for all dimensions.
         @param share_sd_a_across_subjects: whether to use the same sigma_a for all subjects.
@@ -94,14 +107,17 @@ class VocalicConfigBundle(ModelConfigBundle):
             before others talk.
         @param fix_sampled_subject_sequence: whether the sequence of subjects is fixed
             (0,1,2,...,0,1,2...) or randomized.
-        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
-            each index in the latent component scale.
+        @param vocalics_time_steps_in_coordination_scale: time indexes in the coordination scale
+            for each index in the latent vocalic component scale.
+        @param semantic_link_time_steps_in_coordination_scale: time indexes in the coordination
+            scale for each index in semantic link component scale.
         @param mean_uc0: mean of the initial value of the unbounded coordination.
         @param sd_uc: standard deviation of the initial value and random Gaussian walk of the
             unbounded coordination.
         @param initial_state: value of the latent component at t = 0.
         @param sd_a: noise in the Gaussian random walk in the state space.
         @param sd_o: noise in the observation.
+        @param p: Bernoulli parameter of the semantic link component.
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
         @param subject_indices: array of numbers indicating which subject is associated to the
@@ -117,7 +133,7 @@ class VocalicConfigBundle(ModelConfigBundle):
         @param prev_time_diff_subject: similar to the above but it indicates the most recent time
             when the latent component was observed for a different subject. This variable must be
             set before a call to update_pymc_model.
-        @param observed_values: observations vocalic feature values.
+        @param observed_vocalic_values: observations vocalic feature values.
         @param coordination_samples: coordination samples. If not provided, coordination samples
             will be draw in a call to draw_samples.
         @param num_hidden_layers: number of hidden layers in the transformation (MLP) from the
@@ -144,6 +160,8 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.sd_mean_a0 = sd_mean_a0
         self.sd_sd_a = sd_sd_a
         self.sd_sd_o = sd_sd_o
+        self.a_p = a_p
+        self.b_p = b_p
         self.share_mean_a0_across_subjects = share_mean_a0_across_subjects
         self.share_mean_a0_across_dimensions = share_mean_a0_across_dimensions
         self.share_sd_a_across_subjects = share_sd_a_across_subjects
@@ -158,11 +176,17 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.mean_a0 = mean_a0
         self.sd_a = sd_a
         self.sd_o = sd_o
-        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.p = p
+        self.vocalics_time_steps_in_coordination_scale = (
+            vocalics_time_steps_in_coordination_scale
+        )
+        self.semantic_link_time_steps_in_coordination_scale = (
+            semantic_link_time_steps_in_coordination_scale
+        )
         self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
-        self.observed_values = observed_values
+        self.observed_vocalic_values = observed_vocalic_values
         self.coordination_samples = coordination_samples
         self.num_hidden_layers = num_hidden_layers
         self.hidden_dimension_size = hidden_dimension_size
@@ -173,7 +197,7 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.normalize_observed_values = normalize_observed_values
 
 
-class Vocalic2DConfigBundle(ModelConfigBundle):
+class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic 2D model.
     """
@@ -190,8 +214,12 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         sd_mean_a0: np.ndarray = Vocalic2DConstants.SD_MEAN_A0,
         sd_sd_a: np.ndarray = Vocalic2DConstants.SD_SD_A,
         sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
+        a_p: float = SemanticLinkConstants.A_P,
+        b_p: float = SemanticLinkConstants.B_P,
         share_mean_a0_across_subjects: bool = Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
-        share_mean_a0_across_dimensions: bool = Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS,
+        share_mean_a0_across_dimensions: bool = (
+            Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS
+        ),
         share_sd_a_across_subjects: bool = Vocalic2DConstants.SHARE_SD_A_ACROSS_SUBJECTS,
         share_sd_a_across_dimensions: bool = Vocalic2DConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
         share_sd_o_across_subjects: bool = Vocalic2DConstants.SHARE_SD_O_ACROSS_SUBJECTS,
@@ -206,11 +234,13 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         mean_a0: np.ndarray = Vocalic2DConstants.MEAN_A0,
         sd_a: np.ndarray = Vocalic2DConstants.SD_A,
         sd_o: np.ndarray = Vocalic2DConstants.SD_O,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
+        p: float = SemanticLinkConstants.P,
+        vocalics_time_steps_in_coordination_scale: Optional[np.array] = None,
+        semantic_link_time_steps_in_coordination_scale: Optional[np.array] = None,
         subject_indices: Optional[np.array] = None,
         prev_time_same_subject: Optional[np.array] = None,
         prev_time_diff_subject: Optional[np.array] = None,
-        observed_values: Optional[np.array] = None,
+        observed_vocalic_values: Optional[np.array] = None,
         coordination_samples: Optional[ModuleSamples] = None,
         num_hidden_layers: int = Vocalic2DConstants.NUM_HIDDEN_LAYERS,
         hidden_dimension_size: int = Vocalic2DConstants.HIDDEN_DIMENSION_SIZE,
@@ -238,6 +268,10 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         the latent component).
         @param sd_sd_o: std of the hyper-prior of sigma_o (std of the Gaussian emission
             distribution).
+        @param a_p: parameter a of the hyper-prior of p (Bernoulli parameter of the semantic link
+            component).
+        @param b_p: parameter b of the hyper-prior of p (Bernoulli parameter of the semantic link
+            component).
         @param share_mean_a0_across_subjects: whether to use the same mu_a0 for all subjects.
         @param share_mean_a0_across_dimensions: whether to use the same mu_a0 for all dimensions.
         @param share_sd_a_across_subjects: whether to use the same sigma_a for all subjects.
@@ -250,16 +284,19 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
             before others talk.
         @param fix_sampled_subject_sequence: whether the sequence of subjects is fixed
             (0,1,2,...,0,1,2...) or randomized.
-        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
-            each index in the latent component scale.
+        @param vocalics_time_steps_in_coordination_scale: time indexes in the coordination scale
+            for each index in the latent component scale.
         @param mean_uc0: mean of the initial value of the unbounded coordination.
         @param sd_uc: standard deviation of the initial value and random Gaussian walk of the
             unbounded coordination.
         @param initial_state: value of the latent component at t = 0.
         @param sd_a: noise in the Gaussian random walk in the state space.
         @param sd_o: noise in the observation.
-        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
-            each index in the latent component scale.
+        @param p: Bernoulli parameter of the semantic link component.
+        @param vocalics_time_steps_in_coordination_scale: time indexes in the coordination scale
+            for each index in the latent vocalic component scale.
+        @param semantic_link_time_steps_in_coordination_scale: time indexes in the coordination
+            scale for each index in semantic link component scale.
         @param subject_indices: array of numbers indicating which subject is associated to the
             latent component at every time step (e.g. the current speaker for a speech component).
             In serial components, only one user's latent component is observed at a time. This
@@ -273,7 +310,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         @param prev_time_diff_subject: similar to the above but it indicates the most recent time
             when the latent component was observed for a different subject. This variable must be
             set before a call to update_pymc_model.
-        @param observed_values: observations vocalic feature values.
+        @param observed_vocalic_values: observations vocalic feature values.
         @param coordination_samples: coordination samples. If not provided, coordination samples
             will be draw in a call to draw_samples.
         @param num_hidden_layers: number of hidden layers in the transformation (MLP) from the
@@ -297,6 +334,8 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         self.sd_mean_a0 = sd_mean_a0
         self.sd_sd_a = sd_sd_a
         self.sd_sd_o = sd_sd_o
+        self.a_p = a_p
+        self.b_p = b_p
         self.share_mean_a0_across_subjects = share_mean_a0_across_subjects
         self.share_mean_a0_across_dimensions = share_mean_a0_across_dimensions
         self.share_sd_a_across_subjects = share_sd_a_across_subjects
@@ -311,11 +350,17 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         self.mean_a0 = mean_a0
         self.sd_a = sd_a
         self.sd_o = sd_o
-        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.p = p
+        self.vocalics_time_steps_in_coordination_scale = (
+            vocalics_time_steps_in_coordination_scale
+        )
+        self.semantic_link_time_steps_in_coordination_scale = (
+            semantic_link_time_steps_in_coordination_scale
+        )
         self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
-        self.observed_values = observed_values
+        self.observed_vocalic_values = observed_vocalic_values
         self.coordination_samples = coordination_samples
         self.num_hidden_layers = num_hidden_layers
         self.hidden_dimension_size = hidden_dimension_size

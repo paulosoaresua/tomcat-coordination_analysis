@@ -81,6 +81,7 @@ class SpikeObservation(Observation):
             coordination_random_variable=coordination_random_variable,
             observation_random_variable=observation_random_variable,
             observed_values=observed_values,
+            normalize_observed_values=False,
         )
 
         self.p_random_variable = p_random_variable
@@ -106,23 +107,22 @@ class SpikeObservation(Observation):
                 "before invoking the draw_samples method."
             )
 
-        density_mask = bernoulli(p=self.sampling_time_scale_density).rvs(
-            self.coordination_samples.values.shape
-        )
-
-        # Effectively observe links according to the values of coordination
-        links = bernoulli(
-            p=self.coordination_samples.values * self.parameters.p.value
-        ).rvs(self.coordination_samples.values.shape)
-
-        # Mask out spikes according to the required density.
-        links *= density_mask
-
         time_steps = []
         for s in range(num_series):
+            density_mask = bernoulli(p=self.sampling_time_scale_density).rvs(
+                len(self.coordination_samples.values[s])
+            )
+
+            # Effectively observe links according to the values of coordination
+            links = bernoulli(
+                p=self.coordination_samples.values[s] * self.parameters.p.value
+            ).rvs()
+
+            # Mask out spikes according to the required density.
+            links *= density_mask
             # A spike has a constant value of 1.
             # We store the time steps when that a spike was observed
-            time_steps.append(np.array([t for t, l in enumerate(links[s]) if l == 1]))
+            time_steps.append(np.array([t for t, l in enumerate(links) if l == 1]))
 
         return SpikeObservationSamples(time_steps)
 

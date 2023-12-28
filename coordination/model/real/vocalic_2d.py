@@ -63,25 +63,20 @@ class VocalicModel(ModelTemplate):
             fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
         )
 
-        self.transformation = None
-        if config_bundle.activation != "linear" or (
-            config_bundle.state_space_dimension_size
-            < config_bundle.num_vocalic_features
-        ):
-            # Transform latent samples before passing to the observation module to account for
-            # non-linearity and/or different dimensions between the latent component and
-            # associated observation
-            self.transformation = MLP(
-                uuid="state_space_to_speech_vocalics_mlp",
-                pymc_model=pymc_model,
-                output_dimension_size=config_bundle.num_vocalic_features,
-                mean_w0=config_bundle.mean_w0,
-                sd_w0=config_bundle.sd_w0,
-                num_hidden_layers=config_bundle.num_hidden_layers,
-                hidden_dimension_size=config_bundle.hidden_dimension_size,
-                activation=config_bundle.activation,
-                axis=0,  # Vocalic features axis
-            )
+        # Transform latent samples before passing to the observation module to account for
+        # non-linearity and/or different dimensions between the latent component and
+        # associated observation
+        self.transformation = MLP(
+            uuid="state_space_to_speech_vocalics_mlp",
+            pymc_model=pymc_model,
+            output_dimension_size=config_bundle.num_vocalic_features,
+            mean_w0=config_bundle.mean_w0,
+            sd_w0=config_bundle.sd_w0,
+            num_hidden_layers=config_bundle.num_hidden_layers,
+            hidden_dimension_size=config_bundle.hidden_dimension_size,
+            activation=config_bundle.activation,
+            axis=0,  # Vocalic features axis
+        )
 
         self.observation = SerialGaussianObservation(
             uuid="speech_vocalics",
@@ -100,7 +95,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
-            transformations=[self.transformation] if self.transformation else None,
+            transformations=[self.transformation],
         )
 
         super().__init__(
@@ -118,11 +113,13 @@ class VocalicModel(ModelTemplate):
         """
         self.coordination.parameters.mean_uc0.value = (
             np.ones(1) * self.config_bundle.mean_uc0
-            if self.config_bundle.mean_uc0
+            if self.config_bundle.mean_uc0 is not None
             else None
         )
         self.coordination.parameters.sd_uc.value = (
-            np.ones(1) * self.config_bundle.sd_uc if self.config_bundle.sd_uc else None
+            np.ones(1) * self.config_bundle.sd_uc
+            if self.config_bundle.sd_uc is not None
+            else None
         )
         self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0
         self.state_space.parameters.sd_a.value = self.config_bundle.sd_a
