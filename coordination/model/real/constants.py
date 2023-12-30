@@ -24,8 +24,9 @@ class VocalicConstants:
     SHARE_SD_O_ACROSS_DIMENSIONS = True
 
     # For inference
-    SD_MEAN_UC0 = 5
-    SD_SD_UC = 1
+    MEAN_MEAN_UC0 = 0.0
+    SD_MEAN_UC0 = 5.0
+    SD_SD_UC = 1.0
     MEAN_MEAN_A0 = np.zeros((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
     SD_MEAN_A0 = np.ones((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
     # Same variance across subjects but not dimensions
@@ -34,7 +35,7 @@ class VocalicConstants:
     SD_SD_O = np.ones(1)
 
     # For sample generation
-    MEAN_UC0 = 0
+    MEAN_UC0 = 0.0
     SD_UC = 0.5  # this is fixed during inference as well
     MEAN_A0 = np.zeros_like(MEAN_MEAN_A0)
     SD_A = np.ones_like(SD_SD_A) * 0.1
@@ -78,8 +79,9 @@ class Vocalic2DConstants:
     SHARE_SD_O_ACROSS_DIMENSIONS = True
 
     # For inference
-    SD_MEAN_UC0 = 5
-    SD_SD_UC = 1
+    MEAN_MEAN_UC0 = 0.0
+    SD_MEAN_UC0 = 5.0
+    SD_SD_UC = 1.0
     MEAN_MEAN_A0 = np.zeros((DEFAULT_NUM_SUBJECTS, 2))
     SD_MEAN_A0 = np.ones((DEFAULT_NUM_SUBJECTS, 2))
     # Same variance across subjects and dimensions

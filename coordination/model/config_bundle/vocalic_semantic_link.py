@@ -17,55 +17,56 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
     """
 
     def __init__(
-        self,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
-        state_space_dimension_size: int = VocalicConstants.STATE_SPACE_DIM_SIZE,
-        state_space_dimension_names: List[str] = VocalicConstants.STATE_SPACE_DIM_NAMES,
-        self_dependent: bool = VocalicConstants.SELF_DEPENDENT_STATE_SPACE,
-        num_vocalic_features: int = VocalicConstants.NUM_VOCALIC_FEATURES,
-        vocalic_feature_names: List[str] = VocalicConstants.VOCALIC_FEATURE_NAMES,
-        sd_mean_uc0: float = VocalicConstants.SD_MEAN_UC0,
-        sd_sd_uc: float = VocalicConstants.SD_SD_UC,
-        mean_mean_a0: np.ndarray = VocalicConstants.MEAN_MEAN_A0,
-        sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
-        sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
-        sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
-        a_p: float = SemanticLinkConstants.A_P,
-        b_p: float = SemanticLinkConstants.B_P,
-        share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
-        share_mean_a0_across_dimensions: bool = (
-            VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS
-        ),
-        share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
-        share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
-        share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
-        sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = (
-            VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION
-        ),
-        fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
-        mean_uc0: float = VocalicConstants.MEAN_UC0,
-        sd_uc: float = VocalicConstants.SD_UC,
-        mean_a0: np.ndarray = VocalicConstants.MEAN_A0,
-        sd_a: np.ndarray = VocalicConstants.SD_A,
-        sd_o: np.ndarray = VocalicConstants.SD_O,
-        p: float = SemanticLinkConstants.P,
-        vocalics_time_steps_in_coordination_scale: Optional[np.array] = None,
-        semantic_link_time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.array] = None,
-        prev_time_same_subject: Optional[np.array] = None,
-        prev_time_diff_subject: Optional[np.array] = None,
-        observed_vocalic_values: Optional[np.array] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        num_hidden_layers: int = VocalicConstants.NUM_HIDDEN_LAYERS,
-        hidden_dimension_size: int = VocalicConstants.HIDDEN_DIMENSION_SIZE,
-        activation: str = VocalicConstants.ACTIVATION,
-        weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
-        mean_w0: float = VocalicConstants.MEAN_W0,
-        sd_w0: float = VocalicConstants.SD_W0,
-        normalize_observed_values: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            self,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
+            state_space_dimension_size: int = VocalicConstants.STATE_SPACE_DIM_SIZE,
+            state_space_dimension_names: List[str] = VocalicConstants.STATE_SPACE_DIM_NAMES,
+            self_dependent: bool = VocalicConstants.SELF_DEPENDENT_STATE_SPACE,
+            num_vocalic_features: int = VocalicConstants.NUM_VOCALIC_FEATURES,
+            vocalic_feature_names: List[str] = VocalicConstants.VOCALIC_FEATURE_NAMES,
+            mean_mean_uc0: float = VocalicConstants.MEAN_MEAN_UC0,
+            sd_mean_uc0: float = VocalicConstants.SD_MEAN_UC0,
+            sd_sd_uc: float = VocalicConstants.SD_SD_UC,
+            mean_mean_a0: np.ndarray = VocalicConstants.MEAN_MEAN_A0,
+            sd_mean_a0: np.ndarray = VocalicConstants.SD_MEAN_A0,
+            sd_sd_a: np.ndarray = VocalicConstants.SD_SD_A,
+            sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
+            a_p: float = SemanticLinkConstants.A_P,
+            b_p: float = SemanticLinkConstants.B_P,
+            share_mean_a0_across_subjects: bool = VocalicConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
+            share_mean_a0_across_dimensions: bool = (
+                    VocalicConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS
+            ),
+            share_sd_a_across_subjects: bool = VocalicConstants.SHARE_SD_A_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = VocalicConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
+            share_sd_o_across_subjects: bool = VocalicConstants.SHARE_SD_O_ACROSS_SUBJECTS,
+            share_sd_o_across_dimensions: bool = VocalicConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
+            sampling_time_scale_density: float = VocalicConstants.SAMPLING_TIME_SCALE_DENSITY,
+            allow_sampled_subject_repetition: bool = (
+                    VocalicConstants.ALLOW_SAMPLED_SUBJECT_REPETITION
+            ),
+            fix_sampled_subject_sequence: bool = VocalicConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
+            mean_uc0: float = VocalicConstants.MEAN_UC0,
+            sd_uc: float = VocalicConstants.SD_UC,
+            mean_a0: np.ndarray = VocalicConstants.MEAN_A0,
+            sd_a: np.ndarray = VocalicConstants.SD_A,
+            sd_o: np.ndarray = VocalicConstants.SD_O,
+            p: float = SemanticLinkConstants.P,
+            vocalics_time_steps_in_coordination_scale: Optional[np.array] = None,
+            semantic_link_time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.array] = None,
+            prev_time_same_subject: Optional[np.array] = None,
+            prev_time_diff_subject: Optional[np.array] = None,
+            observed_vocalic_values: Optional[np.array] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            num_hidden_layers: int = VocalicConstants.NUM_HIDDEN_LAYERS,
+            hidden_dimension_size: int = VocalicConstants.HIDDEN_DIMENSION_SIZE,
+            activation: str = VocalicConstants.ACTIVATION,
+            weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
+            mean_w0: float = VocalicConstants.MEAN_W0,
+            sd_w0: float = VocalicConstants.SD_W0,
+            normalize_observed_values: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic + semantic model.
@@ -82,6 +83,7 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
         @param num_vocalic_features: number of observed vocalic features. Dimension of the
             observed speech vocalics.
         @param vocalic_feature_names: names of the observed vocalic features.
+        @param mean_mean_uc0: mean of the hyper-prior of mu_uc0.
         @param sd_mean_uc0: std of the hyper-prior of mu_uc0.
         @param sd_sd_uc: std of the hyper-prior of sigma_uc (std of the Gaussian random walk of
             the unbounded coordination).
@@ -154,6 +156,7 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
         self.self_dependent = self_dependent
         self.num_vocalic_features = num_vocalic_features
         self.vocalic_feature_names = vocalic_feature_names
+        self.mean_mean_uc0 = mean_mean_uc0
         self.sd_mean_uc0 = sd_mean_uc0
         self.sd_sd_uc = sd_sd_uc
         self.mean_mean_a0 = mean_mean_a0
@@ -203,52 +206,53 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
     """
 
     def __init__(
-        self,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
-        num_vocalic_features: int = Vocalic2DConstants.NUM_VOCALIC_FEATURES,
-        vocalic_feature_names: List[str] = Vocalic2DConstants.VOCALIC_FEATURE_NAMES,
-        sd_mean_uc0: float = Vocalic2DConstants.SD_MEAN_UC0,
-        sd_sd_uc: float = Vocalic2DConstants.SD_SD_UC,
-        mean_mean_a0: np.ndarray = Vocalic2DConstants.MEAN_MEAN_A0,
-        sd_mean_a0: np.ndarray = Vocalic2DConstants.SD_MEAN_A0,
-        sd_sd_a: np.ndarray = Vocalic2DConstants.SD_SD_A,
-        sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
-        a_p: float = SemanticLinkConstants.A_P,
-        b_p: float = SemanticLinkConstants.B_P,
-        share_mean_a0_across_subjects: bool = Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
-        share_mean_a0_across_dimensions: bool = (
-            Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS
-        ),
-        share_sd_a_across_subjects: bool = Vocalic2DConstants.SHARE_SD_A_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = Vocalic2DConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
-        share_sd_o_across_subjects: bool = Vocalic2DConstants.SHARE_SD_O_ACROSS_SUBJECTS,
-        share_sd_o_across_dimensions: bool = Vocalic2DConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
-        sampling_time_scale_density: float = Vocalic2DConstants.SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = (
-            Vocalic2DConstants.ALLOW_SAMPLED_SUBJECT_REPETITION
-        ),
-        fix_sampled_subject_sequence: bool = Vocalic2DConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
-        mean_uc0: float = Vocalic2DConstants.MEAN_UC0,
-        sd_uc: float = Vocalic2DConstants.SD_UC,
-        mean_a0: np.ndarray = Vocalic2DConstants.MEAN_A0,
-        sd_a: np.ndarray = Vocalic2DConstants.SD_A,
-        sd_o: np.ndarray = Vocalic2DConstants.SD_O,
-        p: float = SemanticLinkConstants.P,
-        vocalics_time_steps_in_coordination_scale: Optional[np.array] = None,
-        semantic_link_time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.array] = None,
-        prev_time_same_subject: Optional[np.array] = None,
-        prev_time_diff_subject: Optional[np.array] = None,
-        observed_vocalic_values: Optional[np.array] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        num_hidden_layers: int = Vocalic2DConstants.NUM_HIDDEN_LAYERS,
-        hidden_dimension_size: int = Vocalic2DConstants.HIDDEN_DIMENSION_SIZE,
-        activation: str = Vocalic2DConstants.ACTIVATION,
-        weights: List[np.ndarray] = Vocalic2DConstants.WEIGHTS,
-        mean_w0: float = Vocalic2DConstants.MEAN_W0,
-        sd_w0: float = Vocalic2DConstants.SD_W0,
-        normalize_observed_values: bool = Vocalic2DConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            self,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
+            num_vocalic_features: int = Vocalic2DConstants.NUM_VOCALIC_FEATURES,
+            vocalic_feature_names: List[str] = Vocalic2DConstants.VOCALIC_FEATURE_NAMES,
+            mean_mean_uc0: float = VocalicConstants.MEAN_MEAN_UC0,
+            sd_mean_uc0: float = Vocalic2DConstants.SD_MEAN_UC0,
+            sd_sd_uc: float = Vocalic2DConstants.SD_SD_UC,
+            mean_mean_a0: np.ndarray = Vocalic2DConstants.MEAN_MEAN_A0,
+            sd_mean_a0: np.ndarray = Vocalic2DConstants.SD_MEAN_A0,
+            sd_sd_a: np.ndarray = Vocalic2DConstants.SD_SD_A,
+            sd_sd_o: np.ndarray = VocalicConstants.SD_SD_O,
+            a_p: float = SemanticLinkConstants.A_P,
+            b_p: float = SemanticLinkConstants.B_P,
+            share_mean_a0_across_subjects: bool = Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_SUBJECT,
+            share_mean_a0_across_dimensions: bool = (
+                    Vocalic2DConstants.SHARE_MEAN_A0_ACROSS_DIMENSIONS
+            ),
+            share_sd_a_across_subjects: bool = Vocalic2DConstants.SHARE_SD_A_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = Vocalic2DConstants.SHARE_SD_A_ACROSS_DIMENSIONS,
+            share_sd_o_across_subjects: bool = Vocalic2DConstants.SHARE_SD_O_ACROSS_SUBJECTS,
+            share_sd_o_across_dimensions: bool = Vocalic2DConstants.SHARE_SD_O_ACROSS_DIMENSIONS,
+            sampling_time_scale_density: float = Vocalic2DConstants.SAMPLING_TIME_SCALE_DENSITY,
+            allow_sampled_subject_repetition: bool = (
+                    Vocalic2DConstants.ALLOW_SAMPLED_SUBJECT_REPETITION
+            ),
+            fix_sampled_subject_sequence: bool = Vocalic2DConstants.FIX_SAMPLED_SUBJECT_SEQUENCE,
+            mean_uc0: float = Vocalic2DConstants.MEAN_UC0,
+            sd_uc: float = Vocalic2DConstants.SD_UC,
+            mean_a0: np.ndarray = Vocalic2DConstants.MEAN_A0,
+            sd_a: np.ndarray = Vocalic2DConstants.SD_A,
+            sd_o: np.ndarray = Vocalic2DConstants.SD_O,
+            p: float = SemanticLinkConstants.P,
+            vocalics_time_steps_in_coordination_scale: Optional[np.array] = None,
+            semantic_link_time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.array] = None,
+            prev_time_same_subject: Optional[np.array] = None,
+            prev_time_diff_subject: Optional[np.array] = None,
+            observed_vocalic_values: Optional[np.array] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            num_hidden_layers: int = Vocalic2DConstants.NUM_HIDDEN_LAYERS,
+            hidden_dimension_size: int = Vocalic2DConstants.HIDDEN_DIMENSION_SIZE,
+            activation: str = Vocalic2DConstants.ACTIVATION,
+            weights: List[np.ndarray] = Vocalic2DConstants.WEIGHTS,
+            mean_w0: float = Vocalic2DConstants.MEAN_W0,
+            sd_w0: float = Vocalic2DConstants.SD_W0,
+            normalize_observed_values: bool = Vocalic2DConstants.DEFAULT_OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic model.
@@ -259,6 +263,7 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
         @param num_vocalic_features: number of observed vocalic features. Dimension of the
             observed speech vocalics.
         @param vocalic_feature_names: names of the observed vocalic features.
+        @param mean_mean_uc0: mean of the hyper-prior of mu_uc0.
         @param sd_mean_uc0: std of the hyper-prior of mu_uc0.
         @param sd_sd_uc: std of the hyper-prior of sigma_uc (std of the Gaussian random walk of
             the unbounded coordination).
@@ -328,6 +333,7 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
         self.num_time_steps_in_coordination_scale = num_time_steps_in_coordination_scale
         self.num_vocalic_features = num_vocalic_features
         self.vocalic_feature_names = vocalic_feature_names
+        self.mean_mean_uc0 = mean_mean_uc0
         self.sd_mean_uc0 = sd_mean_uc0
         self.sd_sd_uc = sd_sd_uc
         self.mean_mean_a0 = mean_mean_a0

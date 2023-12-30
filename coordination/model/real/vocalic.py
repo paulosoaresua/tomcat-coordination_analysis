@@ -37,6 +37,7 @@ class VocalicModel(ModelTemplate):
 
         coordination = SigmoidGaussianCoordination(
             pymc_model=pymc_model,
+            mean_mean_uc0=config_bundle.mean_mean_uc0,
             sd_mean_uc0=config_bundle.sd_mean_uc0,
             sd_sd_uc=config_bundle.sd_sd_uc,
             num_time_steps=config_bundle.num_time_steps_in_coordination_scale,

@@ -16,6 +16,7 @@ from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   NormalParameterPrior,
                                                   Parameter)
+from coordination.common.utils import adjust_dimensions
 
 
 class SigmoidGaussianCoordination(Coordination):
@@ -114,17 +115,17 @@ class SigmoidGaussianCoordination(Coordination):
             if self.mean_uc0_random_variable is None:
                 self.mean_uc0_random_variable = pm.Normal(
                     name=self.parameters.mean_uc0.uuid,
-                    mu=self.parameters.mean_uc0.prior.mean,
-                    sigma=self.parameters.mean_uc0.prior.sd,
+                    mu=adjust_dimensions(self.parameters.mean_uc0.prior.mean, num_rows=1),
+                    sigma=adjust_dimensions(self.parameters.mean_uc0.prior.sd, num_rows=1),
                     size=1,
-                    observed=self.parameters.mean_uc0.value,
+                    observed=adjust_dimensions(self.parameters.mean_uc0.value, num_rows=1),
                 )
             if self.sd_uc_random_variable is None:
                 self.sd_uc_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_uc.uuid,
-                    sigma=self.parameters.sd_uc.prior.sd,
+                    sigma=adjust_dimensions(self.parameters.sd_uc.prior.sd, num_rows=1),
                     size=1,
-                    observed=self.parameters.sd_uc.value,
+                    observed=adjust_dimensions(self.parameters.sd_uc.value, num_rows=1),
                 )
 
             if self.coordination_random_variable is None:
@@ -184,12 +185,12 @@ class SigmoidGaussianCoordinationParameters(ModuleParameters):
         self.mean_uc0 = Parameter(
             uuid=f"{module_uuid}_mean_uc0",
             prior=NormalParameterPrior(
-                mean=np.array([mean_mean_uc0]), sd=np.array([sd_mean_uc0])
+                mean=mean_mean_uc0, sd=sd_mean_uc0
             ),
         )
         self.sd_uc = Parameter(
             uuid=f"{module_uuid}_sd_uc",
-            prior=HalfNormalParameterPrior(np.array([sd_sd_uc])),
+            prior=HalfNormalParameterPrior(sd_sd_uc),
         )
 
 
