@@ -59,7 +59,7 @@ class VocalicConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
             mean_w0: float = VocalicConstants.MEAN_W0,
             sd_w0: float = VocalicConstants.SD_W0,
-            observation_normalization: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            observation_normalization: bool = VocalicConstants.OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic model.
@@ -190,7 +190,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
             num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS,
             num_vocalic_features: int = Vocalic2DConstants.NUM_VOCALIC_FEATURES,
             vocalic_feature_names: List[str] = Vocalic2DConstants.VOCALIC_FEATURE_NAMES,
-            mean_mean_uc0: float = VocalicConstants.MEAN_MEAN_UC0,
+            mean_mean_uc0: float = Vocalic2DConstants.MEAN_MEAN_UC0,
             sd_mean_uc0: float = Vocalic2DConstants.SD_MEAN_UC0,
             sd_sd_uc: float = Vocalic2DConstants.SD_SD_UC,
             mean_mean_a0: np.ndarray = Vocalic2DConstants.MEAN_MEAN_A0,
@@ -226,7 +226,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = Vocalic2DConstants.WEIGHTS,
             mean_w0: float = Vocalic2DConstants.MEAN_W0,
             sd_w0: float = Vocalic2DConstants.SD_W0,
-            observation_normalization: bool = Vocalic2DConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            observation_normalization: bool = Vocalic2DConstants.OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic model.

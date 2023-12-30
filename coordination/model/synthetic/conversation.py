@@ -3,31 +3,22 @@ from typing import Optional
 import numpy as np
 import pymc as pm
 
-from coordination.common.types import TensorTypes
-from coordination.model.model import Model
-from coordination.model.synthetic.constants import (
-    ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL,
-    ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
-    DAMPENING_COEFFICIENTS_CONVERSATION_MODEL, DT_CONVERSATION_MODEL,
-    FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL,
-    INITIAL_STATE_CONVERSATION_MODEL, MEAN_MEAN_A0_CONVERSATION_MODEL,
-    MEAN_UC0, NUM_SUBJECTS, NUM_TIME_STEPS,
-    SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL, SD_A_CONVERSATION_MODEL,
-    SD_MEAN_A0_CONVERSATION_MODEL, SD_MEAN_UC0, SD_O_CONVERSATION_MODEL,
-    SD_SD_A, SD_SD_O, SD_SD_UC, SD_UC, SHARE_MEAN_A0_ACROSS_DIMENSIONS,
-    SHARE_MEAN_A0_ACROSS_SUBJECT, SHARE_SD_ACROSS_DIMENSIONS,
-    SHARE_SD_ACROSS_SUBJECTS)
+from coordination.model.config_bundle.conversation import ConversationConfigBundle
+from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
-from coordination.module.latent_component.serial_mass_spring_damper_latent_component import \
-    SerialMassSpringDamperLatentComponent
-from coordination.module.module import ModuleSamples
+from coordination.module.latent_component.serial_first_derivative_latent_component import \
+    SerialFirstDerivativeLatentComponent
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
+from coordination.module.transformation.mlp import MLP
+from coordination.module.latent_component.serial_mass_spring_damper_latent_component import \
+    SerialMassSpringDamperLatentComponent
+from coordination.common.utils import adjust_dimensions
 
 
-class ConversationModel(Model):
+class ConversationModel(ModelTemplate):
     """
     This class represents a conversational model where subjects are talking to each other and
     their voice intensities evolve in an oscillatory fashion and pair-wisely blended by
@@ -39,68 +30,16 @@ class ConversationModel(Model):
     """
 
     def __init__(
-        self,
-        pymc_model: Optional[pm.Model] = None,
-        num_subjects: int = NUM_SUBJECTS,
-        num_time_steps_in_coordination_scale: int = NUM_TIME_STEPS,
-        squared_angular_frequency: np.ndarray = ANGULAR_FREQUENCIES_CONVERSATION_MODEL,
-        dampening_coefficient: np.ndarray = DAMPENING_COEFFICIENTS_CONVERSATION_MODEL,
-        dt: float = DT_CONVERSATION_MODEL,
-        sd_mean_uc0: float = SD_MEAN_UC0,
-        sd_sd_uc: float = SD_SD_UC,
-        mean_mean_a0: np.ndarray = MEAN_MEAN_A0_CONVERSATION_MODEL,
-        sd_mean_a0: np.ndarray = SD_MEAN_A0_CONVERSATION_MODEL,
-        sd_sd_a: np.ndarray = SD_SD_A,
-        sd_sd_o: np.ndarray = SD_SD_O,
-        share_mean_a0_across_subjects: bool = SHARE_MEAN_A0_ACROSS_SUBJECT,
-        share_mean_a0_across_dimensions: bool = SHARE_MEAN_A0_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = SHARE_SD_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = SHARE_SD_ACROSS_DIMENSIONS,
-        share_sd_o_across_subjects: bool = SHARE_SD_ACROSS_SUBJECTS,
-        share_sd_o_across_dimensions: bool = SHARE_SD_ACROSS_DIMENSIONS,
-        sampling_time_scale_density: float = SAMPLING_TIME_SCALE_DENSITY_CONVERSATIONAL_MODEL,
-        allow_sampled_subject_repetition: bool = ALLOW_SAMPLED_SUBJECT_REPETITION_CONVERSATIONAL_MODEL,  # noqa E501
-        fix_sampled_subject_sequence: bool = FIX_SAMPLED_SUBJECT_SEQUENCE_CONVERSATIONAL_MODEL,
-        coordination_samples: Optional[ModuleSamples] = None,
+            self,
+            config_bundle: ConversationConfigBundle,
+            pymc_model: Optional[pm.Model] = None,
     ):
         """
-        Creates a conversational model.
+        Creates a conversation model.
 
+        @param config_bundle: container for the different parameters of the conversation model.
         @param pymc_model: a PyMC model instance where modules are to be created at. If not
             provided, it will be created along with this model instance.
-        @param num_subjects: the number of subjects in the conversation.
-        @param num_time_steps_in_coordination_scale: size of the coordination series.
-        @param squared_angular_frequency: squared angular frequency of the oscillatory pattern.
-        @param dampening_coefficient: dampening coefficient per subject used to calculate the
-            fundamental matrix of the motion.
-        @param dt: the size of each time step to calculate the fundamental matrix of the motion.
-        @param sd_mean_uc0: std of the hyper-prior of mu_uc0.
-        @param sd_sd_uc: std of the hyper-prior of sigma_uc (std of the Gaussian random walk of
-            the unbounded coordination).
-        @param dampening_coefficient: dampening coefficient per subject used to calculate the
-            fundamental matrix of the motion.
-        @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
-            latent component).
-        @param sd_sd_a: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
-        the latent component).
-        @param sd_sd_o: std of the hyper-prior of sigma_o (std of the Gaussian emission
-            distribution).
-        @param share_mean_a0_across_subjects: whether to use the same mu_a0 for all subjects.
-        @param share_mean_a0_across_dimensions: whether to use the same mu_a0 for all dimensions.
-        @param share_sd_a_across_subjects: whether to use the same sigma_a for all subjects.
-        @param share_sd_a_across_dimensions: whether to use the same sigma_a for all dimensions.
-        @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
-        @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
-        @param sampling_time_scale_density: a number between 0 and 1 indicating percentage of
-            time steps someone talks.
-        @param allow_sampled_subject_repetition: whether a subject can speak in subsequently
-            before others talk.
-        @param fix_sampled_subject_sequence: whether the sequence of subjects is fixed
-            (0,1,2,...,0,1,2...) or randomized.
-        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
-            each index in the latent component scale.
-        @param coordination_samples: coordination samples. If not provided, coordination samples
-            will be draw in a call to draw_samples.
         """
 
         if not pymc_model:
@@ -108,9 +47,10 @@ class ConversationModel(Model):
 
         coordination = SigmoidGaussianCoordination(
             pymc_model=pymc_model,
-            sd_mean_uc0=sd_mean_uc0,
-            sd_sd_uc=sd_sd_uc,
-            num_time_steps=num_time_steps_in_coordination_scale,
+            mean_mean_uc0=config_bundle.mean_mean_uc0,
+            sd_mean_uc0=config_bundle.sd_mean_uc0,
+            sd_sd_uc=config_bundle.sd_sd_uc,
+            num_time_steps=config_bundle.num_time_steps_in_coordination_scale,
         )
 
         # Save a direct reference to state_space and observation for easy access in the parameter
@@ -118,32 +58,46 @@ class ConversationModel(Model):
         self.state_space = SerialMassSpringDamperLatentComponent(
             uuid="state_space",
             pymc_model=pymc_model,
-            num_subjects=num_subjects,
+            num_subjects=config_bundle.num_subjects,
             # angular_frequency^2 = spring_constant / mass
-            spring_constant=squared_angular_frequency,
-            mass=np.ones(num_subjects),
-            dampening_coefficient=dampening_coefficient,
-            dt=dt,
-            mean_mean_a0=mean_mean_a0,
-            sd_mean_a0=sd_mean_a0,
-            sd_sd_a=sd_sd_a,
-            share_mean_a0_across_subjects=share_mean_a0_across_subjects,
-            share_sd_a_across_subjects=share_sd_a_across_subjects,
-            share_mean_a0_across_dimensions=share_mean_a0_across_dimensions,
-            share_sd_a_across_dimensions=share_sd_a_across_dimensions,
-            sampling_time_scale_density=sampling_time_scale_density,
-            allow_sampled_subject_repetition=allow_sampled_subject_repetition,
-            fix_sampled_subject_sequence=fix_sampled_subject_sequence,
+            spring_constant=config_bundle.squared_angular_frequency,
+            mass=np.ones(config_bundle.num_subjects),
+            dampening_coefficient=adjust_dimensions(config_bundle.dampening_coefficient,
+                                                    num_rows=config_bundle.num_subjects),
+            dt=config_bundle.time_step_size_in_seconds,
+            mean_mean_a0=config_bundle.mean_mean_a0,
+            sd_mean_a0=config_bundle.sd_mean_a0,
+            sd_sd_a=config_bundle.sd_sd_a,
+            share_mean_a0_across_subjects=config_bundle.share_mean_a0_across_subjects,
+            share_sd_a_across_subjects=config_bundle.share_sd_a_across_subjects,
+            share_mean_a0_across_dimensions=config_bundle.share_mean_a0_across_dimensions,
+            share_sd_a_across_dimensions=config_bundle.share_sd_a_across_dimensions,
+            sampling_time_scale_density=config_bundle.sampling_time_scale_density,
+            allow_sampled_subject_repetition=config_bundle.allow_sampled_subject_repetition,
+            fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
+        )
+
+        self.transformation = MLP(
+            uuid="state_space_to_observation_mlp",
+            pymc_model=pymc_model,
+            output_dimension_size=1,
+            mean_w0=config_bundle.mean_w0,
+            sd_w0=config_bundle.sd_w0,
+            num_hidden_layers=config_bundle.num_hidden_layers,
+            hidden_dimension_size=config_bundle.hidden_dimension_size,
+            activation=config_bundle.activation,
+            axis=0,  # Vocalic features axis
         )
 
         self.observation = SerialGaussianObservation(
             uuid="observation",
             pymc_model=pymc_model,
-            num_subjects=num_subjects,
-            dimension_size=self.state_space.dimension_size,
-            sd_sd_o=sd_sd_o,
-            share_sd_o_across_subjects=share_sd_o_across_subjects,
-            share_sd_o_across_dimensions=share_sd_o_across_dimensions,
+            num_subjects=config_bundle.num_subjects,
+            dimension_size=1,
+            sd_sd_o=config_bundle.sd_sd_o,
+            share_sd_o_across_subjects=config_bundle.share_sd_o_across_subjects,
+            share_sd_o_across_dimensions=config_bundle.share_sd_o_across_dimensions,
+            normalization=config_bundle.observation_normalization,
         )
 
         group = ComponentGroup(
@@ -151,83 +105,56 @@ class ConversationModel(Model):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
+            transformations=[self.transformation],
         )
 
         super().__init__(
             name="conversation_model",
             pymc_model=pymc_model,
+            config_bundle=config_bundle,
             coordination=coordination,
             component_groups=[group],
-            coordination_samples=coordination_samples,
+            coordination_samples=config_bundle.coordination_samples,
         )
 
-    def prepare_for_sampling(
-        self,
-        mean_uc0: float = MEAN_UC0,
-        sd_uc: float = SD_UC,
-        initial_state: np.ndarray = INITIAL_STATE_CONVERSATION_MODEL,
-        sd_a: np.ndarray = SD_A_CONVERSATION_MODEL,
-        sd_o: np.ndarray = SD_O_CONVERSATION_MODEL,
-    ):
+    def prepare_for_sampling(self):
         """
-        Sets parameter values for sampling.
-
-        @param mean_uc0: mean of the initial value of the unbounded coordination.
-        @param sd_uc: standard deviation of the initial value and random Gaussian walk of the
-            unbounded coordination.
-        @param initial_state: value of the latent component at t = 0.
-        @param sd_a: noise in the Gaussian random walk in the state space.
-        @param sd_o: noise in the observation.
+        Sets parameter values for sampling using values in the model's config bundle.
         """
+        self.coordination.parameters.mean_uc0.value = self.config_bundle.mean_uc0
+        self.coordination.parameters.sd_uc.value = self.config_bundle.sd_uc
+        self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0
+        self.state_space.parameters.sd_a.value = self.config_bundle.sd_a
+        self.observation.parameters.sd_o.value = self.config_bundle.sd_o
 
-        self.coordination.parameters.mean_uc0.value = np.ones(1) * mean_uc0
-        self.coordination.parameters.sd_uc.value = np.ones(1) * sd_uc
-        self.state_space.parameters.mean_a0.value = initial_state
-        self.state_space.parameters.sd_a.value = sd_a
-        self.observation.parameters.sd_o.value = sd_o
+        if self.transformation:
+            for i, w in enumerate(self.transformation.parameters.weights):
+                w.value = self.config_bundle.weights[i]
 
-    def prepare_for_inference(
-        self,
-        num_time_steps_in_coordination_scale: int,
-        time_steps_in_coordination_scale: np.array,
-        subject_indices: np.ndarray,
-        prev_time_same_subject: np.ndarray,
-        prev_time_diff_subject: np.ndarray,
-        observed_values: TensorTypes,
-    ):
+    def prepare_for_inference(self):
         """
-        Sets metadata required for inference.
-
-        @param num_time_steps_in_coordination_scale: size of the coordination series.
-        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
-            each index in the latent component scale.
-        @param subject_indices: array of numbers indicating which subject is associated to the
-            latent component at every time step (e.g. the current speaker for a speech component).
-            In serial components, only one user's latent component is observed at a time. This
-            array indicates which user that is. This array contains no gaps. The size of the array
-            is the number of observed latent component in time, i.e., latent component time
-            indices with an associated subject.
-        @param prev_time_same_subject: time indices indicating the previous observation of the
-            latent component produced by the same subject at a given time. For instance, the last
-            time when the current speaker talked. This variable must be set before a call to
-            update_pymc_model.
-        @param prev_time_diff_subject: similar to the above but it indicates the most recent time
-            when the latent component was observed for a different subject. This variable must be
-            set before a call to update_pymc_model.
-        @param observed_values: observations for the latent component random variable.
+        Sets parameter values for inference using values in the model's config bundle.
         """
 
-        self.coordination.num_time_steps = num_time_steps_in_coordination_scale
+        # Fill parameter values from config bundle. If values are provided for a parameter, that
+        # parameter won't be latent.
+        self.prepare_for_sampling()
+
+        self.coordination.num_time_steps = (
+            self.config_bundle.num_time_steps_in_coordination_scale
+        )
         self.state_space.time_steps_in_coordination_scale = (
-            time_steps_in_coordination_scale
+            self.config_bundle.time_steps_in_coordination_scale
         )
-        self.state_space.subject_indices = subject_indices
-        self.state_space.prev_time_same_subject = prev_time_same_subject
-        self.state_space.prev_time_diff_subject = prev_time_diff_subject
-        self.observation.observed_values = observed_values
+        self.state_space.subject_indices = self.config_bundle.subject_indices
+        self.state_space.prev_time_same_subject = (
+            self.config_bundle.prev_time_same_subject
+        )
+        self.state_space.prev_time_diff_subject = (
+            self.config_bundle.prev_time_diff_subject
+        )
+        self.observation.observed_values = self.config_bundle.observed_values
         self.observation.time_steps_in_coordination_scale = (
-            time_steps_in_coordination_scale
+            self.config_bundle.time_steps_in_coordination_scale
         )
-        self.observation.subject_indices = subject_indices
-
-        self.create_random_variables()
+        self.observation.subject_indices = self.config_bundle.subject_indices

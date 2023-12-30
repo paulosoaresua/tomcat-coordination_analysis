@@ -66,7 +66,7 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
             mean_w0: float = VocalicConstants.MEAN_W0,
             sd_w0: float = VocalicConstants.SD_W0,
-            normalize_observed_values: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            normalize_observed_values: bool = VocalicConstants.OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic + semantic model.
@@ -252,7 +252,7 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = Vocalic2DConstants.WEIGHTS,
             mean_w0: float = Vocalic2DConstants.MEAN_W0,
             sd_w0: float = Vocalic2DConstants.SD_W0,
-            normalize_observed_values: bool = Vocalic2DConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            normalize_observed_values: bool = Vocalic2DConstants.OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic model.
