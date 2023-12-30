@@ -18,6 +18,7 @@ from coordination.module.latent_component.serial_gaussian_latent_component impor
 from coordination.module.module import ModuleSamples
 from coordination.module.observation.gaussian_observation import \
     GaussianObservation
+from coordination.common.utils import adjust_dimensions
 
 
 class NonSerialGaussianObservation(GaussianObservation):
@@ -114,13 +115,18 @@ class NonSerialGaussianObservation(GaussianObservation):
         """
         super().draw_samples(seed, num_series)
 
+        dim_sd_o_subjects = 1 if self.share_sd_o_across_subjects else self.num_subjects
+        dim_sd_o_dimensions = 1 if self.share_sd_o_across_dimensions else self.dimension_size
+        sd_o = adjust_dimensions(self.parameters.sd_o.value, num_rows=dim_sd_o_subjects,
+                                 num_cols=dim_sd_o_dimensions)
+
         # Adjust dimensions according to parameter sharing specification
         if self.share_sd_o_across_subjects:
             # Broadcast across series, subjects and time
-            sd = self.parameters.sd_o.value[None, None, :, None]
+            sd = sd_o[None, None, :, None]
         else:
             # Broadcast across series and time
-            sd = self.parameters.sd_o.value[None, :, :, None]
+            sd = sd_o[None, :, :, None]
 
         sampled_values = norm(loc=self.latent_component_samples.values, scale=sd).rvs(
             size=self.latent_component_samples.values.shape

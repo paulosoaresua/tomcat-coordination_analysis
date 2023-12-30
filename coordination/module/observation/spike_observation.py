@@ -11,6 +11,7 @@ from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import BetaParameterPrior, Parameter
+from coordination.common.utils import adjust_dimensions
 
 
 class SpikeObservation(Observation):
@@ -150,10 +151,10 @@ class SpikeObservation(Observation):
         with self.pymc_model:
             self.p_random_variable = pm.Beta(
                 name=self.parameters.p.uuid,
-                alpha=self.parameters.p.prior.a,
-                beta=self.parameters.p.prior.b,
+                alpha=adjust_dimensions(self.parameters.p.prior.a, num_rows=1),
+                beta=adjust_dimensions(self.parameters.p.prior.b, num_rows=1),
                 size=1,
-                observed=self.parameters.p.value,
+                observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
             )
 
             adjusted_prob = pm.Deterministic(

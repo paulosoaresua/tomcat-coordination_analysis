@@ -13,6 +13,7 @@ from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   Parameter)
+from coordination.common.utils import adjust_dimensions
 
 
 class GaussianObservation(Observation, ABC):
@@ -23,21 +24,21 @@ class GaussianObservation(Observation, ABC):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int,
-        dimension_size: int,
-        sd_sd_o: np.ndarray,
-        share_sd_o_across_subjects: bool,
-        share_sd_o_across_dimensions: bool,
-        normalize_observed_values: bool,
-        dimension_names: Optional[List[str]] = None,
-        latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        observation_random_variable: Optional[pm.Distribution] = None,
-        sd_o_random_variable: Optional[pm.Distribution] = None,
-        observed_values: Optional[TensorTypes] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int,
+            dimension_size: int,
+            sd_sd_o: np.ndarray,
+            share_sd_o_across_subjects: bool,
+            share_sd_o_across_dimensions: bool,
+            normalize_observed_values: bool,
+            dimension_names: Optional[List[str]] = None,
+            latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            observation_random_variable: Optional[pm.Distribution] = None,
+            sd_o_random_variable: Optional[pm.Distribution] = None,
+            observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -84,18 +85,6 @@ class GaussianObservation(Observation, ABC):
             observed_values=observed_values,
         )
 
-        # If a parameter is shared across dimensions, we only have one parameter to infer.
-        dim_sd_o_dimensions = 1 if share_sd_o_across_dimensions else dimension_size
-
-        # Check if the values passed as hyperparameter are in agreement with the dimension of the
-        # variables that we need to infer. Parameters usually have dimensions: num subjects x
-        # dimension size, but that changes depending on the sharing options.
-        # TODO: replace asserts with ValueError
-        if share_sd_o_across_subjects:
-            assert (dim_sd_o_dimensions,) == sd_sd_o.shape
-        else:
-            assert (num_subjects, dim_sd_o_dimensions) == sd_sd_o.shape
-
         self.share_sd_o_across_subjects = share_sd_o_across_subjects
         self.share_sd_o_across_dimensions = share_sd_o_across_dimensions
         self.sd_o_random_variable = sd_o_random_variable
@@ -120,28 +109,8 @@ class GaussianObservation(Observation, ABC):
                 "before invoking the draw_samples method."
             )
 
-        self._check_parameter_dimensionality_consistency()
-
-    def _check_parameter_dimensionality_consistency(self):
-        """
-        Check if their dimensionality is consistent with the sharing options.
-
-        @raise ValueError: if sd_o has undefined values.
-        """
-
         if self.parameters.sd_o.value is None:
             raise ValueError(f"Value of {self.parameters.sd_o.uuid} is undefined.")
-
-        dim_sd_o_dimensions = (
-            1 if self.share_sd_o_across_dimensions else self.dimension_size
-        )
-        if self.share_sd_o_across_subjects:
-            assert (dim_sd_o_dimensions,) == self.parameters.sd_o.value.shape
-        else:
-            assert (
-                self.num_subjects,
-                dim_sd_o_dimensions,
-            ) == self.parameters.sd_o.value.shape
 
     @abstractmethod
     def create_random_variables(self):
@@ -184,17 +153,23 @@ class GaussianObservation(Observation, ABC):
                 # When shared across subjects, only one parameter per dimension is needed.
                 sd_o = pm.HalfNormal(
                     name=self.parameters.sd_o.uuid,
-                    sigma=self.parameters.sd_o.prior.sd,
+                    sigma=adjust_dimensions(self.parameters.sd_o.prior.sd,
+                                            num_rows=dim_sd_o_dimensions),
                     size=dim_sd_o_dimensions,
-                    observed=self.parameters.sd_o.value,
+                    observed=adjust_dimensions(self.parameters.sd_o.value,
+                                               num_rows=dim_sd_o_dimensions),
                 )
             else:
                 # Different parameters per subject and dimension.
                 sd_o = pm.HalfNormal(
                     name=self.parameters.sd_o.uuid,
-                    sigma=self.parameters.sd_o.prior.sd,
+                    sigma=adjust_dimensions(self.parameters.sd_o.prior.sd,
+                                            num_rows=self.num_subjects,
+                                            num_cols=dim_sd_o_dimensions),
                     size=(self.num_subjects, dim_sd_o_dimensions),
-                    observed=self.parameters.sd_o.value,
+                    observed=adjust_dimensions(self.parameters.sd_o.value,
+                                               num_rows=self.num_subjects,
+                                               num_cols=dim_sd_o_dimensions),
                 )
 
         return sd_o

@@ -27,19 +27,17 @@ class VocalicConstants:
     MEAN_MEAN_UC0 = 0.0
     SD_MEAN_UC0 = 5.0
     SD_SD_UC = 1.0
-    MEAN_MEAN_A0 = np.zeros((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
-    SD_MEAN_A0 = np.ones((DEFAULT_NUM_SUBJECTS, STATE_SPACE_DIM_SIZE))
-    # Same variance across subjects but not dimensions
-    SD_SD_A = np.ones(STATE_SPACE_DIM_SIZE)
-    # Same variance across subjects and dimensions
-    SD_SD_O = np.ones(1)
+    MEAN_MEAN_A0 = 0.0
+    SD_MEAN_A0 = 1.0
+    SD_SD_A = 1.0
+    SD_SD_O = 1.0
 
     # For sample generation
     MEAN_UC0 = 0.0
-    SD_UC = 0.5  # this is fixed during inference as well
-    MEAN_A0 = np.zeros_like(MEAN_MEAN_A0)
-    SD_A = np.ones_like(SD_SD_A) * 0.1
-    SD_O = np.ones_like(SD_SD_O) * 0.1  # this is fixed during inference as well
+    SD_UC = 0.5
+    MEAN_A0 = 0.0
+    SD_A = 0.1
+    SD_O = 0.1
 
     SAMPLING_TIME_SCALE_DENSITY = 1.0
     ALLOW_SAMPLED_SUBJECT_REPETITION = False
@@ -85,15 +83,14 @@ class Vocalic2DConstants:
     MEAN_MEAN_A0 = 0.0
     SD_MEAN_A0 = 1.0
     SD_SD_A = 1.0
-    # Same variance across subjects and dimensions
-    SD_SD_O = np.ones(1)
+    SD_SD_O = 1.0
 
     # For sample generation
     MEAN_UC0 = 0.0
     SD_UC = 0.5
     MEAN_A0 = 0.0
     SD_A = 0.1
-    SD_O = np.ones_like(SD_SD_O) * 0.1
+    SD_O = 0.1
 
     SAMPLING_TIME_SCALE_DENSITY = 1.0
     ALLOW_SAMPLED_SUBJECT_REPETITION = False
@@ -116,6 +113,6 @@ class Vocalic2DConstants:
 
 
 class SemanticLinkConstants:
-    A_P = 1
-    B_P = 1
-    P = np.array([1])
+    A_P = 1.0
+    B_P = 1.0
+    P = 1.0
