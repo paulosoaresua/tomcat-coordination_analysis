@@ -1,6 +1,8 @@
 import numpy as np
 
 from coordination.common.constants import DEFAULT_NUM_SUBJECTS
+from coordination.module.observation.gaussian_observation import \
+    NORMALIZATION_PER_SUBJECT_AND_FEATURE
 
 
 class VocalicConstants:
@@ -13,7 +15,7 @@ class VocalicConstants:
     STATE_SPACE_DIM_SIZE = NUM_VOCALIC_FEATURES
     STATE_SPACE_DIM_NAMES = VOCALIC_FEATURE_NAMES
     SELF_DEPENDENT_STATE_SPACE = True
-    DEFAULT_OBSERVATION_NORMALIZATION = True
+    DEFAULT_OBSERVATION_NORMALIZATION = NORMALIZATION_PER_SUBJECT_AND_FEATURE
 
     # Sharing options
     SHARE_MEAN_A0_ACROSS_SUBJECT = False
@@ -66,7 +68,7 @@ class Vocalic2DConstants:
 
     NUM_VOCALIC_FEATURES = 4
     VOCALIC_FEATURE_NAMES = ["pitch", "intensity", "jitter", "shimmer"]
-    DEFAULT_OBSERVATION_NORMALIZATION = True
+    DEFAULT_OBSERVATION_NORMALIZATION = NORMALIZATION_PER_SUBJECT_AND_FEATURE
 
     # Sharing options
     SHARE_MEAN_A0_ACROSS_SUBJECT = False
@@ -108,8 +110,8 @@ class Vocalic2DConstants:
     WEIGHTS = np.vstack(
         [np.ones(NUM_VOCALIC_FEATURES), np.zeros(NUM_VOCALIC_FEATURES)]
     )[None, :]
-    MEAN_W0 = 0
-    SD_W0 = 1
+    MEAN_W0 = 0.0
+    SD_W0 = 1.0
 
 
 class SemanticLinkConstants:

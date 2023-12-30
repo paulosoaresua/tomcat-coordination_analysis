@@ -155,85 +155,45 @@ class GaussianLatentComponent(LatentComponent, ABC):
         super().create_random_variables()
 
         with self.pymc_model:
+            # Below we create the random variables representing the value of the component at time
+            # t = 0 (mean_a0) and standard deviation of the Gaussian random walk (sd_a).
             if self.mean_a0_random_variable is None:
-                self._create_initial_mean_variable()
+                dim_subjects = (
+                    1 if self.share_mean_a0_across_subjects else self.num_subjects
+                )
+                dim_dimensions = (
+                    1 if self.share_mean_a0_across_dimensions else self.dimension_size
+                )
+                self.mean_a0_random_variable = pm.Normal(
+                    name=self.parameters.mean_a0.uuid,
+                    mu=adjust_dimensions(self.parameters.mean_a0.prior.mean,
+                                         num_rows=dim_subjects,
+                                         num_cols=dim_dimensions),
+                    sigma=adjust_dimensions(self.parameters.mean_a0.prior.sd,
+                                            num_rows=dim_subjects,
+                                            num_cols=dim_dimensions),
+                    size=(dim_subjects, dim_dimensions),
+                    observed=adjust_dimensions(self.parameters.mean_a0.value,
+                                               num_rows=dim_subjects,
+                                               num_cols=dim_dimensions),
+                )
 
             if self.sd_a_random_variable is None:
-                self._create_transition_standard_deviation_variable()
-
-    def _create_initial_mean_variable(self):
-        """
-        Creates a latent variable for the mean of the initial state. We assume independence between
-        the individual parameters per subject and dimension and sample them from a multivariate
-        Gaussian.
-        """
-
-        dim_mean_a0_dimensions = (
-            1 if self.share_mean_a0_across_dimensions else self.dimension_size
-        )
-
-        with self.pymc_model:
-            if self.share_mean_a0_across_subjects:
-                # When shared across subjects, only one parameter per dimension is needed.
-                self.mean_a0_random_variable = pm.Normal(
-                    name=self.parameters.mean_a0.uuid,
-                    mu=adjust_dimensions(self.parameters.mean_a0.prior.mean,
-                                         num_rows=dim_mean_a0_dimensions),
-                    sigma=adjust_dimensions(self.parameters.mean_a0.prior.sd,
-                                            num_rows=dim_mean_a0_dimensions),
-                    size=dim_mean_a0_dimensions,
-                    observed=adjust_dimensions(self.parameters.mean_a0.value,
-                                               num_rows=dim_mean_a0_dimensions),
+                dim_subjects = (
+                    1 if self.share_sd_a_across_subjects else self.num_subjects
                 )
-            else:
-                # Different parameters per subject and dimension.
-                self.mean_a0_random_variable = pm.Normal(
-                    name=self.parameters.mean_a0.uuid,
-                    mu=adjust_dimensions(self.parameters.mean_a0.prior.mean,
-                                         num_rows=self.num_subjects,
-                                         num_cols=dim_mean_a0_dimensions),
-                    sigma=adjust_dimensions(self.parameters.mean_a0.prior.sd,
-                                            num_rows=self.num_subjects,
-                                            num_cols=dim_mean_a0_dimensions),
-                    size=(self.num_subjects, dim_mean_a0_dimensions),
-                    observed=adjust_dimensions(self.parameters.mean_a0.value,
-                                               num_rows=self.num_subjects,
-                                               num_cols=dim_mean_a0_dimensions),
+                dim_dimensions = (
+                    1 if self.share_sd_a_across_dimensions else self.dimension_size
                 )
-
-    def _create_transition_standard_deviation_variable(self):
-        """
-        Creates a latent variable for the standard deviation of the state transition (Gaussian
-        random walk). We assume independence between the individual parameters per subject and
-        dimension and sample them from a multivariate Half-Gaussian.
-        """
-
-        with self.pymc_model:
-            dim_sd_a_dimensions = (
-                1 if self.share_sd_a_across_dimensions else self.dimension_size
-            )
-
-            if self.share_sd_a_across_subjects:
-                # When shared across subjects, only one parameter per dimension is needed.
                 self.sd_a_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_a.uuid,
                     sigma=adjust_dimensions(self.parameters.sd_a.prior.sd,
-                                            num_rows=dim_sd_a_dimensions),
-                    size=dim_sd_a_dimensions,
+                                            num_rows=dim_subjects,
+                                            num_cols=dim_dimensions),
+                    size=(dim_subjects, dim_dimensions),
                     observed=adjust_dimensions(self.parameters.sd_a.value,
-                                               num_rows=dim_sd_a_dimensions),
-                )
-            else:
-                # Different parameters per subject and dimension.
-                self.sd_a_random_variable = pm.HalfNormal(
-                    name=self.parameters.sd_a.uuid,
-                    sigma=adjust_dimensions(self.parameters.sd_a.prior.sd,
-                                            num_rows=self.num_subjects,
-                                            num_cols=dim_sd_a_dimensions),
-                    size=(self.num_subjects, dim_sd_a_dimensions),
-                    observed=adjust_dimensions(self.parameters.sd_a.value,
-                                               num_rows=self.num_subjects,
-                                               num_cols=dim_sd_a_dimensions),
+                                               num_rows=dim_subjects,
+                                               num_cols=dim_dimensions),
                 )
 
 

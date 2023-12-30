@@ -15,6 +15,9 @@ from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   Parameter)
 from coordination.common.utils import adjust_dimensions
 
+NORMALIZATION_PER_FEATURE = "norm_per_feature"
+NORMALIZATION_PER_SUBJECT_AND_FEATURE = "norm_per_subject_and_feature"
+
 
 class GaussianObservation(Observation, ABC):
     """
@@ -32,7 +35,7 @@ class GaussianObservation(Observation, ABC):
             sd_sd_o: np.ndarray,
             share_sd_o_across_subjects: bool,
             share_sd_o_across_dimensions: bool,
-            normalize_observed_values: bool,
+            normalization: Optional[str] = None,
             dimension_names: Optional[List[str]] = None,
             latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
             latent_component_random_variable: Optional[pm.Distribution] = None,
@@ -51,8 +54,8 @@ class GaussianObservation(Observation, ABC):
             distribution).
         @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
-        @param normalize_observed_values: whether to normalize observed_values before inference to
-            have mean 0 and standard deviation 1 across time per subject and variable dimension.
+        @param normalization: type of normalization to apply to observed values if desired. Valid
+            normalization values are: norm_per_feature or norm_per_subject_and_feature.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
@@ -65,8 +68,6 @@ class GaussianObservation(Observation, ABC):
             create_random_variables. If not set, it will be created in such a call.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
-        @param normalize_observed_values: whether to normalize observed_values before inference to
-            have mean 0 and standard deviation 1 across time per subject and variable dimension.
         """
 
         # No need to set coordination terms because a Gaussian observation only depends on the
@@ -77,7 +78,6 @@ class GaussianObservation(Observation, ABC):
             parameters=GaussianObservationParameters(module_uuid=uuid, sd_sd_o=sd_sd_o),
             num_subjects=num_subjects,
             dimension_size=dimension_size,
-            normalize_observed_values=normalize_observed_values,
             dimension_names=dimension_names,
             observation_random_variable=observation_random_variable,
             latent_component_samples=latent_component_samples,
@@ -85,6 +85,7 @@ class GaussianObservation(Observation, ABC):
             observed_values=observed_values,
         )
 
+        self.normalization = normalization
         self.share_sd_o_across_subjects = share_sd_o_across_subjects
         self.share_sd_o_across_dimensions = share_sd_o_across_dimensions
         self.sd_o_random_variable = sd_o_random_variable
@@ -123,8 +124,21 @@ class GaussianObservation(Observation, ABC):
 
         with self.pymc_model:
             if self.sd_o_random_variable is None:
-                self.sd_o_random_variable = (
-                    self._create_emission_standard_deviation_variable()
+                dim_subjects = (
+                    1 if self.share_sd_o_across_subjects else self.num_subjects
+                )
+                dim_dimensions = (
+                    1 if self.share_sd_o_across_dimensions else self.dimension_size
+                )
+                self.sd_o_random_variable = pm.HalfNormal(
+                    name=self.parameters.sd_o.uuid,
+                    sigma=adjust_dimensions(self.parameters.sd_o.prior.sd,
+                                            num_rows=dim_subjects,
+                                            num_cols=dim_dimensions),
+                    size=(dim_subjects, dim_dimensions),
+                    observed=adjust_dimensions(self.parameters.sd_o.value,
+                                               num_rows=dim_subjects,
+                                               num_cols=dim_dimensions),
                 )
 
         if self.observation_random_variable is None:
@@ -135,44 +149,37 @@ class GaussianObservation(Observation, ABC):
                     "create_random_variables method."
                 )
 
-    def _create_emission_standard_deviation_variable(self) -> pm.Distribution:
+    def _get_normalized_observation(self) -> np.ndarray:
+        if self.normalization is None:
+            return self.observed_values
+
+        if self.normalization == NORMALIZATION_PER_FEATURE:
+            return self._normalize_observation_per_feature()
+
+        if self.normalization == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
+            return self._normalize_observation_per_subject_and_feature()
+
+        raise ValueError(f"Normalization ({self.normalization}) is invalid.")
+
+    @abstractmethod
+    def _normalize_observation_per_subject_and_feature(self) -> np.ndarray:
         """
-        Creates a latent variable for the standard deviation of the emission distribution. We
-        assume independence between the individual parameters per subject and dimension and sample
-        them from a multivariate Half-Gaussian.
+        Normalize observed values to have mean 0 and standard deviation 1 across time. The
+        normalization is done individually per subject and feature.
 
-        @return: a latent variable with a Half-Gaussian prior.
+        @return: normalized observation.
         """
+        pass
 
-        dim_sd_o_dimensions = (
-            1 if self.share_sd_o_across_dimensions else self.dimension_size
-        )
+    @abstractmethod
+    def _normalize_observation_per_feature(self) -> np.ndarray:
+        """
+        Normalize observed values to have mean 0 and standard deviation 1 across time and subject.
+        The normalization is done individually per feature.
 
-        with self.pymc_model:
-            if self.share_sd_o_across_subjects:
-                # When shared across subjects, only one parameter per dimension is needed.
-                sd_o = pm.HalfNormal(
-                    name=self.parameters.sd_o.uuid,
-                    sigma=adjust_dimensions(self.parameters.sd_o.prior.sd,
-                                            num_rows=dim_sd_o_dimensions),
-                    size=dim_sd_o_dimensions,
-                    observed=adjust_dimensions(self.parameters.sd_o.value,
-                                               num_rows=dim_sd_o_dimensions),
-                )
-            else:
-                # Different parameters per subject and dimension.
-                sd_o = pm.HalfNormal(
-                    name=self.parameters.sd_o.uuid,
-                    sigma=adjust_dimensions(self.parameters.sd_o.prior.sd,
-                                            num_rows=self.num_subjects,
-                                            num_cols=dim_sd_o_dimensions),
-                    size=(self.num_subjects, dim_sd_o_dimensions),
-                    observed=adjust_dimensions(self.parameters.sd_o.value,
-                                               num_rows=self.num_subjects,
-                                               num_cols=dim_sd_o_dimensions),
-                )
-
-        return sd_o
+        @return: normalized observation.
+        """
+        pass
 
 
 ###################################################################################################

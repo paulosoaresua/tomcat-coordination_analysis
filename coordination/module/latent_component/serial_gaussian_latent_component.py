@@ -423,7 +423,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         # Adjust dimensions for proper indexing and broadcast in the log_prob function.
         if self.share_mean_a0_across_subjects:
             # dimension x time = 1 (broadcast across time)
-            mean_a0 = self.mean_a0_random_variable[:, None]
+            mean_a0 = self.mean_a0_random_variable[0, :, None]
         else:
             # dimension x time
             mean_a0 = self.mean_a0_random_variable[self.subject_indices].transpose()
@@ -433,7 +433,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
 
         if self.share_sd_a_across_subjects:
             # dimension x time = 1 (broadcast across time)
-            sd_a = self.sd_a_random_variable[:, None]
+            sd_a = self.sd_a_random_variable[0, :, None]
         else:
             # dimension x time
             sd_a = self.sd_a_random_variable[self.subject_indices].transpose()

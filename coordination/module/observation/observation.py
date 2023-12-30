@@ -24,7 +24,6 @@ class Observation(ABC, Module):
         parameters: ModuleParameters,
         num_subjects: int,
         dimension_size: int,
-        normalize_observed_values: bool,
         dimension_names: Optional[List[str]] = None,
         coordination_samples: Optional[ModuleSamples] = None,
         latent_component_samples: Optional[ModuleSamples] = None,
@@ -41,8 +40,6 @@ class Observation(ABC, Module):
         @param parameters: parameters of the module.
         @param num_subjects: the number of subjects that possess the component.
         @param dimension_size: the number of dimensions in the latent component.
-        @param normalize_observed_values: whether to normalize observed_values before inference to
-            have mean 0 and standard deviation 1 across time per subject and variable dimension.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param coordination_samples: coordination samples.
@@ -70,7 +67,6 @@ class Observation(ABC, Module):
 
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size
-        self.normalize_observed_values = normalize_observed_values
         self.dimension_names = (
             np.arange(dimension_size) if dimension_names is None else dimension_names
         )

@@ -28,29 +28,29 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
-        self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        dimension_names: Optional[List[str]] = None,
-        subject_names: Optional[List[str]] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        observed_values: Optional[TensorTypes] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
+            self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            dimension_names: Optional[List[str]] = None,
+            subject_names: Optional[List[str]] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a serial latent component.
@@ -134,7 +134,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         )
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> GaussianLatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
@@ -173,7 +173,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         )
 
         time_steps_in_coordination_scale = (
-            np.arange(num_time_steps_in_cpn_scale) * self.sampling_relative_frequency
+                np.arange(num_time_steps_in_cpn_scale) * self.sampling_relative_frequency
         ).astype(int)
 
         # Draw values from the system dynamics. The default model generates samples by following a
@@ -190,16 +190,16 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         return GaussianLatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale[
-                None, :
-            ].repeat(num_series, axis=0),
+                                             None, :
+                                             ].repeat(num_series, axis=0),
         )
 
     def _draw_from_system_dynamics(
-        self,
-        sampled_coordination: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
+            self,
+            sampled_coordination: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default non serial component generates samples
@@ -239,7 +239,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                 # n x 1 x 1
                 c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
                     :, None, None
-                ]
+                    ]
 
                 prev_others = np.dot(sum_matrix_others, values[..., t - 1])  # n x s x d
 
@@ -265,15 +265,13 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         # be entries for all the subjects at every time step.
         if self.share_mean_a0_across_subjects:
             # subject x dimension
-            mean_a0 = self.mean_a0_random_variable.mean_a0[None, :].repeat(
-                self.num_subjects, axis=0
-            )
+            mean_a0 = self.mean_a0_random_variable.mean_a0.repeat(self.num_subjects, axis=0)
         else:
             mean_a0 = self.mean_a0_random_variable
 
         if self.share_sd_a_across_subjects:
             # subject x dimension
-            sd_a = self.sd_a_random_variable[None, :].repeat(self.num_subjects, axis=0)
+            sd_a = self.sd_a_random_variable.repeat(self.num_subjects, axis=0)
         else:
             sd_a = self.sd_a_random_variable
 
@@ -340,11 +338,11 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    self_dependent: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        self_dependent: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -400,12 +398,12 @@ def log_prob(
 
 
 def random(
-    initial_mean: np.ndarray,
-    sigma: np.ndarray,
-    coordination: np.ndarray,
-    self_dependent: bool,
-    rng: Optional[np.random.Generator] = None,
-    size: Optional[Tuple[int]] = None,
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        self_dependent: bool,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
     """
     Generates samples from of a non-serial latent component for prior predictive checks.

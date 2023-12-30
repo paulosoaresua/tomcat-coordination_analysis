@@ -36,7 +36,7 @@ class SerialGaussianObservation(GaussianObservation):
             sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
             share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
             share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            normalize_observed_values: bool = DEFAULT_OBSERVATION_NORMALIZATION,
+            normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
             dimension_names: Optional[List[str]] = None,
             observation_random_variable: Optional[pm.Distribution] = None,
             latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
@@ -57,7 +57,7 @@ class SerialGaussianObservation(GaussianObservation):
             distribution).
         @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
-        @param normalize_observed_values: whether to normalize observed_values before inference to
+        @param normalization: whether to normalize observed_values before inference to
             have mean 0 and standard deviation 1 across time per subject and variable dimension.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
@@ -88,7 +88,7 @@ class SerialGaussianObservation(GaussianObservation):
             sd_sd_o=sd_sd_o,
             share_sd_o_across_subjects=share_sd_o_across_subjects,
             share_sd_o_across_dimensions=share_sd_o_across_dimensions,
-            normalize_observed_values=normalize_observed_values,
+            normalization=normalization,
             dimension_names=dimension_names,
             observation_random_variable=observation_random_variable,
             latent_component_samples=latent_component_samples,
@@ -148,28 +148,22 @@ class SerialGaussianObservation(GaussianObservation):
             return
 
         if self.share_sd_o_across_subjects:
-            # dimension x time = 1 (broadcast across time)
-            sd_o = self.sd_o_random_variable[:, None]
+            # dimension x time (broadcast across time)
+            sd_o = self.sd_o_random_variable[0, :, None]
         else:
-            sd_o = self.sd_o_random_variable[
-                self.subject_indices
-            ].transpose()  # dimension x time
+            # dimension x time
+            sd_o = self.sd_o_random_variable[self.subject_indices].transpose()
 
         if self.share_sd_o_across_dimensions:
             sd_o = sd_o.repeat(self.dimension_size, axis=0)
 
         with self.pymc_model:
-            observation = (
-                self._normalize_observation()
-                if self.normalize_observed_values
-                else self.observed_values
-            )
             self.observation_random_variable = pm.Normal(
                 name=self.uuid,
                 mu=self.latent_component_random_variable,
                 sigma=sd_o,
                 dims=[self.dimension_axis_name, self.time_axis_name],
-                observed=observation,
+                observed=self._get_normalized_observation(),
             )
 
     def _add_coordinates(self):
@@ -199,10 +193,10 @@ class SerialGaussianObservation(GaussianObservation):
             ],
         )
 
-    def _normalize_observation(self) -> np.ndarray:
+    def _normalize_observation_per_subject_and_feature(self) -> np.ndarray:
         """
         Normalize observed values to have mean 0 and standard deviation 1 across time. The
-        normalization is done individually per subject and variable dimension.
+        normalization is done individually per subject and feature.
 
         @return: normalized observation.
         """
@@ -216,6 +210,20 @@ class SerialGaussianObservation(GaussianObservation):
             std = np.std(obs_per_subject, axis=-1, keepdims=True)
             normalized_values[:, idx] = (obs_per_subject - mean) / std
 
+        return normalized_values
+
+    def _normalize_observation_per_feature(self) -> np.ndarray:
+        """
+        Normalize observed values to have mean 0 and standard deviation 1 across time and subject.
+        The normalization is done individually per feature.
+
+        @return: normalized observation.
+        """
+
+        # Mean across time and subject
+        mean = np.mean(self.observed_values, axis=-1, keepdims=True)
+        std = np.std(self.observed_values, axis=-1, keepdims=True)
+        normalized_values = (self.observed_values - mean) / std
         return normalized_values
 
 

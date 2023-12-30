@@ -81,8 +81,7 @@ class SpikeObservation(Observation):
             coordination_samples=coordination_samples,
             coordination_random_variable=coordination_random_variable,
             observation_random_variable=observation_random_variable,
-            observed_values=observed_values,
-            normalize_observed_values=False,
+            observed_values=observed_values
         )
 
         self.p_random_variable = p_random_variable

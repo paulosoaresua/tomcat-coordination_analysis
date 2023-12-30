@@ -59,7 +59,7 @@ class VocalicConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = VocalicConstants.WEIGHTS,
             mean_w0: float = VocalicConstants.MEAN_W0,
             sd_w0: float = VocalicConstants.SD_W0,
-            normalize_observed_values: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            observation_normalization: bool = VocalicConstants.DEFAULT_OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic model.
@@ -131,8 +131,9 @@ class VocalicConfigBundle(ModelConfigBundle):
         @param weights: a list of weights used in the transformation. One matrix per layer.
         @param mean_w0: mean of the weights in the transformation.
         @param sd_w0: standard deviation of the weights in the transformation.
-        @param normalize_observed_values: whether to normalize observed_values before inference to
-            have mean 0 and standard deviation 1 across time per subject and variable dimension.
+        @param observation_normalization: type of normalization to apply to observed values if
+            desired. Valid normalization values are: norm_per_feature or
+            norm_per_subject_and_feature.
         """
 
         self.num_subjects: int = num_subjects
@@ -175,7 +176,7 @@ class VocalicConfigBundle(ModelConfigBundle):
         self.weights = weights
         self.mean_w0 = mean_w0
         self.sd_w0 = sd_w0
-        self.normalize_observed_values = normalize_observed_values
+        self.observation_normalization = observation_normalization
 
 
 class Vocalic2DConfigBundle(ModelConfigBundle):
@@ -225,7 +226,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
             weights: List[np.ndarray] = Vocalic2DConstants.WEIGHTS,
             mean_w0: float = Vocalic2DConstants.MEAN_W0,
             sd_w0: float = Vocalic2DConstants.SD_W0,
-            normalize_observed_values: bool = Vocalic2DConstants.DEFAULT_OBSERVATION_NORMALIZATION,
+            observation_normalization: bool = Vocalic2DConstants.DEFAULT_OBSERVATION_NORMALIZATION,
     ):
         """
         Creates a config bundle for the vocalic model.
@@ -291,8 +292,9 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         @param weights: a list of weights used in the transformation. One matrix per layer.
         @param mean_w0: mean of the weights in the transformation.
         @param sd_w0: standard deviation of the weights in the transformation.
-        @param normalize_observed_values: whether to normalize observed_values before inference to
-            have mean 0 and standard deviation 1 across time per subject and variable dimension.
+        @param observation_normalization: type of normalization to apply to observed values if
+            desired. Valid normalization values are: norm_per_feature or
+            norm_per_subject_and_feature.
         """
 
         self.num_subjects: int = num_subjects
@@ -332,4 +334,4 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
         self.weights = weights
         self.mean_w0 = mean_w0
         self.sd_w0 = sd_w0
-        self.normalize_observed_values = normalize_observed_values
+        self.observation_normalization = observation_normalization
