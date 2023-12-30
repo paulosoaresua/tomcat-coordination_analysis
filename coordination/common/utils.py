@@ -67,11 +67,10 @@ def adjust_dimensions(x: [np.array, float], num_rows: int, num_cols: int = 0) ->
             raise ValueError(f"The entry x has more than two dimensions ({x.shape}).")
 
         if x.ndim == 1:
-            if num_rows > 0:
-                return x[None, :].repeat(num_rows, axis=0)
-
-            if num_cols > 0:
-                return x[:, None].repeat(num_cols, axis=1)
+            if x.shape[0] != num_rows:
+                raise ValueError(
+                    f"The dimensions of x ({x.shape}) are incompatible with the requested "
+                    f"dimensions ({num_rows}, {num_cols})")
 
         if x.ndim == 2:
             if x.shape[0] != num_rows or x.shape[1] != num_cols:

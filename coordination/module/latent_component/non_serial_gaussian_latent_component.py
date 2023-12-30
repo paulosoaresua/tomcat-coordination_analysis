@@ -152,18 +152,21 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                 f"be a float number larger or equal than 1."
             )
 
-        self._check_parameter_dimensionality_consistency()
+        dim_mean_a_subjects = 1 if self.share_mean_a0_across_subjects else self.num_subjects
+        dim_mean_a_dimensions = 1 if self.share_mean_a0_across_dimensions else self.dimension_size
+        dim_sd_a_subjects = 1 if self.share_sd_a_across_subjects else self.num_subjects
+        dim_sd_a_dimensions = 1 if self.share_sd_a_across_dimensions else self.dimension_size
 
         # Adjust dimensions according to parameter sharing specification
+        mean_a0 = adjust_dimensions(self.parameters.mean_a0.value, num_rows=dim_mean_a_subjects,
+                                    num_cols=dim_mean_a_dimensions)
         if self.share_mean_a0_across_subjects:
-            mean_a0 = self.parameters.mean_a0.value[None, None, :]
-        else:
-            mean_a0 = self.parameters.mean_a0.value[None, :]
+            mean_a0 = mean_a[None, :].repeat(self.num_subjects, axis=0)
 
+        sd_a = adjust_dimensions(self.parameters.sd_a.value, num_rows=dim_sd_a_subjects,
+                                 num_cols=dim_sd_a_dimensions)[None, :]
         if self.share_sd_a_across_subjects:
-            sd_a = self.parameters.sd_a.value[None, None, :]
-        else:
-            sd_a = self.parameters.sd_a.value[None, :]
+            sd_a = sd_a[None, :].repeat(self.num_subjects, axis=0)
 
         num_time_steps_in_cpn_scale = int(
             self.coordination_samples.num_time_steps / self.sampling_relative_frequency
@@ -229,7 +232,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         for t in range(num_time_steps):
             if t == 0:
-                values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
+                values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
                     size=(num_series, self.num_subjects, self.dim_value)
                 )
             else:
@@ -243,11 +246,11 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                 if self.self_dependent:
                     prev_same = values[..., t - 1]  # n x s x d
                 else:
-                    prev_same = mean_a0  # n x s x d
+                    prev_same = mean_a0[None, :]  # n x s x d
 
                 blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 
-                values[..., t] = norm(loc=blended_mean, scale=sd_a).rvs()
+                values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
 
         return values
 

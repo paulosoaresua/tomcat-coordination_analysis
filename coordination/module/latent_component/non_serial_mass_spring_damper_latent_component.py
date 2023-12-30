@@ -211,7 +211,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
         for t in range(num_time_steps):
             if t == 0:
-                values[..., t] = norm(loc=mean_a0, scale=sd_a).rvs(
+                values[..., t] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
                     size=(num_series, self.num_subjects, self.dimension_size)
                 )
             else:
@@ -237,7 +237,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
                 # We don't blend speed.
                 blended_mean[..., 1] = prev_same[..., 1]
 
-                values[..., t] = norm(loc=blended_mean, scale=sd_a).rvs()
+                values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
 
         return values
 

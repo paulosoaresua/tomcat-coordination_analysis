@@ -21,6 +21,7 @@ from coordination.module.constants import (DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
 from coordination.module.latent_component.gaussian_latent_component import (
     GaussianLatentComponent, GaussianLatentComponentSamples)
 from coordination.module.module import ModuleSamples
+from coordination.common.utils import adjust_dimensions
 
 
 class SerialGaussianLatentComponent(GaussianLatentComponent):
@@ -30,33 +31,33 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
-        self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        dimension_names: Optional[List[str]] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-        fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.ndarray] = None,
-        prev_time_same_subject: Optional[np.ndarray] = None,
-        prev_time_diff_subject: Optional[np.ndarray] = None,
-        observed_values: Optional[TensorTypes] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
+            self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            dimension_names: Optional[List[str]] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+            allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+            fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.ndarray] = None,
+            prev_time_same_subject: Optional[np.ndarray] = None,
+            prev_time_diff_subject: Optional[np.ndarray] = None,
+            observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a serial latent component.
@@ -148,7 +149,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         self.prev_time_diff_subject = prev_time_diff_subject
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> SerialGaussianLatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
@@ -161,28 +162,29 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         super().draw_samples(seed, num_series)
 
         if (
-            self.sampling_time_scale_density <= 0
-            or self.sampling_time_scale_density > 1
+                self.sampling_time_scale_density <= 0
+                or self.sampling_time_scale_density > 1
         ):
             raise ValueError(
                 f"The time scale density ({self.sampling_time_scale_density}) "
                 f"must be a float number in the range (0,1]."
             )
 
-        self._check_parameter_dimensionality_consistency()
+        dim_mean_a_subjects = 1 if self.share_mean_a0_across_subjects else self.num_subjects
+        dim_mean_a_dimensions = 1 if self.share_mean_a0_across_dimensions else self.dimension_size
+        dim_sd_a_subjects = 1 if self.share_sd_a_across_subjects else self.num_subjects
+        dim_sd_a_dimensions = 1 if self.share_sd_a_across_dimensions else self.dimension_size
 
         # Adjust dimensions according to parameter sharing specification
+        mean_a0 = adjust_dimensions(self.parameters.mean_a0.value, num_rows=dim_mean_a_subjects,
+                                    num_cols=dim_mean_a_dimensions)
         if self.share_mean_a0_across_subjects:
-            mean_a0 = self.parameters.mean_a0.value[None, :].repeat(
-                self.num_subjects, axis=0
-            )
-        else:
-            mean_a0 = self.parameters.mean_a0.value
+            mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
 
+        sd_a = adjust_dimensions(self.parameters.sd_a.value, num_rows=dim_sd_a_subjects,
+                                    num_cols=dim_sd_a_dimensions)
         if self.share_sd_a_across_subjects:
-            sd_a = self.parameters.sd_a.value[None, :].repeat(self.num_subjects, axis=0)
-        else:
-            sd_a = self.parameters.sd_a.value
+            sd_a = sd_a[None, :].repeat(self.num_subjects, axis=0)
 
         sampled_subjects = []
         sampled_values = []
@@ -273,7 +275,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
                     for s2 in range(1, self.num_subjects + 1):
                         if s1 == s2 or s2 == s1 + 1:
                             transition_matrix[s1, s2] = (
-                                self.sampling_time_scale_density / 2
+                                    self.sampling_time_scale_density / 2
                             )
 
             else:
@@ -289,20 +291,20 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
                 )
                 transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
                 transition_matrix[:-1, 1:] = (
-                    np.eye(self.num_subjects) * self.sampling_time_scale_density
+                        np.eye(self.num_subjects) * self.sampling_time_scale_density
                 )
                 transition_matrix[-1, 1] = self.sampling_time_scale_density
             else:
                 transition_matrix = np.full(
                     shape=(self.num_subjects + 1, self.num_subjects + 1),
                     fill_value=self.sampling_time_scale_density
-                    / (self.num_subjects - 1),
+                               / (self.num_subjects - 1),
                 )
                 transition_matrix[0, 1:] = (
-                    self.sampling_time_scale_density / self.num_subjects
+                        self.sampling_time_scale_density / self.num_subjects
                 )
                 transition_matrix = transition_matrix * (
-                    1 - np.eye(self.num_subjects + 1)
+                        1 - np.eye(self.num_subjects + 1)
                 )
                 transition_matrix[:, 0] = 1 - self.sampling_time_scale_density
 
@@ -331,14 +333,14 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         return subjects
 
     def _draw_from_system_dynamics(
-        self,
-        coordination_sampled_series: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        subjects_in_time: np.ndarray,
-        prev_time_same_subject: np.ndarray,
-        prev_time_diff_subject: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
+            self,
+            coordination_sampled_series: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            subjects_in_time: np.ndarray,
+            prev_time_same_subject: np.ndarray,
+            prev_time_diff_subject: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default serialized component generates samples
@@ -537,12 +539,12 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
 
 class SerialGaussianLatentComponentSamples(GaussianLatentComponentSamples):
     def __init__(
-        self,
-        values: List[np.ndarray],
-        time_steps_in_coordination_scale: List[np.ndarray],
-        subject_indices: List[np.ndarray],
-        prev_time_same_subject: List[np.ndarray],
-        prev_time_diff_subject: List[np.ndarray],
+            self,
+            values: List[np.ndarray],
+            time_steps_in_coordination_scale: List[np.ndarray],
+            subject_indices: List[np.ndarray],
+            prev_time_same_subject: List[np.ndarray],
+            prev_time_diff_subject: List[np.ndarray],
     ):
         """
         Creates an object to store samples.
@@ -584,15 +586,15 @@ class SerialGaussianLatentComponentSamples(GaussianLatentComponentSamples):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    prev_time_same_subject: ptt.TensorConstant,
-    prev_time_diff_subject: ptt.TensorConstant,
-    prev_same_subject_mask: ptt.TensorConstant,
-    prev_diff_subject_mask: ptt.TensorConstant,
-    self_dependent: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        prev_time_same_subject: ptt.TensorConstant,
+        prev_time_diff_subject: ptt.TensorConstant,
+        prev_same_subject_mask: ptt.TensorConstant,
+        prev_diff_subject_mask: ptt.TensorConstant,
+        self_dependent: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -648,7 +650,7 @@ def log_prob(
         # We create an extra dimension for broadcasting across the dimension axis (axis 0).
         mask_same = prev_same_subject_mask[None, :]  # (1 x time)
         blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
-            prev_same * mask_same + (1 - mask_same) * initial_mean
+                prev_same * mask_same + (1 - mask_same) * initial_mean
         )  # (dimension x time)
     else:
         # The component's value for a subject doesn't depend on previous value of the same subject.
@@ -664,16 +666,16 @@ def log_prob(
 
 
 def random(
-    initial_mean: np.ndarray,
-    sigma: np.ndarray,
-    coordination: np.ndarray,
-    prev_time_same_subject: np.ndarray,
-    prev_time_diff_subject: np.ndarray,
-    prev_same_subject_mask: np.ndarray,
-    prev_diff_subject_mask: np.ndarray,
-    self_dependent: bool,
-    rng: Optional[np.random.Generator] = None,
-    size: Optional[Tuple[int]] = None,
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        prev_same_subject_mask: np.ndarray,
+        prev_diff_subject_mask: np.ndarray,
+        self_dependent: bool,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
     """
     Generates samples from of a serial latent component for prior predictive checks.
