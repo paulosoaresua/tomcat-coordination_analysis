@@ -7,11 +7,11 @@ import pymc as pm
 from scipy.stats import bernoulli
 
 from coordination.common.types import TensorTypes
+from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import BetaParameterPrior, Parameter
-from coordination.common.utils import adjust_dimensions
 
 
 class SpikeObservation(Observation):
@@ -81,7 +81,7 @@ class SpikeObservation(Observation):
             coordination_samples=coordination_samples,
             coordination_random_variable=coordination_random_variable,
             observation_random_variable=observation_random_variable,
-            observed_values=observed_values
+            observed_values=observed_values,
         )
 
         self.p_random_variable = p_random_variable

@@ -34,7 +34,9 @@ class NumpyArrayEncoder(JSONEncoder):
         return JSONEncoder.default(self, obj)
 
 
-def adjust_dimensions(x: [np.array, float], num_rows: int, num_cols: int = 0) -> np.array:
+def adjust_dimensions(
+    x: [np.array, float], num_rows: int, num_cols: int = 0
+) -> np.array:
     """
     Transforms an entry to an array of proper dimensions by repeating the values across rows and
     columns if the entry is a float.
@@ -49,8 +51,10 @@ def adjust_dimensions(x: [np.array, float], num_rows: int, num_cols: int = 0) ->
         return None
 
     if num_rows < 0 or num_cols < 0:
-        raise ValueError(f"The number of rows ({num_rows}) and number of columns ({num_cols}) must "
-                         f"be non-negative integers.")
+        raise ValueError(
+            f"The number of rows ({num_rows}) and number of columns ({num_cols}) must "
+            f"be non-negative integers."
+        )
 
     if isinstance(x, int):
         x = float(x)
@@ -70,13 +74,15 @@ def adjust_dimensions(x: [np.array, float], num_rows: int, num_cols: int = 0) ->
             if x.shape[0] != num_rows:
                 raise ValueError(
                     f"The dimensions of x ({x.shape}) are incompatible with the requested "
-                    f"dimensions ({num_rows}, {num_cols})")
+                    f"dimensions ({num_rows}, {num_cols})"
+                )
 
         if x.ndim == 2:
             if x.shape[0] != num_rows or x.shape[1] != num_cols:
                 raise ValueError(
                     f"The dimensions of x ({x.shape}) are incompatible with the requested "
-                    f"dimensions ({num_rows}, {num_cols})")
+                    f"dimensions ({num_rows}, {num_cols})"
+                )
 
     # Make sure the final array has float type.
     return x.astype(float)

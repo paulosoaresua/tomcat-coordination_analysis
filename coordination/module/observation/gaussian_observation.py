@@ -7,13 +7,13 @@ import numpy as np
 import pymc as pm
 
 from coordination.common.types import TensorTypes
+from coordination.common.utils import adjust_dimensions
 from coordination.module.latent_component.gaussian_latent_component import \
     GaussianLatentComponentSamples
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   Parameter)
-from coordination.common.utils import adjust_dimensions
 
 NORMALIZATION_PER_FEATURE = "norm_per_feature"
 NORMALIZATION_PER_SUBJECT_AND_FEATURE = "norm_per_subject_and_feature"
@@ -27,21 +27,21 @@ class GaussianObservation(Observation, ABC):
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int,
-            dimension_size: int,
-            sd_sd_o: np.ndarray,
-            share_sd_o_across_subjects: bool,
-            share_sd_o_across_dimensions: bool,
-            normalization: Optional[str] = None,
-            dimension_names: Optional[List[str]] = None,
-            latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            observation_random_variable: Optional[pm.Distribution] = None,
-            sd_o_random_variable: Optional[pm.Distribution] = None,
-            observed_values: Optional[TensorTypes] = None,
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int,
+        dimension_size: int,
+        sd_sd_o: np.ndarray,
+        share_sd_o_across_subjects: bool,
+        share_sd_o_across_dimensions: bool,
+        normalization: Optional[str] = None,
+        dimension_names: Optional[List[str]] = None,
+        latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        observation_random_variable: Optional[pm.Distribution] = None,
+        sd_o_random_variable: Optional[pm.Distribution] = None,
+        observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -132,13 +132,17 @@ class GaussianObservation(Observation, ABC):
                 )
                 self.sd_o_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_o.uuid,
-                    sigma=adjust_dimensions(self.parameters.sd_o.prior.sd,
-                                            num_rows=dim_subjects,
-                                            num_cols=dim_dimensions),
+                    sigma=adjust_dimensions(
+                        self.parameters.sd_o.prior.sd,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
                     size=(dim_subjects, dim_dimensions),
-                    observed=adjust_dimensions(self.parameters.sd_o.value,
-                                               num_rows=dim_subjects,
-                                               num_cols=dim_dimensions),
+                    observed=adjust_dimensions(
+                        self.parameters.sd_o.value,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
                 )
 
         if self.observation_random_variable is None:
@@ -169,7 +173,6 @@ class GaussianObservation(Observation, ABC):
 
         @return: normalized observation.
         """
-        pass
 
     @abstractmethod
     def _normalize_observation_per_feature(self) -> np.ndarray:
@@ -179,7 +182,6 @@ class GaussianObservation(Observation, ABC):
 
         @return: normalized observation.
         """
-        pass
 
 
 ###################################################################################################

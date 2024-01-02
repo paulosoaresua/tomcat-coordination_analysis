@@ -7,13 +7,13 @@ import numpy as np
 import pymc as pm
 
 from coordination.common.types import TensorTypes
+from coordination.common.utils import adjust_dimensions
 from coordination.module.latent_component.latent_component import \
     LatentComponent
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   NormalParameterPrior,
                                                   Parameter)
-from coordination.common.utils import adjust_dimensions
 
 
 class GaussianLatentComponent(LatentComponent, ABC):
@@ -24,27 +24,27 @@ class GaussianLatentComponent(LatentComponent, ABC):
     """
 
     def __init__(
-            self,
-            pymc_model: pm.Model,
-            uuid: str,
-            num_subjects: int,
-            dimension_size: int,
-            self_dependent: bool,
-            mean_mean_a0: np.ndarray,
-            sd_mean_a0: np.ndarray,
-            sd_sd_a: np.ndarray,
-            share_mean_a0_across_subjects: bool,
-            share_mean_a0_across_dimensions: bool,
-            share_sd_a_across_subjects: bool,
-            share_sd_a_across_dimensions: bool,
-            dimension_names: Optional[List[str]] = None,
-            coordination_samples: Optional[ModuleSamples] = None,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            mean_a0_random_variable: Optional[pm.Distribution] = None,
-            sd_a_random_variable: Optional[pm.Distribution] = None,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            observed_values: Optional[TensorTypes] = None,
+        self,
+        pymc_model: pm.Model,
+        uuid: str,
+        num_subjects: int,
+        dimension_size: int,
+        self_dependent: bool,
+        mean_mean_a0: np.ndarray,
+        sd_mean_a0: np.ndarray,
+        sd_sd_a: np.ndarray,
+        share_mean_a0_across_subjects: bool,
+        share_mean_a0_across_dimensions: bool,
+        share_sd_a_across_subjects: bool,
+        share_sd_a_across_dimensions: bool,
+        dimension_names: Optional[List[str]] = None,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a latent component module.
@@ -166,16 +166,22 @@ class GaussianLatentComponent(LatentComponent, ABC):
                 )
                 self.mean_a0_random_variable = pm.Normal(
                     name=self.parameters.mean_a0.uuid,
-                    mu=adjust_dimensions(self.parameters.mean_a0.prior.mean,
-                                         num_rows=dim_subjects,
-                                         num_cols=dim_dimensions),
-                    sigma=adjust_dimensions(self.parameters.mean_a0.prior.sd,
-                                            num_rows=dim_subjects,
-                                            num_cols=dim_dimensions),
+                    mu=adjust_dimensions(
+                        self.parameters.mean_a0.prior.mean,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
+                    sigma=adjust_dimensions(
+                        self.parameters.mean_a0.prior.sd,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
                     size=(dim_subjects, dim_dimensions),
-                    observed=adjust_dimensions(self.parameters.mean_a0.value,
-                                               num_rows=dim_subjects,
-                                               num_cols=dim_dimensions),
+                    observed=adjust_dimensions(
+                        self.parameters.mean_a0.value,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
                 )
 
             if self.sd_a_random_variable is None:
@@ -187,13 +193,17 @@ class GaussianLatentComponent(LatentComponent, ABC):
                 )
                 self.sd_a_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_a.uuid,
-                    sigma=adjust_dimensions(self.parameters.sd_a.prior.sd,
-                                            num_rows=dim_subjects,
-                                            num_cols=dim_dimensions),
+                    sigma=adjust_dimensions(
+                        self.parameters.sd_a.prior.sd,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
                     size=(dim_subjects, dim_dimensions),
-                    observed=adjust_dimensions(self.parameters.sd_a.value,
-                                               num_rows=dim_subjects,
-                                               num_cols=dim_dimensions),
+                    observed=adjust_dimensions(
+                        self.parameters.sd_a.value,
+                        num_rows=dim_subjects,
+                        num_cols=dim_dimensions,
+                    ),
                 )
 
 
@@ -208,11 +218,11 @@ class GaussianLatentComponentParameters(ModuleParameters):
     """
 
     def __init__(
-            self,
-            module_uuid: str,
-            mean_mean_a0: np.ndarray,
-            sd_mean_a0: np.ndarray,
-            sd_sd_a: np.ndarray,
+        self,
+        module_uuid: str,
+        mean_mean_a0: np.ndarray,
+        sd_mean_a0: np.ndarray,
+        sd_sd_a: np.ndarray,
     ):
         """
         Creates an object to store latent component parameter info.
@@ -240,9 +250,9 @@ class GaussianLatentComponentSamples(ModuleSamples):
     """
 
     def __init__(
-            self,
-            values: Union[List[np.ndarray], np.ndarray],
-            time_steps_in_coordination_scale: Union[List[np.ndarray], np.ndarray],
+        self,
+        values: Union[List[np.ndarray], np.ndarray],
+        time_steps_in_coordination_scale: Union[List[np.ndarray], np.ndarray],
     ):
         """
         Creates an object to store samples.

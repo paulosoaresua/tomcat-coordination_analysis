@@ -3,19 +3,18 @@ from typing import Optional
 import numpy as np
 import pymc as pm
 
-from coordination.model.config_bundle.conversation import ConversationConfigBundle
+from coordination.common.utils import adjust_dimensions
+from coordination.model.config_bundle.conversation import \
+    ConversationConfigBundle
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
-from coordination.module.latent_component.serial_first_derivative_latent_component import \
-    SerialFirstDerivativeLatentComponent
+from coordination.module.latent_component.serial_mass_spring_damper_latent_component import \
+    SerialMassSpringDamperLatentComponent
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
 from coordination.module.transformation.mlp import MLP
-from coordination.module.latent_component.serial_mass_spring_damper_latent_component import \
-    SerialMassSpringDamperLatentComponent
-from coordination.common.utils import adjust_dimensions
 
 
 class ConversationModel(ModelTemplate):
@@ -30,9 +29,9 @@ class ConversationModel(ModelTemplate):
     """
 
     def __init__(
-            self,
-            config_bundle: ConversationConfigBundle,
-            pymc_model: Optional[pm.Model] = None,
+        self,
+        config_bundle: ConversationConfigBundle,
+        pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a conversation model.
@@ -62,8 +61,9 @@ class ConversationModel(ModelTemplate):
             # angular_frequency^2 = spring_constant / mass
             spring_constant=config_bundle.squared_angular_frequency,
             mass=np.ones(config_bundle.num_subjects),
-            dampening_coefficient=adjust_dimensions(config_bundle.dampening_coefficient,
-                                                    num_rows=config_bundle.num_subjects),
+            dampening_coefficient=adjust_dimensions(
+                config_bundle.dampening_coefficient, num_rows=config_bundle.num_subjects
+            ),
             dt=config_bundle.time_step_size_in_seconds,
             mean_mean_a0=config_bundle.mean_mean_a0,
             sd_mean_a0=config_bundle.sd_mean_a0,
@@ -109,7 +109,9 @@ class ConversationModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
-            transformations=[self.transformation] if self.transformation is not None else None,
+            transformations=[self.transformation]
+            if self.transformation is not None
+            else None,
         )
 
         super().__init__(

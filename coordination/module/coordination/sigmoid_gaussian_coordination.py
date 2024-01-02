@@ -8,6 +8,7 @@ from scipy.stats import norm
 
 from coordination.common.functions import sigmoid
 from coordination.common.types import TensorTypes
+from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import (DEFAULT_NUM_TIME_STEPS,
                                            DEFAULT_UNB_COORDINATION_MEAN_PARAM,
                                            DEFAULT_UNB_COORDINATION_SD_PARAM)
@@ -16,7 +17,6 @@ from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   NormalParameterPrior,
                                                   Parameter)
-from coordination.common.utils import adjust_dimensions
 
 
 class SigmoidGaussianCoordination(Coordination):
@@ -115,10 +115,16 @@ class SigmoidGaussianCoordination(Coordination):
             if self.mean_uc0_random_variable is None:
                 self.mean_uc0_random_variable = pm.Normal(
                     name=self.parameters.mean_uc0.uuid,
-                    mu=adjust_dimensions(self.parameters.mean_uc0.prior.mean, num_rows=1),
-                    sigma=adjust_dimensions(self.parameters.mean_uc0.prior.sd, num_rows=1),
+                    mu=adjust_dimensions(
+                        self.parameters.mean_uc0.prior.mean, num_rows=1
+                    ),
+                    sigma=adjust_dimensions(
+                        self.parameters.mean_uc0.prior.sd, num_rows=1
+                    ),
                     size=1,
-                    observed=adjust_dimensions(self.parameters.mean_uc0.value, num_rows=1),
+                    observed=adjust_dimensions(
+                        self.parameters.mean_uc0.value, num_rows=1
+                    ),
                 )
             if self.sd_uc_random_variable is None:
                 self.sd_uc_random_variable = pm.HalfNormal(
@@ -184,9 +190,7 @@ class SigmoidGaussianCoordinationParameters(ModuleParameters):
         super().__init__()
         self.mean_uc0 = Parameter(
             uuid=f"{module_uuid}_mean_uc0",
-            prior=NormalParameterPrior(
-                mean=mean_mean_uc0, sd=sd_mean_uc0
-            ),
+            prior=NormalParameterPrior(mean=mean_mean_uc0, sd=sd_mean_uc0),
         )
         self.sd_uc = Parameter(
             uuid=f"{module_uuid}_sd_uc",
