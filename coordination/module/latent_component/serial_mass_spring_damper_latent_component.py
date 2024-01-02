@@ -430,6 +430,7 @@ def log_prob(
         prev_same_transformed * mask_same + (1 - mask_same) * initial_mean
     )
 
+    # Decide which dimension(s) to blend
     blended_mean = B1 @ blended_mean + B2 @ (
         prev_same * mask_same + (1 - mask_same) * initial_mean
     )

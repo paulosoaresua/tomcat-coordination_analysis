@@ -16,9 +16,9 @@ from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS)
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponentSamples
-from coordination.module.module import ModuleSamples
 from coordination.module.observation.gaussian_observation import \
     GaussianObservation
+from coordination.module.observation.observation import ObservationSamples
 
 
 class SerialGaussianObservation(GaussianObservation):
@@ -237,7 +237,7 @@ class SerialGaussianObservation(GaussianObservation):
 ###################################################################################################
 
 
-class SerialGaussianObservationSamples(ModuleSamples):
+class SerialGaussianObservationSamples(ObservationSamples):
     def __init__(
         self,
         values: List[np.ndarray],
@@ -256,7 +256,6 @@ class SerialGaussianObservationSamples(ModuleSamples):
         @param subject_indices: series indicating which subject is associated to the observation
             at every time step (e.g. the current speaker for a speech component).
         """
-        super().__init__(values)
+        super().__init__(values, time_steps_in_coordination_scale)
 
-        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.subject_indices = subject_indices

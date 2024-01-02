@@ -20,7 +20,8 @@ from coordination.module.constants import (DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS,
                                            DEFAULT_SUBJECT_REPETITION_FLAG)
 from coordination.module.latent_component.gaussian_latent_component import (
-    GaussianLatentComponent, GaussianLatentComponentSamples)
+    GaussianLatentComponent)
+from coordination.module.latent_component.latent_component import LatentComponentSamples
 from coordination.module.module import ModuleSamples
 
 
@@ -549,7 +550,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
 ###################################################################################################
 
 
-class SerialGaussianLatentComponentSamples(GaussianLatentComponentSamples):
+class SerialGaussianLatentComponentSamples(LatentComponentSamples):
     def __init__(
         self,
         values: List[np.ndarray],

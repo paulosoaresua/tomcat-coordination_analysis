@@ -8,6 +8,7 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
+from coordination.module.latent_component.latent_component import LatentComponentSamples
 
 
 class Observation(ABC, Module):
@@ -26,7 +27,7 @@ class Observation(ABC, Module):
         dimension_size: int,
         dimension_names: Optional[List[str]] = None,
         coordination_samples: Optional[ModuleSamples] = None,
-        latent_component_samples: Optional[ModuleSamples] = None,
+        latent_component_samples: Optional[LatentComponentSamples] = None,
         coordination_random_variable: Optional[pm.Distribution] = None,
         latent_component_random_variable: Optional[pm.Distribution] = None,
         observation_random_variable: Optional[pm.Distribution] = None,
@@ -105,3 +106,29 @@ class Observation(ABC, Module):
         self.pymc_model.add_coord(
             name=self.dimension_axis_name, values=self.dimension_coordinates
         )
+
+
+###################################################################################################
+# AUXILIARY CLASSES
+###################################################################################################
+
+
+class ObservationSamples(ModuleSamples):
+    def __init__(
+        self,
+        values: List[np.ndarray],
+        time_steps_in_coordination_scale: List[np.ndarray],
+    ):
+        """
+        Creates an object to store observation samples.
+
+        @param values: sampled observation values. This is a list of time series of values of
+            different sizes because each sampled series may have a different sparsity level.
+        @param time_steps_in_coordination_scale: indexes to the coordination used to generate the
+            sample. If the component is in a different timescale from the timescale used to compute
+            coordination, this mapping will tell which value of coordination to map to each sampled
+            value of the latent component.
+        """
+        super().__init__(values)
+
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale

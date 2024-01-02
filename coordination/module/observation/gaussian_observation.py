@@ -8,8 +8,7 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
-from coordination.module.latent_component.gaussian_latent_component import \
-    GaussianLatentComponentSamples
+from coordination.module.latent_component.latent_component import LatentComponentSamples
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
@@ -37,7 +36,7 @@ class GaussianObservation(Observation, ABC):
         share_sd_o_across_dimensions: bool,
         normalization: Optional[str] = None,
         dimension_names: Optional[List[str]] = None,
-        latent_component_samples: Optional[GaussianLatentComponentSamples] = None,
+        latent_component_samples: Optional[LatentComponentSamples] = None,
         latent_component_random_variable: Optional[pm.Distribution] = None,
         observation_random_variable: Optional[pm.Distribution] = None,
         sd_o_random_variable: Optional[pm.Distribution] = None,

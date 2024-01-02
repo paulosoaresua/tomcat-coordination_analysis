@@ -18,7 +18,8 @@ from coordination.module.constants import (DEFAULT_LATENT_DIMENSION_SIZE,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS)
 from coordination.module.latent_component.gaussian_latent_component import (
-    GaussianLatentComponent, GaussianLatentComponentSamples)
+    GaussianLatentComponent)
+from coordination.module.latent_component.latent_component import LatentComponentSamples
 from coordination.module.module import ModuleSamples
 
 
@@ -136,7 +137,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
     def draw_samples(
         self, seed: Optional[int], num_series: int
-    ) -> GaussianLatentComponentSamples:
+    ) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
         coordination and different subjects.
@@ -171,15 +172,15 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             num_cols=dim_mean_a_dimensions,
         )
         if self.share_mean_a0_across_subjects:
-            mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
+            mean_a0 = mean_a0.repeat(self.num_subjects, axis=0)
 
         sd_a = adjust_dimensions(
             self.parameters.sd_a.value,
             num_rows=dim_sd_a_subjects,
             num_cols=dim_sd_a_dimensions,
-        )[None, :]
+        )
         if self.share_sd_a_across_subjects:
-            sd_a = sd_a[None, :].repeat(self.num_subjects, axis=0)
+            sd_a = sd_a.repeat(self.num_subjects, axis=0)
 
         num_time_steps_in_cpn_scale = int(
             self.coordination_samples.num_time_steps / self.sampling_relative_frequency
@@ -200,7 +201,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             sd_a=sd_a,
         )
 
-        return GaussianLatentComponentSamples(
+        return LatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale[
                 None, :

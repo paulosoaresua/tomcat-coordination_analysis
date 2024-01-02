@@ -4,7 +4,7 @@ import arviz as az
 import numpy as np
 import pymc as pm
 
-from coordination.module.coordination import (CoordinationSamples,
+from coordination.module.coordination_old import (CoordinationSamples,
                                               SigmoidGaussianCoordination)
 from coordination.module.serial_component import SerialComponentSamples
 from coordination.module.serial_mass_spring_damper_component import \

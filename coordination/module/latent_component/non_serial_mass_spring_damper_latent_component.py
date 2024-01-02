@@ -30,29 +30,31 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
-        mass: np.ndarray = DEFAULT_MASS,
-        dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
-        dt: float = DEFAULT_DT,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        observed_values: Optional[TensorTypes] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
+            mass: np.ndarray = DEFAULT_MASS,
+            dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
+            dt: float = DEFAULT_DT,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            observed_values: Optional[TensorTypes] = None,
+            blend_position: bool = True,
+            blend_speed: bool = True,
     ):
         """
         Creates a non-serial mass-spring-damper latent component.
@@ -93,6 +95,8 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
             each index in the latent component scale.
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
+        @param blend_position: whether to blend the position dimension.
+        @param blend_speed: whether to blend the speed dimension.
         """
         super().__init__(
             uuid=uuid,
@@ -153,6 +157,8 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
         self.mass = mass
         self.damping_coefficient = dampening_coefficient
         self.dt = dt
+        self.blend_position = blend_position
+        self.blend_speed = blend_speed
 
         # Fundamental matrices. One per subject.
         F = []
@@ -171,11 +177,11 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
         self.F = np.concatenate(F, axis=0)
 
     def _draw_from_system_dynamics(
-        self,
-        sampled_coordination: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
+            self,
+            sampled_coordination: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values from a mass-spring-damper system dynamics using the fundamental matrices.
@@ -218,7 +224,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
                 # n x 1 x 1
                 c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
                     :, None, None
-                ]
+                    ]
 
                 # Bring the states to the present according to each component's dynamics.
                 transformed_values = np.einsum(
@@ -234,8 +240,11 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
                 blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 
-                # We don't blend speed.
-                blended_mean[..., 1] = prev_same[..., 1]
+                if not self.blend_position:
+                    blended_mean[..., 0] = prev_same[..., 0]
+
+                if not self.blend_speed:
+                    blended_mean[..., 1] = prev_same[..., 1]
 
                 values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
 
@@ -246,8 +255,17 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
         Gets fundamental matrices per time step.
         """
 
-        # It does not change per time step since all subjects are present in the latent component.
-        return (self.F,)
+        # B1 @ blended_state + B2 @ prev_state gives us the final state based on blending
+        # preferences.
+        B1 = np.zeros((2, 2))
+        B2 = np.zeros((2, 2))
+        B1[0, 0] = int(self.blend_position)
+        B2[0, 0] = int(not self.blend_position)
+        B1[1, 1] = int(self.blend_speed)
+        B2[1, 1] = int(not self.blend_speed)
+
+        # F does not change per time step since all subjects are present in the latent component.
+        return self.F, B1, B2
 
     def _get_log_prob_fn(self) -> Callable:
         """
@@ -269,12 +287,14 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    self_dependent: ptt.TensorConstant,
-    F: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        self_dependent: ptt.TensorConstant,
+        F: ptt.TensorConstant,
+        B1: ptt.TensorConstant,
+        B2: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -290,10 +310,12 @@ def log_prob(
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
         Not used by this implementation as self_dependency is fixed to True.
     @param F: (subject x 4) fundamental matrices for each subject.
+    @param B1: matrix that decides which dimension(s) to use for blending.
+    @param B2: matrix that decides which dimension(s) not to use for blending.
     @return: log-probability of the sample.
     """
 
-    N = sample.shape[0]
+    N = sample.shape[0]  # num subjects
     D = sample.shape[1]
 
     # logp at the initial time step
@@ -312,8 +334,8 @@ def log_prob(
     # component's posterior.
     transformed_sample = ptt.batched_tensordot(F, sample, axes=[(2,), (1,)])
     prev_others = ptt.tensordot(sum_matrix_others, transformed_sample, axes=(1, 0))[
-        ..., :-1
-    ]
+                  ..., :-1
+                  ]
 
     # The component's value for a subject depends on its previous value for the same subject.
     prev_same = transformed_sample[..., :-1]  # N x d x t-1
@@ -324,10 +346,14 @@ def log_prob(
 
     blended_mean = (prev_others - prev_same) * c + prev_same
 
-    # We don't blend velocity
-    POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]
-    VELOCITY_COL = ptt.as_tensor(np.array([[0, 1]])).repeat(N, 0)[..., None]
-    blended_mean = blended_mean * POSITION_COL + prev_same * VELOCITY_COL
+    # Decide which dimension(s) to blend
+    blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(0, 1) + \
+                   ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
+    #
+    # # We don't blend velocity
+    # POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]
+    # VELOCITY_COL = ptt.as_tensor(np.array([[0, 1]])).repeat(N, 0)[..., None]
+    # blended_mean = blended_mean * POSITION_COL + prev_same * VELOCITY_COL
 
     # Match the dimensions of the standard deviation with that of the blended mean
     sd = sigma[:, :, None]
