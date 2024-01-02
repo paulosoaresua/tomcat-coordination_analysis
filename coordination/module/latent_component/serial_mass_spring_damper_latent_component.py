@@ -32,34 +32,36 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
-        mass: np.ndarray = DEFAULT_MASS,
-        dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
-        dt: float = DEFAULT_DT,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-        fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.ndarray] = None,
-        prev_time_same_subject: Optional[np.ndarray] = None,
-        prev_time_diff_subject: Optional[np.ndarray] = None,
-        observed_values: Optional[TensorTypes] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
+            mass: np.ndarray = DEFAULT_MASS,
+            dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
+            dt: float = DEFAULT_DT,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+            allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+            fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.ndarray] = None,
+            prev_time_same_subject: Optional[np.ndarray] = None,
+            prev_time_diff_subject: Optional[np.ndarray] = None,
+            observed_values: Optional[TensorTypes] = None,
+            blend_position: bool = True,
+            blend_speed: bool = True
     ):
         """
         Creates a serial mass-spring-damper latent component.
@@ -120,6 +122,8 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
             set before a call to update_pymc_model.
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
+        @param blend_position: whether to blend the position dimension.
+        @param blend_speed: whether to blend the speed dimension.
         """
         super().__init__(
             uuid=uuid,
@@ -185,6 +189,8 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
         self.mass = mass
         self.damping_coefficient = dampening_coefficient
         self.dt = dt
+        self.blend_position = blend_position
+        self.blend_speed = blend_speed
 
         # Fundamental matrices. One per subject.
         F = []
@@ -203,14 +209,14 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
         self.F = np.concatenate(F, axis=0)
 
     def _draw_from_system_dynamics(
-        self,
-        coordination_sampled_series: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        subjects_in_time: np.ndarray,
-        prev_time_same_subject: np.ndarray,
-        prev_time_diff_subject: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
+            self,
+            coordination_sampled_series: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            subjects_in_time: np.ndarray,
+            prev_time_same_subject: np.ndarray,
+            prev_time_diff_subject: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values from a mass-spring-damper system dynamics using the fundamental matrices.
@@ -274,8 +280,11 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
 
                 blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
 
-                # Do not blend speed.
-                blended_mean[1] = prev_same[1]
+                if not self.blend_position:
+                    blended_mean[0] = prev_same[0]
+
+                if not self.blend_speed:
+                    blended_mean[1] = prev_same[1]
 
                 values[:, t] = norm(loc=blended_mean, scale=sd).rvs()
 
@@ -301,7 +310,16 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
         Fs_diff_reshaped = np.array(Fs_diff).reshape((len(self.subject_indices), 4))
         Fs_same_reshaped = np.array(Fs_same).reshape((len(self.subject_indices), 4))
 
-        return Fs_diff_reshaped, Fs_same_reshaped
+        # B1 @ blended_state + B2 @ prev_state gives us the final state based on blending
+        # preferences.
+        B1 = np.zeros((2, 2))
+        B2 = np.zeros((2, 2))
+        B1[0, 0] = int(self.blend_position)
+        B2[0, 0] = int(not self.blend_position)
+        B1[1, 1] = int(self.blend_speed)
+        B2[1, 1] = int(not self.blend_speed)
+
+        return Fs_diff_reshaped, Fs_same_reshaped, B1, B2
 
     def _get_log_prob_fn(self) -> Callable:
         """
@@ -323,17 +341,19 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    prev_time_same_subject: ptt.TensorConstant,
-    prev_time_diff_subject: ptt.TensorConstant,
-    prev_same_subject_mask: ptt.TensorConstant,
-    prev_diff_subject_mask: ptt.TensorConstant,
-    self_dependent: ptt.TensorConstant,
-    Fs_diff: ptt.TensorConstant,
-    Fs_same: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        prev_time_same_subject: ptt.TensorConstant,
+        prev_time_diff_subject: ptt.TensorConstant,
+        prev_same_subject_mask: ptt.TensorConstant,
+        prev_diff_subject_mask: ptt.TensorConstant,
+        self_dependent: ptt.TensorConstant,
+        Fs_diff: ptt.TensorConstant,
+        Fs_same: ptt.TensorConstant,
+        B1: ptt.TensorConstant,
+        B2: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -364,6 +384,8 @@ def log_prob(
         values from a different subject over time.
     @param Fs_same: (time x 4) fundamental matrix to be applied on the time series of previous
         values from the same subject over time.
+    @param B1: matrix that decides which dimension(s) to use for blending.
+    @param B2: matrix that decides which dimension(s) not to use for blending.
     @return: log-probability of the sample.
     """
 
@@ -405,16 +427,18 @@ def log_prob(
     ).T
 
     blended_mean = prev_other_transformed * c * mask_other + (1 - c * mask_other) * (
-        prev_same_transformed * mask_same + (1 - mask_same) * initial_mean
+            prev_same_transformed * mask_same + (1 - mask_same) * initial_mean
     )
 
-    # We don't blend speed
-    POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
-    SPEED_COL = ptt.as_tensor(np.array([[0], [1]]))
-    blended_mean = (
-        blended_mean * POSITION_COL
-        + (prev_same * mask_same + (1 - mask_same) * initial_mean) * SPEED_COL
-    )
+    blended_mean = B1 @ blended_mean + B2 @ (
+            prev_same * mask_same + (1 - mask_same) * initial_mean)
+    # # We don't blend speed
+    # POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
+    # SPEED_COL = ptt.as_tensor(np.array([[0], [1]]))
+    # blended_mean = (
+    #         blended_mean * POSITION_COL
+    #         + (prev_same * mask_same + (1 - mask_same) * initial_mean) * SPEED_COL
+    # )
 
     total_logp = pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape), sample

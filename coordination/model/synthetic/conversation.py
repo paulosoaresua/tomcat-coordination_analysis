@@ -75,25 +75,29 @@ class ConversationModel(ModelTemplate):
             sampling_time_scale_density=config_bundle.sampling_time_scale_density,
             allow_sampled_subject_repetition=config_bundle.allow_sampled_subject_repetition,
             fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
+            blend_position=config_bundle.blend_position,
+            blend_speed=config_bundle.blend_speed,
         )
 
-        self.transformation = MLP(
-            uuid="state_space_to_observation_mlp",
-            pymc_model=pymc_model,
-            output_dimension_size=1,
-            mean_w0=config_bundle.mean_w0,
-            sd_w0=config_bundle.sd_w0,
-            num_hidden_layers=config_bundle.num_hidden_layers,
-            hidden_dimension_size=config_bundle.hidden_dimension_size,
-            activation=config_bundle.activation,
-            axis=0,  # Vocalic features axis
-        )
+        self.transformation = None
+        if config_bundle.observation_dim_size != 2:
+            self.transformation = MLP(
+                uuid="state_space_to_observation_mlp",
+                pymc_model=pymc_model,
+                output_dimension_size=config_bundle.observation_dim_size,
+                mean_w0=config_bundle.mean_w0,
+                sd_w0=config_bundle.sd_w0,
+                num_hidden_layers=config_bundle.num_hidden_layers,
+                hidden_dimension_size=config_bundle.hidden_dimension_size,
+                activation=config_bundle.activation,
+                axis=0,  # Vocalic features axis
+            )
 
         self.observation = SerialGaussianObservation(
             uuid="observation",
             pymc_model=pymc_model,
             num_subjects=config_bundle.num_subjects,
-            dimension_size=1,
+            dimension_size=config_bundle.observation_dim_size,
             sd_sd_o=config_bundle.sd_sd_o,
             share_sd_o_across_subjects=config_bundle.share_sd_o_across_subjects,
             share_sd_o_across_dimensions=config_bundle.share_sd_o_across_dimensions,
@@ -105,7 +109,7 @@ class ConversationModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
-            transformations=[self.transformation],
+            transformations=[self.transformation] if self.transformation is not None else None,
         )
 
         super().__init__(

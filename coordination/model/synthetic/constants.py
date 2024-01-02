@@ -12,6 +12,9 @@ class ConversationConstants:
     DAMPENING_COEFFICIENT = 0.0
     TIME_STEP_SIZE_IN_SECONDS = 0.2
     OBSERVATION_NORMALIZATION = None
+    BLEND_POSITION = True
+    BLEND_SPEED = False
+    OBSERVATION_DIM_SIZE = 2
 
     # Sharing options
     SHARE_MEAN_A0_ACROSS_SUBJECT = False
