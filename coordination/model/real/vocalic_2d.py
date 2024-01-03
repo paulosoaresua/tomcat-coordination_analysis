@@ -8,8 +8,8 @@ from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
-from coordination.module.latent_component.serial_first_derivative_latent_component import \
-    SerialFirstDerivativeLatentComponent
+from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
+    Serial2DGaussianLatentComponent
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
 from coordination.module.transformation.mlp import MLP
@@ -48,7 +48,7 @@ class VocalicModel(ModelTemplate):
 
         # Save a direct reference to state_space and observation for easy access in the parameter
         # setting functions in this class.
-        self.state_space = SerialFirstDerivativeLatentComponent(
+        self.state_space = Serial2DGaussianLatentComponent(
             uuid="state_space",
             pymc_model=pymc_model,
             num_subjects=config_bundle.num_subjects,

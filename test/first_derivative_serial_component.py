@@ -3,7 +3,7 @@ from unittest import TestCase
 import numpy as np
 import pytensor.tensor as ptt
 
-from coordination.module.latent_component.serial_first_derivative_latent_component import \
+from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
     log_prob
 
 

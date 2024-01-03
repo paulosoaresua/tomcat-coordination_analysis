@@ -21,14 +21,14 @@ from coordination.module.latent_component.serial_gaussian_latent_component impor
 from coordination.module.module import ModuleSamples
 
 
-class SerialFirstDerivativeLatentComponent(SerialGaussianLatentComponent):
+class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
     """
     This class represents a 2D serial latent component with position and speed. It encodes the
     notion that a change in speed from a component from one subject drives a change in speed
     of the same component in another subject through blending of the speed dimension when
-    there's coordination. This encodes the following idea: if A raises their pitch  (positive
-    speed) and B subsequently raise theirs, this is an indicative of coordination regardless of
-    the absolute value of their pitches (position).
+    there's coordination. This encodes the following idea: if there's a raise in A's component's
+    speed and B a subsequent raise in B's component's speed, this is an indication of coordination
+    regardless of the absolute value of A and B's component amplitudes (positions).
     """
 
     def __init__(
@@ -58,7 +58,7 @@ class SerialFirstDerivativeLatentComponent(SerialGaussianLatentComponent):
         observed_values: Optional[TensorTypes] = None,
     ):
         """
-        Creates a serial first derivative latent component.
+        Creates a serial 2D Gaussian latent component.
 
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
@@ -113,7 +113,7 @@ class SerialFirstDerivativeLatentComponent(SerialGaussianLatentComponent):
             uuid=uuid,
             pymc_model=pymc_model,
             num_subjects=num_subjects,
-            dimension_size=2,
+            dimension_size=2,  # position and speed
             self_dependent=True,
             mean_mean_a0=mean_mean_a0,
             sd_mean_a0=sd_mean_a0,
@@ -203,16 +203,15 @@ class SerialFirstDerivativeLatentComponent(SerialGaussianLatentComponent):
 
                 prev_other = values[..., prev_time_diff_subject[t]]
 
-                dt_diff = 1  # np.maximum(t - prev_time_diff_subject[t], 1)
-
                 # The matrix F multiplied by the state of a component "a" at time t - 1
                 # ([P(t-1), S(t-1)]) gives us:
                 #
                 # P_a(t) = P_a(t-1) + S_a(t-1)dt
                 # S_a(t) = (1 - C(t))*S_a(t-1)
                 #
-                # Then we just need to sum with c(t)*V_b(t-1) to obtain the updated state of the
-                # component. Which can be accomplished with U*[P_b(t-1), S_b(t-1)]
+                # Then we just need to sum with [0, c(t)*S_b(t-1)] to obtain the updated state of
+                # the component. Which can be accomplished with U*[P_b(t-1), S_b(t-1)]
+                dt_diff = 1
                 F = np.array([[1, dt_diff], [0, 1 - c]])
                 U = np.array(
                     [

@@ -55,7 +55,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         observed_values: Optional[TensorTypes] = None,
     ):
         """
-        Creates a serial latent component.
+        Creates a non-serial latent component.
 
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
