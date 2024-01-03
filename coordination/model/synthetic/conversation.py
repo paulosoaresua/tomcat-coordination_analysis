@@ -59,7 +59,9 @@ class ConversationModel(ModelTemplate):
             pymc_model=pymc_model,
             num_subjects=config_bundle.num_subjects,
             # angular_frequency^2 = spring_constant / mass
-            spring_constant=config_bundle.squared_angular_frequency,
+            spring_constant=adjust_dimensions(
+                config_bundle.squared_angular_frequency, num_rows=config_bundle.num_subjects
+            ),
             mass=np.ones(config_bundle.num_subjects),
             dampening_coefficient=adjust_dimensions(
                 config_bundle.dampening_coefficient, num_rows=config_bundle.num_subjects
@@ -127,6 +129,8 @@ class ConversationModel(ModelTemplate):
         """
         Sets parameter values for sampling using values in the model's config bundle.
         """
+        self.coordination_samples = self.config_bundle.coordination_samples
+
         self.coordination.parameters.mean_uc0.value = self.config_bundle.mean_uc0
         self.coordination.parameters.sd_uc.value = self.config_bundle.sd_uc
         self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0

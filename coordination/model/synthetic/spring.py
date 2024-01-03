@@ -56,7 +56,9 @@ class SpringModel(ModelTemplate):
             uuid="state_space",
             pymc_model=pymc_model,
             num_subjects=config_bundle.num_springs,
-            spring_constant=config_bundle.spring_constant,
+            spring_constant=adjust_dimensions(
+                config_bundle.spring_constant, num_rows=config_bundle.num_springs
+            ),
             mass=adjust_dimensions(
                 config_bundle.mass, num_rows=config_bundle.num_springs
             ),
@@ -122,6 +124,8 @@ class SpringModel(ModelTemplate):
         """
         Sets parameter values for sampling using values in the model's config bundle.
         """
+        self.coordination_samples = self.config_bundle.coordination_samples
+
         self.coordination.parameters.mean_uc0.value = self.config_bundle.mean_uc0
         self.coordination.parameters.sd_uc.value = self.config_bundle.sd_uc
         self.state_space.parameters.mean_a0.value = self.config_bundle.mean_a0
