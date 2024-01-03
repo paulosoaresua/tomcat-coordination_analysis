@@ -238,7 +238,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros(
-            (num_series, self.num_subjects, self.dim_value, num_time_steps)
+            (num_series, self.num_subjects, self.dimension_size, num_time_steps)
         )
 
         N = self.num_subjects
@@ -247,7 +247,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         for t in range(num_time_steps):
             if t == 0:
                 values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
-                    size=(num_series, self.num_subjects, self.dim_value)
+                    size=(num_series, self.num_subjects, self.dimension_size)
                 )
             else:
                 # n x 1 x 1

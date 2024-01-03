@@ -13,6 +13,7 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
 
     num_subjects = 3
     num_time_steps_in_coordination_scale = 100
+    observation_normalization = None
     state_space_dimension_size = 4
     state_space_dimension_names = ["pitch", "intensity", "jitter", "shimmer"]
     self_dependent = True
@@ -76,7 +77,7 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
 
     num_subjects = 3
     num_time_steps_in_coordination_scale = 100
-    self_dependent = True
+    observation_normalization = None
     num_vocalic_features = 4
     vocalic_feature_names = ["pitch", "intensity", "jitter", "shimmer"]
 

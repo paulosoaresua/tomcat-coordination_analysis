@@ -154,7 +154,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros(
-            (num_series, self.num_subjects, self.dim_value, num_time_steps)
+            (num_series, self.num_subjects, self.dimension_size, num_time_steps)
         )
 
         N = self.num_subjects
@@ -163,7 +163,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         for t in range(num_time_steps):
             if t == 0:
                 values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
-                    size=(num_series, self.num_subjects, self.dim_value)
+                    size=(num_series, self.num_subjects, self.dimension_size)
                 )
             else:
                 # n x 1 x 1
@@ -278,7 +278,7 @@ def log_prob(
     # we can add that to the log-probability such that the samples are effectively coming from the
     # component's posterior.
     prev_same_transformed = ptt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
-    prev_other_transformed = ptt.batched_tensordot(U, prev_other.T, axes=[(2,), (1,)]).T
+    prev_other_transformed = ptt.batched_tensordot(U, prev_others.T, axes=[(2,), (1,)]).T
 
     blended_mean = prev_other_transformed + prev_same_transformed
 
