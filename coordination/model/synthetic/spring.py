@@ -87,7 +87,7 @@ class SpringModel(ModelTemplate):
                 num_hidden_layers=config_bundle.num_hidden_layers,
                 hidden_dimension_size=config_bundle.hidden_dimension_size,
                 activation=config_bundle.activation,
-                axis=0,  # Vocalic features axis
+                axis=1,  # Vocalic features axis
             )
 
         self.observation = NonSerialGaussianObservation(
@@ -105,6 +105,7 @@ class SpringModel(ModelTemplate):
             uuid="group",
             pymc_model=pymc_model,
             latent_component=self.state_space,
+            transformations=[self.transformation] if self.transformation is not None else None,
             observations=[self.observation],
         )
 

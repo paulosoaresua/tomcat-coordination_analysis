@@ -34,16 +34,6 @@ def plot_series(
         fig = plt.figure()
         ax = fig.gca()
 
-    # colormap = ListedColormap(SPRING_PASTELS_COLOR_PALETTE)
-    ax.plot(
-        x,
-        y,
-        markerfacecolor=kwargs.pop("markerfacecolor", "None"),
-        marker=kwargs.pop("marker", "o"),
-        # cmap=kwargs.pop("cmap", colormap),
-        label=label,
-        **kwargs
-    )
     if include_bands:
         lower_band = y - y_std
         if value_bounds is not None and value_bounds[0] is not None:
@@ -53,6 +43,15 @@ def plot_series(
         if value_bounds is not None and value_bounds[1] is not None:
             upper_band = np.minimum(upper_band, value_bounds[1])
 
-        ax.fill_between(x, lower_band, upper_band, alpha=0.5)  # , cmap=colormap)
+        ax.fill_between(x, lower_band, upper_band, color=kwargs.pop("color", None), alpha=0.5)
+
+    ax.plot(
+        x,
+        y,
+        markerfacecolor=kwargs.pop("markerfacecolor", "None"),
+        marker=kwargs.pop("marker", "o"),
+        label=label,
+        **kwargs
+    )
 
     return ax

@@ -321,7 +321,7 @@ class InferenceData:
                 x=time_steps,
                 y=means,
                 y_std=stds,
-                label=None,
+                label=kwargs.pop("label", None),
                 include_bands=include_bands,
                 value_bounds=value_bounds,
                 ax=ax,
@@ -329,6 +329,7 @@ class InferenceData:
             )
             ax.set_ylabel("Coordination")
         elif len(means.shape) == 2:
+            label_prefix = kwargs.pop("label", "Subject")
             # Serial variable
             subject_indices = np.array(
                 [
@@ -359,7 +360,7 @@ class InferenceData:
                     x=time_steps[idx],
                     y=y,
                     y_std=y_std,
-                    label=f"Subject {s}",
+                    label=f"{label_prefix} {s}",
                     include_bands=include_bands,
                     value_bounds=value_bounds,
                     ax=ax,
@@ -367,6 +368,7 @@ class InferenceData:
                 )
             ax.set_ylabel(getattr(means, f"{variable_name}_dimension").data[dimension])
         else:
+            label_prefix = kwargs.pop("label", "Subject")
             # Non-serial variable
             for s in range(means.shape[0]):
                 y = (
@@ -383,7 +385,7 @@ class InferenceData:
                     x=time_steps,
                     y=y,
                     y_std=y_std,
-                    label=f"Subject {s}",
+                    label=f"{label_prefix} {s}",
                     include_bands=include_bands,
                     value_bounds=value_bounds,
                     ax=ax,

@@ -123,17 +123,9 @@ class NonSerialGaussianObservation(GaussianObservation):
             self.parameters.sd_o.value,
             num_rows=dim_sd_o_subjects,
             num_cols=dim_sd_o_dimensions,
-        )
+        )[None, :, :, None]  # broadcast across series and time
 
-        # Adjust dimensions according to parameter sharing specification
-        if self.share_sd_o_across_subjects:
-            # Broadcast across series, subjects and time
-            sd = sd_o[None, None, :, None]
-        else:
-            # Broadcast across series and time
-            sd = sd_o[None, :, :, None]
-
-        sampled_values = norm(loc=self.latent_component_samples.values, scale=sd).rvs(
+        sampled_values = norm(loc=self.latent_component_samples.values, scale=sd_o).rvs(
             size=self.latent_component_samples.values.shape
         )
 

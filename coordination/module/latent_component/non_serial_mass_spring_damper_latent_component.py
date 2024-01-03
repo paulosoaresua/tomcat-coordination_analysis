@@ -347,13 +347,13 @@ def log_prob(
     blended_mean = (prev_others - prev_same) * c + prev_same
 
     # Decide which dimension(s) to blend
-    blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(0, 1) + \
-                   ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
+    # blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(0, 1) + \
+    #                ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
     #
     # # We don't blend velocity
-    # POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]
-    # VELOCITY_COL = ptt.as_tensor(np.array([[0, 1]])).repeat(N, 0)[..., None]
-    # blended_mean = blended_mean * POSITION_COL + prev_same * VELOCITY_COL
+    POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]
+    VELOCITY_COL = ptt.as_tensor(np.array([[0, 1]])).repeat(N, 0)[..., None]
+    blended_mean = blended_mean * POSITION_COL + prev_same * VELOCITY_COL
 
     # Match the dimensions of the standard deviation with that of the blended mean
     sd = sigma[:, :, None]
