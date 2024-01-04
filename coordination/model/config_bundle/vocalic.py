@@ -90,7 +90,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     share_mean_a0_across_subjects = False
     share_mean_a0_across_dimensions = False
     share_sd_a_across_subjects = True
-    share_sd_a_across_dimensions = False
+    share_sd_a_across_dimensions = True
     share_sd_o_across_subjects = True
     share_sd_o_across_dimensions = True
 

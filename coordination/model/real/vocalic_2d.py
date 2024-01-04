@@ -25,9 +25,9 @@ class VocalicModel(ModelTemplate):
     """
 
     def __init__(
-        self,
-        config_bundle: Vocalic2DConfigBundle,
-        pymc_model: Optional[pm.Model] = None,
+            self,
+            config_bundle: Vocalic2DConfigBundle,
+            pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a vocalic model.
@@ -66,23 +66,24 @@ class VocalicModel(ModelTemplate):
             fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
         )
 
-        self.transformation = Sequential(
+        self.mlp = MLP(
+            uuid="state_space_to_speech_vocalics_mlp",
+            pymc_model=pymc_model,
+            output_dimension_size=config_bundle.num_vocalic_features,
+            mean_w0=config_bundle.mean_w0,
+            sd_w0=config_bundle.sd_w0,
+            num_hidden_layers=config_bundle.num_hidden_layers,
+            hidden_dimension_size=config_bundle.hidden_dimension_size,
+            activation=config_bundle.activation,
+            axis=0,  # Vocalic features axis
+        )
+        transformation = Sequential(
             child_transformations=[
                 DimensionReduction(
                     keep_dimensions=[0],  # position,
                     axis=0
                 ),
-                MLP(
-                    uuid="state_space_to_speech_vocalics_mlp",
-                    pymc_model=pymc_model,
-                    output_dimension_size=config_bundle.num_vocalic_features,
-                    mean_w0=config_bundle.mean_w0,
-                    sd_w0=config_bundle.sd_w0,
-                    num_hidden_layers=config_bundle.num_hidden_layers,
-                    hidden_dimension_size=config_bundle.hidden_dimension_size,
-                    activation=config_bundle.activation,
-                    axis=0,  # Vocalic features axis
-                )
+                self.mlp
             ]
         )
 
@@ -103,7 +104,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=pymc_model,
             latent_component=self.state_space,
             observations=[self.observation],
-            transformations=[self.transformation],
+            transformations=[transformation],
         )
 
         super().__init__(
@@ -133,8 +134,8 @@ class VocalicModel(ModelTemplate):
         self.state_space.parameters.sd_a.value = self.config_bundle.sd_a
         self.observation.parameters.sd_o.value = self.config_bundle.sd_o
 
-        if self.transformation:
-            for i, w in enumerate(self.transformation.parameters.weights):
+        if self.mlp is not None:
+            for i, w in enumerate(self.mlp.parameters.weights):
                 w.value = self.config_bundle.weights[i]
 
     def prepare_for_inference(self):
