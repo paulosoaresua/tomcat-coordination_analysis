@@ -13,6 +13,8 @@ from coordination.module.latent_component.serial_2d_gaussian_latent_component im
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
 from coordination.module.transformation.mlp import MLP
+from coordination.module.transformation.dimension_reduction import DimensionReduction
+from coordination.module.transformation.sequential import Sequential
 
 
 class VocalicModel(ModelTemplate):
@@ -64,19 +66,24 @@ class VocalicModel(ModelTemplate):
             fix_sampled_subject_sequence=config_bundle.fix_sampled_subject_sequence,
         )
 
-        # Transform latent samples before passing to the observation module to account for
-        # non-linearity and/or different dimensions between the latent component and
-        # associated observation
-        self.transformation = MLP(
-            uuid="state_space_to_speech_vocalics_mlp",
-            pymc_model=pymc_model,
-            output_dimension_size=config_bundle.num_vocalic_features,
-            mean_w0=config_bundle.mean_w0,
-            sd_w0=config_bundle.sd_w0,
-            num_hidden_layers=config_bundle.num_hidden_layers,
-            hidden_dimension_size=config_bundle.hidden_dimension_size,
-            activation=config_bundle.activation,
-            axis=0,  # Vocalic features axis
+        self.transformation = Sequential(
+            child_transformations=[
+                DimensionReduction(
+                    keep_dimensions=[0],  # position,
+                    axis=0
+                ),
+                MLP(
+                    uuid="state_space_to_speech_vocalics_mlp",
+                    pymc_model=pymc_model,
+                    output_dimension_size=config_bundle.num_vocalic_features,
+                    mean_w0=config_bundle.mean_w0,
+                    sd_w0=config_bundle.sd_w0,
+                    num_hidden_layers=config_bundle.num_hidden_layers,
+                    hidden_dimension_size=config_bundle.hidden_dimension_size,
+                    activation=config_bundle.activation,
+                    axis=0,  # Vocalic features axis
+                )
+            ]
         )
 
         self.observation = SerialGaussianObservation(

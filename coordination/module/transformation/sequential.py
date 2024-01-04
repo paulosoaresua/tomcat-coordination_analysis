@@ -1,40 +1,36 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import List, Optional
 
-import numpy as np
 import pymc as pm
 
 from coordination.module.module import ModuleSamples
 from coordination.module.transformation.transformation import Transformation
 
 
-class DimensionReduction(Transformation):
+class Sequential(Transformation):
     """
-    This class represents a transformation that generates an output from selected dimensions of
-    the input.
+    This class represents a transformation that executes other transformations in a sequential
+    manner.
     """
 
     def __init__(
         self,
-        keep_dimensions: List[int],
+        child_transformations: List[Transformation],
         input_samples: Optional[ModuleSamples] = None,
         input_random_variable: Optional[pm.Distribution] = None,
         output_random_variable: Optional[pm.Distribution] = None,
-        axis: int = 0,
     ):
         """
-        Creates a dimension reduction transformation.
+        Creates a sequential transformation.
 
-        @param keep_dimensions: list of dimensions to keep in the output.
+        @param child_transformations: transformations to be executed in sequence.
         @param input_samples: samples transformed in a call to draw_samples. This variable must be
             set before such a call.
         @param input_random_variable: random variable to be transformed in a call to
             create_random_variables. This variable must be set before such a call.
         @param output_random_variable: transformed random variable. If set, not transformation is
             performed in a call to create_random_variables.
-        @param axis: axis to apply the transformation.
         """
         super().__init__(
             uuid=None,
@@ -44,14 +40,14 @@ class DimensionReduction(Transformation):
             input_random_variable=input_random_variable,
             output_random_variable=output_random_variable,
             observed_values=None,
-            axis=axis,
+            axis=None,
         )
 
-        self.keep_dimensions = keep_dimensions
+        self.child_transformations = child_transformations
 
     def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:
         """
-        Transforms input samples by picking selected dimensions.
+        Transforms input samples by applying different transformations in sequence.
 
         @param seed: random seed for reproducibility.
         @param num_series: how many series of samples to generate.
@@ -59,27 +55,31 @@ class DimensionReduction(Transformation):
         """
         super().draw_samples(seed, num_series)
 
-        transformed_samples_values = []
-        for i, sampled_series in enumerate(self.input_samples.values):
-            transformed_samples_values.append(
-                np.take(sampled_series, self.keep_dimensions, axis=self.axis)
-            )
+        transformed_samples = None
+        self.child_transformations[0].input_samples = self.input_samples
+        for transformation in self.child_transformations:
+            if transformed_samples is not None:
+                transformation.input_samples = transformed_samples
 
-        transformed_samples = deepcopy(self.input_samples)
-        transformed_samples.values = (
-            np.array(transformed_samples_values)
-            if isinstance(self.input_samples.values, np.ndarray)
-            else transformed_samples_values
-        )
+            transformed_samples = transformation.draw_samples(seed, num_series)
+
         return transformed_samples
 
     def create_random_variables(self):
         """
-        Creates an output random variable by selecting the chosen dimensions in the input random
-        variable.
+        Creates an output random variable by applying different transformations in sequence.
         """
         super().create_random_variables()
 
-        self.output_random_variable = self.input_random_variable.take(
-            self.keep_dimensions, axis=self.axis
-        )
+        transformed_random_variable = None
+        self.child_transformations[0].input_random_variable = self.input_random_variable
+        for transformation in self.child_transformations:
+            if transformed_random_variable is not None:
+                transformation.input_random_variable = transformed_random_variable
+
+            transformation.create_random_variables()
+            transformed_random_variable = transformation.output_random_variable
+
+        self.output_random_variable = self.child_transformations[
+            -1
+        ].output_random_variable

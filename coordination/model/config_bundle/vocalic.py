@@ -121,6 +121,6 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     hidden_dimension_size = 0
     activation = "linear"
     # Only position is used
-    weights = [np.vstack([np.ones(4), np.zeros(4)])]
+    weights = [np.ones((1, 4))]  # From position to 4 vocalic features
     mean_w0 = 0.0
     sd_w0 = 1.0
