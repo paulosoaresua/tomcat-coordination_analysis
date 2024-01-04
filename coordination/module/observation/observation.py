@@ -7,8 +7,9 @@ import numpy as np
 import pymc as pm
 
 from coordination.common.types import TensorTypes
+from coordination.module.latent_component.latent_component import \
+    LatentComponentSamples
 from coordination.module.module import Module, ModuleParameters, ModuleSamples
-from coordination.module.latent_component.latent_component import LatentComponentSamples
 
 
 class Observation(ABC, Module):

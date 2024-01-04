@@ -107,7 +107,9 @@ class SpringModel(ModelTemplate):
             uuid="group",
             pymc_model=pymc_model,
             latent_component=self.state_space,
-            transformations=[self.transformation] if self.transformation is not None else None,
+            transformations=[self.transformation]
+            if self.transformation is not None
+            else None,
             observations=[self.observation],
         )
 

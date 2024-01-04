@@ -58,7 +58,7 @@ class FNIRSModel(ModelTemplate):
             share_sd_a_across_subjects=config_bundle.share_sd_a_across_subjects,
             share_mean_a0_across_dimensions=config_bundle.share_mean_a0_across_dimensions,
             share_sd_a_across_dimensions=config_bundle.share_sd_a_across_dimensions,
-            sampling_relative_frequency=config_bundle.sampling_relative_frequency
+            sampling_relative_frequency=config_bundle.sampling_relative_frequency,
         )
 
         # Transform latent samples before passing to the observation module to account for

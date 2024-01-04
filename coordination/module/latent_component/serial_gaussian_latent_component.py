@@ -19,9 +19,10 @@ from coordination.module.constants import (DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS,
                                            DEFAULT_SUBJECT_REPETITION_FLAG)
-from coordination.module.latent_component.gaussian_latent_component import (
-    GaussianLatentComponent)
-from coordination.module.latent_component.latent_component import LatentComponentSamples
+from coordination.module.latent_component.gaussian_latent_component import \
+    GaussianLatentComponent
+from coordination.module.latent_component.latent_component import \
+    LatentComponentSamples
 from coordination.module.module import ModuleSamples
 
 

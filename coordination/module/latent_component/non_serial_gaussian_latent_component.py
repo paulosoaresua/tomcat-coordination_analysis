@@ -17,9 +17,10 @@ from coordination.module.constants import (DEFAULT_LATENT_DIMENSION_SIZE,
                                            DEFAULT_SELF_DEPENDENCY,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS)
-from coordination.module.latent_component.gaussian_latent_component import (
-    GaussianLatentComponent)
-from coordination.module.latent_component.latent_component import LatentComponentSamples
+from coordination.module.latent_component.gaussian_latent_component import \
+    GaussianLatentComponent
+from coordination.module.latent_component.latent_component import \
+    LatentComponentSamples
 from coordination.module.module import ModuleSamples
 
 

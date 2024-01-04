@@ -43,9 +43,15 @@ def plot_series(
         if value_bounds is not None and value_bounds[1] is not None:
             upper_band = np.minimum(upper_band, value_bounds[1])
 
-        ax.fill_between(x, lower_band, upper_band, color=kwargs.pop("color", None), alpha=0.5)
+        ax.fill_between(
+            x, lower_band, upper_band, color=kwargs.pop("color", None), alpha=0.5
+        )
 
-    if value_bounds is not None and value_bounds[0] is not None and value_bounds[1] is not None:
+    if (
+        value_bounds is not None
+        and value_bounds[0] is not None
+        and value_bounds[1] is not None
+    ):
         ax.set_ylim(value_bounds)
 
     ax.plot(

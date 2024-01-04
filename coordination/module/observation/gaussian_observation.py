@@ -8,7 +8,8 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
-from coordination.module.latent_component.latent_component import LatentComponentSamples
+from coordination.module.latent_component.latent_component import \
+    LatentComponentSamples
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,

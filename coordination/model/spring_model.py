@@ -5,7 +5,7 @@ import numpy as np
 import pymc as pm
 
 from coordination.module.coordination_old import (CoordinationSamples,
-                                              SigmoidGaussianCoordination)
+                                                  SigmoidGaussianCoordination)
 from coordination.module.non_serial_component import NonSerialComponentSamples
 from coordination.module.non_serial_mass_spring_damper_component import \
     NonSerialMassSpringDamperComponent

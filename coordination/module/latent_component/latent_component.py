@@ -143,6 +143,7 @@ class LatentComponent(ABC, Module):
                 name=self.dimension_axis_name, values=self.dimension_coordinates
             )
 
+
 ###################################################################################################
 # AUXILIARY CLASSES
 ###################################################################################################

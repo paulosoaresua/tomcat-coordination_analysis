@@ -20,7 +20,6 @@ class Transformation(ABC, Module):
         uuid: str,
         pymc_model: pm.Model,
         parameters: ModuleParameters,
-        output_dimension_size: int,
         input_samples: Optional[ModuleSamples] = None,
         input_random_variable: Optional[pm.Distribution] = None,
         output_random_variable: Optional[pm.Distribution] = None,
@@ -33,16 +32,15 @@ class Transformation(ABC, Module):
         @param uuid: string uniquely identifying the transformation in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param parameters: parameters of the module.
-        @param output_dimension_size: the number of dimensions in the transformed object.
         @param input_samples: samples transformed in a call to draw_samples. This variable must be
             set before such a call.
         @param input_random_variable: random variable to be transformed in a call to
             create_random_variables. This variable must be set before such a call.
         @param output_random_variable: transformed random variable. If set, not transformation is
             performed in a call to create_random_variables.
-        @param axis: axis to apply the transformation.
         @param observed_values: observations for the weights random variable. If a value
             is set, the variable is not latent anymore.
+        @param axis: axis to apply the transformation.
         """
         super().__init__(
             uuid=uuid,
@@ -51,7 +49,6 @@ class Transformation(ABC, Module):
             observed_values=observed_values,
         )
 
-        self.output_dimension_size = output_dimension_size
         self.input_samples = input_samples
         self.input_random_variable = input_random_variable
         self.output_random_variable = output_random_variable

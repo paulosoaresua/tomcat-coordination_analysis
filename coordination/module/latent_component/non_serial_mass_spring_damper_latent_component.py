@@ -30,31 +30,31 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
-            mass: np.ndarray = DEFAULT_MASS,
-            dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
-            dt: float = DEFAULT_DT,
-            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            coordination_samples: Optional[ModuleSamples] = None,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            mean_a0_random_variable: Optional[pm.Distribution] = None,
-            sd_a_random_variable: Optional[pm.Distribution] = None,
-            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            observed_values: Optional[TensorTypes] = None,
-            blend_position: bool = True,
-            blend_speed: bool = True,
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
+        mass: np.ndarray = DEFAULT_MASS,
+        dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
+        dt: float = DEFAULT_DT,
+        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
+        blend_position: bool = True,
+        blend_speed: bool = True,
     ):
         """
         Creates a non-serial mass-spring-damper latent component.
@@ -177,11 +177,11 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
         self.F = np.concatenate(F, axis=0)
 
     def _draw_from_system_dynamics(
-            self,
-            sampled_coordination: np.ndarray,
-            time_steps_in_coordination_scale: np.ndarray,
-            mean_a0: np.ndarray,
-            sd_a: np.ndarray,
+        self,
+        sampled_coordination: np.ndarray,
+        time_steps_in_coordination_scale: np.ndarray,
+        mean_a0: np.ndarray,
+        sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values from a mass-spring-damper system dynamics using the fundamental matrices.
@@ -224,7 +224,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
                 # n x 1 x 1
                 c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
                     :, None, None
-                    ]
+                ]
 
                 # Bring the states to the present according to each component's dynamics.
                 transformed_values = np.einsum(
@@ -287,14 +287,14 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
 
 def log_prob(
-        sample: ptt.TensorVariable,
-        initial_mean: ptt.TensorVariable,
-        sigma: ptt.TensorVariable,
-        coordination: ptt.TensorVariable,
-        self_dependent: ptt.TensorConstant,
-        F: ptt.TensorConstant,
-        B1: ptt.TensorConstant,
-        B2: ptt.TensorConstant,
+    sample: ptt.TensorVariable,
+    initial_mean: ptt.TensorVariable,
+    sigma: ptt.TensorVariable,
+    coordination: ptt.TensorVariable,
+    self_dependent: ptt.TensorConstant,
+    F: ptt.TensorConstant,
+    B1: ptt.TensorConstant,
+    B2: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -334,8 +334,8 @@ def log_prob(
     # component's posterior.
     transformed_sample = ptt.batched_tensordot(F, sample, axes=[(2,), (1,)])
     prev_others = ptt.tensordot(sum_matrix_others, transformed_sample, axes=(1, 0))[
-                  ..., :-1
-                  ]
+        ..., :-1
+    ]
 
     # The component's value for a subject depends on its previous value for the same subject.
     prev_same = transformed_sample[..., :-1]  # N x d x t-1
@@ -347,8 +347,9 @@ def log_prob(
     blended_mean = (prev_others - prev_same) * c + prev_same
 
     # Decide which dimension(s) to blend
-    blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(0, 1) + \
-                   ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
+    blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(
+        0, 1
+    ) + ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
 
     # # We don't blend velocity
     # POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]

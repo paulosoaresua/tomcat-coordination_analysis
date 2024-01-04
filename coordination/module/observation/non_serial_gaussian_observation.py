@@ -28,22 +28,22 @@ class NonSerialGaussianObservation(GaussianObservation):
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
-            sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
-            share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
-            dimension_names: Optional[List[str]] = None,
-            subject_names: Optional[List[str]] = None,
-            observation_random_variable: Optional[pm.Distribution] = None,
-            latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            sd_o_random_variable: Optional[pm.Distribution] = None,
-            observed_values: Optional[TensorTypes] = None,
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
+        sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
+        share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
+        dimension_names: Optional[List[str]] = None,
+        subject_names: Optional[List[str]] = None,
+        observation_random_variable: Optional[pm.Distribution] = None,
+        latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        sd_o_random_variable: Optional[pm.Distribution] = None,
+        observed_values: Optional[TensorTypes] = None,
     ):
         """
         Creates a non-serial Gaussian observation.
@@ -123,14 +123,18 @@ class NonSerialGaussianObservation(GaussianObservation):
             self.parameters.sd_o.value,
             num_rows=dim_sd_o_subjects,
             num_cols=dim_sd_o_dimensions,
-        )[None, :, :, None]  # broadcast across series and time
+        )[
+            None, :, :, None
+        ]  # broadcast across series and time
 
         sampled_values = norm(loc=self.latent_component_samples.values, scale=sd_o).rvs(
             size=self.latent_component_samples.values.shape
         )
 
-        return ObservationSamples(sampled_values,
-                                  self.latent_component_samples.time_steps_in_coordination_scale)
+        return ObservationSamples(
+            sampled_values,
+            self.latent_component_samples.time_steps_in_coordination_scale,
+        )
 
     def create_random_variables(self):
         """

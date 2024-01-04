@@ -60,7 +60,8 @@ class ConversationModel(ModelTemplate):
             num_subjects=config_bundle.num_subjects,
             # angular_frequency^2 = spring_constant / mass
             spring_constant=adjust_dimensions(
-                config_bundle.squared_angular_frequency, num_rows=config_bundle.num_subjects
+                config_bundle.squared_angular_frequency,
+                num_rows=config_bundle.num_subjects,
             ),
             mass=np.ones(config_bundle.num_subjects),
             dampening_coefficient=adjust_dimensions(
