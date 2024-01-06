@@ -54,6 +54,8 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
         time_steps_in_coordination_scale: Optional[np.array] = None,
         observed_values: Optional[TensorTypes] = None,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a non-serial latent component.
@@ -96,6 +98,12 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             each index in the latent component scale.
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
+        @param mean_a0: initial value of the latent component. It needs to be given for sampling
+            but not for inference if it needs to be inferred. If not provided now, it can be set
+            later via the module parameters variable.
+        @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
         super().__init__(
             uuid=uuid,
@@ -118,6 +126,8 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             sd_a_random_variable=sd_a_random_variable,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             observed_values=observed_values,
+            mean_a0=mean_a0,
+            sd_a=sd_a,
         )
 
         self.subject_names = subject_names

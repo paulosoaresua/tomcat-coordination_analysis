@@ -36,6 +36,8 @@ class SigmoidGaussianCoordination(Coordination):
         mean_uc0_random_variable: Optional[pm.Distribution] = None,
         sd_uc_random_variable: Optional[pm.Distribution] = None,
         unbounded_coordination_observed_values: Optional[TensorTypes] = None,
+        mean_uc0: Optional[float] = None,
+        sd_uc: Optional[float] = None,
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -55,6 +57,12 @@ class SigmoidGaussianCoordination(Coordination):
             create_random_variables. If not set, it will be created in such a call.
         @param unbounded_coordination_observed_values: observations for the unbounded coordination
             random variable. If a value is set, the variable is not latent anymore.
+        @param mean_uc0: initial value of the unbounded coordination. It needs to be given for
+            sampling but not for inference if it needs to be inferred. If not provided now, it can
+            be set later via the module parameters variable.
+        @param sd_uc: standard deviation of the unbounded coordination Gaussian random walk. It
+            needs to be given for sampling but not for inference if it needs to be inferred. If
+            not provided now, it can be set later via the module parameters variable.
         """
         super().__init__(
             pymc_model=pymc_model,
@@ -68,6 +76,8 @@ class SigmoidGaussianCoordination(Coordination):
             coordination_random_variable=coordination_random_variable,
             observed_values=unbounded_coordination_observed_values,
         )
+        self.parameters.mean_uc0.value = mean_uc0
+        self.parameters.sd_uc.value = sd_uc
 
         self.mean_uc0_random_variable = mean_uc0_random_variable
         self.sd_uc_random_variable = sd_uc_random_variable

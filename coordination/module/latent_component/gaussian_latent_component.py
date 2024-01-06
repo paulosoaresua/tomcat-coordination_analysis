@@ -45,6 +45,8 @@ class GaussianLatentComponent(LatentComponent, ABC):
         sd_a_random_variable: Optional[pm.Distribution] = None,
         time_steps_in_coordination_scale: Optional[np.array] = None,
         observed_values: Optional[TensorTypes] = None,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a latent component module.
@@ -82,6 +84,12 @@ class GaussianLatentComponent(LatentComponent, ABC):
             each index in the latent component scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param mean_a0: initial value of the latent component. It needs to be given for sampling
+            but not for inference if it needs to be inferred. If not provided now, it can be set
+            later via the module parameters variable.
+        @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
 
         super().__init__(
@@ -103,6 +111,8 @@ class GaussianLatentComponent(LatentComponent, ABC):
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             observed_values=observed_values,
         )
+        self.parameters.mean_a0.value = mean_a0
+        self.parameters.sd_a.value = sd_a
 
         self.num_subjects = num_subjects
         self.dimension_size = dimension_size

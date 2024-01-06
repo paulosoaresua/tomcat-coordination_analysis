@@ -2,9 +2,8 @@ import numpy as np
 
 
 def normalize_serialized_data_per_subject_and_feature(
-        data: np.ndarray,
-        subject_indices: np.ndarray,
-        num_subjects: int) -> np.ndarray:
+    data: np.ndarray, subject_indices: np.ndarray, num_subjects: int
+) -> np.ndarray:
     """
     Normalize data (feature x time) to have mean 0 and standard deviation 1 across time. The
     normalization is done individually per subject and feature.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import pymc as pm
@@ -42,6 +42,7 @@ class GaussianObservation(Observation, ABC):
         observation_random_variable: Optional[pm.Distribution] = None,
         sd_o_random_variable: Optional[pm.Distribution] = None,
         observed_values: Optional[TensorTypes] = None,
+        sd_o: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -68,6 +69,9 @@ class GaussianObservation(Observation, ABC):
             create_random_variables. If not set, it will be created in such a call.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param sd_o: standard deviation that represents the noise in the observations. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
 
         # No need to set coordination terms because a Gaussian observation only depends on the
@@ -84,6 +88,7 @@ class GaussianObservation(Observation, ABC):
             latent_component_random_variable=latent_component_random_variable,
             observed_values=observed_values,
         )
+        self.parameters.sd_o.value = sd_o
 
         self.normalization = normalization
         self.share_sd_o_across_subjects = share_sd_o_across_subjects
@@ -155,12 +160,17 @@ class GaussianObservation(Observation, ABC):
 
     def _get_normalized_observation(self) -> np.ndarray:
         if self.normalization is None:
+            print(f"Observations ({self.uuid}) will not be normalized.")
             return self.observed_values
 
         if self.normalization == NORMALIZATION_PER_FEATURE:
+            print(f"Observations ({self.uuid}) will be normalized per feature.")
             return self._normalize_observation_per_feature()
 
         if self.normalization == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
+            print(
+                f"Observations ({self.uuid}) will be normalized per subject and feature."
+            )
             return self._normalize_observation_per_subject_and_feature()
 
         raise ValueError(f"Normalization ({self.normalization}) is invalid.")

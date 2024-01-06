@@ -56,6 +56,8 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         prev_time_same_subject: Optional[np.ndarray] = None,
         prev_time_diff_subject: Optional[np.ndarray] = None,
         observed_values: Optional[TensorTypes] = None,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a serial 2D Gaussian latent component.
@@ -108,6 +110,12 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             set before a call to update_pymc_model.
         @param observed_values: observations for the serial latent component random variable. If
             a value is set, the variable is not latent anymore.
+        @param mean_a0: initial value of the latent component. It needs to be given for sampling
+            but not for inference if it needs to be inferred. If not provided now, it can be set
+            later via the module parameters variable.
+        @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
         super().__init__(
             uuid=uuid,
@@ -136,6 +144,8 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             subject_indices=subject_indices,
             prev_time_same_subject=prev_time_same_subject,
             prev_time_diff_subject=prev_time_diff_subject,
+            mean_a0=mean_a0,
+            sd_a=sd_a,
         )
 
     def _draw_from_system_dynamics(
@@ -245,7 +255,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         Gets a reference to a random function for prior predictive checks.
         Disabled in this module as it is only used for synthetic data generation.
         """
-        return None
+        return random
 
 
 ###################################################################################################
@@ -330,3 +340,97 @@ def log_prob(
     ).sum()
 
     return total_logp
+
+
+def random(
+    initial_mean: np.ndarray,
+    sigma: np.ndarray,
+    coordination: np.ndarray,
+    prev_time_same_subject: np.ndarray,
+    prev_time_diff_subject: np.ndarray,
+    prev_same_subject_mask: np.ndarray,
+    prev_diff_subject_mask: np.ndarray,
+    self_dependent: bool,
+    rng: Optional[np.random.Generator] = None,
+    size: Optional[Tuple[int]] = None,
+) -> np.ndarray:
+    """
+    Generates samples from of a serial latent component for prior predictive checks.
+
+    @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
+        associated with the subject at that time. The initial mean is only used the first time the
+        user speaks, but we repeat the values here over time for uniform vector operations (e.g.,
+        we can multiply this with other tensors) and we fix the behavior with mask tensors.
+    @param sigma: (dimension x time) a series of standard deviations. At each time the standard
+        deviation is associated with the subject at that time.
+    @param coordination: (time) a series of coordination values.
+    @param prev_time_same_subject: (time) a series of time steps pointing to the previous time step
+        associated with the same subject. For instance, prev_time_same_subject[t] points to the
+        most recent time step where the subject at time t had an observation. If there's no such a
+        time, prev_time_same_subject[t] will be -1.
+    @param prev_time_diff_subject: (time)  a series of time steps pointing to the previous time
+        step associated with a different subject. For instance, prev_time_diff_subject[t] points
+        to the most recent time step where a different subject than the one at time t had an
+        observation. If there's no such a time, prev_time_diff_subject[t] will be -1.
+    @param prev_same_subject_mask: (time) a binary mask with 0 whenever prev_time_same_subject
+        is -1.
+    @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
+        is -1.
+    @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param rng: random number generator.
+    @param size: size of the sample.
+
+    @return: a serial latent component sample.
+    """
+
+    # TODO: Unify this with the class sampling method.
+
+    T = coordination.shape[-1]
+
+    noise = rng.normal(loc=0, scale=1, size=size) * sigma
+
+    sample = np.zeros_like(noise)
+
+    mean_0 = initial_mean if initial_mean.ndim == 1 else initial_mean[..., 0]
+    sd_0 = sigma if sigma.ndim == 1 else sigma[..., 0]
+
+    sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
+
+    for t in np.arange(1, T):
+        prev_other = sample[..., prev_time_diff_subject[t]]  # d
+
+        # Previous sample from the same individual
+        if self_dependent and prev_same_subject_mask[t] == 1:
+            prev_same = sample[..., prev_time_same_subject[t]]
+        else:
+            # When there's no self-dependency, the transition distribution is a blending between
+            # the previous value from another individual, and a fixed mean.
+            if initial_mean.shape[1] == 1:
+                prev_same = initial_mean[..., 0]
+            else:
+                prev_same = initial_mean[..., t]
+
+        c = coordination[t]
+        dt_diff = 1
+        F = np.array([[1, dt_diff], [0, 1 - c]])
+        U = np.array(
+            [
+                [0, 0],  # position of "b" does not influence position of "a"
+                [
+                    0,
+                    c,
+                ],  # speed of "b" influences the speed of "a" when there's coordination.
+            ]
+        )
+
+        blended_mean = np.dot(F, prev_same) + np.dot(U, prev_other)
+
+        if sigma.shape[1] == 1:
+            # Parameter sharing across subjects
+            transition_sample = rng.normal(loc=blended_mean, scale=sigma[..., 0])
+        else:
+            transition_sample = rng.normal(loc=blended_mean, scale=sigma[..., t])
+
+        sample[..., t] = transition_sample
+
+    return sample + noise

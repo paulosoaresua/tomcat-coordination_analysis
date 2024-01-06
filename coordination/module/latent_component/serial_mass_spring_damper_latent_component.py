@@ -62,6 +62,8 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
         observed_values: Optional[TensorTypes] = None,
         blend_position: bool = True,
         blend_speed: bool = True,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a serial mass-spring-damper latent component.
@@ -124,6 +126,12 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
             a value is set, the variable is not latent anymore.
         @param blend_position: whether to blend the position dimension.
         @param blend_speed: whether to blend the speed dimension.
+        @param mean_a0: initial value of the latent component. It needs to be given for sampling
+            but not for inference if it needs to be inferred. If not provided now, it can be set
+            later via the module parameters variable.
+        @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
         super().__init__(
             uuid=uuid,
@@ -152,6 +160,8 @@ class SerialMassSpringDamperLatentComponent(SerialGaussianLatentComponent):
             subject_indices=subject_indices,
             prev_time_same_subject=prev_time_same_subject,
             prev_time_diff_subject=prev_time_diff_subject,
+            mean_a0=mean_a0,
+            sd_a=sd_a,
         )
 
         if spring_constant.ndim != 1:

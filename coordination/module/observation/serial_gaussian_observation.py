@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import pymc as pm
 from scipy.stats import norm
 
+from coordination.common.normalization import (
+    normalize_serialized_data_per_feature,
+    normalize_serialized_data_per_subject_and_feature)
 from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
@@ -19,8 +22,6 @@ from coordination.module.latent_component.serial_gaussian_latent_component impor
 from coordination.module.observation.gaussian_observation import \
     GaussianObservation
 from coordination.module.observation.observation import ObservationSamples
-from coordination.common.normalization import (normalize_serialized_data_per_feature,
-                                               normalize_serialized_data_per_subject_and_feature)
 
 
 class SerialGaussianObservation(GaussianObservation):
@@ -30,23 +31,24 @@ class SerialGaussianObservation(GaussianObservation):
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
-            sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
-            share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
-            dimension_names: Optional[List[str]] = None,
-            observation_random_variable: Optional[pm.Distribution] = None,
-            latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            sd_o_random_variable: Optional[pm.Distribution] = None,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            subject_indices: Optional[np.ndarray] = None,
-            observed_values: Optional[TensorTypes] = None,
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
+        sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
+        share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
+        dimension_names: Optional[List[str]] = None,
+        observation_random_variable: Optional[pm.Distribution] = None,
+        latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        sd_o_random_variable: Optional[pm.Distribution] = None,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        subject_indices: Optional[np.ndarray] = None,
+        observed_values: Optional[TensorTypes] = None,
+        sd_o: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a serial Gaussian observation.
@@ -81,6 +83,9 @@ class SerialGaussianObservation(GaussianObservation):
             indices with an associated subject.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param sd_o: standard deviation that represents the noise in the observations. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
         super().__init__(
             uuid=uuid,
@@ -97,13 +102,14 @@ class SerialGaussianObservation(GaussianObservation):
             latent_component_random_variable=latent_component_random_variable,
             sd_o_random_variable=sd_o_random_variable,
             observed_values=observed_values,
+            sd_o=sd_o,
         )
 
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.subject_indices = subject_indices
 
     def draw_samples(
-            self, seed: Optional[int], num_series: int
+        self, seed: Optional[int], num_series: int
     ) -> SerialGaussianObservationSamples:
         """
         Draws observation samples using ancestral sampling.
@@ -211,7 +217,8 @@ class SerialGaussianObservation(GaussianObservation):
         return normalize_serialized_data_per_subject_and_feature(
             data=self.observed_values,
             subject_indices=self.subject_indices,
-            num_subjects=self.num_subjects)
+            num_subjects=self.num_subjects,
+        )
 
     def _normalize_observation_per_feature(self) -> np.ndarray:
         """
@@ -231,10 +238,10 @@ class SerialGaussianObservation(GaussianObservation):
 
 class SerialGaussianObservationSamples(ObservationSamples):
     def __init__(
-            self,
-            values: List[np.ndarray],
-            time_steps_in_coordination_scale: List[np.ndarray],
-            subject_indices: List[np.ndarray],
+        self,
+        values: List[np.ndarray],
+        time_steps_in_coordination_scale: List[np.ndarray],
+        subject_indices: List[np.ndarray],
     ):
         """
         Creates an object to store samples and associated subjects in time.

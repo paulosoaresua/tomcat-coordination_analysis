@@ -46,6 +46,7 @@ class MLP(Transformation):
         output_random_variable: Optional[pm.Distribution] = None,
         weight_random_variables: Optional[List[pm.Distribution]] = None,
         axis: int = 0,
+        weights: Optional[List[np.ndarray]] = None,
     ):
         """
         Creates an MLP.
@@ -81,6 +82,9 @@ class MLP(Transformation):
             each layer of the neural network to be used in a call to create_random_variables. If
             not set, they will be created in such a call.
         @param axis: axis to apply the transformation.
+        @param weights: values for the weights of the MLP. It needs to be given for sampling but
+            not for inference if it needs to be inferred. If not provided now, it can be set later
+            via the module parameters variable.
         """
         super().__init__(
             uuid=uuid,
@@ -92,6 +96,8 @@ class MLP(Transformation):
             observed_values=None,
             axis=axis,
         )
+        for i, w in enumerate(self.parameters.weights):
+            w.value = weights[i]
 
         if num_hidden_layers < 0:
             raise ValueError(

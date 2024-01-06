@@ -44,6 +44,7 @@ class NonSerialGaussianObservation(GaussianObservation):
         latent_component_random_variable: Optional[pm.Distribution] = None,
         sd_o_random_variable: Optional[pm.Distribution] = None,
         observed_values: Optional[TensorTypes] = None,
+        sd_o: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a non-serial Gaussian observation.
@@ -72,6 +73,9 @@ class NonSerialGaussianObservation(GaussianObservation):
             create_random_variables. If not set, it will be created in such a call.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param sd_o: standard deviation that represents the noise in the observations. It needs to
+            be given for sampling but not for inference if it needs to be inferred. If not
+            provided now, it can be set later via the module parameters variable.
         """
         super().__init__(
             uuid=uuid,
@@ -88,6 +92,7 @@ class NonSerialGaussianObservation(GaussianObservation):
             latent_component_random_variable=latent_component_random_variable,
             sd_o_random_variable=sd_o_random_variable,
             observed_values=observed_values,
+            sd_o=sd_o,
         )
 
         self.subject_names = subject_names

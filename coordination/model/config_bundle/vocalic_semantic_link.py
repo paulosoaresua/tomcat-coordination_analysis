@@ -54,11 +54,12 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
     coordination_samples: np.ndarray = None
 
     # Evidence and metadata filled before inference.
-    time_steps_in_coordination_scale: np.ndarray = None
+    vocalics_time_steps_in_coordination_scale: np.ndarray = None
     subject_indices: np.ndarray = None
     prev_time_same_subject: np.ndarray = None
     prev_time_diff_subject: np.ndarray = None
-    observed_values: np.ndarray = None
+    observed_vocalic_values: np.ndarray = None
+    semantic_link_time_steps_in_coordination_scale: np.ndarray = None
 
     # To transform a high-dimension state space to a lower dimension observation in case we
     # want to observe position only.
@@ -115,11 +116,12 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
     coordination_samples: np.ndarray = None
 
     # Evidence and metadata filled before inference.
-    time_steps_in_coordination_scale: np.ndarray = None
+    vocalics_time_steps_in_coordination_scale: np.ndarray = None
     subject_indices: np.ndarray = None
     prev_time_same_subject: np.ndarray = None
     prev_time_diff_subject: np.ndarray = None
-    observed_values: np.ndarray = None
+    observed_vocalic_values: np.ndarray = None
+    semantic_link_time_steps_in_coordination_scale: np.ndarray = None
 
     # To transform a high-dimension state space to a lower dimension observation in case we
     # want to observe position only.

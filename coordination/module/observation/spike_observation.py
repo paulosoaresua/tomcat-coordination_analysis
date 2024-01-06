@@ -38,6 +38,7 @@ class SpikeObservation(Observation):
         sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
         time_steps_in_coordination_scale: Optional[np.array] = None,
         observed_values: Optional[TensorTypes] = None,
+        p: Optional[float] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -67,6 +68,9 @@ class SpikeObservation(Observation):
             each index in the observation scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param p: parameter p of the Bernoulli distribution of the module. It needs to be given
+            for sampling but not for inference if it needs to be inferred. If not provided now,
+            it can be set later via the module parameters variable.
         """
 
         # No need to set latent component terms because a spike observation only depends on the
@@ -83,6 +87,7 @@ class SpikeObservation(Observation):
             observation_random_variable=observation_random_variable,
             observed_values=observed_values,
         )
+        self.parameters.p.value = p
 
         self.p_random_variable = p_random_variable
         self.sampling_time_scale_density = sampling_time_scale_density
