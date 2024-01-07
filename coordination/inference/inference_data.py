@@ -152,7 +152,7 @@ class InferenceData:
                 )
         else:
             raise ValueError(
-                f"Inference modee ({inference_mode}) not found in the trace."
+                f"Inference mode ({inference_mode}) not found in the trace."
             )
 
     def generate_convergence_summary(self) -> pd.DataFrame:
