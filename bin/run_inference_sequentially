@@ -16,7 +16,6 @@ import pandas as pd
 
 from coordination.callback.progress_saver_callback import ProgressSaverCallback
 from coordination.common.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_INFERENCE_RESULTS_DIR,
                                            DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
@@ -26,6 +25,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
 from coordination.common.log import configure_log
 from coordination.model.builder import ModelBuilder, MODELS
 from coordination.model.config_bundle.mapper import DataMapper
+from coordination.common.config import settings
 
 # PyMC 5.0.2 prints some warnings when we use GaussianRandomWalk. The snippet below silences them.
 if not sys.warnoptions:
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out_dir",
         type=str,
-        default=os.getenv("INFERENCE_RESULTS_DIR", DEFAULT_INFERENCE_RESULTS_DIR),
+        default=settings.inferences_dir,
         required=False,
         help="Directory where artifacts must be saved.",
     )

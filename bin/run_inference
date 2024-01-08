@@ -35,7 +35,6 @@ import numpy as np
 import pandas as pd
 
 from coordination.common.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_INFERENCE_RESULTS_DIR,
                                            DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_INFERENCE_JOBS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
@@ -47,6 +46,7 @@ from coordination.common.tmux import TMUX
 from coordination.common.utils import NumpyArrayEncoder
 from coordination.model.builder import ModelBuilder, MODELS
 from coordination.model.config_bundle.mapper import DataMapper
+from coordination.common.config import settings
 
 
 def infer(out_dir: str,
@@ -238,7 +238,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out_dir",
         type=str,
-        default=os.getenv("INFERENCE_RESULTS_DIR", DEFAULT_INFERENCE_RESULTS_DIR),
+        default=settings.inferences_dir,
         required=False,
         help="Directory where artifacts must be saved.",
     )

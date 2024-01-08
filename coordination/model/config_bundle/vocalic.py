@@ -42,12 +42,11 @@ class VocalicConfigBundle(ModelConfigBundle):
     allow_sampled_subject_repetition = False
     fix_sampled_subject_sequence = True
 
-    # For sampling. These will be cleared and estimated during inference.
-    mean_uc0 = 0.0
+    # Some parameters are given and others fixed.
+    mean_uc0 = None
     sd_uc = 0.5
-    # Each subject starts with the same voice intensity and 0 speed.
-    mean_a0 = 0.0
-    sd_a = 0.1
+    mean_a0 = None
+    sd_a = None
     sd_o = 0.1
     # Fixed coordination series for sampling.
     coordination_samples: np.ndarray = None
