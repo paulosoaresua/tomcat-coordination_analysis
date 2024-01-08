@@ -5,6 +5,7 @@ import numpy as np
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.common.normalization import (NORMALIZATION_PER_FEATURE,
                                                NORMALIZATION_PER_SUBJECT_AND_FEATURE)
+from typing import List
 
 
 @dataclass

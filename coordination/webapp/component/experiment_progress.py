@@ -29,6 +29,7 @@ class ExperimentProgress:
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
         self.status_ = False
+        self.total_num_divergences_ = 0
 
     @property
     def succeeded(self) -> bool:
@@ -84,6 +85,8 @@ class ExperimentProgress:
             progress_emoji = ":question:"
 
         st.write(f"## {self.experiment_id} {progress_emoji}")
+        divergence_progress_container = st.container()
+
         col1, col2 = st.columns([0.03, 0.97])
         with col1:
             st.write("**Logs:**")
@@ -100,15 +103,35 @@ class ExperimentProgress:
         # Use an OrderedDict such that the chains show up in order of their numbers. For instance,
         # chain1, chain 2, chain 3...
         total_samples_per_chain = (
-            self.inference_run.execution_params["burn_in"]
-            + self.inference_run.execution_params["num_samples"]
+                self.inference_run.execution_params["burn_in"]
+                + self.inference_run.execution_params["num_samples"]
         )
+        total_num_samples = (
+                    total_samples_per_chain * self.inference_run.execution_params["num_chains"])
         sorted_chain_names = sorted(list(progress_info["step"].keys()))
+        total_num_divergences = 0
+        st.write(f"### Samples")
         for chain in sorted_chain_names:
             ProgressBar(
                 items_name=f"samples in {chain}",
                 current_value=progress_info["step"][chain],
                 maximum_value=total_samples_per_chain,
+            ).create()
+
+        st.write(f"### Divergences")
+        for chain in sorted_chain_names:
+            ProgressBar(
+                items_name=f"divergences in {chain}",
+                current_value=progress_info["num_divergences"][chain],
+                maximum_value=total_samples_per_chain,
+            ).create()
+            total_num_divergences += progress_info["num_divergences"][chain]
+
+        with divergence_progress_container:
+            ProgressBar(
+                items_name=f"divergences.",
+                current_value=total_num_divergences,
+                maximum_value=total_num_samples,
             ).create()
 
     def _read_logs(self) -> Optional[str]:
