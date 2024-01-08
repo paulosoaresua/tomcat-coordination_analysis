@@ -310,7 +310,10 @@ def plot_series(
     """
 
     if not figure:
-        figure = go.Figure()
+        if value_bounds is not None and value_bounds[0] is not None and value_bounds[1] is not None:
+            figure = go.Figure(layout_yaxis_range=value_bounds)
+        else:
+            figure = go.Figure()
 
     figure.add_trace(
         go.Scatter(

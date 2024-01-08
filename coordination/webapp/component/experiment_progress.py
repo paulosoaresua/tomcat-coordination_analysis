@@ -87,7 +87,7 @@ class ExperimentProgress:
         st.write(f"## {self.experiment_id} {progress_emoji}")
         divergence_progress_container = st.container()
 
-        col1, col2 = st.columns([0.03, 0.97])
+        col1, col2 = st.columns([0.05, 0.95])
         with col1:
             st.write("**Logs:**")
         with col2:
