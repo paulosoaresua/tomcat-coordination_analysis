@@ -11,6 +11,8 @@ import logging
 import os
 import sys
 from typing import List, Optional
+import time
+import datetime
 
 import pandas as pd
 
@@ -132,19 +134,30 @@ def infer(
             config_bundle.update(model_params_dict)
             data_mapper.update_config_bundle(config_bundle, row_df)
             model = ModelBuilder.build_model(model_name=model_name, config_bundle=config_bundle)
+
+            global_start_time = time.time()
             model.prepare_for_inference()
+            duration = (time.time() - global_start_time)
+            logger.info(
+                f"Time to create random variables: {str(datetime.timedelta(seconds=duration))}.")
 
             idata = None
             if do_prior:
                 logger.info("Prior predictive check")
                 try:
+                    start_time = time.time()
                     idata = model.prior_predictive(num_samples=num_samples, seed=seed)
+                    duration = (time.time() - start_time)
+                    logger.info(
+                        f"Time to run prior predictive check: "
+                        f"{str(datetime.timedelta(seconds=duration))}.")
                 except Exception as ex:
                     logger.error(ex)
 
             if do_posterior:
                 logger.info("Fitting model...")
                 try:
+                    start_time = time.time()
                     idata_posterior = model.fit(
                         seed=seed,
                         burn_in=burn_in,
@@ -155,6 +168,10 @@ def infer(
                         target_accept=target_accept,
                         callback=ProgressSaverCallback(out_dir=experiment_out_dir,
                                                        saving_frequency=progress_saving_frequency))
+                    duration = (time.time() - start_time)
+                    logger.info(
+                        f"Time to run posterior inference: "
+                        f"{str(datetime.timedelta(seconds=duration))}.")
                 except Exception as ex:
                     logger.error(ex)
                     return
@@ -164,16 +181,25 @@ def infer(
                 else:
                     idata.add(idata_posterior)
 
-                idata_posterior_predictive = model.posterior_predictive(posterior_trace=idata.trace,
-                                                                        seed=seed)
+                start_time = time.time()
+                idata_posterior_predictive = model.posterior_predictive(
+                    posterior_trace=idata.trace,
+                    seed=seed)
+                duration = (time.time() - start_time)
+                logger.info(
+                    f"Time to run posterior predictive check: "
+                    f"{str(datetime.timedelta(seconds=duration))}.")
                 idata.add(idata_posterior_predictive)
 
                 # Log the percentage of divergences
                 perc_divergences = 100.0 * idata.num_divergences / idata.num_posterior_samples
                 logger.info(
-                    f"{idata.num_divergences} divergences in {idata.num_posterior_samples} samples "
-                    f"--> {perc_divergences}%."
+                    f"{idata.num_divergences} divergences in {idata.num_posterior_samples} "
+                    f"samples --> {perc_divergences}%."
                 )
+
+                duration = (time.time() - global_start_time)
+                logger.info(f"Duration: {str(datetime.timedelta(seconds=duration))}")
 
             idata.save_to_directory(experiment_out_dir)
             logger.info("[SUCCESS]")
