@@ -2,7 +2,6 @@ import os
 
 import streamlit as st
 
-from coordination.common.constants import DEFAULT_INFERENCE_RESULTS_DIR
 from coordination.webapp.component.header import Header
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
                                            INFERENCE_RESULTS_DIR_STATE_KEY)
@@ -10,6 +9,7 @@ from coordination.webapp.pages.new_run import NewRun
 from coordination.webapp.pages.progress import Progress
 from coordination.webapp.pages.run_vs_run import RunVsRun
 from coordination.webapp.pages.single_run import SingleRun
+from coordination.common.config import settings
 
 st.set_page_config(
     page_title="Coordination Processes",
@@ -22,9 +22,7 @@ st.set_page_config(
 st.title("Coordination Processes")
 
 if INFERENCE_RESULTS_DIR_STATE_KEY not in st.session_state:
-    st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY] = os.getenv(
-        "INFERENCE_RESULTS_DIR", DEFAULT_INFERENCE_RESULTS_DIR
-    )
+    st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY] = settings.inferences_dir
 
 if AVAILABLE_EXPERIMENTS_STATE_KEY not in st.session_state:
     st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = []
