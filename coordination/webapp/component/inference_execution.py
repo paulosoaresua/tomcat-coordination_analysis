@@ -15,7 +15,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
-from coordination.model.builder import ModelBuilder
+from coordination.model.builder import MODELS
 from coordination.model.config_bundle.mapper import DataMapper
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
                                            INFERENCE_PARAMETERS_DIR,
@@ -182,7 +182,7 @@ class InferenceExecution:
             )
 
         with tab2:
-            model_options = sorted(list(ModelBuilder.MODELS))
+            model_options = sorted(list(MODELS))
             selected_model_index = (
                 model_options.index(default_execution_params["model"])
                 if default_execution_params["model"]

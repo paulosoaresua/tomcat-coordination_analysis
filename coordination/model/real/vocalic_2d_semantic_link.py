@@ -22,7 +22,7 @@ from coordination.module.transformation.mlp import MLP
 from coordination.module.transformation.sequential import Sequential
 
 
-class VocalicSemanticLinkModel(ModelTemplate):
+class Vocalic2DSemanticLinkModel(ModelTemplate):
     """
     This class represents a model where subjects are talking to each other and their speech
     vocalics are observed as they finish talking as well as semantic links between subsequent

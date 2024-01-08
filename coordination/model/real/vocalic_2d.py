@@ -18,7 +18,7 @@ from coordination.module.transformation.mlp import MLP
 from coordination.module.transformation.sequential import Sequential
 
 
-class VocalicModel(ModelTemplate):
+class Vocalic2DModel(ModelTemplate):
     """
     This class represents a vocalic model where subjects are talking to each other and their
     speech vocalics are observed as they finish talking. It uses a 2D latent component comprised

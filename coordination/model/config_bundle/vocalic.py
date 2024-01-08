@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from coordination.model.config_bundle.bundle import ModelConfigBundle
+from coordination.common.normalization import (NORMALIZATION_PER_FEATURE,
+                                               NORMALIZATION_PER_SUBJECT_AND_FEATURE)
 
 
 @dataclass
@@ -13,7 +15,7 @@ class VocalicConfigBundle(ModelConfigBundle):
 
     num_subjects = 3
     num_time_steps_in_coordination_scale = 100
-    observation_normalization = None
+    observation_normalization = NORMALIZATION_PER_SUBJECT_AND_FEATURE
     state_space_dimension_size = 4
     state_space_dimension_names = ["pitch", "intensity", "jitter", "shimmer"]
     self_dependent = True
@@ -74,13 +76,13 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
 
     num_subjects = 3
     num_time_steps_in_coordination_scale = 100
-    observation_normalization = None
+    observation_normalization = NORMALIZATION_PER_FEATURE
     num_vocalic_features = 4
     vocalic_feature_names = ["pitch", "intensity", "jitter", "shimmer"]
 
     # Hyper priors
     mean_mean_uc0 = 0.0
-    sd_mean_uc0 = 5.0
+    sd_mean_uc0 = 1.0
     sd_sd_uc = 1.0
     mean_mean_a0 = 0.0
     sd_mean_a0 = 1.0
@@ -98,13 +100,12 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     allow_sampled_subject_repetition = False
     fix_sampled_subject_sequence = True
 
-    # For sampling. These will be cleared and estimated during inference.
-    mean_uc0 = 0.0
-    sd_uc = 0.5
-    # Each subject starts with the same voice intensity and 0 speed.
-    mean_a0 = 0.0
-    sd_a = 0.1
-    sd_o = 0.1
+    # For sampling. Defaults to None for inference.
+    mean_uc0 = None
+    sd_uc = None
+    mean_a0 = None
+    sd_a = None
+    sd_o = None
     # Fixed coordination series for sampling.
     coordination_samples: np.ndarray = None
 

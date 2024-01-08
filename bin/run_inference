@@ -45,7 +45,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.tmux import TMUX
 from coordination.common.utils import NumpyArrayEncoder
-from coordination.model.builder import ModelBuilder
+from coordination.model.builder import ModelBuilder, MODELS
 from coordination.model.config_bundle.mapper import DataMapper
 
 
@@ -260,7 +260,7 @@ if __name__ == "__main__":
         "--model_name",
         type=str,
         required=True,
-        choices=["vocalic", "vocalic_semantic"],
+        choices=MODELS,
         help="Model name.",
     )
     parser.add_argument(

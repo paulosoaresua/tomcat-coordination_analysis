@@ -27,9 +27,9 @@ class VocalicSemanticLinkModel(ModelTemplate):
     """
 
     def __init__(
-            self,
-            config_bundle: VocalicSemanticLinkConfigBundle,
-            pymc_model: Optional[pm.Model] = None,
+        self,
+        config_bundle: VocalicSemanticLinkConfigBundle,
+        pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a vocalic + semantic link model.
@@ -90,8 +90,8 @@ class VocalicSemanticLinkModel(ModelTemplate):
 
         transformation = None
         if self.config_bundle.activation != "linear" or (
-                self.config_bundle.state_space_dimension_size
-                < self.config_bundle.num_vocalic_features
+            self.config_bundle.state_space_dimension_size
+            < self.config_bundle.num_vocalic_features
         ):
             # Transform latent samples before passing to the observation module to account for
             # non-linearity and/or different dimensions between the latent component and
@@ -121,7 +121,8 @@ class VocalicSemanticLinkModel(ModelTemplate):
             dimension_names=self.config_bundle.vocalic_feature_names,
             observed_values=self.config_bundle.observed_vocalic_values,
             time_steps_in_coordination_scale=(
-                self.config_bundle.vocalics_time_steps_in_coordination_scale),
+                self.config_bundle.vocalics_time_steps_in_coordination_scale
+            ),
             subject_indices=self.config_bundle.subject_indices,
             sd_o=self.config_bundle.sd_o,
         )

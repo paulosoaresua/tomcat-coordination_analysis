@@ -1,15 +1,28 @@
 from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.model.config_bundle.vocalic import VocalicConfigBundle
+from coordination.model.config_bundle.vocalic import (Vocalic2DConfigBundle,
+                                                      VocalicConfigBundle)
+from coordination.model.config_bundle.vocalic_semantic_link import (
+    Vocalic2DSemanticLinkConfigBundle, VocalicSemanticLinkConfigBundle)
 from coordination.model.real.vocalic import VocalicModel
+from coordination.model.real.vocalic_2d import Vocalic2DModel
+from coordination.model.real.vocalic_2d_semantic_link import \
+    Vocalic2DSemanticLinkModel
+from coordination.model.real.vocalic_semantic_link import \
+    VocalicSemanticLinkModel
 from coordination.model.template import ModelTemplate
+
+MODELS = {
+    "vocalic",
+    "vocalic_2d",
+    "vocalic_semantic",
+    "vocalic_2d_semantic",
+}
 
 
 class ModelBuilder:
     """
     This class is responsible from instantiating a concrete model object from its name.
     """
-
-    MODELS = {"conversation", "spring", "vocalic", "vocalic_semantic"}
 
     @staticmethod
     def build_bundle(model_name: str) -> ModelConfigBundle:
@@ -20,20 +33,20 @@ class ModelBuilder:
         @raise ValueError: if the model name is not in the list of valid models.
         @return: an instance of the model config bundle.
         """
-        if model_name not in ModelBuilder.MODELS:
+        if model_name not in MODELS:
             raise ValueError(f"Invalid model ({model_name}).")
-
-        if model_name == "conversation":
-            return None
-
-        if model_name == "spring":
-            return None
 
         if model_name == "vocalic":
             return VocalicConfigBundle()
 
         if model_name == "vocalic_semantic":
-            return None
+            return VocalicSemanticLinkConfigBundle()
+
+        if model_name == "vocalic_2d":
+            return Vocalic2DConfigBundle()
+
+        if model_name == "vocalic_2d_semantic":
+            return Vocalic2DSemanticLinkConfigBundle()
 
     @staticmethod
     def build_model(model_name: str, config_bundle: ModelConfigBundle) -> ModelTemplate:
@@ -45,17 +58,17 @@ class ModelBuilder:
         @raise ValueError: if the model name is not in the list of valid models.
         @return: an instance of the model.
         """
-        if model_name not in ModelBuilder.MODELS:
+        if model_name not in MODELS:
             raise ValueError(f"Invalid model ({model_name}).")
-
-        if model_name == "conversation":
-            return None
-
-        if model_name == "spring":
-            return None
 
         if model_name == "vocalic":
             return VocalicModel(config_bundle=config_bundle)
 
         if model_name == "vocalic_semantic":
-            return None
+            return VocalicSemanticLinkModel(config_bundle=config_bundle)
+
+        if model_name == "vocalic_2d":
+            return Vocalic2DModel(config_bundle=config_bundle)
+
+        if model_name == "vocalic_2d_semantic":
+            return Vocalic2DSemanticLinkModel(config_bundle=config_bundle)
