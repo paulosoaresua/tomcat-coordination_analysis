@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
+from typing import List
 
 import numpy as np
 
+from coordination.common.normalization import (
+    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
 from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.common.normalization import (NORMALIZATION_PER_FEATURE,
-                                               NORMALIZATION_PER_SUBJECT_AND_FEATURE)
-from typing import List
 
 
 @dataclass
@@ -19,11 +19,13 @@ class VocalicSemanticLinkConfigBundle(ModelConfigBundle):
     observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
     state_space_dimension_size: int = 4
     state_space_dimension_names: List[str] = field(
-        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"])
+        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
+    )
     self_dependent: bool = True
     num_vocalic_features: int = 4
     vocalic_feature_names: List[str] = field(
-        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"])
+        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
+    )
 
     # Hyper priors
     mean_mean_uc0: float = 0.0
@@ -87,7 +89,8 @@ class Vocalic2DSemanticLinkConfigBundle(ModelConfigBundle):
     observation_normalization: str = NORMALIZATION_PER_FEATURE
     num_vocalic_features: int = 4
     vocalic_feature_names: List[str] = field(
-        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"])
+        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
+    )
 
     # Hyper priors
     mean_mean_uc0: float = 0.0

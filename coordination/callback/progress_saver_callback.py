@@ -36,9 +36,13 @@ class ProgressSaverCallback:
             self.progress_dict["step"][key] = len(trace)
             self.progress_dict["log_prob"][key] = float(draw.stats[0]["model_logp"])
             if key in self.progress_dict["num_divergences"]:
-                self.progress_dict["num_divergences"][key] += int(draw.stats[0]["diverging"])
+                self.progress_dict["num_divergences"][key] += int(
+                    draw.stats[0]["diverging"]
+                )
             else:
-                self.progress_dict["num_divergences"][key] = int(draw.stats[0]["diverging"])
+                self.progress_dict["num_divergences"][key] = int(
+                    draw.stats[0]["diverging"]
+                )
 
             with open(self._progress_filepath, "w") as f:
                 # We open the file every time something is written to it instead of keeping it

@@ -34,8 +34,8 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 
-from coordination.common.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_NUM_CHAINS,
+from coordination.common.config import settings
+from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_INFERENCE_JOBS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
@@ -44,9 +44,8 @@ from coordination.common.constants import (DEFAULT_BURN_IN,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.tmux import TMUX
 from coordination.common.utils import NumpyArrayEncoder
-from coordination.model.builder import ModelBuilder, MODELS
+from coordination.model.builder import MODELS, ModelBuilder
 from coordination.model.config_bundle.mapper import DataMapper
-from coordination.common.config import settings
 
 
 def infer(out_dir: str,

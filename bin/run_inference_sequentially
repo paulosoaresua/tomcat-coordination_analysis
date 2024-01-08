@@ -6,28 +6,27 @@ all experiments are covered.
 """
 
 import argparse
+import datetime
 import json
 import logging
 import os
 import sys
-from typing import List, Optional
 import time
-import datetime
+from typing import List, Optional
 
 import pandas as pd
 
 from coordination.callback.progress_saver_callback import ProgressSaverCallback
-from coordination.common.constants import (DEFAULT_BURN_IN,
-                                           DEFAULT_NUM_CHAINS,
+from coordination.common.config import settings
+from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_PROGRESS_SAVING_FREQUENCY,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
 from coordination.common.log import configure_log
-from coordination.model.builder import ModelBuilder, MODELS
+from coordination.model.builder import MODELS, ModelBuilder
 from coordination.model.config_bundle.mapper import DataMapper
-from coordination.common.config import settings
 
 # PyMC 5.0.2 prints some warnings when we use GaussianRandomWalk. The snippet below silences them.
 if not sys.warnoptions:

@@ -103,14 +103,15 @@ class ExperimentProgress:
         # Use an OrderedDict such that the chains show up in order of their numbers. For instance,
         # chain1, chain 2, chain 3...
         total_samples_per_chain = (
-                self.inference_run.execution_params["burn_in"]
-                + self.inference_run.execution_params["num_samples"]
+            self.inference_run.execution_params["burn_in"]
+            + self.inference_run.execution_params["num_samples"]
         )
         total_num_samples = (
-                    total_samples_per_chain * self.inference_run.execution_params["num_chains"])
+            total_samples_per_chain * self.inference_run.execution_params["num_chains"]
+        )
         sorted_chain_names = sorted(list(progress_info["step"].keys()))
         total_num_divergences = 0
-        st.write(f"### Samples")
+        st.write("### Samples")
         for chain in sorted_chain_names:
             ProgressBar(
                 items_name=f"samples in {chain}",
@@ -118,7 +119,7 @@ class ExperimentProgress:
                 maximum_value=total_samples_per_chain,
             ).create()
 
-        st.write(f"### Divergences")
+        st.write("### Divergences")
         for chain in sorted_chain_names:
             ProgressBar(
                 items_name=f"divergences in {chain}",
@@ -129,7 +130,7 @@ class ExperimentProgress:
 
         with divergence_progress_container:
             ProgressBar(
-                items_name=f"divergences.",
+                items_name="divergences.",
                 current_value=total_num_divergences,
                 maximum_value=total_num_samples,
             ).create()
