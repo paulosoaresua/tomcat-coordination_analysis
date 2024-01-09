@@ -32,21 +32,21 @@ class MLP(Transformation):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        output_dimension_size: int,
-        mean_w0: float = DEFAULT_MLP_MEAN_WEIGHTS,
-        sd_w0: float = DEFAULT_MLP_SD_WEIGHTS,
-        num_hidden_layers: int = DEFAULT_MLP_NUM_HIDDEN_LAYERS,
-        hidden_dimension_size: int = DEFAULT_MLP_HIDDEN_DIMENSION_SIZE,
-        activation: str = DEFAULT_MLP_ACTIVATION,
-        input_samples: Optional[ModuleSamples] = None,
-        input_random_variable: Optional[pm.Distribution] = None,
-        output_random_variable: Optional[pm.Distribution] = None,
-        weight_random_variables: Optional[List[pm.Distribution]] = None,
-        axis: int = 0,
-        weights: Optional[List[np.ndarray]] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            output_dimension_size: int,
+            mean_w0: float = DEFAULT_MLP_MEAN_WEIGHTS,
+            sd_w0: float = DEFAULT_MLP_SD_WEIGHTS,
+            num_hidden_layers: int = DEFAULT_MLP_NUM_HIDDEN_LAYERS,
+            hidden_dimension_size: int = DEFAULT_MLP_HIDDEN_DIMENSION_SIZE,
+            activation: str = DEFAULT_MLP_ACTIVATION,
+            input_samples: Optional[ModuleSamples] = None,
+            input_random_variable: Optional[pm.Distribution] = None,
+            output_random_variable: Optional[pm.Distribution] = None,
+            weight_random_variables: Optional[List[pm.Distribution]] = None,
+            axis: int = 0,
+            weights: Optional[List[np.ndarray]] = None,
     ):
         """
         Creates an MLP.
@@ -96,8 +96,9 @@ class MLP(Transformation):
             observed_values=None,
             axis=axis,
         )
-        for i, w in enumerate(self.parameters.weights):
-            w.value = weights[i]
+        if weights is not None:
+            for i, w in enumerate(self.parameters.weights):
+                w.value = weights[i]
 
         if num_hidden_layers < 0:
             raise ValueError(
@@ -145,7 +146,7 @@ class MLP(Transformation):
             for layer in range(self.num_layers):
                 weights = self.parameters.weights[layer].value
                 z = np.tensordot(
-                    sampled_series, weights, axes=[(self.axis,), (0,)]
+                    a, weights, axes=[(self.axis,), (0,)]
                 ).swapaxes(-2, -1)
 
                 if layer < self.num_layers - 1:
@@ -322,9 +323,9 @@ class MLP(Transformation):
             for h in range(1, self.num_hidden_layers + 1):
                 if self.weight_random_variables[h] is not None:
                     if (
-                        ptt.neq(self.weight_random_variables[h].shape, hidden_dims)
-                        .any()
-                        .eval()
+                            ptt.neq(self.weight_random_variables[h].shape, hidden_dims)
+                                    .any()
+                                    .eval()
                     ):
                         raise ValueError(
                             f"Dimensions of weight_random_variables[{h}] "
@@ -335,9 +336,9 @@ class MLP(Transformation):
             if self.weight_random_variables[-1] is not None:
                 out_dims = [self.hidden_dimension_size, self.output_dimension_size]
                 if (
-                    ptt.neq(self.weight_random_variables[-1].shape, out_dims)
-                    .any()
-                    .eval()
+                        ptt.neq(self.weight_random_variables[-1].shape, out_dims)
+                                .any()
+                                .eval()
                 ):
                     raise ValueError(
                         f"Dimensions of weight_random_variables[-1] "
@@ -357,7 +358,7 @@ class MLPParameters(ModuleParameters):
     """
 
     def __init__(
-        self, module_uuid: str, num_hidden_layers: int, mean_w0: float, sd_w0: float
+            self, module_uuid: str, num_hidden_layers: int, mean_w0: float, sd_w0: float
     ):
         """
         Creates an object to store MLP parameter info.

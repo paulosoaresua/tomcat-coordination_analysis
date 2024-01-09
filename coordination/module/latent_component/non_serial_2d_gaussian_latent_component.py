@@ -235,46 +235,51 @@ def log_prob(
     """
     Computes the log-probability function of a sample.
 
-    @param sample: (subject x dimension x time) a single samples series.
-    @param initial_mean: (subject x dimension) mean at t0 for each subject.
-    @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
+    @param sample: (subject = S x 2 x time = T) a single samples series.
+    @param initial_mean: (subject = S x 2) mean at t0 for each subject.
+    @param sigma: (subject = S x 2) a series of standard deviations. At each time the standard
         deviation is associated with the subject at that time.
-    @param coordination: (time) a series of coordination values.
+    @param coordination: (time = T) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
     @return: log-probability of the sample.
     """
 
-    N = sample.shape[0]
-    D = sample.shape[1]
+    S = sample.shape[0]
+    D = sample.shape[1]  # This should be 2: position and speed
 
     # log-probability at the initial time step
     total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)), sample[..., 0]
+        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
     ).sum()
 
-    # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
+    # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
     # We discard the last value as that is not a previous value of any other.
-    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
-    prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]
-    prev_same = sample[..., :-1]
+    sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
+    prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]  # S x 2 x T-1
+    prev_same = sample[..., :-1]  # S x 2 x T-1
 
     # Coordination does not affect the component in the first time step because the subjects have
     # no previous dependencies at that time.
-    # c = coordination[None, None, 1:]  # 1 x 1 x t-1
-    c = coordination[1:]  # 1 x 1 x t-1
+    # c = coordination[None, None, 1:]  # 1 x 1 x T-1
+    c = coordination[1:]  # 1 x 1 x T-1
 
-    T = c.shape[0] - 1
+    # The dimensions of F and U are: T-1 x 2 x 2
+    T = c.shape[0]
     F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
-    F = ptt.set_subtensor(F[:, 1, 1], 1 - coordination * prev_diff_subject_mask)
+    F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
 
     U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
-    U = ptt.set_subtensor(U[:, 1, 1], coordination * prev_diff_subject_mask)
+    U = ptt.set_subtensor(U[:, 1, 1], c)
 
     # We transform the sample using the fundamental matrix so that we learn to generate samples
     # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
     # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
     # we can add that to the log-probability such that the samples are effectively coming from the
     # component's posterior.
+    #
+    # prev_same.T has dimensions T-1 x 2 x S. The first dimension of both F and prev_same.T is T-1
+    # and used as the batch dimension. The result of batched_tensordot will have dimensions
+    # T-1 x 2 x S. Transposing that results in S x 2 x T-1 as desired.
     prev_same_transformed = ptt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
     prev_other_transformed = ptt.batched_tensordot(
         U, prev_others.T, axes=[(2,), (1,)]
@@ -282,9 +287,8 @@ def log_prob(
 
     blended_mean = prev_other_transformed + prev_same_transformed
 
-    # blended_mean = (prev_others - prev_same) * c + prev_same
-
-    # Match the dimensions of the standard deviation with that of the blended mean
+    # Match the dimensions of the standard deviation with that of the blended mean by adding
+    # another dimension for time.
     sd = sigma[:, :, None]
 
     # Index samples starting from the second index (i = 1) so that we can effectively compare

@@ -4,6 +4,9 @@ lint:
 	autoflake -r coordination --in-place --remove-all-unused-imports
 	flake8 coordination
 
+test:
+	pytest
+
 app:
 	PYTHONPATH="." streamlit run coordination/webapp/app.py --server.port=${APP_PORT} \
 		--server.address=localhost

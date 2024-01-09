@@ -1,4 +1,4 @@
-import unittest
+from unittest import TestCase
 
 import numpy as np
 import pymc as pm
@@ -8,7 +8,7 @@ from coordination.module.module import ModuleSamples
 from coordination.module.transformation.mlp import MLP
 
 
-class TestMLP(unittest.TestCase):
+class TestMLP(TestCase):
     def test_sample_transformation_no_hidden_layer(self):
         weights = [
             np.array(
