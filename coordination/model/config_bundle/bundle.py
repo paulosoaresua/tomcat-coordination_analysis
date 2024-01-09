@@ -17,6 +17,8 @@ class ModelConfigBundle:
         @param params_dict: dictionary with attribute values. The keys must match the attribute
             names.
         """
+        if params_dict is None:
+            return
 
         for key, value in params_dict.items():
             if hasattr(self, key):
