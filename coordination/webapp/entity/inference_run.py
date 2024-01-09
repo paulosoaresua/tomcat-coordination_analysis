@@ -10,8 +10,6 @@ from coordination.inference.inference_data import InferenceData
 from coordination.webapp.entity.model_variable import ModelVariableInfo
 
 
-# Need to add this such that an inference run object can be cached with @st.cache_data
-@dataclass(init=False)
 class InferenceRun:
     """
     Represents a container for information related to an inference run.
