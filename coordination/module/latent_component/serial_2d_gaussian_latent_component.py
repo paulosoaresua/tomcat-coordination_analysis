@@ -277,6 +277,10 @@ def log_prob(
     """
     Computes the log-probability function of a sample.
 
+    Legend:
+    D: number of dimensions
+    T: number of time steps
+
     @param sample: (dimension x time) a single samples series.
     @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
         associated with the subject at that time. The initial mean is only used the first time the
@@ -305,10 +309,10 @@ def log_prob(
     # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
     # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
     # case the first dimension of the sample component is one.
-    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # d x T
+    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # D x T
 
     # The component's value for a subject depends on its previous value for the same subject.
-    prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # d x T
+    prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # D x T
 
     # We use this binary mask to zero out entries with no previous observations from the subjects.
     # We use this to determine the time steps that belong to the initial values of the component.
@@ -357,6 +361,10 @@ def random(
     """
     Generates samples from of a serial latent component for prior predictive checks.
 
+    Legend:
+    D: number of dimensions
+    T: number of time steps
+
     @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
         associated with the subject at that time. The initial mean is only used the first time the
         user speaks, but we repeat the values here over time for uniform vector operations (e.g.,
@@ -387,9 +395,7 @@ def random(
 
     T = coordination.shape[-1]
 
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
-
-    sample = np.zeros_like(noise)
+    sample = np.zeros(size)
 
     mean_0 = initial_mean if initial_mean.ndim == 1 else initial_mean[..., 0]
     sd_0 = sigma if sigma.ndim == 1 else sigma[..., 0]
@@ -397,14 +403,12 @@ def random(
     sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
 
     for t in np.arange(1, T):
-        prev_other = sample[..., prev_time_diff_subject[t]]  # d
+        prev_other = sample[..., prev_time_diff_subject[t]]  # D
 
         # Previous sample from the same individual
-        if self_dependent and prev_same_subject_mask[t] == 1:
+        if prev_same_subject_mask[t] == 1:
             prev_same = sample[..., prev_time_same_subject[t]]
         else:
-            # When there's no self-dependency, the transition distribution is a blending between
-            # the previous value from another individual, and a fixed mean.
             if initial_mean.shape[1] == 1:
                 prev_same = initial_mean[..., 0]
             else:
@@ -433,4 +437,4 @@ def random(
 
         sample[..., t] = transition_sample
 
-    return sample + noise
+    return sample

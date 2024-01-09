@@ -623,6 +623,10 @@ def log_prob(
     """
     Computes the log-probability function of a sample.
 
+    Legend:
+    D: number of dimensions
+    T: number of time steps
+
     @param sample: (dimension x time) a single samples series.
     @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
         associated with the subject at that time. The initial mean is only used the first time the
@@ -656,31 +660,31 @@ def log_prob(
 
     # We use this binary mask to zero out entries with no observations from partners. We create an
     # extra dimension for broadcasting across the dimension axis (axis 0).
-    mask_other = prev_diff_subject_mask[None, :]  # (1 x time)
+    mask_other = prev_diff_subject_mask[None, :]  # (1 x T)
 
     # We create an extra dimension for broadcasting across the dimension axis (axis 0).
-    c = coordination[None, :]  # (1 x time)
+    c = coordination[None, :]  # (1 x T)
 
     if self_dependent.eval():
         # The component's value for a subject depends on previous value of the same subject.
         prev_same = sample[..., prev_time_same_subject].reshape(
             sample.shape
-        )  # (dimension x time)
+        )  # (D x T)
 
         # We use this binary mask to zero out entries with no previous values of the same subjects.
         # We use this to determine the time steps that belong to the initial values of the
         # component. Each subject will have their initial value in a different time step hence
         # we cannot just use t=0.
         # We create an extra dimension for broadcasting across the dimension axis (axis 0).
-        mask_same = prev_same_subject_mask[None, :]  # (1 x time)
+        mask_same = prev_same_subject_mask[None, :]  # (1 x T)
         blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * (
             prev_same * mask_same + (1 - mask_same) * initial_mean
-        )  # (dimension x time)
+        )  # (D x T)
     else:
         # The component's value for a subject doesn't depend on previous value of the same subject.
         # At every time step, the value from other subjects is blended with a fixed value given
         # by the component's initial means associated with the subjects over time.
-        # (dimension x time)
+        # (D x T)
         blended_mean = prev_other * c * mask_other + (1 - c * mask_other) * initial_mean
 
     return pm.logp(
@@ -703,6 +707,10 @@ def random(
 ) -> np.ndarray:
     """
     Generates samples from of a serial latent component for prior predictive checks.
+
+    Legend:
+    D: number of dimensions
+    T: number of time steps
 
     @param initial_mean: (dimension x time) a series of mean at t0. At each time the mean is
         associated with the subject at that time. The initial mean is only used the first time the
@@ -734,9 +742,7 @@ def random(
 
     T = coordination.shape[-1]
 
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma
-
-    sample = np.zeros_like(noise)
+    sample = np.zeros(size)
 
     mean_0 = initial_mean if initial_mean.ndim == 1 else initial_mean[..., 0]
     sd_0 = sigma if sigma.ndim == 1 else sigma[..., 0]
@@ -744,7 +750,7 @@ def random(
     sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
 
     for t in np.arange(1, T):
-        prev_other = sample[..., prev_time_diff_subject[t]]  # d
+        prev_other = sample[..., prev_time_diff_subject[t]]  # D
 
         # Previous sample from the same individual
         if self_dependent and prev_same_subject_mask[t] == 1:
@@ -769,4 +775,4 @@ def random(
 
         sample[..., t] = transition_sample
 
-    return sample + noise
+    return sample

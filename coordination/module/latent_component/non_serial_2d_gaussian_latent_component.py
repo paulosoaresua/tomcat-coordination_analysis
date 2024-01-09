@@ -217,7 +217,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         Gets a reference to a random function for prior predictive checks.
         """
-        return None
+        return random
 
 
 ###################################################################################################
@@ -235,11 +235,16 @@ def log_prob(
     """
     Computes the log-probability function of a sample.
 
-    @param sample: (subject = S x 2 x time = T) a single samples series.
-    @param initial_mean: (subject = S x 2) mean at t0 for each subject.
-    @param sigma: (subject = S x 2) a series of standard deviations. At each time the standard
+    Legend:
+    D: number of dimensions
+    S: number of subjects
+    T: number of time steps
+
+    @param sample: (subject x 2 x time) a single samples series.
+    @param initial_mean: (subject x 2) mean at t0 for each subject.
+    @param sigma: (subject x 2) a series of standard deviations. At each time the standard
         deviation is associated with the subject at that time.
-    @param coordination: (time = T) a series of coordination values.
+    @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
     @return: log-probability of the sample.
     """
@@ -300,55 +305,65 @@ def log_prob(
 
     return total_logp
 
-#
-#
-# def random(
-#         initial_mean: np.ndarray,
-#         sigma: np.ndarray,
-#         coordination: np.ndarray,
-#         self_dependent: bool,
-#         rng: Optional[np.random.Generator] = None,
-#         size: Optional[Tuple[int]] = None,
-# ) -> np.ndarray:
-#     """
-#     Generates samples from of a non-serial latent component for prior predictive checks.
-#
-#     @param initial_mean: (subject x dimension) mean at t0 for each subject.
-#     @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
-#         deviation is associated with the subject at that time.
-#     @param coordination: (time) a series of coordination values.
-#     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
-#     @param rng: random number generator.
-#     @param size: size of the sample.
-#
-#     @return: a serial latent component sample.
-#     """
-#
-#     # TODO: Unify this with the class sampling method.
-#
-#     T = coordination.shape[-1]
-#     N = initial_mean.shape[0]
-#
-#     noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
-#
-#     sample = np.zeros_like(noise)
-#
-#     # Sample from prior in the initial time step
-#     sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=noise.shape[:-1])
-#
-#     sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
-#     for t in np.arange(1, T):
-#         prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # s x d
-#
-#         if self_dependent:
-#             # Previous sample from the same subject
-#             prev_same = sample[..., t - 1]
-#         else:
-#             # No dependency on the same subject. Sample from prior.
-#             prev_same = initial_mean
-#
-#         blended_mean = (prev_others - prev_same) * coordination[t] + prev_same
-#
-#         sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
-#
-#     return sample + noise
+
+def random(
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        self_dependent: bool,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
+) -> np.ndarray:
+    """
+    Generates samples from of a non-serial latent component for prior predictive checks.
+
+    Legend:
+    D: number of dimensions
+    S: number of subjects
+    T: number of time steps
+
+    @param initial_mean: (subject x dimension) mean at t0 for each subject.
+    @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
+        deviation is associated with the subject at that time.
+    @param coordination: (time) a series of coordination values.
+    @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param rng: random number generator.
+    @param size: size of the sample.
+
+    @return: a serial latent component sample.
+    """
+
+    # TODO: Unify this with the class sampling method.
+
+    T = coordination.shape[-1]
+    S = initial_mean.shape[0]
+
+    sample = np.zeros(size)
+
+    # Sample from prior in the initial time step
+    sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=size[:-1])
+
+    sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
+    for t in np.arange(1, T):
+        prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # S x D
+        prev_same = sample[..., t - 1]  # S x D
+
+        c = coordination[t]
+        dt_diff = 1
+        F = np.array([[1, dt_diff], [0, 1 - c]])
+        U = np.array(
+            [
+                [0, 0],  # position of "b" does not influence position of "a"
+                [
+                    0,
+                    c,
+                ],  # speed of "b" influences the speed of "a" when there's coordination.
+            ]
+        )
+
+        blended_mean = np.einsum("ij,lj->li", F, prev_same) + \
+                       np.einsum("ij,lj->li", U, prev_others)
+
+        sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
+
+    return sample

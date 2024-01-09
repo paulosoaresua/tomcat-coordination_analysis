@@ -375,6 +375,11 @@ def log_prob(
     """
     Computes the log-probability function of a sample.
 
+    Legend:
+    D: number of dimensions
+    S: number of subjects
+    T: number of time steps
+
     @param sample: (subject x dimension x time) a single samples series.
     @param initial_mean: (subject x dimension) mean at t0 for each subject.
     @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
@@ -384,17 +389,17 @@ def log_prob(
     @return: log-probability of the sample.
     """
 
-    N = sample.shape[0]
+    S = sample.shape[0]
     D = sample.shape[1]
 
     # log-probability at the initial time step
     total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)), sample[..., 0]
+        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
     ).sum()
 
-    # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
+    # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
     # We discard the last value as that is not a previous value of any other.
-    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+    sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
     prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]
 
     if self_dependent.eval():
@@ -408,7 +413,7 @@ def log_prob(
 
     # Coordination does not affect the component in the first time step because the subjects have
     # no previous dependencies at that time.
-    c = coordination[None, None, 1:]  # 1 x 1 x t-1
+    c = coordination[None, None, 1:]  # 1 x 1 x T-1
 
     blended_mean = (prev_others - prev_same) * c + prev_same
 
@@ -436,6 +441,11 @@ def random(
     """
     Generates samples from of a non-serial latent component for prior predictive checks.
 
+    Legend:
+    D: number of dimensions
+    S: number of subjects
+    T: number of time steps
+
     @param initial_mean: (subject x dimension) mean at t0 for each subject.
     @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
         deviation is associated with the subject at that time.
@@ -450,18 +460,16 @@ def random(
     # TODO: Unify this with the class sampling method.
 
     T = coordination.shape[-1]
-    N = initial_mean.shape[0]
+    S = initial_mean.shape[0]
 
-    noise = rng.normal(loc=0, scale=1, size=size) * sigma[:, :, None]
-
-    sample = np.zeros_like(noise)
+    sample = np.zeros(size)
 
     # Sample from prior in the initial time step
-    sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=noise.shape[:-1])
+    sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=size[:-1])
 
-    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+    sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
     for t in np.arange(1, T):
-        prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # s x d
+        prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # S x D
 
         if self_dependent:
             # Previous sample from the same subject
@@ -474,4 +482,4 @@ def random(
 
         sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
 
-    return sample + noise
+    return sample
