@@ -30,28 +30,28 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        subject_names: Optional[List[str]] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        observed_values: Optional[TensorTypes] = None,
-        mean_a0: Optional[Union[float, np.ndarray]] = None,
-        sd_a: Optional[Union[float, np.ndarray]] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            subject_names: Optional[List[str]] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            observed_values: Optional[TensorTypes] = None,
+            mean_a0: Optional[Union[float, np.ndarray]] = None,
+            sd_a: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a non-serial 2D Gaussian latent component.
@@ -123,11 +123,11 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         self.sampling_relative_frequency = sampling_relative_frequency
 
     def _draw_from_system_dynamics(
-        self,
-        sampled_coordination: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
+            self,
+            sampled_coordination: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values with the following updating equations for the state of the component at time
@@ -170,12 +170,10 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     size=(num_series, self.num_subjects, self.dimension_size)
                 )
             else:
-                # n x 1 x 1
-                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
-                    :, None, None
-                ]
+                c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
 
-                prev_others = np.dot(sum_matrix_others, values[..., t - 1])  # n x s x d
+                # n x s x d
+                prev_others = np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
                 prev_same = values[..., t - 1]  # n x s x d
 
                 # The matrix F multiplied by the state of a component "a" at time t - 1
@@ -187,19 +185,14 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 # Then we just need to sum with [0, c(t)*S_b(t-1)] to obtain the updated state of
                 # the component. Which can be accomplished with U*[P_b(t-1), S_b(t-1)]
                 dt_diff = 1
-                F = np.array([[1, dt_diff], [0, 1 - c]])
-                U = np.array(
-                    [
-                        [0, 0],  # position of "b" does not influence position of "a"
-                        [
-                            0,
-                            c,
-                        ],  # speed of "b" influences the speed of "a" when there's coordination.
-                    ]
-                )
+                F = np.array([[1., dt_diff], [0., 0.]])[None, :].repeat(num_series, axis=0)
+                F[:, 1, 1] = 1 - c
 
-                blended_mean = np.einsum("ij,klj->kli", F, prev_same) + np.einsum(
-                    "ij,klj->kli", U, prev_others
+                U = np.zeros((num_series, 2, 2))
+                U[:, 1, 1] = c
+
+                blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
+                    "kij,klj->kli", U, prev_others
                 )
 
                 # blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
@@ -233,11 +226,11 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    self_dependent: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        self_dependent: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -302,7 +295,6 @@ def log_prob(
     ).sum()
 
     return total_logp
-
 
 #
 #
