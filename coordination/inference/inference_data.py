@@ -161,12 +161,14 @@ class InferenceData:
         @return: Rhat distribution per latent variable.
         """
 
-        header = ["variable", "mean_rhat", "std_rhat"]
+        header = ["variable", "converged", "mean_rhat", "std_rhat"]
 
         rhat = az.rhat(self.trace)
         data = []
         for var, values in rhat.data_vars.items():
-            entry = [var, values.to_numpy().mean(), values.to_numpy().std()]
+            mean = values.to_numpy().mean()
+            std = values.to_numpy().std()
+            entry = [var, "yes" if mean < 1.1 else "no", mean, std]
             data.append(entry)
 
         return pd.DataFrame(data, columns=header)
