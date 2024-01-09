@@ -18,8 +18,8 @@ class DataMapper:
     """
 
     def __init__(
-        self,
-        data_mapping: Dict[str, List[Dict[str, Union[ParameterValueType, List[str]]]]],
+            self,
+            data_mapping: Dict[str, List[Dict[str, Union[ParameterValueType, List[str]]]]],
     ):
         """
         Creates a data mapper.
@@ -57,13 +57,11 @@ class DataMapper:
                     if value.ndim == 3:
                         # Subject indices come first and dimensions come in second.
                         value = value.swapaxis(0, 1)
-                    elif len(mapping["data_column_names"]) == 1:
-                        # TODO: check this, I believe this breaks if we use only one feature
-                        #  because observations still keep the feature dimension even if is a
-                        #  single one.
-                        # Drop the first dimension and keep only the time series.
+                    elif (len(mapping["data_column_names"]) == 1 and
+                          not mapping.get("feature", False)):
+                        # Drop the first dimension and keep only the time series, except if the
+                        # series represents a feature and not metadata.
                         value = np.array(values[0])
-
                 else:
                     value = data[mapping["data_column_names"][0]]
 

@@ -36,7 +36,8 @@
         "jitter",
         "shimmer"
       ],
-      "data_type": "array"
+      "data_type": "array",
+      "feature": true
     },
     {
       "bundle_param_name": "num_time_steps_in_coordination_scale",

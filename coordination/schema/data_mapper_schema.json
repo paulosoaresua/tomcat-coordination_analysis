@@ -27,6 +27,10 @@
               "float"
             ],
             "description": "The type of the data."
+          },
+          "feature": {
+            "type": "boolean",
+            "description": "Whether the column represents a feature instead of metadata."
           }
         },
         "required": [
