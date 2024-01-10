@@ -5,7 +5,7 @@ NORMALIZATION_PER_SUBJECT_AND_FEATURE = "norm_per_subject_and_feature"
 
 
 def normalize_serialized_data_per_subject_and_feature(
-    data: np.ndarray, subject_indices: np.ndarray, num_subjects: int
+        data: np.ndarray, subject_indices: np.ndarray, num_subjects: int
 ) -> np.ndarray:
     """
     Normalize data (feature x time) to have mean 0 and standard deviation 1 across time. The
@@ -43,4 +43,37 @@ def normalize_serialized_data_per_feature(data: np.ndarray) -> np.ndarray:
     mean = np.mean(data, axis=-1, keepdims=True)
     std = np.std(data, axis=-1, keepdims=True)
     normalized_values = (data - mean) / std
+    return normalized_values
+
+
+def normalize_non_serial_data_per_subject_and_feature(data: np.ndarray) -> np.ndarray:
+    """
+    Normalize data (subject x feature x time) to have mean 0 and standard deviation 1 across time.
+    The normalization is done individually per subject and feature.
+
+    @param data: data to be normalized.
+    @return: normalized data.
+    """
+
+    mean = np.mean(data, axis=-1, keepdims=True)  # mean across time
+    std = np.std(data, axis=-1, keepdims=True)
+    normalized_values = (data - mean) / std
+
+    return normalized_values
+
+
+def normalize_non_serial_data_per_feature(data: np.ndarray) -> np.ndarray:
+    """
+    Normalize data to have mean 0 and standard deviation 1 across time and subject. The
+    normalization is done individually per feature.
+
+    @param data: data to be normalized.
+    @return: normalized data.
+    """
+
+    # Mean across time and subject
+    mean = np.mean(data, axis=(0, -1), keepdims=True)
+    std = np.std(data, axis=(0, -1), keepdims=True)
+    normalized_values = (data - mean) / std
+
     return normalized_values

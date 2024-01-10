@@ -254,6 +254,9 @@ class MLP(Transformation):
                 axes=[[0], [self.axis]],
             )
 
+            if self.input_random_variable.ndim > 2:
+                z = z.swapaxes(0, 1)
+
             if self.num_hidden_layers > 0:
                 a = ACTIVATIONS[self.activation](z)
                 for h in range(1, self.num_hidden_layers + 1):
