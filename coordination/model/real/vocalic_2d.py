@@ -1,5 +1,6 @@
 from typing import Optional
 
+import numpy as np
 import pymc as pm
 
 from coordination.model.config_bundle.vocalic import Vocalic2DConfigBundle
@@ -26,9 +27,9 @@ class Vocalic2DModel(ModelTemplate):
     """
 
     def __init__(
-        self,
-        config_bundle: Vocalic2DConfigBundle,
-        pymc_model: Optional[pm.Model] = None,
+            self,
+            config_bundle: Vocalic2DConfigBundle,
+            pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a vocalic model.
@@ -55,75 +56,98 @@ class Vocalic2DModel(ModelTemplate):
             sd_uc=self.config_bundle.sd_uc,
         )
 
-        state_space = Serial2DGaussianLatentComponent(
-            uuid="state_space",
-            pymc_model=self.pymc_model,
-            num_subjects=self.config_bundle.num_subjects,
-            mean_mean_a0=self.config_bundle.mean_mean_a0,
-            sd_mean_a0=self.config_bundle.sd_mean_a0,
-            sd_sd_a=self.config_bundle.sd_sd_a,
-            share_mean_a0_across_subjects=self.config_bundle.share_mean_a0_across_subjects,
-            share_sd_a_across_subjects=self.config_bundle.share_sd_a_across_subjects,
-            share_mean_a0_across_dimensions=self.config_bundle.share_mean_a0_across_dimensions,
-            share_sd_a_across_dimensions=self.config_bundle.share_sd_a_across_dimensions,
-            coordination_samples=self.config_bundle.coordination_samples,
-            sampling_time_scale_density=self.config_bundle.sampling_time_scale_density,
-            allow_sampled_subject_repetition=self.config_bundle.allow_sampled_subject_repetition,
-            fix_sampled_subject_sequence=self.config_bundle.fix_sampled_subject_sequence,
-            time_steps_in_coordination_scale=self.config_bundle.time_steps_in_coordination_scale,
-            prev_time_same_subject=self.config_bundle.prev_time_same_subject,
-            prev_time_diff_subject=self.config_bundle.prev_time_diff_subject,
-            subject_indices=self.config_bundle.subject_indices,
-            mean_a0=self.config_bundle.mean_a0,
-            sd_a=self.config_bundle.sd_a,
-        )
+        vocalic_groups = self.config_bundle.vocalic_groups
+        if vocalic_groups is None:
+            vocalic_groups = [{
+                "name": None,
+                "features": self.config_bundle.vocalic_feature_names,
+                "weights": self.config_bundle.weights
+            }]
 
-        transformation = Sequential(
-            child_transformations=[
-                DimensionReduction(keep_dimensions=[0], axis=0),  # position,
-                MLP(
-                    uuid="state_space_to_speech_vocalics_mlp",
-                    pymc_model=self.pymc_model,
-                    output_dimension_size=self.config_bundle.num_vocalic_features,
-                    mean_w0=self.config_bundle.mean_w0,
-                    sd_w0=self.config_bundle.sd_w0,
-                    num_hidden_layers=self.config_bundle.num_hidden_layers,
-                    hidden_dimension_size=self.config_bundle.hidden_dimension_size,
-                    activation=self.config_bundle.activation,
-                    axis=0,  # Vocalic features axis
-                    weights=self.config_bundle.weights,
-                ),
-            ]
-        )
+        groups = []
+        for vocalic_group in vocalic_groups:
+            # Form a tensor of observations by getting only the dimensions of the features in the
+            # group.
+            feature_idx = [self.config_bundle.vocalic_feature_names.index(feature) for feature in
+                           vocalic_group["features"]]
+            observed_values = np.take_along_axis(self.config_bundle.observed_values,
+                                                 indices=np.array(feature_idx, dtype=int)[:, None],
+                                                 axis=0)
 
-        observation = SerialGaussianObservation(
-            uuid="speech_vocalics",
-            pymc_model=self.pymc_model,
-            num_subjects=self.config_bundle.num_subjects,
-            dimension_size=self.config_bundle.num_vocalic_features,
-            sd_sd_o=self.config_bundle.sd_sd_o,
-            share_sd_o_across_subjects=self.config_bundle.share_sd_o_across_subjects,
-            share_sd_o_across_dimensions=self.config_bundle.share_sd_o_across_dimensions,
-            normalization=self.config_bundle.observation_normalization,
-            dimension_names=self.config_bundle.vocalic_feature_names,
-            observed_values=self.config_bundle.observed_values,
-            time_steps_in_coordination_scale=self.config_bundle.time_steps_in_coordination_scale,
-            subject_indices=self.config_bundle.subject_indices,
-            sd_o=self.config_bundle.sd_o,
-        )
+            # For retro-compatibility, we only add suffix if groups were defined.
+            group_name = vocalic_group["name"]
+            suffix = "" if self.config_bundle.vocalic_groups is None else f"_{group_name}"
+            state_space = Serial2DGaussianLatentComponent(
+                uuid=f"state_space{suffix}",
+                pymc_model=self.pymc_model,
+                num_subjects=self.config_bundle.num_subjects,
+                mean_mean_a0=self.config_bundle.mean_mean_a0,
+                sd_mean_a0=self.config_bundle.sd_mean_a0,
+                sd_sd_a=self.config_bundle.sd_sd_a,
+                share_mean_a0_across_subjects=self.config_bundle.share_mean_a0_across_subjects,
+                share_sd_a_across_subjects=self.config_bundle.share_sd_a_across_subjects,
+                share_mean_a0_across_dimensions=self.config_bundle.share_mean_a0_across_dimensions,
+                share_sd_a_across_dimensions=self.config_bundle.share_sd_a_across_dimensions,
+                coordination_samples=self.config_bundle.coordination_samples,
+                sampling_time_scale_density=self.config_bundle.sampling_time_scale_density,
+                allow_sampled_subject_repetition=self.config_bundle.allow_sampled_subject_repetition,
+                fix_sampled_subject_sequence=self.config_bundle.fix_sampled_subject_sequence,
+                time_steps_in_coordination_scale=self.config_bundle.time_steps_in_coordination_scale,
+                prev_time_same_subject=self.config_bundle.prev_time_same_subject,
+                prev_time_diff_subject=self.config_bundle.prev_time_diff_subject,
+                subject_indices=self.config_bundle.subject_indices,
+                mean_a0=self.config_bundle.mean_a0,
+                sd_a=self.config_bundle.sd_a,
+            )
 
-        group = ComponentGroup(
-            uuid="group",
-            pymc_model=self.pymc_model,
-            latent_component=state_space,
-            observations=[observation],
-            transformations=[transformation],
-        )
+            transformation = Sequential(
+                child_transformations=[
+                    DimensionReduction(keep_dimensions=[0], axis=0),  # position,
+                    MLP(
+                        uuid=f"state_space_to_speech_vocalics_mlp{suffix}",
+                        pymc_model=self.pymc_model,
+                        output_dimension_size=len(vocalic_group["features"]),
+                        mean_w0=self.config_bundle.mean_w0,
+                        sd_w0=self.config_bundle.sd_w0,
+                        num_hidden_layers=self.config_bundle.num_hidden_layers,
+                        hidden_dimension_size=self.config_bundle.hidden_dimension_size,
+                        activation=self.config_bundle.activation,
+                        axis=0,  # Vocalic features axis
+                        weights=vocalic_group["weights"],
+                    ),
+                ]
+            )
+
+            observation = SerialGaussianObservation(
+                uuid=f"speech_vocalics{suffix}",
+                pymc_model=self.pymc_model,
+                num_subjects=self.config_bundle.num_subjects,
+                dimension_size=len(vocalic_group["features"]),
+                sd_sd_o=self.config_bundle.sd_sd_o,
+                share_sd_o_across_subjects=self.config_bundle.share_sd_o_across_subjects,
+                share_sd_o_across_dimensions=self.config_bundle.share_sd_o_across_dimensions,
+                normalization=self.config_bundle.observation_normalization,
+                dimension_names=vocalic_group["features"],
+                observed_values=observed_values,
+                time_steps_in_coordination_scale=(
+                    self.config_bundle.time_steps_in_coordination_scale),
+                subject_indices=self.config_bundle.subject_indices,
+                sd_o=self.config_bundle.sd_o,
+            )
+
+            group = ComponentGroup(
+                uuid=f"group{suffix}",
+                pymc_model=self.pymc_model,
+                latent_component=state_space,
+                observations=[observation],
+                transformations=[transformation],
+            )
+            groups.append(group)
 
         self._model = Model(
             name="vocalic_2d_model",
             pymc_model=self.pymc_model,
             coordination=coordination,
-            component_groups=[group],
+            component_groups=groups,
             coordination_samples=self.config_bundle.coordination_samples,
         )

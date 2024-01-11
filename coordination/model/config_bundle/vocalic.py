@@ -132,3 +132,26 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     weights: List[np.ndarray] = field(default_factory=lambda: [np.ones((1, 4))])
     mean_w0: float = 0.0
     sd_w0: float = 1.0
+
+    # To allow splitting features into different groups
+    # If provided, it must be list of a dictionaries in the following format:
+    # {
+    # "name": "name of the group"
+    # "features": ["a list vocalic features to include in this group"]
+    # "weights": None or fixed weights to transform the latent component of the group to
+    # observations. If not given, it will be fit to the data.
+    # Example:
+    # vocalic_groups = [
+    #     {
+    #         "name": "pitch_intensity",
+    #         "features": ["pitch", "intensity"],
+    #         "weights": [np.ones((1, 2))]
+    #     },
+    #     {
+    #         "name": "jitter_shimmer",
+    #         "features": ["jitter", "shimmer"],
+    #         "weights": [np.ones((1, 2))]
+    #     }
+    # ]
+
+    vocalic_groups = None
