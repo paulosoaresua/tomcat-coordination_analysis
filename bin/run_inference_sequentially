@@ -84,7 +84,7 @@ def infer(
 
     model_params_dict = None
     if model_params_dict_filepath:
-        if os.path.exists(model_params_dict_filepath):
+        if not os.path.exists(model_params_dict_filepath):
             raise FileNotFoundError(
                 f"Dictionary of parameter values not found in {model_params_dict_filepath}.")
 
