@@ -1,6 +1,6 @@
 import streamlit as st
 
-from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
+from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY, APP_RUN_DIR
 
 
 class Header:
@@ -20,6 +20,9 @@ class Header:
         )
         st.write(
             f"In use: *:blue[{st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY]}]*"
+        )
+        st.write(
+            f"tmp: *:blue[{APP_RUN_DIR}]*"
         )
 
         submit = st.button(label="Update Directory")
