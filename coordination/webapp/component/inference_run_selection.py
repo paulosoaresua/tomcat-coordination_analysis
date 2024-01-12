@@ -39,9 +39,10 @@ class InferenceRunSelection:
         if run_id:
             self.selected_inference_run_ = InferenceRun(self.inference_dir, run_id)
 
-            # Display execution parameter under the drop down
-            col1, col2 = st.columns([0.12, 0.88])
-            with col1:
-                st.write("**Execution Parameters:**")
-            with col2:
-                st.json(self.selected_inference_run_.execution_params, expanded=False)
+            if self.selected_inference_run_.execution_params:
+                # Display execution parameter under the drop down
+                col1, col2 = st.columns([0.12, 0.88])
+                with col1:
+                    st.write("**Execution Parameters:**")
+                with col2:
+                    st.json(self.selected_inference_run_.execution_params, expanded=False)

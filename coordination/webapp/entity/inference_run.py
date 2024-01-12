@@ -25,6 +25,7 @@ class InferenceRun:
         self.inference_dir = inference_dir
         self.run_id = run_id
 
+        self.execution_params = None
         # Load execution parameters for the run
         execution_params_filepath = f"{inference_dir}/{run_id}/execution_params.json"
         if os.path.exists(execution_params_filepath):

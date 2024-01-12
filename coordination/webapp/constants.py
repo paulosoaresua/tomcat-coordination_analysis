@@ -6,6 +6,7 @@ REFRESH_RATE = 10  # in seconds
 
 # Holds temporary files related to the webapp execution
 APP_RUN_DIR = os.getenv("APP_RUN_DIR", ".webapp")
+EVALUATIONS_DIR = os.getenv("EVAL_DIR", "evaluations")
 INFERENCE_PARAMETERS_DIR = f"{APP_RUN_DIR}/inference/execution_params"
 INFERENCE_TMP_DIR = f"{APP_RUN_DIR}/inference/tmp"
 DEFAULT_COLOR_PALETTE = px.colors.qualitative.Pastel1
