@@ -113,19 +113,22 @@ class ExperimentProgress:
         total_num_divergences = 0
         st.write("### Samples")
         for chain in sorted_chain_names:
-            ProgressBar(
-                items_name=f"samples in {chain}",
-                current_value=progress_info["step"][chain],
-                maximum_value=total_samples_per_chain,
-            ).create()
+            # If a chain has completed its job, do not show progress to avoid rendering overhead.
+            if progress_info["step"][chain] < total_samples_per_chain:
+                ProgressBar(
+                    items_name=f"samples in {chain}",
+                    current_value=progress_info["step"][chain],
+                    maximum_value=total_samples_per_chain,
+                ).create()
 
         st.write("### Divergences")
         for chain in sorted_chain_names:
-            ProgressBar(
-                items_name=f"divergences in {chain}",
-                current_value=progress_info["num_divergences"][chain],
-                maximum_value=total_samples_per_chain,
-            ).create()
+            if progress_info["step"][chain] < total_samples_per_chain:
+                ProgressBar(
+                    items_name=f"divergences in {chain}",
+                    current_value=progress_info["num_divergences"][chain],
+                    maximum_value=total_samples_per_chain,
+                ).create()
             total_num_divergences += progress_info["num_divergences"][chain]
 
         with divergence_progress_container:
