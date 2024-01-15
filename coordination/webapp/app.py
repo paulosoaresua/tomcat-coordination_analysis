@@ -40,10 +40,10 @@ with tab2:
     RunVsRun(page_key="run_vs_run_tab").create_page()
 
 with tab3:
-    NewRun(page_key="new_run_tab").create_page()
+    RunVsRunEvaluations(page_key="evaluations_tab").create_page()
 
 with tab4:
-    Progress(page_key="progress_tab").create_page()
+    NewRun(page_key="new_run_tab").create_page()
 
 with tab5:
-    RunVsRunEvaluations(page_key="evaluations_tab").create_page()
+    Progress(page_key="progress_tab").create_page()
