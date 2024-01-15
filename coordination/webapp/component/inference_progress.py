@@ -31,9 +31,9 @@ class InferenceProgress:
         Creates area in the screen for selection of an inference run id. Below is presented a json
         object with the execution params of the run once one is chosen from the list.
         """
-        asyncio.run(self._create_progress_area())
+        self._create_progress_area()
 
-    async def _create_progress_area(self):
+    def _create_progress_area(self):
         """
         Populates the progress pane where one can see the progress of the different inference runs.
 
@@ -71,13 +71,3 @@ class InferenceProgress:
                                 inference_run
                             )
                             inference_progress_component.create_component()
-
-            await self._wait(status_text)
-
-    async def _wait(self, countdown_area: st.container):
-        """
-        Waits a few seconds and update countdown.
-        """
-        for i in range(self.refresh_rate, 0, -1):
-            countdown_area.write(f"**Refreshing in :red[{i} seconds].**")
-            await asyncio.sleep(1)

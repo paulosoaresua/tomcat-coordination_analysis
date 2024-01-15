@@ -29,5 +29,7 @@ class Progress:
             refresh_rate=REFRESH_RATE,
         )
 
-        if st.checkbox("Monitor progress"):
-            inference_progress_component.create_component()
+        if st.button("Refresh"):
+            st.rerun()
+
+        inference_progress_component.create_component()
