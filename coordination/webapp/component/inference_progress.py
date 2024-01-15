@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Optional
 
 import streamlit as st
@@ -18,6 +19,7 @@ class InferenceProgress:
         self,
         component_key: str,
         inference_dir: str,
+        refresh_rate: int,
         preferred_run_ids: Optional[List[str]] = None,
     ):
         """
@@ -25,21 +27,23 @@ class InferenceProgress:
 
         @param component_key: unique identifier for the component in a page.
         @param inference_dir: directory where inference runs were saved.
+        @param refresh_rate: how many seconds to wait before updating the progress.
         @param preferred_run_ids: a collection of run ids to show the progress. If not provided,
             the progress of all run ids in the inference directory will be displayed.
         """
         self.component_key = component_key
         self.inference_dir = inference_dir
         self.preferred_run_ids = preferred_run_ids
+        self.refresh_rate = refresh_rate
 
     def create_component(self):
         """
         Creates area in the screen for selection of an inference run id. Below is presented a json
         object with the execution params of the run once one is chosen from the list.
         """
-        self._create_progress_area()
+        asyncio.run(self._create_progress_area())
 
-    def _create_progress_area(self):
+    async def _create_progress_area(self):
         """
         Populates the progress pane where one can see the progress of the different inference runs.
 
@@ -57,6 +61,16 @@ class InferenceProgress:
                     else:
                         run_ids = get_inference_run_ids(self.inference_dir)
 
+                    # The status contains a countdown showing how many seconds until the next
+                    # refresh. It is properly filled in the end of this function after we parse
+                    # all the experiments in the run and know how many of them have finished
+                    # successfully.
+                    status_text = st.empty()
+
+                    if len(run_ids) <= 0:
+                        await self._wait(status_text)
+                        continue
+
                     for i, run_id in enumerate(run_ids):
                         inference_run = InferenceRun(
                             inference_dir=self.inference_dir, run_id=run_id
@@ -71,3 +85,11 @@ class InferenceProgress:
                                 inference_run
                             )
                             inference_progress_component.create_component()
+
+    async def _wait(self, countdown_area: st.container):
+        """
+        Waits a few seconds and update countdown.
+        """
+        for i in range(self.refresh_rate, 0, -1):
+            countdown_area.write(f"**Refreshing in :red[{i} seconds].**")
+            await asyncio.sleep(1)

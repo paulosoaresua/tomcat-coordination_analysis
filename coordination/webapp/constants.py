@@ -12,3 +12,4 @@ DEFAULT_PLOT_MARGINS = dict(l=0, r=0, t=30, b=10)
 INFERENCE_RESULTS_DIR_STATE_KEY = "inference_results_dir"
 AVAILABLE_EXPERIMENTS_STATE_KEY = "available_experiments"
 NUM_LAST_RUNS = 5
+REFRESH_RATE = 10  # in seconds
