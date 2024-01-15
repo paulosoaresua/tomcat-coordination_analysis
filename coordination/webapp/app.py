@@ -30,7 +30,7 @@ if AVAILABLE_EXPERIMENTS_STATE_KEY not in st.session_state:
 Header().create_component()
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Single Run", "Run vs Run", "New Run", "Progress", "Evaluations"]
+    ["Single Run", "Run vs Run", "Evaluations", "New Run", "Progress"]
 )
 
 with tab1:
