@@ -14,17 +14,19 @@ class InferenceProgress:
     one of them.
     """
 
-    def __init__(self, component_key: str, inference_dir: str, refresh_rate: int):
+    def __init__(self, component_key: str, inference_dir: str,
+                 preferred_run_ids: Optional[List[str]] = None):
         """
         Creates the component.
 
         @param component_key: unique identifier for the component in a page.
         @param inference_dir: directory where inference runs were saved.
-        @param refresh_rate: how many seconds to wait before updating the progress.
+        @param preferred_run_ids: a collection of run ids to show the progress. If not provided, the
+            progress of all run ids in the inference directory will be displayed.
         """
         self.component_key = component_key
         self.inference_dir = inference_dir
-        self.refresh_rate = refresh_rate
+        self.preferred_run_ids = preferred_run_ids
 
     def create_component(self):
         """
@@ -46,7 +48,10 @@ class InferenceProgress:
         while True:
             with progress_area:
                 with st.container():
-                    run_ids = get_inference_run_ids(self.inference_dir)
+                    if self.preferred_run_ids:
+                        run_ids = self.preferred_run_ids
+                    else:
+                        run_ids = get_inference_run_ids(self.inference_dir)
 
                     for i, run_id in enumerate(run_ids):
                         inference_run = InferenceRun(
