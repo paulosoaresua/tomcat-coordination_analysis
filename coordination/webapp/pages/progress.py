@@ -46,17 +46,17 @@ class Progress:
             run_id_multi_selection_component.create_component()
         with col3:
             if st.button("Refresh"):
-                if run_id_multi_selection_component.selected_run_ids_:
-                    inference_progress_component.preferred_run_ids = (
-                        run_id_multi_selection_component.selected_run_ids_
-                    )
-                else:
-                    idx = min(
-                        num_runs, len(run_id_multi_selection_component.all_run_ids)
-                    )
-                    inference_progress_component.preferred_run_ids = (
-                        run_id_multi_selection_component.all_run_ids[:idx]
-                    )
                 st.rerun()
 
+        if run_id_multi_selection_component.selected_run_ids_:
+            inference_progress_component.preferred_run_ids = (
+                run_id_multi_selection_component.selected_run_ids_
+            )
+        else:
+            idx = min(
+                num_runs, len(run_id_multi_selection_component.all_run_ids)
+            )
+            inference_progress_component.preferred_run_ids = (
+                run_id_multi_selection_component.all_run_ids[:idx]
+            )
         inference_progress_component.create_component()
