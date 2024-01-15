@@ -2,8 +2,6 @@ import os
 
 import plotly.express as px
 
-REFRESH_RATE = 10  # in seconds
-
 # Holds temporary files related to the webapp execution
 APP_RUN_DIR = os.getenv("APP_RUN_DIR", ".webapp")
 EVALUATIONS_DIR = os.getenv("EVAL_DIR", "evaluations")
@@ -13,3 +11,4 @@ DEFAULT_COLOR_PALETTE = px.colors.qualitative.Pastel1
 DEFAULT_PLOT_MARGINS = dict(l=0, r=0, t=30, b=10)
 INFERENCE_RESULTS_DIR_STATE_KEY = "inference_results_dir"
 AVAILABLE_EXPERIMENTS_STATE_KEY = "available_experiments"
+NUM_LAST_RUNS = 10
