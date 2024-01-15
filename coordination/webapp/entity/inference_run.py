@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from coordination.inference.inference_data import InferenceData

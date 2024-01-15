@@ -3,8 +3,7 @@ from typing import List
 
 import numpy as np
 
-from coordination.common.normalization import (
-    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
+from coordination.common.normalization import NORMALIZATION_PER_FEATURE
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 
 
@@ -18,9 +17,7 @@ class FNIRSConfigBundle(ModelConfigBundle):
     num_time_steps_in_coordination_scale: int = 100
     observation_normalization: str = NORMALIZATION_PER_FEATURE
     num_channels: int = 2
-    channel_names: List[str] = field(
-        default_factory=lambda: ["s1_d1", "s1_d2"]
-    )
+    channel_names: List[str] = field(default_factory=lambda: ["s1_d1", "s1_d2"])
 
     # Hyper priors
     mean_mean_uc0: float = 0.0

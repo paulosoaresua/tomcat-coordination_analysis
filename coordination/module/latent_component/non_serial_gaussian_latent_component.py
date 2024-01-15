@@ -267,7 +267,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                 ]
 
                 # n x s x d
-                prev_others = np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
+                prev_others = np.einsum(
+                    "ij,kjl->kil", sum_matrix_others, values[..., t - 1]
+                )
 
                 if self.self_dependent:
                     prev_same = values[..., t - 1]  # n x s x d

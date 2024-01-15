@@ -667,9 +667,7 @@ def log_prob(
 
     if self_dependent.eval():
         # The component's value for a subject depends on previous value of the same subject.
-        prev_same = sample[..., prev_time_same_subject].reshape(
-            sample.shape
-        )  # (D x T)
+        prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # (D x T)
 
         # We use this binary mask to zero out entries with no previous values of the same subjects.
         # We use this to determine the time steps that belong to the initial values of the

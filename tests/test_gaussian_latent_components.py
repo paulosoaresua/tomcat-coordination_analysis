@@ -3,10 +3,10 @@ from unittest import TestCase
 import numpy as np
 import pytensor.tensor as ptt
 
-from coordination.module.latent_component.serial_gaussian_latent_component import \
-    log_prob as serial_log_prob
 from coordination.module.latent_component.non_serial_gaussian_latent_component import \
     log_prob as non_serial_log_prob
+from coordination.module.latent_component.serial_gaussian_latent_component import \
+    log_prob as serial_log_prob
 
 
 class TestGaussianLatentComponents(TestCase):

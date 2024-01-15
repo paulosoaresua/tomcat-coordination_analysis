@@ -7,7 +7,8 @@ from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
 from coordination.webapp.pages.new_run import NewRun
 from coordination.webapp.pages.progress import Progress
 from coordination.webapp.pages.run_vs_run import RunVsRun
-from coordination.webapp.pages.run_vs_run_evaluations import RunVsRunEvaluations
+from coordination.webapp.pages.run_vs_run_evaluations import \
+    RunVsRunEvaluations
 from coordination.webapp.pages.single_run import SingleRun
 
 st.set_page_config(
@@ -28,7 +29,9 @@ if AVAILABLE_EXPERIMENTS_STATE_KEY not in st.session_state:
 
 Header().create_component()
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Single Run", "Run vs Run", "New Run", "Progress", "Evaluations"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Single Run", "Run vs Run", "New Run", "Progress", "Evaluations"]
+)
 
 with tab1:
     SingleRun(page_key="single_run_tab").create_page()

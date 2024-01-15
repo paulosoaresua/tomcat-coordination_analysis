@@ -3,32 +3,23 @@ from unittest import TestCase
 import numpy as np
 import pytensor.tensor as ptt
 
-from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
-    log_prob as serial_log_prob
 from coordination.module.latent_component.non_serial_2d_gaussian_latent_component import \
     log_prob as non_serial_log_prob
+from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
+    log_prob as serial_log_prob
 
 
 class Test2DGaussianLatentComponents(TestCase):
     def test_serial_log_prob(self):
         # 2 subjects, 2 features and 4 time steps
         sample = ptt.constant(
-            np.array([
-                [0.1, 0.2, 0.3, 0.4],  # position
-                [0.2, 0.3, 0.4, 0.5]  # speed
-            ])
+            np.array([[0.1, 0.2, 0.3, 0.4], [0.2, 0.3, 0.4, 0.5]])  # position  # speed
         )
         initial_mean = ptt.constant(
-            np.array([
-                [0.3, 0.4],  # subject 1
-                [0.4, 0.5]  # subject 2
-            ])
+            np.array([[0.3, 0.4], [0.4, 0.5]])  # subject 1  # subject 2
         )
         sigma = ptt.constant(
-            np.array([
-                [0.01, 0.02],  # subject 1
-                [0.02, 0.03]  # subject 2
-            ])
+            np.array([[0.01, 0.02], [0.02, 0.03]])  # subject 1  # subject 2
         )
         coordination = ptt.constant(np.array([0.1, 0.3, 0.7, 0.5]))
         # Subjects: A, A, B, A
@@ -64,37 +55,34 @@ class Test2DGaussianLatentComponents(TestCase):
     def test_non_serial_log_prob(self):
         # 3 subjects, 2 features and 3 time steps
         sample = ptt.constant(
-            np.array([
-                # Subject 1
+            np.array(
                 [
-                    [0.1, 0.2, 0.3],  # position
-                    [0.2, 0.3, 0.4]  # speed
-                ],
-                # Subject 2
-                [
-                    [0.3, 0.4, 0.5],
-                    [0.4, 0.5, 0.6]
-                ],
-                # Subject 3
-                [
-                    [0.5, 0.6, 0.7],
-                    [0.9, 1.0, 1.1]
+                    # Subject 1
+                    [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]],  # position  # speed
+                    # Subject 2
+                    [[0.3, 0.4, 0.5], [0.4, 0.5, 0.6]],
+                    # Subject 3
+                    [[0.5, 0.6, 0.7], [0.9, 1.0, 1.1]],
                 ]
-            ])
+            )
         )
         initial_mean = ptt.constant(
-            np.array([
-                [0.3, 0.4],  # subject 1
-                [0.4, 0.5],  # subject 2
-                [0.5, 0.6]  # subject 3
-            ])
+            np.array(
+                [
+                    [0.3, 0.4],  # subject 1
+                    [0.4, 0.5],  # subject 2
+                    [0.5, 0.6],  # subject 3
+                ]
+            )
         )
         sigma = ptt.constant(
-            np.array([
-                [0.01, 0.02],  # subject 1
-                [0.02, 0.03],  # subject 2
-                [0.03, 0.04]  # subject 2
-            ])
+            np.array(
+                [
+                    [0.01, 0.02],  # subject 1
+                    [0.02, 0.03],  # subject 2
+                    [0.03, 0.04],  # subject 2
+                ]
+            )
         )
         coordination = ptt.constant(np.array([0.1, 0.3, 0.7]))
 

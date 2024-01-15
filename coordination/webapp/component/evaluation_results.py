@@ -1,13 +1,10 @@
-import pandas as pd
-import streamlit as st
 import os
 
-from coordination.webapp.component.inference_stats import InferenceStats
-from coordination.webapp.component.model_variable_inference_results import \
-    ModelVariableInferenceResults
-from coordination.webapp.entity.inference_run import InferenceRun
-from coordination.webapp.entity.model_variable import ModelVariableInfo
+import pandas as pd
+import streamlit as st
+
 from coordination.webapp.constants import EVALUATIONS_DIR
+from coordination.webapp.entity.inference_run import InferenceRun
 
 
 class EvaluationResults:
@@ -15,11 +12,7 @@ class EvaluationResults:
     Represents a component that displays evaluation results for an inference run.
     """
 
-    def __init__(
-        self,
-        component_key: str,
-        inference_run: InferenceRun
-    ):
+    def __init__(self, component_key: str, inference_run: InferenceRun):
         """
         Creates the component.
 
@@ -33,10 +26,7 @@ class EvaluationResults:
         """
         Displays evaluation results in different forms depending on the variable selected.
         """
-        data = {
-            "images": [],
-            "tables": []
-        }
+        data = {"images": [], "tables": []}
         for filename in os.listdir(f"{EVALUATIONS_DIR}/{self.inference_run.run_id}"):
             if filename[-3:] == "png":
                 data["images"].append(filename)

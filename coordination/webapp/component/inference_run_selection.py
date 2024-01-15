@@ -45,4 +45,6 @@ class InferenceRunSelection:
                 with col1:
                     st.write("**Execution Parameters:**")
                 with col2:
-                    st.json(self.selected_inference_run_.execution_params, expanded=False)
+                    st.json(
+                        self.selected_inference_run_.execution_params, expanded=False
+                    )

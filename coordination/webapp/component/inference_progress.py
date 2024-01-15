@@ -1,4 +1,4 @@
-import asyncio
+from typing import List, Optional
 
 import streamlit as st
 
@@ -14,15 +14,19 @@ class InferenceProgress:
     one of them.
     """
 
-    def __init__(self, component_key: str, inference_dir: str,
-                 preferred_run_ids: Optional[List[str]] = None):
+    def __init__(
+        self,
+        component_key: str,
+        inference_dir: str,
+        preferred_run_ids: Optional[List[str]] = None,
+    ):
         """
         Creates the component.
 
         @param component_key: unique identifier for the component in a page.
         @param inference_dir: directory where inference runs were saved.
-        @param preferred_run_ids: a collection of run ids to show the progress. If not provided, the
-            progress of all run ids in the inference directory will be displayed.
+        @param preferred_run_ids: a collection of run ids to show the progress. If not provided,
+            the progress of all run ids in the inference directory will be displayed.
         """
         self.component_key = component_key
         self.inference_dir = inference_dir

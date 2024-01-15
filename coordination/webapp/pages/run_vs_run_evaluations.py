@@ -1,13 +1,8 @@
 import streamlit as st
 
-from coordination.webapp.component.experiment_id_multi_selection import \
-    ExperimentIDMultiSelection
 from coordination.webapp.component.evaluation_results import EvaluationResults
 from coordination.webapp.component.inference_run_selection import \
     InferenceRunSelection
-from coordination.webapp.component.model_variable_selection import \
-    ModelVariableSelection
-from coordination.webapp.constants import INFERENCE_RESULTS_DIR_STATE_KEY
 from coordination.webapp.constants import EVALUATIONS_DIR
 
 
@@ -29,16 +24,16 @@ class RunVsRunEvaluations:
         """
         Creates the page by adding different components to the screen.
         """
-        st.write(
-            f"Evaluations dir: *:blue[{EVALUATIONS_DIR}]*"
-        )
+        st.write(f"Evaluations dir: *:blue[{EVALUATIONS_DIR}]*")
 
         col_left, col_right = st.columns(2)
         with col_left:
             RunVsRunEvaluations._populate_column(column_key=f"{self.page_key}_left_col")
 
         with col_right:
-            RunVsRunEvaluations._populate_column(column_key=f"{self.page_key}_right_col")
+            RunVsRunEvaluations._populate_column(
+                column_key=f"{self.page_key}_right_col"
+            )
 
     @staticmethod
     def _populate_column(column_key: str):
@@ -60,7 +55,7 @@ class RunVsRunEvaluations:
 
         evaluation_results_component = EvaluationResults(
             component_key=f"{column_key}_{inference_run_component.selected_inference_run_.run_id}"
-                          f"_evaluation_results",
-            inference_run=inference_run_component.selected_inference_run_
+            f"_evaluation_results",
+            inference_run=inference_run_component.selected_inference_run_,
         )
         evaluation_results_component.create_component()

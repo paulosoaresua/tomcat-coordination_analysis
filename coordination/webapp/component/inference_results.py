@@ -57,7 +57,9 @@ class InferenceResults:
 
         if self.model_variable_info.inference_mode == "inference_stats":
             convergence_report = InferenceResults._read_convergence_report(
-                self.inference_run.inference_dir, self.inference_run.run_id, self.experiment_id
+                self.inference_run.inference_dir,
+                self.inference_run.run_id,
+                self.experiment_id,
             )
             inference_stats_component = InferenceStats(
                 component_key=f"{self.component_key}_inference_stats",

@@ -27,9 +27,9 @@ class Vocalic2DModel(ModelTemplate):
     """
 
     def __init__(
-            self,
-            config_bundle: Vocalic2DConfigBundle,
-            pymc_model: Optional[pm.Model] = None,
+        self,
+        config_bundle: Vocalic2DConfigBundle,
+        pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a vocalic model.
@@ -58,25 +58,33 @@ class Vocalic2DModel(ModelTemplate):
 
         vocalic_groups = self.config_bundle.vocalic_groups
         if vocalic_groups is None:
-            vocalic_groups = [{
-                "name": None,
-                "features": self.config_bundle.vocalic_feature_names,
-                "weights": self.config_bundle.weights
-            }]
+            vocalic_groups = [
+                {
+                    "name": None,
+                    "features": self.config_bundle.vocalic_feature_names,
+                    "weights": self.config_bundle.weights,
+                }
+            ]
 
         groups = []
         for vocalic_group in vocalic_groups:
             # Form a tensor of observations by getting only the dimensions of the features in the
             # group.
-            feature_idx = [self.config_bundle.vocalic_feature_names.index(feature) for feature in
-                           vocalic_group["features"]]
-            observed_values = np.take_along_axis(self.config_bundle.observed_values,
-                                                 indices=np.array(feature_idx, dtype=int)[:, None],
-                                                 axis=0)
+            feature_idx = [
+                self.config_bundle.vocalic_feature_names.index(feature)
+                for feature in vocalic_group["features"]
+            ]
+            observed_values = np.take_along_axis(
+                self.config_bundle.observed_values,
+                indices=np.array(feature_idx, dtype=int)[:, None],
+                axis=0,
+            )
 
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = vocalic_group["name"]
-            suffix = "" if self.config_bundle.vocalic_groups is None else f"_{group_name}"
+            suffix = (
+                "" if self.config_bundle.vocalic_groups is None else f"_{group_name}"
+            )
             state_space = Serial2DGaussianLatentComponent(
                 uuid=f"state_space{suffix}",
                 pymc_model=self.pymc_model,
@@ -90,9 +98,13 @@ class Vocalic2DModel(ModelTemplate):
                 share_sd_a_across_dimensions=self.config_bundle.share_sd_a_across_dimensions,
                 coordination_samples=self.config_bundle.coordination_samples,
                 sampling_time_scale_density=self.config_bundle.sampling_time_scale_density,
-                allow_sampled_subject_repetition=self.config_bundle.allow_sampled_subject_repetition,
+                allow_sampled_subject_repetition=(
+                    self.config_bundle.allow_sampled_subject_repetition
+                ),
                 fix_sampled_subject_sequence=self.config_bundle.fix_sampled_subject_sequence,
-                time_steps_in_coordination_scale=self.config_bundle.time_steps_in_coordination_scale,
+                time_steps_in_coordination_scale=(
+                    self.config_bundle.time_steps_in_coordination_scale
+                ),
                 prev_time_same_subject=self.config_bundle.prev_time_same_subject,
                 prev_time_diff_subject=self.config_bundle.prev_time_diff_subject,
                 subject_indices=self.config_bundle.subject_indices,
@@ -130,7 +142,8 @@ class Vocalic2DModel(ModelTemplate):
                 dimension_names=vocalic_group["features"],
                 observed_values=observed_values,
                 time_steps_in_coordination_scale=(
-                    self.config_bundle.time_steps_in_coordination_scale),
+                    self.config_bundle.time_steps_in_coordination_scale
+                ),
                 subject_indices=self.config_bundle.subject_indices,
                 sd_o=self.config_bundle.sd_o,
             )

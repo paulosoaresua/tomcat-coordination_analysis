@@ -5,7 +5,7 @@ NORMALIZATION_PER_SUBJECT_AND_FEATURE = "norm_per_subject_and_feature"
 
 
 def normalize_serialized_data_per_subject_and_feature(
-        data: np.ndarray, subject_indices: np.ndarray, num_subjects: int
+    data: np.ndarray, subject_indices: np.ndarray, num_subjects: int
 ) -> np.ndarray:
     """
     Normalize data (feature x time) to have mean 0 and standard deviation 1 across time. The

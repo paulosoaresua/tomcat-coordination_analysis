@@ -1,11 +1,10 @@
 from typing import Optional
 
-import numpy as np
 import pymc as pm
 
 from coordination.model.config_bundle.fnirs import FNIRSConfigBundle
-from coordination.model.template import ModelTemplate
 from coordination.model.model import Model
+from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
@@ -13,9 +12,10 @@ from coordination.module.latent_component.non_serial_2d_gaussian_latent_componen
     NonSerial2DGaussianLatentComponent
 from coordination.module.observation.non_serial_gaussian_observation import \
     NonSerialGaussianObservation
+from coordination.module.transformation.dimension_reduction import \
+    DimensionReduction
 from coordination.module.transformation.mlp import MLP
 from coordination.module.transformation.sequential import Sequential
-from coordination.module.transformation.dimension_reduction import DimensionReduction
 
 
 class FNIRSModel(ModelTemplate):
