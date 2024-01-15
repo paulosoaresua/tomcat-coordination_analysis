@@ -46,16 +46,7 @@ class InferenceProgress:
         while True:
             with progress_area:
                 with st.container():
-                    # The status contains a countdown showing how many seconds until the next
-                    # refresh. It is properly filled in the end of this function after we parse
-                    # all the experiments in the run and know how many of them have finished
-                    # successfully.
-                    status_text = st.empty()
-
                     run_ids = get_inference_run_ids(self.inference_dir)
-                    if len(run_ids) <= 0:
-                        await self._wait(status_text)
-                        continue
 
                     for i, run_id in enumerate(run_ids):
                         inference_run = InferenceRun(
