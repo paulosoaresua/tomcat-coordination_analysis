@@ -86,6 +86,8 @@ class InferenceProgress:
                             )
                             inference_progress_component.create_component()
 
+                    await self._wait(status_text)
+
     async def _wait(self, countdown_area: st.container):
         """
         Waits a few seconds and update countdown.
