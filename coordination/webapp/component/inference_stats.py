@@ -44,10 +44,11 @@ class InferenceStats:
 
         st.write("#### Model stats")
         st.write("**Divergences**")
-        p_divergence = self.inference_data.num_divergences / self.inference_data.num_posterior_samples
+        p_divergence = (100.0 * self.inference_data.num_divergences /
+                        self.inference_data.num_posterior_samples)
         st.write(
             f"{self.inference_data.num_divergences} out of "
-            f"{self.inference_data.num_posterior_samples} ({p_divergence})")
+            f"{self.inference_data.num_posterior_samples} ({p_divergence:.1f}%)")
 
         st.write("**Convergence**")
         st.dataframe(self.convergence_report, use_container_width=True)

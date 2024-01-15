@@ -167,7 +167,9 @@ class ExperimentProgress:
             return "no_logs"
 
         if logs.find("ERROR") >= 0:
-            return "failed"
+            if logs.rfind("ERROR") > logs.rfind("INFO"):
+                # If there's an INFO after error is because another run is being attempted.
+                return "failed"
 
         if logs.find("SUCCESS") >= 0:
             return "success"
