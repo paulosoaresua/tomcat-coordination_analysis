@@ -53,7 +53,6 @@ class InferenceProgress:
             with progress_area:
                 with st.container():
                     if self.preferred_run_ids:
-                        print("Yes")
                         run_ids = self.preferred_run_ids
                     else:
                         run_ids = get_inference_run_ids(self.inference_dir)
