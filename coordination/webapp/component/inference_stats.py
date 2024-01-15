@@ -17,10 +17,10 @@ class InferenceStats:
     """
 
     def __init__(
-        self,
-        component_key: str,
-        inference_data: InferenceData,
-        convergence_report: pd.DataFrame,
+            self,
+            component_key: str,
+            inference_data: InferenceData,
+            convergence_report: pd.DataFrame,
     ):
         """
         Creates the component.
@@ -42,6 +42,16 @@ class InferenceStats:
         if not self.inference_data:
             return
 
+        st.write("#### Model stats")
+        st.write("**Divergences**")
+        p_divergence = self.inference_data.num_divergences / self.inference_data.num_posterior_samples
+        st.write(
+            f"{self.inference_data.num_divergences} out of "
+            f"{self.inference_data.num_posterior_samples} ({p_divergence})")
+
+        st.write("**Convergence**")
+        st.dataframe(self.convergence_report, use_container_width=True)
+
         means = self.inference_data.average_posterior_samples(
             "coordination", return_std=False
         )
@@ -56,10 +66,6 @@ class InferenceStats:
         st.write(f"Std: {means.std():.4f}")
 
         self._plot_coordination_distribution(means)
-
-        st.write("#### Model stats")
-        st.write("**Convergence**")
-        st.dataframe(self.convergence_report, use_container_width=True)
 
         self._plot_log_probability_distribution()
 
