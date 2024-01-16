@@ -198,6 +198,7 @@ class InferenceExecution:
             def update_experiment_list():
                 data_filepath = st.session_state[f"{self.component_key}_data_filepath"]
                 InferenceExecution._load_available_experiment_list(data_filepath)
+                default_execution_params["experiment_ids"] = None
 
             execution_params["data_filepath"] = st.text_input(
                 label="Data Filepath",
