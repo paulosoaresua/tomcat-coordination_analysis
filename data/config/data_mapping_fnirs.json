@@ -1,0 +1,27 @@
+{
+  "mappings": [
+    {
+      "bundle_param_name": "time_steps_in_coordination_scale",
+      "data_column_names": [
+        "fnirs_time_steps_in_coordination_scale"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "observed_values",
+      "data_column_names": [
+        "s1_d1",
+        "s1_d2"
+      ],
+      "data_type": "array",
+      "feature": true
+    },
+    {
+      "bundle_param_name": "num_time_steps_in_coordination_scale",
+      "data_column_names": [
+        "num_time_steps_in_coordination_scale"
+      ],
+      "data_type": "int"
+    }
+  ]
+}   

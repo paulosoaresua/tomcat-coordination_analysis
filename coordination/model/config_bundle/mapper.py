@@ -56,7 +56,7 @@ class DataMapper:
                     value = np.array(values)
                     if value.ndim == 3:
                         # Subject indices come first and dimensions come in second.
-                        value = value.swapaxis(0, 1)
+                        value = value.swapaxes(0, 1)
                     elif len(mapping["data_column_names"]) == 1 and not mapping.get(
                         "feature", False
                     ):
