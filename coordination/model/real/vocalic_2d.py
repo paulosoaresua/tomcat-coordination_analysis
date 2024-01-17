@@ -17,6 +17,7 @@ from coordination.module.transformation.dimension_reduction import \
     DimensionReduction
 from coordination.module.transformation.mlp import MLP
 from coordination.module.transformation.sequential import Sequential
+from coordination.module.coordination.constant_coordination import ConstantCoordination
 
 
 class Vocalic2DModel(ModelTemplate):
@@ -46,15 +47,23 @@ class Vocalic2DModel(ModelTemplate):
         bundle. This allows the config bundle to be updated after the model creation, reflecting
         in changes in the model's modules any time this function is called.
         """
-        coordination = SigmoidGaussianCoordination(
-            pymc_model=self.pymc_model,
-            num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
-            mean_mean_uc0=self.config_bundle.mean_mean_uc0,
-            sd_mean_uc0=self.config_bundle.sd_mean_uc0,
-            sd_sd_uc=self.config_bundle.sd_sd_uc,
-            mean_uc0=self.config_bundle.mean_uc0,
-            sd_uc=self.config_bundle.sd_uc,
-        )
+        if self.config_bundle.constant_coordination:
+            coordination = ConstantCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
+                alpha=self.config_bundle.alpha,
+                beta=self.config_bundle.beta,
+            )
+        else:
+            coordination = SigmoidGaussianCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
+                mean_mean_uc0=self.config_bundle.mean_mean_uc0,
+                sd_mean_uc0=self.config_bundle.sd_mean_uc0,
+                sd_sd_uc=self.config_bundle.sd_sd_uc,
+                mean_uc0=self.config_bundle.mean_uc0,
+                sd_uc=self.config_bundle.sd_uc,
+            )
 
         vocalic_groups = self.config_bundle.vocalic_groups
         if vocalic_groups is None:
@@ -78,7 +87,7 @@ class Vocalic2DModel(ModelTemplate):
                 self.config_bundle.observed_values,
                 indices=np.array(feature_idx, dtype=int)[:, None],
                 axis=0,
-            )
+            ) if self.config_bundle.observed_values is not None else None
 
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = vocalic_group["name"]

@@ -80,17 +80,28 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     """
 
     num_subjects: int = 3
-    num_time_steps_in_coordination_scale: int = 100
     observation_normalization: str = NORMALIZATION_PER_FEATURE
     num_vocalic_features: int = 4
     vocalic_feature_names: List[str] = field(
         default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
     )
 
-    # Hyper priors
+    # Coordination
+    num_time_steps_in_coordination_scale: int = 100
+    constant_coordination: bool = False
+
+    # Parameters if coordination is constant
+    alpha: float = 1
+    beta: float = 1
+
+    # Parameters if coordination is variable
     mean_mean_uc0: float = 0.0
     sd_mean_uc0: float = 1.0
     sd_sd_uc: float = 1.0
+    mean_uc0: float = None
+    sd_uc: float = None
+
+    # Hyper priors
     mean_mean_a0: float = 0.0
     sd_mean_a0: float = 1.0
     sd_sd_a: float = 1.0
@@ -108,11 +119,10 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     fix_sampled_subject_sequence: bool = True
 
     # For sampling. Defaults to None for inference.
-    mean_uc0: float = None
-    sd_uc: float = None
     mean_a0: float = None
     sd_a: float = None
     sd_o: float = None
+
     # Fixed coordination series for sampling.
     coordination_samples: np.ndarray = None
 
