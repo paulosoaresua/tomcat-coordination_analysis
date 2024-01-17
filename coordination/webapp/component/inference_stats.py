@@ -86,7 +86,7 @@ class InferenceStats:
 
         # Add combination of all chains
         coordination = np.concatenate(
-            [coordination_per_chain.mean(axis=0), coordination_per_chain], axis=0
+            [coordination_per_chain.mean(axis=0, keepdims=True), coordination_per_chain], axis=0
         )
         colors = [next(color_palette_iter) for _ in range(coordination.shape[0])]
         labels = ["All chains"] + [
