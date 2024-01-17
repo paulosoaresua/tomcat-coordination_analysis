@@ -138,7 +138,7 @@ class ModelVariableInferenceResults:
 
         fig = None
         color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
-        if len(means.shape) == 1:
+        if means.ndim == 1:
             # The series only has a time axis.
             time_steps = np.arange(len(means))
             bounds = (
@@ -160,52 +160,79 @@ class ModelVariableInferenceResults:
             if self.dimension is None:
                 return
 
-            # Get subject indices and time indices from the coded coordinates of the data along
-            # the time axis. Each time coordinate is coded as "subject#time" when a serial module
-            # is created.
-            subject_indices = np.array(
-                [
-                    int(x.split("#")[0])
-                    for x in getattr(
-                        means, f"{self.model_variable_info.variable_name}_time"
-                    ).data
-                ]
-            )
-            time_steps = np.array(
-                [
-                    int(x.split("#")[1])
-                    for x in getattr(
-                        means, f"{self.model_variable_info.variable_name}_time"
-                    ).data
-                ]
-            )
-            unique_subjects = sorted(list(set(subject_indices)))
-            for s in unique_subjects:
-                # Get the indices in the time series belonging to subject "s". In a serial module,
-                # only one subject is observed at a time.
-                idx = [i for i, subject in enumerate(subject_indices) if subject == s]
-                y = (
-                    means.loc[self.dimension][idx]
-                    if isinstance(self.dimension, str)
-                    else means[self.dimension, idx]
+            if means.ndim == 2:
+                # Serialized data. Axes are (dimension x time)
+                # Get subject indices and time indices from the coded coordinates of the data along
+                # the time axis. Each time coordinate is coded as "subject#time" when a serial module
+                # is created.
+                subject_indices = np.array(
+                    [
+                        int(x.split("#")[0])
+                        for x in getattr(
+                            means, f"{self.model_variable_info.variable_name}_time"
+                        ).data
+                    ]
                 )
-                if stds is None:
-                    y_std = None
-                else:
-                    y_std = (
-                        stds.loc[self.dimension][idx]
+                time_steps = np.array(
+                    [
+                        int(x.split("#")[1])
+                        for x in getattr(
+                            means, f"{self.model_variable_info.variable_name}_time"
+                        ).data
+                    ]
+                )
+                unique_subjects = sorted(list(set(subject_indices)))
+                for s in unique_subjects:
+                    # Get the indices in the time series belonging to subject "s". In a serial module,
+                    # only one subject is observed at a time.
+                    idx = [i for i, subject in enumerate(subject_indices) if subject == s]
+                    y = (
+                        means.loc[self.dimension][idx]
                         if isinstance(self.dimension, str)
-                        else stds[self.dimension, idx]
+                        else means[self.dimension, idx]
                     )
+                    if stds is None:
+                        y_std = None
+                    else:
+                        y_std = (
+                            stds.loc[self.dimension][idx]
+                            if isinstance(self.dimension, str)
+                            else stds[self.dimension, idx]
+                        )
 
-                fig = plot_series(
-                    x=time_steps[idx],
-                    y=y,
-                    y_std=y_std,
-                    label=f"Subject {s}",
-                    figure=fig,
-                    color=next(color_palette_iter),
-                )
+                    fig = plot_series(
+                        x=time_steps[idx],
+                        y=y,
+                        y_std=y_std,
+                        label=f"Subject {s}",
+                        figure=fig,
+                        color=next(color_palette_iter),
+                    )
+            else:
+                # Non-serialized data. Axes are (subject x dimension x time)
+                for s in np.range(means.shape[0]):
+                    y = (
+                        means[s].loc[self.dimension]
+                        if isinstance(self.dimension, str)
+                        else means[s, self.dimension]
+                    )
+                    if stds is None:
+                        y_std = None
+                    else:
+                        y_std = (
+                            stds[s].loc[self.dimension]
+                            if isinstance(self.dimension, str)
+                            else stds[s, self.dimension]
+                        )
+
+                    fig = plot_series(
+                        x=np.arange(y),
+                        y=y,
+                        y_std=y_std,
+                        label=f"Subject {s}",
+                        figure=fig,
+                        color=next(color_palette_iter),
+                    )
 
             yaxis_label = f"{self.model_variable_info.variable_name} - {self.dimension}"
 
