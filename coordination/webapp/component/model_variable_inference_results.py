@@ -226,7 +226,7 @@ class ModelVariableInferenceResults:
                         )
 
                     fig = plot_series(
-                        x=np.arange(y),
+                        x=np.arange(len(y)),
                         y=y,
                         y_std=y_std,
                         label=f"Subject {s}",
