@@ -77,10 +77,10 @@ class InferenceStats:
         @param overall_coordination: coordination series averaged across all chains and draws.
         """
         color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
-        # chain x time
+        # chain x draw
         coordination_per_chain = (
             self.inference_data.trace["posterior"]["coordination"]
-            .mean(dim=["draw"])
+            .mean(dim=["coordination_time"])
             .to_numpy()
         )
 
