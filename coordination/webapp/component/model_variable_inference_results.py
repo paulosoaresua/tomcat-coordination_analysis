@@ -210,7 +210,7 @@ class ModelVariableInferenceResults:
                     )
             else:
                 # Non-serialized data. Axes are (subject x dimension x time)
-                for s in np.range(means.shape[0]):
+                for s in range(means.shape[0]):
                     y = (
                         means[s].loc[self.dimension]
                         if isinstance(self.dimension, str)
