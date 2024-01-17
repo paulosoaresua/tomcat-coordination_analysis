@@ -14,15 +14,26 @@ class FNIRSConfigBundle(ModelConfigBundle):
     """
 
     num_subjects: int = 3
-    num_time_steps_in_coordination_scale: int = 100
     observation_normalization: str = NORMALIZATION_PER_FEATURE
     num_channels: int = 2
     channel_names: List[str] = field(default_factory=lambda: ["s1_d1", "s1_d2"])
 
-    # Hyper priors
+    # Coordination
+    num_time_steps_in_coordination_scale: int = 100
+    constant_coordination: bool = False
+
+    # Parameters if coordination is constant
+    alpha: float = 1
+    beta: float = 1
+
+    # Parameters if coordination is variable
     mean_mean_uc0: float = 0.0
     sd_mean_uc0: float = 1.0
     sd_sd_uc: float = 1.0
+    mean_uc0: float = None
+    sd_uc: float = None
+
+    # Hyper priors
     mean_mean_a0: float = 0.0
     sd_mean_a0: float = 1.0
     sd_sd_a: float = 1.0

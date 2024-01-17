@@ -2,6 +2,7 @@ from typing import Optional
 
 import numpy as np
 import pymc as pm
+import logging
 
 from coordination.model.config_bundle.vocalic import Vocalic2DConfigBundle
 from coordination.model.model import Model
@@ -48,11 +49,12 @@ class Vocalic2DModel(ModelTemplate):
         in changes in the model's modules any time this function is called.
         """
         if self.config_bundle.constant_coordination:
+            logging.info("Fitting a constant coordination.")
             coordination = ConstantCoordination(
                 pymc_model=self.pymc_model,
                 num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
                 alpha=self.config_bundle.alpha,
-                beta=self.config_bundle.beta,
+                beta=self.config_bundle.beta
             )
         else:
             coordination = SigmoidGaussianCoordination(

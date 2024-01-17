@@ -357,7 +357,7 @@ class InferenceData:
                     stds.loc[dimension][idx]
                     if isinstance(dimension, str)
                     else stds[dimension, idx]
-                )
+                ) if stds is not None else None
                 plot_series(
                     x=time_steps[idx],
                     y=y,
@@ -382,7 +382,7 @@ class InferenceData:
                     stds[s].loc[dimension]
                     if isinstance(dimension, str)
                     else stds[s, dimension]
-                )
+                ) if stds is not None else None
                 plot_series(
                     x=time_steps,
                     y=y,

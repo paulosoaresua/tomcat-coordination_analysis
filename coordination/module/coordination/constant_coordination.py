@@ -79,7 +79,7 @@ class ConstantCoordination(Coordination):
             raise ValueError(f"Value of the parameter beta is undefined.")
 
         coordination = beta(self.alpha, self.beta).rvs(num_series)
-        values = np.ones_like((num_series, self.num_time_steps)) * coordination[:, None]
+        values = np.ones((num_series, self.num_time_steps)) * np.array(coordination)[:, None]
 
         return ModuleSamples(values=values)
 
@@ -100,7 +100,8 @@ class ConstantCoordination(Coordination):
                     name="single_coordination",
                     alpha=self.alpha,
                     beta=self.beta,
-                    size=1
+                    size=1,
+                    observed=adjust_dimensions(self.observed_values, 1)
                 )
 
                 self.coordination_random_variable = pm.Deterministic(

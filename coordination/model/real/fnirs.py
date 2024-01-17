@@ -45,15 +45,24 @@ class FNIRSModel(ModelTemplate):
         in changes in the model's modules any time this function is called.
         """
 
-        coordination = SigmoidGaussianCoordination(
-            pymc_model=self.pymc_model,
-            num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
-            mean_mean_uc0=self.config_bundle.mean_mean_uc0,
-            sd_mean_uc0=self.config_bundle.sd_mean_uc0,
-            sd_sd_uc=self.config_bundle.sd_sd_uc,
-            mean_uc0=self.config_bundle.mean_uc0,
-            sd_uc=self.config_bundle.sd_uc,
-        )
+        if self.config_bundle.constant_coordination:
+            logging.info("Fitting a constant coordination.")
+            coordination = ConstantCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
+                alpha=self.config_bundle.alpha,
+                beta=self.config_bundle.beta
+            )
+        else:
+            coordination = SigmoidGaussianCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
+                mean_mean_uc0=self.config_bundle.mean_mean_uc0,
+                sd_mean_uc0=self.config_bundle.sd_mean_uc0,
+                sd_sd_uc=self.config_bundle.sd_sd_uc,
+                mean_uc0=self.config_bundle.mean_uc0,
+                sd_uc=self.config_bundle.sd_uc,
+            )
 
         state_space = NonSerial2DGaussianLatentComponent(
             uuid="neural_activity",
