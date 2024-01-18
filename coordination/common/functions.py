@@ -1,6 +1,7 @@
 from typing import Union
 
 import numpy as np
+from scipy.signal import find_peaks
 
 
 def logit(x: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
