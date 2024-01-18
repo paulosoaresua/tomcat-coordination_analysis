@@ -49,8 +49,6 @@ class FNIRSConfigBundle(ModelConfigBundle):
     sampling_relative_frequency: float = 1.0
 
     # For sampling. Defaults to None for inference.
-    mean_uc0: float = None
-    sd_uc: float = None
     mean_a0: float = None
     sd_a: float = None
     sd_o: float = None

@@ -9,6 +9,7 @@ import streamlit as st
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
                                            DEFAULT_PLOT_MARGINS)
+from coordination.common.functions import mean_at_peaks
 
 
 class InferenceStats:
@@ -64,7 +65,9 @@ class InferenceStats:
         )
         st.write(f"Mean: {means.mean():.4f}")
         st.write(f"Median: {np.median(means):.4f}")
+        st.write(f"Mean at Peaks: {mean_at_peaks(means):.4f}")
         st.write(f"Std: {means.std():.4f}")
+        st.write(f"Signal-to-Noise: {np.mean(means) / np.std(means):.4f}")
 
         self._plot_coordination_distribution(means)
 
