@@ -65,7 +65,7 @@ class InferenceStats:
         )
         st.write(f"Mean: {means.mean():.4f}")
         st.write(f"Median: {np.median(means):.4f}")
-        st.write(f"Mean at Peaks: {mean_at_peaks(means):.4f}")
+        st.write(f"Mean at Peaks: {mean_at_peaks(means, seconds=5):.4f}")
         st.write(f"Std: {means.std():.4f}")
         st.write(f"Signal-to-Noise: {np.mean(means) / np.std(means):.4f}")
 
