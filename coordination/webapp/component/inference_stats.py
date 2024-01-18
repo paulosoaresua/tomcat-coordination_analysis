@@ -9,7 +9,6 @@ import streamlit as st
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
                                            DEFAULT_PLOT_MARGINS)
-from coordination.common.functions import mean_at_peaks
 
 
 class InferenceStats:
@@ -63,11 +62,19 @@ class InferenceStats:
         st.write(
             "*:blue[Statistics computed over the mean posterior coordination per time step.]*"
         )
-        st.write(f"Mean: {means.mean():.4f}")
-        st.write(f"Median: {np.median(means):.4f}")
-        st.write(f"Mean at Peaks: {mean_at_peaks(means, seconds=5):.4f}")
-        st.write(f"Std: {means.std():.4f}")
-        st.write(f"Signal-to-Noise: {np.mean(means) / np.std(means):.4f}")
+        stats_df = pd.DataFrame([
+            {
+                "Mean": f"{means.mean():.4f}",
+                "Median": f"{np.median(means):.4f}",
+                "Std": f"{means.std():.4f}",
+                "Signal-to-Noise": f"{np.mean(means) / np.std(means):.4f}",
+                "Mean Last 5": f"{np.mean(means[-5:]):.4f}",
+                "Mean Last 10": f"{np.mean(means[-10:]):.4f}",
+                "Mean First Half": f"{np.mean(means[:int(len(means) / 2)]):.4f}",
+                "Mean Second Half": f"{np.mean(means[int(len(means) / 2):]):.4f}",
+            }
+        ])
+        st.dataframe(stats_df)
 
         self._plot_coordination_distribution(means)
 
