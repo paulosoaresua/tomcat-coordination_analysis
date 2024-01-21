@@ -105,7 +105,7 @@ class ConversationModel(ModelTemplate):
                 num_hidden_layers=self.config_bundle.num_hidden_layers,
                 hidden_dimension_size=self.config_bundle.hidden_dimension_size,
                 activation=self.config_bundle.activation,
-                axis=0,  # Vocalic features axis
+                axis=0,
                 weights=self.config_bundle.weights,
             )
 
