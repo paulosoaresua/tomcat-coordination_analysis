@@ -4,6 +4,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
+import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
@@ -41,9 +42,9 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
             dt: float = DEFAULT_DT,
             mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
             sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
             sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
             share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
             share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
             share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
             coordination_samples: Optional[ModuleSamples] = None,
@@ -252,10 +253,10 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
                 A = np.array(
                     [
-                        [0, 1,    0, 0],
+                        [0, 1, 0, 0],
                         [9, -d_a, 9, 0],  # 9 is a placeholder
-                        [0, 0,    0, 1],
-                        [9, 0,    9, -d_b]
+                        [0, 0, 0, 1],
+                        [9, 0, 9, -d_b]
                     ]
                 )[None, :].repeat(num_series, axis=0)
 
@@ -280,20 +281,24 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
     def _get_extra_logp_params(self) -> Tuple[Union[TensorTypes, pm.Distribution], ...]:
         """
-        Gets fundamental matrices per time step.
+        Gets the motion matrix template.
         """
 
-        # B1 @ blended_state + B2 @ prev_state gives us the final state based on blending
-        # preferences.
-        B1 = np.zeros((2, 2))
-        B2 = np.zeros((2, 2))
-        B1[0, 0] = int(self.blend_position)
-        B2[0, 0] = int(not self.blend_position)
-        B1[1, 1] = int(self.blend_speed)
-        B2[1, 1] = int(not self.blend_speed)
+        f_a = self.spring_constant[0] / self.mass[0]
+        f_b = self.spring_constant[1] / self.mass[1]
+        d_a = self.damping_coefficient[0]
+        d_b = self.damping_coefficient[1]
 
-        # F does not change per time step since all subjects are present in the latent component.
-        return self.F, B1, B2
+        # Template motion matrix. Sampled coordination will complement some cells during inference.
+        A = np.array(
+            [
+                [0, 1, 0, 0],
+                [-f_a, -d_a, 9, 0],
+                [0, 0, 0, 1],
+                [9, 0, -f_b, -d_b]
+            ]
+        )
+        return A, self.dt
 
     def _get_log_prob_fn(self) -> Callable:
         """
@@ -320,9 +325,8 @@ def log_prob(
         sigma: ptt.TensorVariable,
         coordination: ptt.TensorVariable,
         self_dependent: ptt.TensorConstant,
-        F: ptt.TensorConstant,
-        B1: ptt.TensorConstant,
-        B2: ptt.TensorConstant,
+        A: ptt.TensorConstant,
+        dt: ptt.TensorConstant
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -337,47 +341,76 @@ def log_prob(
     @param coordination: (time) a series of coordination values. Axis (time).
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
         Not used by this implementation as self_dependency is fixed to True.
-    @param F: (subject x 4) fundamental matrices for each subject.
-    @param B1: matrix that decides which dimension(s) to use for blending.
-    @param B2: matrix that decides which dimension(s) not to use for blending.
-    @return: log-probability of the sample.
+    @param A: (4 x 4) motion matrix template to be complemented with sampled coordination.
+    @param dt: the size of each time step to calculate the fundamental matrix of the motion.
     """
 
     N = sample.shape[0]  # num subjects
     D = sample.shape[1]
+    T = sample.shape[2]
 
     # logp at the initial time step
     total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(N, D)), sample[..., 0]
     ).sum()
 
-    # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
-    # We discard the last value as that is not a previous value of any other.
-    sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+    # Adding another axis for time.
+    A = A[None, :].repeat(T - 1, axis=0)
 
-    # We transform the sample using the fundamental matrix so that we learn to generate samples
-    # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
-    # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
-    # we can add that to the log-probability such that the samples are effectively coming from the
-    # component's posterior.
-    transformed_sample = ptt.batched_tensordot(F, sample, axes=[(2,), (1,)])
-    prev_others = ptt.tensordot(sum_matrix_others, transformed_sample, axes=(1, 0))[
-                  ..., :-1
-                  ]
+    # Update appropriate cells with samples coordination
+    c = coordination[1:]  # T-1
 
-    # The component's value for a subject depends on its previous value for the same subject.
-    prev_same = transformed_sample[..., :-1]  # N x d x t-1
+    A = ptt.set_subtensor(A[:, 1, 0], A[:, 1, 0] - c)
+    A = ptt.set_subtensor(A[:, 1, 2], c)
+    A = ptt.set_subtensor(A[:, 3, 0], c)
+    A = ptt.set_subtensor(A[:, 3, 2], A[:, 3, 2] - c)
 
-    # Coordination does not affect the component in the first time step because the subjects have
-    # no previous dependencies at that time.
-    c = coordination[None, None, 1:]  # 1 x 1 x t-1
+    # Find the fundamental matrix by solving the DE.
+    # F can be obtained with matrix exponential but doing so like below lead to a series of
+    # numerical problems. So, I am approximating expm with a power series.
+    # F, _ = pt.scan(fn=lambda x, _: ptt.slinalg.Expm()(x), outputs_info=ptt.ones_like(A[0]),
+    #                sequences=[A * dt])  # T-1 x 4 x 4
 
-    blended_mean = (prev_others - prev_same) * c + prev_same
+    # Approximation of F with a power series
+    I = ptt.eye(N * N)[None, :].repeat(T - 1, axis=0)
+    A = A * dt
+    A2 = ptt.power(A, 2)
+    A3 = ptt.power(A, 3)
+    F = I + A + A2 / 2 + A3 / 6
 
-    # Decide which dimension(s) to blend
-    blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(
-        0, 1
-    ) + ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
+    # Flatten the last two dimensions to create the state vector
+    # [x_a, v_a, x_b, v_b].
+    concatenated_state = sample[..., :-1].reshape((-1, T - 1)).T  # T-1 x 4
+    blended_mean = ptt.batched_tensordot(F, concatenated_state, axes=[(2,), (1,)]).T.reshape(
+        (N, D, T - 1))
+
+    # # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
+    # # We discard the last value as that is not a previous value of any other.
+    # sum_matrix_others = (ptt.ones((N, N)) - ptt.eye(N)) / (N - 1)
+    #
+    # # We transform the sample using the fundamental matrix so that we learn to generate samples
+    # # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
+    # # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
+    # # we can add that to the log-probability such that the samples are effectively coming from the
+    # # component's posterior.
+    # transformed_sample = ptt.batched_tensordot(F, sample, axes=[(2,), (1,)])
+    # prev_others = ptt.tensordot(sum_matrix_others, transformed_sample, axes=(1, 0))[
+    #               ..., :-1
+    #               ]
+    #
+    # # The component's value for a subject depends on its previous value for the same subject.
+    # prev_same = transformed_sample[..., :-1]  # N x d x t-1
+    #
+    # # Coordination does not affect the component in the first time step because the subjects have
+    # # no previous dependencies at that time.
+    # c = coordination[None, None, 1:]  # 1 x 1 x t-1
+    #
+    # blended_mean = (prev_others - prev_same) * c + prev_same
+    #
+    # # Decide which dimension(s) to blend
+    # blended_mean = ptt.tensordot(B1, blended_mean, axes=[(1,), (1,)]).swapaxes(
+    #     0, 1
+    # ) + ptt.tensordot(B2, prev_same, axes=[(1,), (1,)]).swapaxes(0, 1)
 
     # # We don't blend velocity
     # POSITION_COL = ptt.as_tensor(np.array([[1, 0]])).repeat(N, 0)[..., None]

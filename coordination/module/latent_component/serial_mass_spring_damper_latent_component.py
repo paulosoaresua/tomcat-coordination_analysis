@@ -446,13 +446,6 @@ def log_prob(
     blended_mean = B1 @ blended_mean + B2 @ (
             prev_same * mask_same + (1 - mask_same) * initial_mean
     )
-    # # We don't blend speed
-    # POSITION_COL = ptt.as_tensor(np.array([[1], [0]]))
-    # SPEED_COL = ptt.as_tensor(np.array([[0], [1]]))
-    # blended_mean = (
-    #         blended_mean * POSITION_COL
-    #         + (prev_same * mask_same + (1 - mask_same) * initial_mean) * SPEED_COL
-    # )
 
     total_logp = pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=blended_mean.shape), sample

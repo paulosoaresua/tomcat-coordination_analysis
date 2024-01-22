@@ -15,10 +15,10 @@ class SpringConfigBundle(ModelConfigBundle):
     num_springs: int = 2
     num_time_steps_in_coordination_scale: int = 100
     observation_normalization: str = None
-    spring_constant: np.ndarray = np.array([1, 0.5])
+    spring_constant: np.ndarray = np.array([4, 4])
     mass: int = 1
     dampening_coefficient: float = 0.0
-    time_step_size_in_seconds: float = 0.2#1.0
+    time_step_size_in_seconds: float = 0.2 #1.0
     blend_position: bool = True
     blend_speed: bool = False
     observation_dim_size: int = 2  # both position and speed are observed.
@@ -45,9 +45,9 @@ class SpringConfigBundle(ModelConfigBundle):
     mean_uc0: float = 0.0
     sd_uc: float = 1.0
     # Each subject starts with the same voice intensity and 0 speed.
-    mean_a0: np.ndarray = np.array([[1, 0], [1, 0]])
-    sd_a: float = 0.1
-    sd_o: float = 0.1
+    mean_a0: np.ndarray = np.array([[1, 0], [0, 0]])
+    sd_a: float = 0.01
+    sd_o: float = 0.01
     # Fixed coordination series for sampling.
     coordination_samples: np.ndarray = None
 
