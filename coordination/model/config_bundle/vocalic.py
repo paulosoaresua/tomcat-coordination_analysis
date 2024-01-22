@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -71,6 +71,9 @@ class VocalicConfigBundle(ModelConfigBundle):
     weights: List[np.ndarray] = field(default_factory=lambda: [np.eye(4)])
     mean_w0: float = 0.0
     sd_w0: float = 1.0
+
+    match_vocalics_scale: bool = False
+    p_time_steps_to_fit = 0.5
 
 
 @dataclass
@@ -164,4 +167,4 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     #     }
     # ]
 
-    vocalic_groups = None
+    vocalic_groups: List[Dict[str, Any]] = None
