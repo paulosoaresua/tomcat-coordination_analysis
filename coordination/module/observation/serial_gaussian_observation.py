@@ -31,24 +31,24 @@ class SerialGaussianObservation(GaussianObservation):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
-        sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
-        share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
-        dimension_names: Optional[List[str]] = None,
-        observation_random_variable: Optional[pm.Distribution] = None,
-        latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        sd_o_random_variable: Optional[pm.Distribution] = None,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.ndarray] = None,
-        observed_values: Optional[TensorTypes] = None,
-        sd_o: Optional[Union[float, np.ndarray]] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            dimension_size: int = DEFAULT_OBSERVATION_DIMENSION_SIZE,
+            sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
+            share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
+            dimension_names: Optional[List[str]] = None,
+            observation_random_variable: Optional[pm.Distribution] = None,
+            latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            sd_o_random_variable: Optional[pm.Distribution] = None,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.ndarray] = None,
+            observed_values: Optional[TensorTypes] = None,
+            sd_o: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a serial Gaussian observation.
@@ -103,13 +103,14 @@ class SerialGaussianObservation(GaussianObservation):
             sd_o_random_variable=sd_o_random_variable,
             observed_values=observed_values,
             sd_o=sd_o,
+
         )
 
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.subject_indices = subject_indices
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> SerialGaussianObservationSamples:
         """
         Draws observation samples using ancestral sampling.
@@ -124,20 +125,31 @@ class SerialGaussianObservation(GaussianObservation):
         dim_sd_o_dimensions = (
             1 if self.share_sd_o_across_dimensions else self.dimension_size
         )
-        sd_o = adjust_dimensions(
-            self.parameters.sd_o.value,
-            num_rows=dim_sd_o_subjects,
-            num_cols=dim_sd_o_dimensions,
-        )
+
+        if (isinstance(self.parameters.sd_o.value,
+                       np.ndarray) and self.parameters.sd_o.value.ndim == 3):
+            # A different value per series. We expect it's already in the correct dimensions.
+            sd_o = self.parameters.sd_a.value
+        else:
+            sd_o = adjust_dimensions(
+                self.parameters.sd_o.value,
+                num_rows=dim_sd_o_subjects,
+                num_cols=dim_sd_o_dimensions,
+            )
+            if self.share_sd_o_across_subjects:
+                sd_o = sd_o.repeat(self.num_subjects, axis=0)
+
+            sd_o = sd_o[None, :].repeat(num_series, axis=0)
 
         observation_series = []
         for i in range(self.latent_component_samples.num_series):
             # Adjust dimensions according to parameter sharing specification
             if self.share_sd_o_across_subjects:
-                # Broadcast across time
-                sd = sd_o[:, None]
+                subject_idx_sd_o = np.zeros_like(self.latent_component_samples.subject_indices[i])
             else:
-                sd = sd_o[self.subject_indices[i]].T
+                subject_idx_sd_o = self.latent_component_samples.subject_indices[i]
+
+            sd = sd_o[i, subject_idx_sd_o].T
 
             samples = norm(loc=self.latent_component_samples.values[i], scale=sd).rvs(
                 size=self.latent_component_samples.values[i].shape
@@ -238,10 +250,10 @@ class SerialGaussianObservation(GaussianObservation):
 
 class SerialGaussianObservationSamples(ObservationSamples):
     def __init__(
-        self,
-        values: List[np.ndarray],
-        time_steps_in_coordination_scale: List[np.ndarray],
-        subject_indices: List[np.ndarray],
+            self,
+            values: List[np.ndarray],
+            time_steps_in_coordination_scale: List[np.ndarray],
+            subject_indices: List[np.ndarray],
     ):
         """
         Creates an object to store samples and associated subjects in time.

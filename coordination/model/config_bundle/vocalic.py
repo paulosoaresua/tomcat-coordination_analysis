@@ -6,6 +6,8 @@ import numpy as np
 from coordination.common.normalization import (
     NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
 from coordination.model.config_bundle.bundle import ModelConfigBundle
+from coordination.module.latent_component.serial_gaussian_latent_component import \
+    SerialGaussianLatentComponent, SerialGaussianLatentComponentSamples
 
 
 @dataclass
@@ -53,8 +55,6 @@ class VocalicConfigBundle(ModelConfigBundle):
     mean_a0: float = None
     sd_a: float = None
     sd_o: float = 0.1
-    # Fixed coordination series for sampling.
-    coordination_samples: np.ndarray = None
 
     # Evidence and metadata filled before inference.
     time_steps_in_coordination_scale: np.ndarray = None
@@ -72,8 +72,14 @@ class VocalicConfigBundle(ModelConfigBundle):
     mean_w0: float = 0.0
     sd_w0: float = 1.0
 
-    match_vocalics_scale: bool = False
+    match_vocalics_scale: bool = True
     p_time_steps_to_fit = 0.5
+
+    # Samples
+    coordination_samples: np.ndarray = None
+
+    unbounded_coordination_posterior_samples: np.ndarray = None
+    state_space_posterior_samples: np.ndarray = None
 
 
 @dataclass

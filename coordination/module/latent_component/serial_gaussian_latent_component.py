@@ -62,6 +62,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             observed_values: Optional[TensorTypes] = None,
             mean_a0: Optional[Union[float, np.ndarray]] = None,
             sd_a: Optional[Union[float, np.ndarray]] = None,
+            posterior_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a serial latent component.
@@ -127,6 +128,8 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
             be given for sampling but not for inference if it needs to be inferred. If not
             provided now, it can be set later via the module parameters variable.
+        @param posterior_samples: samples from the posterior to use during a call to draw_samples.
+            This is useful to do predictive checks by sampling data in the future.
         """
         super().__init__(
             uuid=uuid,
@@ -159,6 +162,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
+        self.posterior_samples = posterior_samples
 
     def draw_samples(
             self, seed: Optional[int], num_series: int
@@ -207,6 +211,8 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             if self.share_mean_a0_across_subjects:
                 mean_a0 = mean_a0[None, :].repeat(self.num_subjects, axis=0)
 
+            mean_a0 = mean_a0[None, :].repeat(num_series, axis=0)
+
         if (isinstance(self.parameters.sd_a.value,
                        np.ndarray) and self.parameters.sd_a.value.ndim == 3):
             # A different value per series. We expect it's already in the correct dimensions.
@@ -220,67 +226,76 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             if self.share_sd_a_across_subjects:
                 sd_a = sd_a[None, :].repeat(self.num_subjects, axis=0)
 
-        sampled_subjects = []
+            sd_a = sd_a[None, :].repeat(num_series, axis=0)
+
         sampled_values = []
-        time_steps_in_coordination_scale = []
-        prev_time_same_subject = []
-        prev_time_diff_subject = []
+        subject_indices = (
+            [] if self.posterior_samples is None else [self.subject_indices] * num_series)
+        time_steps_in_coordination_scale = (
+            [] if self.posterior_samples is None else [self.time_steps_in_coordination_scale] * num_series)
+        prev_time_same_subject = (
+            [] if self.posterior_samples is None else [self.prev_time_same_subject] * num_series)
+        prev_time_diff_subject = (
+            [] if self.posterior_samples is None else [self.prev_time_diff_subject] * num_series)
         for s in range(num_series):
-            sparse_subjects = self._draw_random_subjects(num_series)
-            sampled_subjects.append(
-                np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int)
-            )
-
-            time_steps_in_coordination_scale.append(
-                np.array(
-                    [t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int
-                )
-            )
-
-            num_time_steps_in_cpn_scale = len(time_steps_in_coordination_scale[s])
-
-            prev_time_same_subject.append(
-                np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int)
-            )
-            prev_time_diff_subject.append(
-                np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int)
-            )
-
-            # Fill dependencies
-            prev_time_per_subject = {}
-            for t in range(num_time_steps_in_cpn_scale):
-                prev_time_same_subject[s][t] = prev_time_per_subject.get(
-                    sampled_subjects[s][t], -1
+            if self.posterior_samples is None:
+                sparse_subjects = self._draw_random_subjects(num_series)
+                subject_indices.append(
+                    np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int)
                 )
 
-                for subject, time in prev_time_per_subject.items():
-                    if subject == sampled_subjects[s][t]:
-                        continue
+                time_steps_in_coordination_scale.append(
+                    np.array(
+                        [t for t, s in enumerate(sparse_subjects[s]) if s >= 0], dtype=int
+                    )
+                )
 
-                    # Most recent time from a different subject
-                    prev_time_diff_subject[s][t] = (
-                        time
-                        if prev_time_diff_subject[s][t] == -1
-                        else max(prev_time_diff_subject[s][t], time)
+                num_time_steps_in_cpn_scale = len(time_steps_in_coordination_scale[s])
+
+                prev_time_same_subject.append(
+                    np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int)
+                )
+                prev_time_diff_subject.append(
+                    np.full(shape=num_time_steps_in_cpn_scale, fill_value=-1, dtype=int)
+                )
+
+                # Fill dependencies
+                prev_time_per_subject = {}
+                for t in range(num_time_steps_in_cpn_scale):
+                    prev_time_same_subject[s][t] = prev_time_per_subject.get(
+                        subject_indices[s][t], -1
                     )
 
-                prev_time_per_subject[sampled_subjects[s][t]] = t
+                    for subject, time in prev_time_per_subject.items():
+                        if subject == subject_indices[s][t]:
+                            continue
+
+                        # Most recent time from a different subject
+                        prev_time_diff_subject[s][t] = (
+                            time
+                            if prev_time_diff_subject[s][t] == -1
+                            else max(prev_time_diff_subject[s][t], time)
+                        )
+
+                    prev_time_per_subject[subject_indices[s][t]] = t
 
             values = self._draw_from_system_dynamics(
                 coordination_sampled_series=self.coordination_samples.values[s],
-                time_steps_in_coordination_scale=time_steps_in_coordination_scale[s],
-                subjects_in_time=sampled_subjects[s],
+                time_steps_in_coordination_scale=
+                time_steps_in_coordination_scale[s],
+                subjects_in_time=subject_indices[s],
                 prev_time_same_subject=prev_time_same_subject[s],
                 prev_time_diff_subject=prev_time_diff_subject[s],
-                mean_a0=mean_a0[s] if mean_a0.ndim == 3 else mean_a0,
-                sd_a=sd_a[s] if sd_a.ndim == 3 else sd_a,
+                mean_a0=mean_a0[s],
+                sd_a=sd_a[s],
+                init_values=None if self.posterior_samples is None else self.posterior_samples[s]
             )
             sampled_values.append(values)
 
         return SerialGaussianLatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
-            subject_indices=sampled_subjects,
+            subject_indices=subject_indices,
             prev_time_same_subject=prev_time_same_subject,
             prev_time_diff_subject=prev_time_diff_subject,
         )
@@ -375,6 +390,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             prev_time_diff_subject: np.ndarray,
             mean_a0: np.ndarray,
             sd_a: np.ndarray,
+            init_values: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default serialized component generates samples
@@ -393,14 +409,18 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         the component from a different subject was observed in the component's timescale.
         @param mean_a0: initial mean of the latent component.
         @param sd_a: standard deviation of the Gaussian transition distribution.
+        @param init_values: initial values if the series was pre-sampled up to some time step.
 
         @return: sampled values.
         """
 
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros((self.dimension_size, num_time_steps))
+        t0 = 0 if init_values is None else init_values.shape[-1]
+        if init_values is not None:
+            values[..., :t0] = init_values
 
-        for t in range(num_time_steps):
+        for t in range(t0, num_time_steps):
             # The way we index subjects change depending on the sharing options. If shared, the
             # parameters will have a single dimension across subjects, so we can index by 0,
             # otherwise we use the subject number to index the correct parameter for that subject.

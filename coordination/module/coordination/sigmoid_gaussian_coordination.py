@@ -26,18 +26,19 @@ class SigmoidGaussianCoordination(Coordination):
     """
 
     def __init__(
-        self,
-        pymc_model: pm.Model,
-        num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
-        mean_mean_uc0: float = DEFAULT_UNB_COORDINATION_MEAN_PARAM,
-        sd_mean_uc0: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
-        sd_sd_uc: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        mean_uc0_random_variable: Optional[pm.Distribution] = None,
-        sd_uc_random_variable: Optional[pm.Distribution] = None,
-        unbounded_coordination_observed_values: Optional[TensorTypes] = None,
-        mean_uc0: Optional[float] = None,
-        sd_uc: Optional[float] = None,
+            self,
+            pymc_model: pm.Model,
+            num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
+            mean_mean_uc0: float = DEFAULT_UNB_COORDINATION_MEAN_PARAM,
+            sd_mean_uc0: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
+            sd_sd_uc: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            mean_uc0_random_variable: Optional[pm.Distribution] = None,
+            sd_uc_random_variable: Optional[pm.Distribution] = None,
+            unbounded_coordination_observed_values: Optional[TensorTypes] = None,
+            mean_uc0: Optional[float] = None,
+            sd_uc: Optional[float] = None,
+            posterior_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -63,6 +64,8 @@ class SigmoidGaussianCoordination(Coordination):
         @param sd_uc: standard deviation of the unbounded coordination Gaussian random walk. It
             needs to be given for sampling but not for inference if it needs to be inferred. If
             not provided now, it can be set later via the module parameters variable.
+        @param posterior_samples: samples from the posterior to use during a call to draw_samples.
+            This is useful to do predictive checks by sampling data in the future.
         """
         super().__init__(
             pymc_model=pymc_model,
@@ -81,9 +84,10 @@ class SigmoidGaussianCoordination(Coordination):
 
         self.mean_uc0_random_variable = mean_uc0_random_variable
         self.sd_uc_random_variable = sd_uc_random_variable
+        self.posterior_samples = posterior_samples
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> SigmoidGaussianCoordinationSamples:
         """
         Draw coordination samples. A sample is a time series of coordination.
@@ -101,13 +105,35 @@ class SigmoidGaussianCoordination(Coordination):
         if self.parameters.sd_uc.value is None:
             raise ValueError(f"Value of {self.parameters.sd_uc.uuid} is undefined.")
 
-        # Gaussian random walk via re-parametrization trick
+        if self.posterior_samples is not None:
+            if self.posterior_samples.shape[0] != num_series:
+                raise ValueError(
+                    f"The number of series {num_series} does not match the number of sampled "
+                    f"series in the provided unbounded coordination samples.")
+
+            if self.posterior_samples.shape[1] > self.num_time_steps:
+                raise ValueError(
+                    f"The number of time steps in the provided unbounded coordination samples is "
+                    f"larger than the requested number of time steps ({self.num_time_steps}).")
+
+            T = self.num_time_steps - self.posterior_samples.shape[1]
+        else:
+            T = self.num_time_steps
+
         unbounded_coordination = (
-            norm(loc=0, scale=1).rvs(size=(num_series, self.num_time_steps))
-            * self.parameters.sd_uc.value
+                norm(loc=0, scale=1).rvs(size=(num_series, T))
+                * self.parameters.sd_uc.value
         )
-        unbounded_coordination[:, 0] += self.parameters.mean_uc0.value
+        if self.posterior_samples is None:
+            unbounded_coordination[:, 0] += self.parameters.mean_uc0.value
+        else:
+            unbounded_coordination[:, 0] += self.posterior_samples[..., -1]
+
         unbounded_coordination = unbounded_coordination.cumsum(axis=1)
+
+        if self.posterior_samples is not None:
+            unbounded_coordination = np.concatenate(
+                [self.posterior_samples, unbounded_coordination], axis=-1)
 
         # tilde{C} is a bounded version of coordination in the range [0,1]
         coordination = sigmoid(unbounded_coordination)
@@ -181,11 +207,11 @@ class SigmoidGaussianCoordinationParameters(ModuleParameters):
     """
 
     def __init__(
-        self,
-        module_uuid: str,
-        mean_mean_uc0: float,
-        sd_mean_uc0: float,
-        sd_sd_uc: float,
+            self,
+            module_uuid: str,
+            mean_mean_uc0: float,
+            sd_mean_uc0: float,
+            sd_sd_uc: float,
     ):
         """
         Creates an object to store coordination parameter info.
