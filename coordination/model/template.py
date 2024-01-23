@@ -13,6 +13,8 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
 from coordination.inference.inference_data import InferenceData
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.model import Model, ModelSamples
+from copy import deepcopy
+from coordination.metadata.metadata import Metadata
 
 
 class ModelTemplate:
@@ -33,9 +35,19 @@ class ModelTemplate:
 
         if not pymc_model:
             self.pymc_model = pm.Model()
+
         self.config_bundle = config_bundle
 
         self._model: Model = None
+        self.metadata: Dict[str, Metadata] = {}
+        self._register_metadata()
+
+    @abstractmethod
+    def _register_metadata(self):
+        """
+        Add entries to the metadata dictionary from values filled in the config bundle.
+        """
+        pass
 
     @abstractmethod
     def _create_model_from_config_bundle(self):
@@ -44,11 +56,12 @@ class ModelTemplate:
         bundle. This allows the config bundle to be updated after the model creation, reflecting
         in changes in the model's modules any time this function is called.
         """
+        pass
 
     def draw_samples(
-        self,
-        seed: Optional[int] = DEFAULT_SEED,
-        num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
+            self,
+            seed: Optional[int] = DEFAULT_SEED,
+            num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
     ) -> ModelSamples:
         """
         Draws samples from the model using ancestral sampling and some blending strategy with
@@ -72,7 +85,7 @@ class ModelTemplate:
         self._model.create_random_variables()
 
     def prior_predictive(
-        self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
+            self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
     ) -> InferenceData:
         """
         Executes prior predictive checks in the model.
@@ -90,16 +103,16 @@ class ModelTemplate:
         return self._model.prior_predictive(seed=seed, num_samples=num_samples)
 
     def fit(
-        self,
-        seed: Optional[int] = DEFAULT_SEED,
-        burn_in: int = DEFAULT_BURN_IN,
-        num_samples: int = DEFAULT_NUM_SAMPLES,
-        num_chains: int = DEFAULT_NUM_CHAINS,
-        num_jobs: int = DEFAULT_NUM_JOBS_PER_INFERENCE,
-        nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
-        target_accept: float = DEFAULT_TARGET_ACCEPT,
-        callback: Callable = None,
-        **kwargs,
+            self,
+            seed: Optional[int] = DEFAULT_SEED,
+            burn_in: int = DEFAULT_BURN_IN,
+            num_samples: int = DEFAULT_NUM_SAMPLES,
+            num_chains: int = DEFAULT_NUM_CHAINS,
+            num_jobs: int = DEFAULT_NUM_JOBS_PER_INFERENCE,
+            nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
+            target_accept: float = DEFAULT_TARGET_ACCEPT,
+            callback: Callable = None,
+            **kwargs,
     ) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
@@ -135,7 +148,7 @@ class ModelTemplate:
         )
 
     def posterior_predictive(
-        self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
+            self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
     ) -> InferenceData:
         """
         Executes posterior predictive checks in the model.
@@ -155,3 +168,43 @@ class ModelTemplate:
         return self._model.posterior_predictive(
             posterior_trace=posterior_trace, seed=seed
         )
+
+    @abstractmethod
+    def new_config_bundle_from_time_step_info(
+            self,
+            config_bundle: ModelConfigBundle) -> ModelConfigBundle:
+        """
+        Gets a new config bundle with metadata and observed values adapted to the number of time
+        steps in coordination scale in case we don't want to fit just a portion of the time series.
+
+        @param config_bundle: original config bundle.
+        @return: new config bundle.
+        """
+        new_bundle = deepcopy(config_bundle)
+        num_time_steps_to_fit = int(
+            new_bundle.num_time_steps_in_coordination_scale * config_bundle.perc_time_steps_to_fit)
+
+        # Update metadata
+        for _, meta in self.metadata.items():
+            self.metadata["vocalic"] = meta.truncate(num_time_steps_to_fit)
+
+        return new_bundle
+
+    @abstractmethod
+    def new_config_bundle_from_posterior_samples(self,
+                                                 config_bundle: ModelConfigBundle,
+                                                 idata: InferenceData,
+                                                 num_samples: int,
+                                                 seed: int) -> ModelConfigBundle:
+        """
+        Uses samples from posterior to update a config bundle. Here we set the samples from the
+        posterior in the last time step as initial values for the latent variables. This
+        allows us to generate samples in the future for predictive checks.
+
+        @param config_bundle: original config bundle.
+        @param idata: inference data.
+        @param num_samples: number of samples from posterior to use. Samples will be chosen
+            randomly from the posterior samples.
+        @param seed: random seed for reproducibility when choosing the samples to keep.
+        """
+        pass

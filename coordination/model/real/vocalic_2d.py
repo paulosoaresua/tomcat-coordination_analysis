@@ -22,6 +22,7 @@ from coordination.module.coordination.constant_coordination import ConstantCoord
 from copy import deepcopy
 from coordination.common.constants import DEFAULT_SEED
 from coordination.inference.inference_data import InferenceData
+from coordination.metadata.serial import SerialMetadata
 
 
 class Vocalic2DModel(ModelTemplate):
@@ -45,13 +46,32 @@ class Vocalic2DModel(ModelTemplate):
         """
         super().__init__(pymc_model, config_bundle)
 
+    # TODO: new
+    def _register_metadata(self):
+        """
+        Add entries to the metadata dictionary from values filled in the config bundle.
+        """
+        time_steps = self.config_bundle.time_steps_in_coordination_scale
+        if time_steps is not None and self.config_bundle.match_vocalics_scale:
+            time_steps = np.arange(len(time_steps))
+        self.metadata["vocalic"] = SerialMetadata(
+            num_subjects=self.config_bundle.num_subjects,
+            time_steps_in_coordination_scale=time_steps,
+            subject_indices=self.config_bundle.subject_indices,
+            prev_time_same_subject=self.config_bundle.prev_time_same_subject,
+            prev_time_diff_subject=self.config_bundle.prev_time_diff_subject,
+            observed_values=self.config_bundle.observed_values,
+            normalization_method=self.config_bundle.observation_normalization
+        )
+
     def _create_model_from_config_bundle(self):
         """
         Creates internal modules of the model using the most up-to-date information in the config
         bundle. This allows the config bundle to be updated after the model creation, reflecting
         in changes in the model's modules any time this function is called.
         """
-        bundle = Vocalic2DModel.new_config_bundle_from_time_step_info(self.config_bundle)
+        # TODO: new
+        bundle = self.new_config_bundle_from_time_step_info(self.config_bundle)
 
         if bundle.constant_coordination:
             logging.info("Fitting a constant coordination.")
@@ -84,6 +104,7 @@ class Vocalic2DModel(ModelTemplate):
                 }
             ]
 
+        vocalic_metadata: SerialMetadata = self.metadata["vocalic"]
         groups = []
         for vocalic_group in vocalic_groups:
             # Form a tensor of observations by getting only the dimensions of the features in the
@@ -92,13 +113,15 @@ class Vocalic2DModel(ModelTemplate):
                 bundle.vocalic_feature_names.index(feature)
                 for feature in vocalic_group["features"]
             ]
+            # TODO: new
             observed_values = np.take_along_axis(
-                bundle.observed_values,
+                vocalic_metadata.normalized_observations,
                 indices=np.array(feature_idx, dtype=int)[:, None],
                 axis=0,
             ) if bundle.observed_values is not None else None
 
             # For retro-compatibility, we only add suffix if groups were defined.
+
             group_name = vocalic_group["name"]
             suffix = (
                 "" if bundle.vocalic_groups is None else f"_{group_name}"
@@ -121,11 +144,11 @@ class Vocalic2DModel(ModelTemplate):
                 ),
                 fix_sampled_subject_sequence=bundle.fix_sampled_subject_sequence,
                 time_steps_in_coordination_scale=(
-                    bundle.time_steps_in_coordination_scale
+                    vocalic_metadata.time_steps_in_coordination_scale
                 ),
-                prev_time_same_subject=bundle.prev_time_same_subject,
-                prev_time_diff_subject=bundle.prev_time_diff_subject,
-                subject_indices=bundle.subject_indices,
+                prev_time_same_subject=vocalic_metadata.prev_time_same_subject,
+                prev_time_diff_subject=vocalic_metadata.prev_time_diff_subject,
+                subject_indices=vocalic_metadata.subject_indices,
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
                 posterior_samples=bundle.state_space_posterior_samples
@@ -159,11 +182,11 @@ class Vocalic2DModel(ModelTemplate):
                 share_sd_o_across_dimensions=bundle.share_sd_o_across_dimensions,
                 normalization=bundle.observation_normalization,
                 dimension_names=vocalic_group["features"],
-                observed_values=observed_values,
+                observed_values=observed_values,  # TODO: new
                 time_steps_in_coordination_scale=(
-                    bundle.time_steps_in_coordination_scale
+                    vocalic_metadata.time_steps_in_coordination_scale
                 ),
-                subject_indices=bundle.subject_indices,
+                subject_indices=vocalic_metadata.subject_indices,
                 sd_o=bundle.sd_o,
             )
 
@@ -184,8 +207,8 @@ class Vocalic2DModel(ModelTemplate):
             coordination_samples=bundle.coordination_samples,
         )
 
-    @staticmethod
     def new_config_bundle_from_time_step_info(
+            self,
             config_bundle: Vocalic2DConfigBundle) -> Vocalic2DConfigBundle:
         """
         Gets a new config bundle with metadata and observed values adapted to the number of time
@@ -196,41 +219,19 @@ class Vocalic2DModel(ModelTemplate):
         """
         new_bundle = deepcopy(config_bundle)
 
-        if (config_bundle.match_vocalics_scale and
-                config_bundle.time_steps_in_coordination_scale is not None):
-            new_bundle.num_time_steps_in_coordination_scale = len(
-                config_bundle.time_steps_in_coordination_scale)
-            new_bundle.time_steps_in_coordination_scale = np.arange(
-                new_bundle.num_time_steps_in_coordination_scale)
+        if config_bundle.match_vocalics_scale:
+            if config_bundle.time_steps_in_coordination_scale is not None:
+                # We estimate coordination at only when at the time steps we have observations.
+                # So, we adjust the number of time steps in the coordination scale to match the
+                # vocalics latent component scale.
+                new_bundle.num_time_steps_in_coordination_scale = len(
+                    config_bundle.time_steps_in_coordination_scale)
 
-        new_bundle.num_time_steps_in_coordination_scale = int(
-            new_bundle.num_time_steps_in_coordination_scale * config_bundle.p_time_steps_to_fit)
-
-        # State space info
-        # In case we are fitting less number of time steps, adjust indices in the component.
-        if new_bundle.time_steps_in_coordination_scale is not None:
-            T = new_bundle.num_time_steps_in_coordination_scale
-            ts = new_bundle.time_steps_in_coordination_scale
-            ts = ts[ts < T]
-
-            new_bundle.time_steps_in_coordination_scale = ts
-
-            if new_bundle.prev_time_same_subject is not None:
-                new_bundle.prev_time_same_subject = new_bundle.prev_time_same_subject[:len(ts)]
-
-            if new_bundle.prev_time_diff_subject is not None:
-                new_bundle.prev_time_diff_subject = new_bundle.prev_time_diff_subject[:len(ts)]
-
-            if new_bundle.subject_indices is not None:
-                new_bundle.subject_indices = new_bundle.subject_indices[:len(ts)]
-
-            if new_bundle.observed_values is not None:
-                new_bundle.observed_values = new_bundle.observed_values[..., :len(ts)]
-
+        new_bundle = super().new_config_bundle_from_time_step_info(new_bundle)
         return new_bundle
 
-    @staticmethod
     def new_config_bundle_from_posterior_samples(
+            self,
             config_bundle: Vocalic2DConfigBundle,
             idata: InferenceData,
             num_samples: int,

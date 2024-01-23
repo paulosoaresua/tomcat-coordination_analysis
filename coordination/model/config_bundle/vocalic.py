@@ -8,6 +8,8 @@ from coordination.common.normalization import (
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponent, SerialGaussianLatentComponentSamples
+from coordination.metadata.metadata import Metadata
+from coordination.metadata.serial import SerialMetadata
 
 
 @dataclass
@@ -87,6 +89,11 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic 2D model.
     """
+    match_vocalics_scale: bool = True
+    num_time_steps_in_coordination_scale: int = 100
+    metadatas: Dict[str, Metadata] = field(default_factory=lambda: {
+        "vocalics": None
+    })
 
     num_subjects: int = 3
     observation_normalization: str = NORMALIZATION_PER_FEATURE
@@ -96,7 +103,6 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     )
 
     # Coordination
-    num_time_steps_in_coordination_scale: int = 100
     constant_coordination: bool = False
 
     # Parameters if coordination is constant
@@ -171,9 +177,6 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     # ]
 
     vocalic_groups: List[Dict[str, Any]] = None
-
-    match_vocalics_scale: bool = True
-    p_time_steps_to_fit = 0.5
 
     # Samples
     coordination_samples: np.ndarray = None
