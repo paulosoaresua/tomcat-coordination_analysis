@@ -33,6 +33,7 @@ class ConstantCoordination(Coordination):
             beta: float = 1,
             coordination_random_variable: Optional[pm.Distribution] = None,
             observed_value: Optional[float] = None,
+            posterior_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -47,6 +48,8 @@ class ConstantCoordination(Coordination):
             create_random_variables. If not set, it will be created in such a call.
         @param observed_value: observed value of coordination. If a value is set, the variable is
         not latent anymore.
+        @param posterior_samples: samples from the posterior to use during a call to draw_samples.
+            This is useful to do predictive checks by sampling data in the future.
         """
         super().__init__(
             pymc_model=pymc_model,
@@ -58,6 +61,7 @@ class ConstantCoordination(Coordination):
         )
         self.alpha = alpha
         self.beta = beta
+        self.posterior_samples = posterior_samples
 
     def draw_samples(
             self, seed: Optional[int], num_series: int
@@ -77,6 +81,9 @@ class ConstantCoordination(Coordination):
 
         if self.beta is None:
             raise ValueError(f"Value of the parameter beta is undefined.")
+
+        if self.posterior_samples:
+            return ModuleSamples(values=self.posterior_samples)
 
         coordination = beta(self.alpha, self.beta).rvs(num_series)
         values = np.ones((num_series, self.num_time_steps)) * np.array(coordination)[:, None]

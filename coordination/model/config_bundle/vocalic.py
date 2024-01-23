@@ -132,9 +132,6 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     sd_a: float = None
     sd_o: float = None
 
-    # Fixed coordination series for sampling.
-    coordination_samples: np.ndarray = None
-
     # Evidence and metadata filled before inference.
     time_steps_in_coordination_scale: np.ndarray = None
     subject_indices: np.ndarray = None
@@ -174,3 +171,12 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     # ]
 
     vocalic_groups: List[Dict[str, Any]] = None
+
+    match_vocalics_scale: bool = True
+    p_time_steps_to_fit = 0.5
+
+    # Samples
+    coordination_samples: np.ndarray = None
+
+    unbounded_coordination_posterior_samples: np.ndarray = None
+    state_space_posterior_samples: np.ndarray = None

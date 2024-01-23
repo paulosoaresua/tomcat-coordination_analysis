@@ -129,7 +129,7 @@ class SerialGaussianObservation(GaussianObservation):
         if (isinstance(self.parameters.sd_o.value,
                        np.ndarray) and self.parameters.sd_o.value.ndim == 3):
             # A different value per series. We expect it's already in the correct dimensions.
-            sd_o = self.parameters.sd_a.value
+            sd_o = self.parameters.sd_o.value
         else:
             sd_o = adjust_dimensions(
                 self.parameters.sd_o.value,
