@@ -190,12 +190,15 @@ def infer(out_dir: str,
             tmux_window_name += "..."
 
         # Call the actual inference script (bin/run_inference_sequentially)
+        model_params_dict_filepath = (
+            f'--model_params_dict_filepath="{model_params_dict_filepath}" '
+            if model_params_dict_filepath else '')
         call_python_script_command = (
             f'python3 {bin_dir}/run_inference_sequentially '
             f'--out_dir="{results_folder}" '
             f'--experiment_ids="{experiment_ids}" '
             f'--evidence_filepath="{evidence_filepath}" '
-            f'--model_params_dict_filepath="{model_params_dict_filepath}" '
+            f'{model_params_dict_filepath}'
             f'--data_mapping_filepath="{data_mapping_filepath}" '
             f'--model_name="{model_name}" '
             f'--do_prior={do_prior} '

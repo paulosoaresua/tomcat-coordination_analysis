@@ -16,3 +16,15 @@ vocalic_asist:
 		--model_name="vocalic" \
 		--data_mapping_filepath="data/config/data_mapping.json" \
 		--model_params_dict_filepath="data/config/params_dict.json"
+
+vocalic_2d_asist:
+	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data.csv" \
+		--model_name="vocalic_2d" \
+		--data_mapping_filepath="data/config/data_mapping.json" \
+		--experiment_ids="T000612,T000613"
+
+vocalic_2d_asist_unconcat:
+	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data_unconcat.csv" \
+		--model_name="vocalic_2d" \
+		--data_mapping_filepath="data/config/data_mapping.json" \
+		--experiment_ids="T000612,T000613"
