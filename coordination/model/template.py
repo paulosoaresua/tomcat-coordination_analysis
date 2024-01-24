@@ -185,8 +185,8 @@ class ModelTemplate:
             new_bundle.num_time_steps_in_coordination_scale * config_bundle.perc_time_steps_to_fit)
 
         # Update metadata
-        for _, meta in self.metadata.items():
-            self.metadata["vocalic"] = meta.truncate(num_time_steps_to_fit)
+        for key, meta in self.metadata.items():
+            self.metadata[key] = meta.truncate(num_time_steps_to_fit)
 
         return new_bundle
 

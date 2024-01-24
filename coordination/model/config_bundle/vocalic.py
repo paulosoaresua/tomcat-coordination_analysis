@@ -91,9 +91,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     """
     match_vocalics_scale: bool = True
     num_time_steps_in_coordination_scale: int = 100
-    metadatas: Dict[str, Metadata] = field(default_factory=lambda: {
-        "vocalics": None
-    })
+    perc_time_steps_to_fit: float = 1.0
 
     num_subjects: int = 3
     observation_normalization: str = NORMALIZATION_PER_FEATURE

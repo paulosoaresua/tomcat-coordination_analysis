@@ -45,13 +45,12 @@ class SerialMetadata(Metadata):
         @param observed values for the serial component.
         @param normalization_method: normalization method to apply on observations.
         """
+        super().__init__(time_steps_in_coordination_scale, observed_values, normalization_method)
+
         self.num_subjects = num_subjects
-        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
-        self.observed_values = observed_values
-        self.normalization_method = normalization_method
 
     def truncate(self, max_time_step: int) -> SerialMetadata:
         """
@@ -73,23 +72,40 @@ class SerialMetadata(Metadata):
             normalization_method=self.normalization_method
         )
 
-    @property
-    def normalized_observations(self) -> np.ndarray:
+    def _normalize(self, observations: np.ndarray):
         """
         Normalize observations with some method.
 
+        @param observations: observations to be normalized.
         @return normalized observations.
         """
         if self.normalization_method is None:
-            return self.observed_values
+            return observations
 
         if self.normalization_method == NORMALIZATION_PER_FEATURE:
-            return normalize_serialized_data_per_feature(self.observed_values)
+            return normalize_serialized_data_per_feature(observations)
 
         if self.normalization_method == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
             return normalize_serialized_data_per_subject_and_feature(
-                data=self.observed_values,
+                data=observations,
                 subject_indices=self.subject_indices,
                 num_subjects=self.num_subjects)
 
         raise ValueError(f"Normalization ({method}) is invalid.")
+
+    def split_observations_per_subject(self, observations: np.ndarray, normalize: bool) -> List[
+        np.ndarray]:
+        """
+        Returns a list of observations per speaker as a list of arrays.
+
+        @param observations: observations to be split.
+        @param normalize: whether observations must be normalized before retrieved.
+        @return observations per subjects.
+        """
+        obs = self._normalize(observations) if normalize else observations
+        result = []
+        for s in range(self.num_subjects):
+            idx = [t for t, subject in enumerate(self.subject_indices) if s == subject]
+            result.append(obs[idx])
+
+        return result

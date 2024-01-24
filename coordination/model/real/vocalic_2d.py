@@ -54,7 +54,7 @@ class Vocalic2DModel(ModelTemplate):
         time_steps = self.config_bundle.time_steps_in_coordination_scale
         if time_steps is not None and self.config_bundle.match_vocalics_scale:
             time_steps = np.arange(len(time_steps))
-        self.metadata["vocalic"] = SerialMetadata(
+        self.metadata["speech_vocalics"] = SerialMetadata(
             num_subjects=self.config_bundle.num_subjects,
             time_steps_in_coordination_scale=time_steps,
             subject_indices=self.config_bundle.subject_indices,
@@ -104,7 +104,7 @@ class Vocalic2DModel(ModelTemplate):
                 }
             ]
 
-        vocalic_metadata: SerialMetadata = self.metadata["vocalic"]
+        vocalic_metadata: SerialMetadata = self.metadata["speech_vocalics"]
         groups = []
         for vocalic_group in vocalic_groups:
             # Form a tensor of observations by getting only the dimensions of the features in the

@@ -98,7 +98,7 @@ class MLP(Transformation):
         )
         if weights is not None:
             for i, w in enumerate(self.parameters.weights):
-                w.value = weights[i]
+                w.value = np.array(weights[i])
 
         if num_hidden_layers < 0:
             raise ValueError(

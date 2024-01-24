@@ -2,12 +2,31 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import numpy as np
+
 
 @dataclass
 class Metadata:
     """
     This class represents a generic metadata.
     """
+
+    def __init__(
+            self,
+            time_steps_in_coordination_scale: np.array,
+            observed_values: np.ndarray,
+            normalization_method: str):
+        """
+        Creates a serial metadata:
+
+        @param time_steps_in_coordination_scale: time indexes in the coordination scale for
+            each index in the latent component scale.
+        @param observed values for the serial component.
+        @param normalization_method: normalization method to apply on observations.
+        """
+        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.observed_values = observed_values
+        self.normalization_method = normalization_method
 
     @abstractmethod
     def truncate(self, max_time_step: int) -> Metadata:
@@ -20,11 +39,32 @@ class Metadata:
         pass
 
     @property
-    @abstractmethod
     def normalized_observations(self) -> np.ndarray:
         """
         Normalize observations with some method.
 
         @return normalized observations.
+        """
+        return self._normalize(self.observed_values)
+
+    @abstractmethod
+    def _normalize(self, observations: np.ndarray):
+        """
+        Normalize observations with some method.
+
+        @param observations: observations to be normalized.
+        @return normalized observations.
+        """
+        pass
+
+    @abstractmethod
+    def split_observations_per_subject(self, observations: np.ndarray, normalize: bool) -> List[
+        np.ndarray]:
+        """
+        Returns a list of observations per speaker as a list of arrays.
+
+        @param observations: observations to be split.
+        @param normalize: whether observations must be normalized before retrieved.
+        @return observations per subjects.
         """
         pass

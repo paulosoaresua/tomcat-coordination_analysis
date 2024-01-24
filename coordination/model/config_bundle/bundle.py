@@ -4,7 +4,7 @@ import numpy as np
 
 from coordination.common.types import ParameterValueType
 from coordination.metadata.metadata import Metadata
-from coordination.common.constants import DEFAULT_NUM_TIME_STEPS
+from coordination.common.constants import DEFAULT_NUM_TIME_STEPS, DEFAULT_NUM_SUBJECTS
 
 
 class ModelConfigBundle:
@@ -12,6 +12,7 @@ class ModelConfigBundle:
     Container with different parameters of a model.
     """
 
+    num_subjects: int = DEFAULT_NUM_SUBJECTS
     num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS
     perc_time_steps_to_fit: float = 1.0
 
