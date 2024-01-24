@@ -62,16 +62,24 @@ class NonSerialMetadata(Metadata):
 
         raise ValueError(f"Normalization ({method}) is invalid.")
 
-    def split_observations_per_subject(self, observations: np.ndarray, normalize: bool) -> List[
-        np.ndarray]:
+    def split_observations_per_subject(
+            self,
+            observations: np.ndarray,
+            normalize: bool,
+            skip_first: Optional[int] = None,
+            skip_last: Optional[int] = None) -> List[np.ndarray]:
         """
         Returns a list of observations per speaker as a list of arrays.
 
         @param observations: observations to be split.
         @param normalize: whether observations must be normalized before retrieved.
         @return observations per subjects.
+        @param skip_first: number of time steps to skip.
+        @param skip_last: number of time steps to not to include.
         """
-        if normalize:
-            return [obs for obs in self._normalize(observations)]
-        else:
-            return [obs for obs in observations]
+        obs = self._normalize(observations) if normalize else observations
+        lb = 0 if skip_first is None else skip_first
+        ub = obs.shape[-1] if skip_last is None else -skip_last
+
+        return obs[..., lb:ub]
+

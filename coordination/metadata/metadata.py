@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -58,13 +59,19 @@ class Metadata:
         pass
 
     @abstractmethod
-    def split_observations_per_subject(self, observations: np.ndarray, normalize: bool) -> List[
-        np.ndarray]:
+    def split_observations_per_subject(
+            self,
+            observations: np.ndarray,
+            normalize: bool,
+            skip_first: Optional[int] = None,
+            skip_last: Optional[int] = None) -> List[np.ndarray]:
         """
         Returns a list of observations per speaker as a list of arrays.
 
         @param observations: observations to be split.
         @param normalize: whether observations must be normalized before retrieved.
         @return observations per subjects.
+        @param skip_first: number of time steps to skip.
+        @param skip_last: number of time steps to not to include.
         """
         pass

@@ -93,19 +93,27 @@ class SerialMetadata(Metadata):
 
         raise ValueError(f"Normalization ({method}) is invalid.")
 
-    def split_observations_per_subject(self, observations: np.ndarray, normalize: bool) -> List[
-        np.ndarray]:
+    def split_observations_per_subject(
+            self,
+            observations: np.ndarray,
+            normalize: bool,
+            skip_first: Optional[int] = None,
+            skip_last: Optional[int] = None) -> List[np.ndarray]:
         """
         Returns a list of observations per speaker as a list of arrays.
 
         @param observations: observations to be split.
         @param normalize: whether observations must be normalized before retrieved.
         @return observations per subjects.
+        @param skip_first: number of time steps to skip.
+        @param skip_last: number of time steps to not to include.
         """
         obs = self._normalize(observations) if normalize else observations
         result = []
+        lb = 0 if skip_first is None else skip_first
+        ub = obs.shape[-1] if skip_last is None else -skip_last
         for s in range(self.num_subjects):
-            idx = [t for t, subject in enumerate(self.subject_indices) if s == subject]
-            result.append(obs[idx])
+            idx = [t for t, subject in enumerate(self.subject_indices[lb:ub]) if s == subject]
+            result.append(obs[..., lb:ub][..., idx])
 
         return result

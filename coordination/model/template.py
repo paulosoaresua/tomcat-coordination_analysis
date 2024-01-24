@@ -42,6 +42,10 @@ class ModelTemplate:
         self.metadata: Dict[str, Metadata] = {}
         self._register_metadata()
 
+        # Adjust metadata to the adjusted time step info. We don't replace the original config
+        # bundle with the adjusted one because we want to preserve the original one.
+        self.new_config_bundle_from_time_step_info(self.config_bundle)
+
     @abstractmethod
     def _register_metadata(self):
         """
