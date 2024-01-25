@@ -36,6 +36,9 @@ class NonSerialMetadata(Metadata):
         @return: new metadata with adjusted arrays.
         """
         ts = self.time_steps_in_coordination_scale
+        if ts is None:
+            return
+
         ts = ts[ts < max_time_step]
 
         return NonSerialMetadata(
@@ -51,7 +54,7 @@ class NonSerialMetadata(Metadata):
         @param observations: observations to be normalized.
         @return normalized observations.
         """
-        if self.normalization_method is None:
+        if self.normalization_method is None or observations is None:
             return observations
 
         if self.normalization_method == NORMALIZATION_PER_FEATURE:
@@ -78,6 +81,10 @@ class NonSerialMetadata(Metadata):
         @param skip_last: number of time steps to not to include.
         """
         obs = self._normalize(observations) if normalize else observations
+
+        if obs is None:
+            return None
+
         lb = 0 if skip_first is None else skip_first
         ub = obs.shape[-1] if skip_last is None else -skip_last
 

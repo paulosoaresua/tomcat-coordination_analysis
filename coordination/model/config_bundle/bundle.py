@@ -15,6 +15,8 @@ class ModelConfigBundle:
     num_subjects: int = DEFAULT_NUM_SUBJECTS
     num_time_steps_in_coordination_scale: int = DEFAULT_NUM_TIME_STEPS
     perc_time_steps_to_fit: float = 1.0
+    # If provided, it will be used instead of the percentage above.
+    num_time_steps_to_fit: int = None
 
     def update(self, params_dict: Dict[str, ParameterValueType]):
         """

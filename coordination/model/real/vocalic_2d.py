@@ -226,6 +226,8 @@ class Vocalic2DModel(ModelTemplate):
                 # vocalics latent component scale.
                 new_bundle.num_time_steps_in_coordination_scale = len(
                     config_bundle.time_steps_in_coordination_scale)
+                new_bundle.time_steps_in_coordination_scale = np.arange(len(
+                    config_bundle.time_steps_in_coordination_scale))
 
         new_bundle = super().new_config_bundle_from_time_step_info(new_bundle)
         return new_bundle
@@ -260,10 +262,12 @@ class Vocalic2DModel(ModelTemplate):
         new_bundle.sd_o = idata.get_posterior_samples("speech_vocalics_sd_o", samples_idx)
 
         if config_bundle.constant_coordination:
-            new_bundle.constant_coordination_posterior_samples = (
-                idata.get_posterior_samples("coordination", samples_idx))
+            T = new_bundle.num_time_steps_in_coordination_scale
+            new_bundle.coordination_posterior_samples = (idata.get_posterior_samples(
+                "coordination", samples_idx))[:, None].repeat(T, axis=-1)
         else:
-            new_bundle.unbounded_coordination_posterior_samples = (
+            new_bundle.coordination_posterior_samples = (
+                idata.get_posterior_samples("unbounded_coordination", samples_idx))
                 idata.get_posterior_samples("unbounded_coordination", samples_idx))
 
         new_bundle.state_space_posterior_samples = (

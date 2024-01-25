@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import pymc as pm
@@ -38,7 +38,7 @@ class SigmoidGaussianCoordination(Coordination):
             unbounded_coordination_observed_values: Optional[TensorTypes] = None,
             mean_uc0: Optional[float] = None,
             sd_uc: Optional[float] = None,
-            posterior_samples: Optional[np.ndarray] = None
+            posterior_samples: Optional[np.ndarray] = None,
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.

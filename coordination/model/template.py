@@ -184,9 +184,16 @@ class ModelTemplate:
         @param config_bundle: original config bundle.
         @return: new config bundle.
         """
+
         new_bundle = deepcopy(config_bundle)
-        num_time_steps_to_fit = int(
-            new_bundle.num_time_steps_in_coordination_scale * config_bundle.perc_time_steps_to_fit)
+        if new_bundle.num_time_steps_to_fit is not None:
+            num_time_steps_to_fit = new_bundle.num_time_steps_to_fit
+        else:
+            num_time_steps_to_fit = int(
+                new_bundle.num_time_steps_in_coordination_scale *
+                config_bundle.perc_time_steps_to_fit)
+
+        new_bundle.num_time_steps_in_coordination_scale = num_time_steps_to_fit
 
         # Update metadata
         for key, meta in self.metadata.items():

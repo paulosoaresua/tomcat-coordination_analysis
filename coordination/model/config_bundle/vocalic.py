@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 import numpy as np
 
@@ -20,6 +20,10 @@ class VocalicConfigBundle(ModelConfigBundle):
 
     num_subjects: int = 3
     num_time_steps_in_coordination_scale: int = 100
+    perc_time_steps_to_fit: float = 1.0
+    # If provided, it will be used instead of the percentage above.
+    num_time_steps_to_fit: int = None
+
     observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
     state_space_dimension_size: int = 4
     state_space_dimension_names: List[str] = field(
@@ -30,6 +34,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     vocalic_feature_names: List[str] = field(
         default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
     )
+    observed_coordination: Union[float, np.ndarray] = None
 
     # Hyper priors
     mean_mean_uc0: float = 0.0
@@ -39,6 +44,8 @@ class VocalicConfigBundle(ModelConfigBundle):
     sd_mean_a0: float = 1.0
     sd_sd_a: float = 1.0
     sd_sd_o: float = 1.0
+    alpha: float = 1.0
+    beta: float = 1.0
 
     share_mean_a0_across_subjects: bool = False
     share_mean_a0_across_dimensions: bool = False
@@ -75,13 +82,15 @@ class VocalicConfigBundle(ModelConfigBundle):
     sd_w0: float = 1.0
 
     match_vocalics_scale: bool = True
-    p_time_steps_to_fit = 0.5
 
     # Samples
     coordination_samples: np.ndarray = None
 
-    unbounded_coordination_posterior_samples: np.ndarray = None
+    coordination_posterior_samples: np.ndarray = None
     state_space_posterior_samples: np.ndarray = None
+
+    # Coordination
+    constant_coordination: bool = False
 
 
 @dataclass
@@ -92,6 +101,8 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     match_vocalics_scale: bool = True
     num_time_steps_in_coordination_scale: int = 100
     perc_time_steps_to_fit: float = 1.0
+    # If provided, it will be used instead of the percentage above.
+    num_time_steps_to_fit: int = None
 
     num_subjects: int = 3
     observation_normalization: str = NORMALIZATION_PER_FEATURE
@@ -179,5 +190,5 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     # Samples
     coordination_samples: np.ndarray = None
 
-    unbounded_coordination_posterior_samples: np.ndarray = None
+    coordination_posterior_samples: np.ndarray = None
     state_space_posterior_samples: np.ndarray = None

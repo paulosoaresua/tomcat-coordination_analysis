@@ -360,7 +360,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         initial_prob = transition_matrix[0]
         subjects = np.zeros(
             (
-                self.coordination_samples.num_series,
+                num_series,
                 self.coordination_samples.num_time_steps,
             ),
             dtype=int,

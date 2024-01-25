@@ -6,6 +6,7 @@ from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEA
                                                NORMALIZATION_PER_FEATURE,
                                                normalize_serialized_data_per_feature,
                                                normalize_serialized_data_per_subject_and_feature)
+from copy import deepcopy
 
 
 @dataclass
@@ -60,17 +61,19 @@ class SerialMetadata(Metadata):
         @return: new metadata with adjusted arrays.
         """
         ts = self.time_steps_in_coordination_scale
-        ts = ts[ts < max_time_step]
-
-        return SerialMetadata(
-            num_subjects=self.num_subjects,
-            time_steps_in_coordination_scale=ts,
-            subject_indices=self.subject_indices[:len(ts)],
-            prev_time_same_subject=self.prev_time_same_subject[:len(ts)],
-            prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
-            observed_values=self.observed_values[..., :len(ts)],
-            normalization_method=self.normalization_method
-        )
+        if ts is None:
+            return deepcopy(self)
+        else:
+            ts = ts[ts < max_time_step]
+            return SerialMetadata(
+                num_subjects=self.num_subjects,
+                time_steps_in_coordination_scale=ts,
+                subject_indices=self.subject_indices[:len(ts)],
+                prev_time_same_subject=self.prev_time_same_subject[:len(ts)],
+                prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
+                observed_values=self.observed_values[..., :len(ts)],
+                normalization_method=self.normalization_method
+            )
 
     def _normalize(self, observations: np.ndarray):
         """
@@ -79,7 +82,7 @@ class SerialMetadata(Metadata):
         @param observations: observations to be normalized.
         @return normalized observations.
         """
-        if self.normalization_method is None:
+        if self.normalization_method is None or observations is None:
             return observations
 
         if self.normalization_method == NORMALIZATION_PER_FEATURE:
@@ -109,6 +112,10 @@ class SerialMetadata(Metadata):
         @param skip_last: number of time steps to not to include.
         """
         obs = self._normalize(observations) if normalize else observations
+
+        if obs is None:
+            return None
+
         result = []
         lb = 0 if skip_first is None else skip_first
         ub = obs.shape[-1] if skip_last is None else -skip_last
