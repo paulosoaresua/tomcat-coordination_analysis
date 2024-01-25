@@ -9,6 +9,8 @@ import streamlit as st
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
                                            DEFAULT_PLOT_MARGINS)
+from coordination.common.functions import (mean_at_peaks, peaks_count)
+from scipy.signal import find_peaks
 
 
 class InferenceStats:
@@ -65,6 +67,8 @@ class InferenceStats:
         stats_df = pd.DataFrame([
             {
                 "Mean": f"{means.mean():.4f}",
+                "Mean at Peaks (5s)": f"{mean_at_peaks(means, 5):.4f}",
+                "#Peaks (5s)": f"{peaks_count(means, 5):.4f}",
                 "Median": f"{np.median(means):.4f}",
                 "Std": f"{means.std():.4f}",
                 "Signal-to-Noise": f"{np.mean(means) / np.std(means):.4f}",
@@ -75,6 +79,7 @@ class InferenceStats:
             }
         ])
         st.dataframe(stats_df)
+        st.write(f"Peak Points (5s): ", find_peaks(means, width=5)[0])
 
         self._plot_coordination_distribution(means)
 

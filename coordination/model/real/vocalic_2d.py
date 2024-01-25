@@ -254,21 +254,19 @@ class Vocalic2DModel(ModelTemplate):
         np.random.seed(seed)
         samples_idx = np.random.choice(idata.num_posterior_samples, num_samples, replace=False)
 
-        new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0")[
-            samples_idx]
-        new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
         new_bundle.mean_a0 = idata.get_posterior_samples("state_space_mean_a0", samples_idx)
         new_bundle.sd_a = idata.get_posterior_samples("state_space_sd_a", samples_idx)
         new_bundle.sd_o = idata.get_posterior_samples("speech_vocalics_sd_o", samples_idx)
 
         if config_bundle.constant_coordination:
-            T = new_bundle.num_time_steps_in_coordination_scale
-            new_bundle.coordination_posterior_samples = (idata.get_posterior_samples(
-                "coordination", samples_idx))[:, None].repeat(T, axis=-1)
+            new_bundle.initial_coordination_samples = (idata.get_posterior_samples(
+                "coordination", samples_idx))
         else:
-            new_bundle.coordination_posterior_samples = (
-                idata.get_posterior_samples("unbounded_coordination", samples_idx))
-                idata.get_posterior_samples("unbounded_coordination", samples_idx))
+            new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0")[
+                samples_idx]
+            new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
+            new_bundle.initial_coordination_samples = (
+                idata.get_posterior_samples("coordination", samples_idx))
 
         new_bundle.state_space_posterior_samples = (
             idata.get_posterior_samples("state_space", samples_idx))

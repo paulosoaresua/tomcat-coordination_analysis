@@ -43,6 +43,18 @@ class ModelTemplate:
 
         self._create_model_from_config_bundle()
 
+    @property
+    def num_time_steps_in_coordination_scale(self) -> int:
+        """
+        Gets the number of time steps in coordination scale to fit. We get this value from the
+        coordination module instead of the config bundle because they may be different. The config
+        bundle is just a guide one may choose to parameterize time steps differently given other
+        options in the bundle.
+
+        @return: Number of time steps in coordination scale to fit.
+        """
+        return self._model.coordination.num_time_steps
+
     @abstractmethod
     def _register_metadata(self, config_bundle: ModelConfigBundle):
         """
