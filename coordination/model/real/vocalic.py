@@ -103,7 +103,7 @@ class VocalicModel(ModelTemplate):
                 alpha_c=bundle.alpha_c,
                 beta_c=bundle.beta_c,
                 initial_samples=bundle.initial_coordination_samples,
-                observed_value=bundle.observed_coordination
+                observed_value=bundle.observed_coordination_for_inference
             )
         else:
             given_coordination = None
