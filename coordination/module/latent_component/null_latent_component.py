@@ -8,6 +8,7 @@ import pymc as pm
 from coordination.module.latent_component.latent_component import \
     LatentComponent
 from coordination.module.module import ModuleSamples
+import logging
 
 
 class NullLatentComponent(LatentComponent, ABC):
@@ -57,3 +58,5 @@ class NullLatentComponent(LatentComponent, ABC):
         Calls superclass method to ensure coordination random variable was provided.
         """
         super().create_random_variables()
+
+        logging.info(f"Fitting {self.__class__.__name__}.")

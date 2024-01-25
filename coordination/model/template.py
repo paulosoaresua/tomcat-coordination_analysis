@@ -40,16 +40,15 @@ class ModelTemplate:
 
         self._model: Model = None
         self.metadata: Dict[str, Metadata] = {}
-        self._register_metadata()
 
-        # Adjust metadata to the adjusted time step info. We don't replace the original config
-        # bundle with the adjusted one because we want to preserve the original one.
-        self.new_config_bundle_from_time_step_info(self.config_bundle)
+        self._create_model_from_config_bundle()
 
     @abstractmethod
-    def _register_metadata(self):
+    def _register_metadata(self, config_bundle: ModelConfigBundle):
         """
         Add entries to the metadata dictionary from values filled in the config bundle.
+
+        @param config_bundle: config bundle to fill up the metadata with.
         """
         pass
 
@@ -173,7 +172,6 @@ class ModelTemplate:
             posterior_trace=posterior_trace, seed=seed
         )
 
-    @abstractmethod
     def new_config_bundle_from_time_step_info(
             self,
             config_bundle: ModelConfigBundle) -> ModelConfigBundle:
@@ -184,20 +182,16 @@ class ModelTemplate:
         @param config_bundle: original config bundle.
         @return: new config bundle.
         """
+        self._register_metadata(config_bundle)
 
         new_bundle = deepcopy(config_bundle)
-        if new_bundle.num_time_steps_to_fit is not None:
-            num_time_steps_to_fit = new_bundle.num_time_steps_to_fit
-        else:
-            num_time_steps_to_fit = int(
-                new_bundle.num_time_steps_in_coordination_scale *
-                config_bundle.perc_time_steps_to_fit)
+        if new_bundle.num_time_steps_to_fit is None:
+            new_bundle.num_time_steps_to_fit = new_bundle.num_time_steps_in_coordination_scale
 
-        new_bundle.num_time_steps_in_coordination_scale = num_time_steps_to_fit
-
-        # Update metadata
+        # Update metadata. This will adjust the metadata indices to make sure we do not include
+        # any time step that is not being fit/sampled.
         for key, meta in self.metadata.items():
-            self.metadata[key] = meta.truncate(num_time_steps_to_fit)
+            self.metadata[key] = meta.truncate(new_bundle.num_time_steps_to_fit)
 
         return new_bundle
 

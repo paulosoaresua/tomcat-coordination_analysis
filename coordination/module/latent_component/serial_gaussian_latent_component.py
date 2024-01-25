@@ -24,6 +24,7 @@ from coordination.module.latent_component.gaussian_latent_component import \
 from coordination.module.latent_component.latent_component import \
     LatentComponentSamples
 from coordination.module.module import ModuleSamples
+import logging
 
 
 class SerialGaussianLatentComponent(GaussianLatentComponent):
@@ -62,7 +63,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             observed_values: Optional[TensorTypes] = None,
             mean_a0: Optional[Union[float, np.ndarray]] = None,
             sd_a: Optional[Union[float, np.ndarray]] = None,
-            posterior_samples: Optional[np.ndarray] = None
+            initial_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a serial latent component.
@@ -128,8 +129,8 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
             be given for sampling but not for inference if it needs to be inferred. If not
             provided now, it can be set later via the module parameters variable.
-        @param posterior_samples: samples from the posterior to use during a call to draw_samples.
-            This is useful to do predictive checks by sampling data in the future.
+        @param initial_samples: samples to use during a call to draw_samples. We complete with
+            ancestral sampling up to the desired number of time steps.
         """
         super().__init__(
             uuid=uuid,
@@ -162,7 +163,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
-        self.posterior_samples = posterior_samples
+        self.initial_samples = initial_samples
 
     def draw_samples(
             self, seed: Optional[int], num_series: int
@@ -230,15 +231,15 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
 
         sampled_values = []
         subject_indices = (
-            [] if self.posterior_samples is None else [self.subject_indices] * num_series)
+            [] if self.initial_samples is None else [self.subject_indices] * num_series)
         time_steps_in_coordination_scale = (
-            [] if self.posterior_samples is None else [self.time_steps_in_coordination_scale] * num_series)
+            [] if self.initial_samples is None else [self.time_steps_in_coordination_scale] * num_series)
         prev_time_same_subject = (
-            [] if self.posterior_samples is None else [self.prev_time_same_subject] * num_series)
+            [] if self.initial_samples is None else [self.prev_time_same_subject] * num_series)
         prev_time_diff_subject = (
-            [] if self.posterior_samples is None else [self.prev_time_diff_subject] * num_series)
+            [] if self.initial_samples is None else [self.prev_time_diff_subject] * num_series)
         for s in range(num_series):
-            if self.posterior_samples is None:
+            if self.initial_samples is None:
                 sparse_subjects = self._draw_random_subjects(num_series)
                 subject_indices.append(
                     np.array([s for s in sparse_subjects[s] if s >= 0], dtype=int)
@@ -288,7 +289,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
                 prev_time_diff_subject=prev_time_diff_subject[s],
                 mean_a0=mean_a0[s],
                 sd_a=sd_a[s],
-                init_values=None if self.posterior_samples is None else self.posterior_samples[s]
+                init_values=None if self.initial_samples is None else self.initial_samples[s]
             )
             sampled_values.append(values)
 
@@ -509,6 +510,9 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
 
         if self.prev_time_diff_subject is None:
             raise ValueError("prev_time_diff_subject is undefined.")
+
+        logging.info(f"Fitting {self.__class__.__name__} with "
+                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
 
         # Mask with 1 for time steps where there is observation for a subject (subject index >= 0)
         prev_same_subject_mask = np.array(

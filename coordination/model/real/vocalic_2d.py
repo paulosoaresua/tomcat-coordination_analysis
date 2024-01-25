@@ -78,9 +78,9 @@ class Vocalic2DModel(ModelTemplate):
             coordination = ConstantCoordination(
                 pymc_model=self.pymc_model,
                 num_time_steps=bundle.num_time_steps_in_coordination_scale,
-                alpha=bundle.alpha,
-                beta=bundle.beta,
-                posterior_samples=bundle.unbounded_coordination_posterior_samples
+                alpha_c=bundle.alpha,
+                beta_c=bundle.beta,
+                initial_samples=bundle.unbounded_coordination_posterior_samples
             )
         else:
             coordination = SigmoidGaussianCoordination(
@@ -91,7 +91,7 @@ class Vocalic2DModel(ModelTemplate):
                 sd_sd_uc=bundle.sd_sd_uc,
                 mean_uc0=bundle.mean_uc0,
                 sd_uc=bundle.sd_uc,
-                posterior_samples=bundle.unbounded_coordination_posterior_samples
+                initial_samples=bundle.unbounded_coordination_posterior_samples
             )
 
         vocalic_groups = bundle.vocalic_groups
@@ -151,7 +151,7 @@ class Vocalic2DModel(ModelTemplate):
                 subject_indices=vocalic_metadata.subject_indices,
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
-                posterior_samples=bundle.state_space_posterior_samples
+                initial_samples=bundle.state_space_posterior_samples
             )
 
             transformation = Sequential(

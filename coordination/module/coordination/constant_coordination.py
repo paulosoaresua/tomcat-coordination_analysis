@@ -17,6 +17,7 @@ from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   NormalParameterPrior,
                                                   Parameter)
+import logging
 
 
 class ConstantCoordination(Coordination):
@@ -29,11 +30,11 @@ class ConstantCoordination(Coordination):
             self,
             pymc_model: pm.Model,
             num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
-            alpha: float = 1,
-            beta: float = 1,
+            alpha_c: float = 1,
+            beta_c: float = 1,
             coordination_random_variable: Optional[pm.Distribution] = None,
             observed_value: Optional[float] = None,
-            posterior_samples: Optional[np.ndarray] = None
+            initial_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -42,14 +43,13 @@ class ConstantCoordination(Coordination):
         @param num_time_steps: number of time steps in the coordination scale.
         @param mean_mean_uc0: mean of the hyper-prior of mu_uc0 (mean of the initial value of the
             unbounded coordination).
-        @param alpha: parameter alpha of the Beta distribution.
-        @param beta: parameter beta of the beta distribution.
+        @param alpha_c: parameter alpha of the Beta distribution.
+        @param beta_c: parameter beta of the beta distribution.
         @param coordination_random_variable: random variable to be used in a call to
             create_random_variables. If not set, it will be created in such a call.
         @param observed_value: observed value of coordination. If a value is set, the variable is
         not latent anymore.
-        @param posterior_samples: samples from the posterior to use during a call to draw_samples.
-            This is useful to do predictive checks by sampling data in the future.
+        @param initial_samples: samples to use during a call to draw_samples.
         """
         super().__init__(
             pymc_model=pymc_model,
@@ -59,9 +59,9 @@ class ConstantCoordination(Coordination):
             coordination_random_variable=coordination_random_variable,
             observed_values=observed_value,
         )
-        self.alpha = alpha
-        self.beta = beta
-        self.posterior_samples = posterior_samples
+        self.alpha_c = alpha_c
+        self.beta_c = beta_c
+        self.initial_samples = initial_samples
 
     def draw_samples(
             self, seed: Optional[int], num_series: int
@@ -76,16 +76,28 @@ class ConstantCoordination(Coordination):
         """
         super().draw_samples(seed, num_series)
 
-        if self.alpha is None:
+        if self.alpha_c is None:
             raise ValueError(f"Value of the parameter alpha is undefined.")
 
-        if self.beta is None:
+        if self.beta_c is None:
             raise ValueError(f"Value of the parameter beta is undefined.")
 
-        if self.posterior_samples:
-            return ModuleSamples(values=self.posterior_samples)
+        logging.info(f"Drawing {self.__class__.__name__} with {self.num_time_steps} time "
+                     f"steps.")
 
-        coordination = beta(self.alpha, self.beta).rvs(num_series)
+        if self.initial_samples is not None:
+            dt = self.num_time_steps - self.initial_samples.shape[-1]
+            if dt > 0:
+                values = np.concatenate(
+                    [self.initial_samples,
+                     np.ones((num_series, dt)) * self.initial_samples[:, -1][:, None]],
+                    axis=-1
+                )
+            else:
+                values = self.initial_samples
+            return ModuleSamples(values)
+
+        coordination = beta(self.alpha_c, self.beta_c).rvs(num_series)
         values = np.ones((num_series, self.num_time_steps)) * np.array(coordination)[:, None]
 
         return ModuleSamples(values=values)
@@ -97,6 +109,9 @@ class ConstantCoordination(Coordination):
 
         with self.pymc_model:
             if self.coordination_random_variable is None:
+                logging.info(f"Fitting {self.__class__.__name__} with {self.num_time_steps} time "
+                             f"steps.")
+
                 # Add coordinates to the model
                 if self.time_axis_name not in self.pymc_model.coords:
                     self.pymc_model.add_coord(
@@ -105,8 +120,8 @@ class ConstantCoordination(Coordination):
 
                 single_coordination = pm.Beta(
                     name="single_coordination",
-                    alpha=self.alpha,
-                    beta=self.beta,
+                    alpha=self.alpha_c,
+                    beta=self.beta_c,
                     size=1,
                     observed=adjust_dimensions(self.observed_values, 1)
                 )

@@ -43,22 +43,32 @@ class VocalicModel(ModelTemplate):
         """
         super().__init__(pymc_model, config_bundle)
 
-    def _register_metadata(self):
+    def _register_metadata(self, config_bundle: VocalicConfigBundle):
         """
-        Add entries to the metadata dictionary from values filled in the config bundle.
+        Add entries to the metadata dictionary from values filled in a config bundle. This will
+        allow adjustment of time steps later if we want to fit/sample less time steps than the
+        informed in the original config bundle.
         """
-        time_steps = self.config_bundle.time_steps_in_coordination_scale
-        if time_steps is not None and self.config_bundle.match_vocalics_scale:
-            time_steps = np.arange(len(time_steps))
-        self.metadata["speech_vocalics"] = SerialMetadata(
-            num_subjects=self.config_bundle.num_subjects,
-            time_steps_in_coordination_scale=time_steps,
-            subject_indices=self.config_bundle.subject_indices,
-            prev_time_same_subject=self.config_bundle.prev_time_same_subject,
-            prev_time_diff_subject=self.config_bundle.prev_time_diff_subject,
-            observed_values=self.config_bundle.observed_values,
-            normalization_method=self.config_bundle.observation_normalization
-        )
+        if "speech_vocalics" in self.metadata:
+            metadata: SerialMetadata = self.metadata["speech_vocalics"]
+            metadata.num_subjects = config_bundle.num_subjects
+            metadata.time_steps_in_coordination_scale = (
+                config_bundle.time_steps_in_coordination_scale)
+            metadata.subject_indices = config_bundle.subject_indices
+            metadata.prev_time_same_subject = config_bundle.prev_time_same_subject
+            metadata.prev_time_diff_subject = config_bundle.prev_time_diff_subject
+            metadata.observed_values = config_bundle.observed_values
+            metadata.normalization_method = config_bundle.observation_normalization
+        else:
+            self.metadata["speech_vocalics"] = SerialMetadata(
+                num_subjects=config_bundle.num_subjects,
+                time_steps_in_coordination_scale=config_bundle.time_steps_in_coordination_scale,
+                subject_indices=config_bundle.subject_indices,
+                prev_time_same_subject=config_bundle.prev_time_same_subject,
+                prev_time_diff_subject=config_bundle.prev_time_diff_subject,
+                observed_values=config_bundle.observed_values,
+                normalization_method=config_bundle.observation_normalization
+            )
 
     def _create_model_from_config_bundle(self):
         """
@@ -66,39 +76,55 @@ class VocalicModel(ModelTemplate):
         bundle. This allows the config bundle to be updated after the model creation, reflecting
         in changes in the model's modules any time this function is called.
         """
-        print(self.config_bundle.num_time_steps_in_coordination_scale)
 
-        bundle = self.new_config_bundle_from_time_step_info(self.config_bundle)
+        bundle = self.config_bundle
+        if self.config_bundle.match_vocalic_scale:
+            if self.config_bundle.time_steps_in_coordination_scale is not None:
+                # We estimate coordination at only when at the time steps we have observations.
+                # So, we adjust the number of time steps in the coordination scale to match the
+                # number of time steps in the vocalic component scale
+                bundle = deepcopy(self.config_bundle)
 
-        print(bundle.num_time_steps_in_coordination_scale)
+                # We adjust the number of time steps in coordination scale to match that.
+                bundle.num_time_steps_in_coordination_scale = len(
+                    self.config_bundle.time_steps_in_coordination_scale)
+
+                # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
+                # where n is the number of observations.
+                bundle.time_steps_in_coordination_scale = np.arange(
+                    len(self.config_bundle.time_steps_in_coordination_scale))
+
+        bundle = self.new_config_bundle_from_time_step_info(bundle)
 
         if bundle.constant_coordination:
-            logging.info("Fitting a constant coordination.")
             coordination = ConstantCoordination(
                 pymc_model=self.pymc_model,
-                num_time_steps=bundle.num_time_steps_in_coordination_scale,
-                alpha=bundle.alpha,
-                beta=bundle.beta,
-                posterior_samples=bundle.unbounded_coordination_posterior_samples,
+                num_time_steps=bundle.num_time_steps_to_fit,
+                alpha_c=bundle.alpha_c,
+                beta_c=bundle.beta_c,
+                initial_samples=bundle.initial_coordination_samples,
                 observed_value=bundle.observed_coordination
             )
         else:
             given_coordination = None
-            posterior_samples = None
-            if bundle.observed_coordination is not None:
-                given_coordination = adjust_dimensions(logit(bundle.observed_coordination),
-                                                       bundle.num_time_steps_in_coordination_scale)
-            if bundle.coordination_posterior_samples is not None:
-                posterior_samples = logit(bundle.coordination_posterior_samples)
+            if bundle.observed_coordination_for_inference is not None:
+                given_coordination = adjust_dimensions(
+                    logit(bundle.observed_coordination_for_inference),
+                    bundle.num_time_steps_to_fit
+                )
+
+            initial_samples = None
+            if bundle.initial_coordination_samples is not None:
+                initial_samples = logit(bundle.initial_coordination_samples)
             coordination = SigmoidGaussianCoordination(
                 pymc_model=self.pymc_model,
-                num_time_steps=bundle.num_time_steps_in_coordination_scale,
+                num_time_steps=bundle.num_time_steps_to_fit,
                 mean_mean_uc0=bundle.mean_mean_uc0,
                 sd_mean_uc0=bundle.sd_mean_uc0,
                 sd_sd_uc=bundle.sd_sd_uc,
                 mean_uc0=bundle.mean_uc0,
                 sd_uc=bundle.sd_uc,
-                posterior_samples=posterior_samples,
+                initial_samples=initial_samples,
                 unbounded_coordination_observed_values=given_coordination
             )
 
@@ -108,7 +134,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=self.pymc_model,
             num_subjects=bundle.num_subjects,
             dimension_size=bundle.state_space_dimension_size,
-            self_dependent=bundle.self_dependent,
+            self_dependent=True,
             mean_mean_a0=bundle.mean_mean_a0,
             sd_mean_a0=bundle.sd_mean_a0,
             sd_sd_a=bundle.sd_sd_a,
@@ -128,29 +154,8 @@ class VocalicModel(ModelTemplate):
             subject_indices=vocalic_metadata.subject_indices,
             mean_a0=bundle.mean_a0,
             sd_a=bundle.sd_a,
-            posterior_samples=bundle.state_space_posterior_samples
+            initial_samples=bundle.initial_state_space_samples
         )
-
-        transformation = None
-        if bundle.activation != "linear" or (
-                bundle.state_space_dimension_size
-                < bundle.num_vocalic_features
-        ):
-            # Transform latent samples before passing to the observation module to account for
-            # non-linearity and/or different dimensions between the latent component and
-            # associated observation
-            transformation = MLP(
-                uuid="state_space_to_speech_vocalics_mlp",
-                pymc_model=self.pymc_model,
-                output_dimension_size=bundle.num_vocalic_features,
-                mean_w0=bundle.mean_w0,
-                sd_w0=bundle.sd_w0,
-                num_hidden_layers=bundle.num_hidden_layers,
-                hidden_dimension_size=bundle.hidden_dimension_size,
-                activation=bundle.activation,
-                axis=0,  # Vocalic features axis
-                weights=bundle.weights,
-            )
 
         observation = SerialGaussianObservation(
             uuid="speech_vocalics",
@@ -160,7 +165,6 @@ class VocalicModel(ModelTemplate):
             sd_sd_o=bundle.sd_sd_o,
             share_sd_o_across_subjects=bundle.share_sd_o_across_subjects,
             share_sd_o_across_dimensions=bundle.share_sd_o_across_dimensions,
-            normalization=bundle.observation_normalization,
             dimension_names=bundle.vocalic_feature_names,
             observed_values=vocalic_metadata.normalized_observations,
             time_steps_in_coordination_scale=(
@@ -175,50 +179,22 @@ class VocalicModel(ModelTemplate):
             pymc_model=self.pymc_model,
             latent_component=state_space,
             observations=[observation],
-            transformations=[transformation] if transformation else None,
+            transformations=None,
         )
 
         self._model = Model(
             name="vocalic_model",
             pymc_model=self.pymc_model,
             coordination=coordination,
-            component_groups=[group],
-            coordination_samples=bundle.coordination_samples,
+            component_groups=[group]
         )
 
-    def new_config_bundle_from_time_step_info(self,
-                                              config_bundle: VocalicConfigBundle) -> VocalicConfigBundle:
-        """
-        Gets a new config bundle with metadata and observed values adapted to the number of time
-        steps in coordination scale in case we don't want to fit just a portion of the time series.
-
-        @param config_bundle: original config bundle.
-        @return: new config bundle.
-        """
-        new_bundle = deepcopy(config_bundle)
-
-        print(new_bundle.num_time_steps_in_coordination_scale)
-
-        if config_bundle.match_vocalics_scale:
-            if config_bundle.time_steps_in_coordination_scale is not None:
-                # We estimate coordination at only when at the time steps we have observations.
-                # So, we adjust the number of time steps in the coordination scale to match the
-                # vocalics latent component scale.
-                # TODO: hahaha
-                new_bundle.num_time_steps_in_coordination_scale = len(
-                    config_bundle.time_steps_in_coordination_scale)
-                new_bundle.time_steps_in_coordination_scale = np.arange(
-                    len(config_bundle.time_steps_in_coordination_scale))
-                print("Hha")
-                print(new_bundle.num_time_steps_in_coordination_scale)
-
-        new_bundle = super().new_config_bundle_from_time_step_info(new_bundle)
-        return new_bundle
-
-    def new_config_bundle_from_posterior_samples(self, config_bundle: VocalicConfigBundle,
-                                                 idata: InferenceData,
-                                                 num_samples: int,
-                                                 seed: int = DEFAULT_SEED) -> VocalicConfigBundle:
+    def new_config_bundle_from_posterior_samples(
+            self,
+            config_bundle: VocalicConfigBundle,
+            idata: InferenceData,
+            num_samples: int,
+            seed: int = DEFAULT_SEED) -> VocalicConfigBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
         posterior in the last time step as initial values for the latent variables. This
@@ -235,22 +211,21 @@ class VocalicModel(ModelTemplate):
         np.random.seed(seed)
         samples_idx = np.random.choice(idata.num_posterior_samples, num_samples, replace=False)
 
-        new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0")[
-            samples_idx]
-        new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
         new_bundle.mean_a0 = idata.get_posterior_samples("state_space_mean_a0", samples_idx)
         new_bundle.sd_a = idata.get_posterior_samples("state_space_sd_a", samples_idx)
         new_bundle.sd_o = idata.get_posterior_samples("speech_vocalics_sd_o", samples_idx)
 
         if config_bundle.constant_coordination:
-            T = new_bundle.num_time_steps_in_coordination_scale
-            new_bundle.coordination_posterior_samples = (idata.get_posterior_samples(
-                "coordination", samples_idx))[:, None].repeat(T, axis=-1)
+            new_bundle.initial_coordination_samples = (idata.get_posterior_samples(
+                "coordination", samples_idx))
         else:
-            new_bundle.coordination_posterior_samples = (
-                idata.get_posterior_samples("unbounded_coordination", samples_idx))
+            new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0")[
+                samples_idx]
+            new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
+            new_bundle.initial_coordination_samples = (
+                idata.get_posterior_samples("coordination", samples_idx))
 
-        new_bundle.state_space_posterior_samples = (
+        new_bundle.initial_state_space_samples = (
             idata.get_posterior_samples("state_space", samples_idx))
 
         return new_bundle

@@ -22,6 +22,7 @@ from coordination.module.latent_component.gaussian_latent_component import \
 from coordination.module.latent_component.latent_component import \
     LatentComponentSamples
 from coordination.module.module import ModuleSamples
+import logging
 
 
 class NonSerialGaussianLatentComponent(GaussianLatentComponent):
@@ -56,6 +57,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         observed_values: Optional[TensorTypes] = None,
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
+            initial_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a non-serial latent component.
@@ -104,6 +106,8 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
             be given for sampling but not for inference if it needs to be inferred. If not
             provided now, it can be set later via the module parameters variable.
+        @param initial_samples: samples to use during a call to draw_samples. We complete with
+            ancestral sampling up to the desired number of time steps.
         """
         super().__init__(
             uuid=uuid,
@@ -132,6 +136,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         self.subject_names = subject_names
         self.sampling_relative_frequency = sampling_relative_frequency
+        self.initial_samples = initial_samples
 
     @property
     def subject_coordinates(self) -> Union[List[str], np.ndarray]:
@@ -193,13 +198,16 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         if self.share_sd_a_across_subjects:
             sd_a = sd_a.repeat(self.num_subjects, axis=0)
 
-        num_time_steps_in_cpn_scale = int(
-            self.coordination_samples.num_time_steps / self.sampling_relative_frequency
-        )
+        if self.initial_samples is None:
+            num_time_steps_in_cpn_scale = int(
+                self.coordination_samples.num_time_steps / self.sampling_relative_frequency
+            )
 
-        time_steps_in_coordination_scale = (
-            np.arange(num_time_steps_in_cpn_scale) * self.sampling_relative_frequency
-        ).astype(int)
+            time_steps_in_coordination_scale = (
+                np.arange(num_time_steps_in_cpn_scale) * self.sampling_relative_frequency
+            ).astype(int)
+        else:
+            time_steps_in_coordination_scale = [self.time_steps_in_coordination_scale] * num_series
 
         # Draw values from the system dynamics. The default model generates samples by following a
         # Gaussian random walk with blended values from different subjects according to the
@@ -210,6 +218,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             mean_a0=mean_a0,
             sd_a=sd_a,
+            init_values=None if self.initial_samples is None else self.initial_samples
         )
 
         return LatentComponentSamples(
@@ -225,6 +234,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         time_steps_in_coordination_scale: np.ndarray,
         mean_a0: np.ndarray,
         sd_a: np.ndarray,
+            init_values: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default non serial component generates samples
@@ -237,6 +247,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         coordination scale that match those of the component's scale.
         @param mean_a0: initial mean of the latent component.
         @param sd_a: standard deviation of the Gaussian transition distribution.
+        @param init_values: initial values if the series was pre-sampled up to some time step.
 
         @return: sampled values.
         """
@@ -246,16 +257,19 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         # s: number of subjects
         # d: dimension size
 
+        N = self.num_subjects
+        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
+
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros(
             (num_series, self.num_subjects, self.dimension_size, num_time_steps)
         )
+        t0 = 0 if init_values is None else init_values.shape[-1]
+        if init_values is not None:
+            values[..., :t0] = init_values
 
-        N = self.num_subjects
-        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
-
-        for t in range(num_time_steps):
+        for t in range(t0, num_time_steps):
             if t == 0:
                 values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
                     size=(num_series, self.num_subjects, self.dimension_size)
@@ -307,6 +321,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         if self.latent_component_random_variable is not None:
             return
+
+        logging.info(f"Fitting {self.__class__.__name__} with "
+                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
 
         log_prob_params = (
             mean_a0,

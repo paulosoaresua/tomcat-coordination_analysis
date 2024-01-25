@@ -12,6 +12,7 @@ from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import BetaParameterPrior, Parameter
+import logging
 
 
 class SpikeObservation(Observation):
@@ -151,6 +152,9 @@ class SpikeObservation(Observation):
 
         if self.time_steps_in_coordination_scale is None:
             raise ValueError("time_steps_in_coordination_scale is undefined.")
+
+        logging.info(f"Fitting {self.__class__.__name__} with "
+                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
 
         with self.pymc_model:
             self.p_random_variable = pm.Beta(

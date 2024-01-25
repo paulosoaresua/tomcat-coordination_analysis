@@ -17,35 +17,69 @@ class VocalicConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic model.
     """
-
     num_subjects: int = 3
     num_time_steps_in_coordination_scale: int = 100
-    perc_time_steps_to_fit: float = 1.0
-    # If provided, it will be used instead of the percentage above.
+
+    # When the following is true, we will estimate coordination only at the time steps for which we
+    # have observed vocalic features.
+    match_vocalic_scale: bool = True
+
+    # Used for both sampling and inference. It is capped to the number of time steps in
+    # coordination scale.
     num_time_steps_to_fit: int = None
 
-    observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
-    state_space_dimension_size: int = 4
-    state_space_dimension_names: List[str] = field(
-        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
-    )
-    self_dependent: bool = True
-    num_vocalic_features: int = 4
-    vocalic_feature_names: List[str] = field(
-        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
-    )
-    observed_coordination: Union[float, np.ndarray] = None
+    # Fixed value of coordination during inference
+    observed_coordination_for_inference: Union[float, np.ndarray] = None
 
-    # Hyper priors
-    mean_mean_uc0: float = 0.0
+    # Initial sampled values of coordination. In a call to draw samples, the model will start by
+    # using the samples given here and move forward sampling in time until the number of time
+    # steps desired have been reached.
+    initial_coordination_samples: np.ndarray = None
+    initial_state_space_samples: np.ndarray = None
+
+    # Whether to use a constant model of coordination
+    constant_coordination: bool = False
+
+    # Parameters for inference
+    mean_mean_uc0: float = 0.0  # Variable coordination
     sd_mean_uc0: float = 5.0
     sd_sd_uc: float = 1.0
+    alpha_c: float = 1.0  # Fix coordination
+    beta_c: float = 1.0
+    # -----------------------
+    # State space and observation
     mean_mean_a0: float = 0.0
     sd_mean_a0: float = 1.0
     sd_sd_a: float = 1.0
     sd_sd_o: float = 1.0
-    alpha: float = 1.0
-    beta: float = 1.0
+
+    # Given parameter values. Required for sampling, not for inference.
+    mean_uc0: float = 0.0  # Coordination = 0.5
+    sd_uc: float = 0.5
+    mean_a0: float = None
+    sd_a: float = None
+    sd_o: float = 0.1
+
+    # Sampling settings
+    sampling_time_scale_density: float = 1.0
+    allow_sampled_subject_repetition: bool = False
+    fix_sampled_subject_sequence: bool = True
+
+    # Inference settings
+    observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
+
+    # Modules settings
+    state_space_dimension_size: int = 4
+    state_space_dimension_names: List[str] = field(
+        default_factory=lambda: ["latent_pitch",
+                                 "latent_intensity",
+                                 "latent_jitter",
+                                 "latent_shimmer"]
+    )
+    num_vocalic_features: int = 4
+    vocalic_feature_names: List[str] = field(
+        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
+    )
 
     share_mean_a0_across_subjects: bool = False
     share_mean_a0_across_dimensions: bool = False
@@ -54,43 +88,12 @@ class VocalicConfigBundle(ModelConfigBundle):
     share_sd_o_across_subjects: bool = True
     share_sd_o_across_dimensions: bool = True
 
-    sampling_time_scale_density: float = 1.0
-    allow_sampled_subject_repetition: bool = False
-    fix_sampled_subject_sequence: bool = True
-
-    # Some parameters are given and others fixed.
-    mean_uc0: float = None
-    sd_uc: float = 0.5
-    mean_a0: float = None
-    sd_a: float = None
-    sd_o: float = 0.1
-
-    # Evidence and metadata filled before inference.
+    # Metadata parameters. These must be filled before inference.
     time_steps_in_coordination_scale: np.ndarray = None
     subject_indices: np.ndarray = None
     prev_time_same_subject: np.ndarray = None
     prev_time_diff_subject: np.ndarray = None
     observed_values: np.ndarray = None
-
-    # To transform a high-dimension state space to a lower dimension observation in case we
-    # want to observe position only.
-    num_hidden_layers: int = 0
-    hidden_dimension_size: int = 0
-    activation: str = "linear"
-    weights: List[np.ndarray] = field(default_factory=lambda: [np.eye(4)])
-    mean_w0: float = 0.0
-    sd_w0: float = 1.0
-
-    match_vocalics_scale: bool = True
-
-    # Samples
-    coordination_samples: np.ndarray = None
-
-    coordination_posterior_samples: np.ndarray = None
-    state_space_posterior_samples: np.ndarray = None
-
-    # Coordination
-    constant_coordination: bool = False
 
 
 @dataclass

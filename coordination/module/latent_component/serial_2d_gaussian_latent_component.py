@@ -58,7 +58,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             observed_values: Optional[TensorTypes] = None,
             mean_a0: Optional[Union[float, np.ndarray]] = None,
             sd_a: Optional[Union[float, np.ndarray]] = None,
-            posterior_samples: Optional[np.ndarray] = None
+            initial_samples: Optional[np.ndarray] = None
     ):
         """
         Creates a serial 2D Gaussian latent component.
@@ -117,7 +117,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
             be given for sampling but not for inference if it needs to be inferred. If not
             provided now, it can be set later via the module parameters variable.
-        @param posterior_samples: samples from the posterior to use during a call to draw_samples.
+        @param initial_samples: samples from the posterior to use during a call to draw_samples.
             This is useful to do predictive checks by sampling data in the future.
         """
         super().__init__(
@@ -149,7 +149,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             prev_time_diff_subject=prev_time_diff_subject,
             mean_a0=mean_a0,
             sd_a=sd_a,
-            posterior_samples=posterior_samples
+            initial_samples=initial_samples
         )
 
     def _draw_from_system_dynamics(

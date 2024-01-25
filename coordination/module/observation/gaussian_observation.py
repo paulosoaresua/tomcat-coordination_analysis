@@ -7,8 +7,6 @@ from typing import List, Optional, Union
 import numpy as np
 import pymc as pm
 
-from coordination.common.normalization import (
-    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
 from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
 from coordination.module.latent_component.latent_component import \
@@ -17,6 +15,7 @@ from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   Parameter)
+import logging
 
 
 class GaussianObservation(Observation, ABC):
@@ -35,7 +34,6 @@ class GaussianObservation(Observation, ABC):
         sd_sd_o: np.ndarray,
         share_sd_o_across_subjects: bool,
         share_sd_o_across_dimensions: bool,
-        normalization: Optional[str] = None,
         dimension_names: Optional[List[str]] = None,
         latent_component_samples: Optional[LatentComponentSamples] = None,
         latent_component_random_variable: Optional[pm.Distribution] = None,
@@ -55,8 +53,6 @@ class GaussianObservation(Observation, ABC):
             distribution).
         @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
-        @param normalization: type of normalization to apply to observed values if desired. Valid
-            normalization values are: norm_per_feature or norm_per_subject_and_feature.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
@@ -90,7 +86,6 @@ class GaussianObservation(Observation, ABC):
         )
         self.parameters.sd_o.value = sd_o
 
-        self.normalization = normalization
         self.share_sd_o_across_subjects = share_sd_o_across_subjects
         self.share_sd_o_across_dimensions = share_sd_o_across_dimensions
         self.sd_o_random_variable = sd_o_random_variable
@@ -157,41 +152,6 @@ class GaussianObservation(Observation, ABC):
                     "latent_component_random_variable before invoking the "
                     "create_random_variables method."
                 )
-
-    def _get_normalized_observation(self) -> np.ndarray:
-        if self.normalization is None:
-            logging.info(f"Observations ({self.uuid}) will not be normalized.")
-            return self.observed_values
-
-        if self.normalization == NORMALIZATION_PER_FEATURE:
-            logging.info(f"Observations ({self.uuid}) will be normalized per feature.")
-            return self._normalize_observation_per_feature()
-
-        if self.normalization == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
-            logging.info(
-                f"Observations ({self.uuid}) will be normalized per subject and feature."
-            )
-            return self._normalize_observation_per_subject_and_feature()
-
-        raise ValueError(f"Normalization ({self.normalization}) is invalid.")
-
-    @abstractmethod
-    def _normalize_observation_per_subject_and_feature(self) -> np.ndarray:
-        """
-        Normalize observed values to have mean 0 and standard deviation 1 across time. The
-        normalization is done individually per subject and feature.
-
-        @return: normalized observation.
-        """
-
-    @abstractmethod
-    def _normalize_observation_per_feature(self) -> np.ndarray:
-        """
-        Normalize observed values to have mean 0 and standard deviation 1 across time and subject.
-        The normalization is done individually per feature.
-
-        @return: normalized observation.
-        """
 
 
 ###################################################################################################

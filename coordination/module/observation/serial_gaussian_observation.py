@@ -6,9 +6,6 @@ import numpy as np
 import pymc as pm
 from scipy.stats import norm
 
-from coordination.common.normalization import (
-    normalize_serialized_data_per_feature,
-    normalize_serialized_data_per_subject_and_feature)
 from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
@@ -22,6 +19,7 @@ from coordination.module.latent_component.serial_gaussian_latent_component impor
 from coordination.module.observation.gaussian_observation import \
     GaussianObservation
 from coordination.module.observation.observation import ObservationSamples
+import logging
 
 
 class SerialGaussianObservation(GaussianObservation):
@@ -39,7 +37,6 @@ class SerialGaussianObservation(GaussianObservation):
             sd_sd_o: np.ndarray = DEFAULT_OBSERVATION_SD_PARAM,
             share_sd_o_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
             share_sd_o_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            normalization: bool = DEFAULT_OBSERVATION_NORMALIZATION,
             dimension_names: Optional[List[str]] = None,
             observation_random_variable: Optional[pm.Distribution] = None,
             latent_component_samples: Optional[SerialGaussianLatentComponentSamples] = None,
@@ -61,8 +58,6 @@ class SerialGaussianObservation(GaussianObservation):
             distribution).
         @param share_sd_o_across_subjects: whether to use the same sigma_o for all subjects.
         @param share_sd_o_across_dimensions: whether to use the same sigma_o for all dimensions.
-        @param normalization: whether to normalize observed_values before inference to
-            have mean 0 and standard deviation 1 across time per subject and variable dimension.
         @param dimension_names: the names of each dimension of the observation. If not
             informed, this will be filled with numbers 0,1,2 up to dimension_size - 1.
         @param observation_random_variable: observation random variable to be used in a
@@ -95,7 +90,6 @@ class SerialGaussianObservation(GaussianObservation):
             sd_sd_o=sd_sd_o,
             share_sd_o_across_subjects=share_sd_o_across_subjects,
             share_sd_o_across_dimensions=share_sd_o_across_dimensions,
-            normalization=normalization,
             dimension_names=dimension_names,
             observation_random_variable=observation_random_variable,
             latent_component_samples=latent_component_samples,
@@ -182,13 +176,16 @@ class SerialGaussianObservation(GaussianObservation):
         if self.share_sd_o_across_dimensions:
             sd_o = sd_o.repeat(self.dimension_size, axis=0)
 
+        logging.info(f"Fitting {self.__class__.__name__} with "
+                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
+
         with self.pymc_model:
             self.observation_random_variable = pm.Normal(
                 name=self.uuid,
                 mu=self.latent_component_random_variable,
                 sigma=sd_o,
                 dims=[self.dimension_axis_name, self.time_axis_name],
-                observed=self._get_normalized_observation(),
+                observed=self.observed_values,
             )
 
     def _add_coordinates(self):
@@ -217,31 +214,6 @@ class SerialGaussianObservation(GaussianObservation):
                 )
             ],
         )
-
-    def _normalize_observation_per_subject_and_feature(self) -> np.ndarray:
-        """
-        Normalize observed values to have mean 0 and standard deviation 1 across time. The
-        normalization is done individually per subject and feature.
-
-        @return: normalized observation.
-        """
-
-        return normalize_serialized_data_per_subject_and_feature(
-            data=self.observed_values,
-            subject_indices=self.subject_indices,
-            num_subjects=self.num_subjects,
-        )
-
-    def _normalize_observation_per_feature(self) -> np.ndarray:
-        """
-        Normalize observed values to have mean 0 and standard deviation 1 across time and subject.
-        The normalization is done individually per feature.
-
-        @return: normalized observation.
-        """
-
-        return normalize_serialized_data_per_feature(self.observed_values)
-
 
 ###################################################################################################
 # AUXILIARY CLASSES

@@ -32,8 +32,7 @@ class Model(Module):
         name: str,
         pymc_model: pm.Model,
         coordination: Coordination,
-        component_groups: List[ComponentGroup],
-        coordination_samples: Optional[ModuleSamples] = None,
+        component_groups: List[ComponentGroup]
     ):
         """
         Creates a model instance.
@@ -42,9 +41,6 @@ class Model(Module):
         @param pymc_model: a PyMC model instance where model's modules are to be created at.
         @param coordination: coordination module.
         @param component_groups: list of component groups in the model.
-        @param coordination_samples: fixed coordination samples to be used during a call to
-            draw_samples. If provided, these samples will be used and samples from the coordination
-            component won't be drawn.
         """
 
         super().__init__(
@@ -53,7 +49,6 @@ class Model(Module):
 
         self.coordination = coordination
         self.component_groups = component_groups
-        self.coordination_samples = coordination_samples
 
     def draw_samples(
         self,
@@ -70,10 +65,7 @@ class Model(Module):
         """
         super().draw_samples(seed, num_series)
 
-        if self.coordination_samples is None:
-            coordination_samples = self.coordination.draw_samples(seed, num_series)
-        else:
-            coordination_samples = self.coordination_samples
+        coordination_samples = self.coordination.draw_samples(seed, num_series)
 
         # Place the latent component and observation samples from all groups in a single
         # dictionary for easy query.
