@@ -66,10 +66,10 @@ class VocalicConfigBundle(ModelConfigBundle):
     fix_sampled_subject_sequence: bool = True
 
     # Inference settings
-    observation_normalization: str = NORMALIZATION_PER_FEATURE  # NORMALIZATION_PER_SUBJECT_AND_FEATURE
+    observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
 
     # Modules settings
-    state_space_2d: bool = True
+    state_space_2d: bool = False
 
     #   The two options below are only used if state_space_2d = False. Otherwise, the latent
     #   space will be composed of 2 dimensions: position and speed.
