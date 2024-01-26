@@ -11,7 +11,7 @@ def logit(x: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
     @param x: number of array to compute the logit for.
     @return: logit of x.
     """
-    return np.log(x / (1 - x))
+    return np.log(x / (1 - x + 1e-9))
 
 
 def sigmoid(x: Union[np.ndarray, float]) -> Union[np.ndarray, float]:

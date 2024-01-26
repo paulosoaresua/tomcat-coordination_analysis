@@ -100,7 +100,7 @@ class SigmoidGaussianCoordination(Coordination):
         """
         super().draw_samples(seed, num_series)
 
-        if self.parameters.sd_uc.value is None:
+        if self.parameters.mean_uc0.value is None:
             raise ValueError(f"Value of {self.parameters.mean_uc0.uuid} is undefined.")
 
         if self.parameters.sd_uc.value is None:

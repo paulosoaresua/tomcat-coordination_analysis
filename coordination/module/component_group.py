@@ -53,6 +53,7 @@ class ComponentGroup(Module):
             self.latent_component = LatentComponent(
                 uuid="null_latent_component",
                 pymc_model=pymc_model,
+                parameters=None,
                 num_subjects=0,
                 dimension_size=0,
                 self_dependent=False,
