@@ -4,7 +4,7 @@ import numpy as np
 import pymc as pm
 import logging
 
-from coordination.model.config_bundle.vocalic import Vocalic2DConfigBundle
+from coordination.model.config_bundle.vocalic_2d import Vocalic2DConfigBundle
 from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup

@@ -12,8 +12,8 @@ from coordination.metadata.metadata import Metadata
 from coordination.metadata.serial import SerialMetadata
 
 
-@dataclass(kw_only=True)
-class VocalicConfigBundle(ModelConfigBundle):
+@dataclass
+class Vocalic2DConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic model.
     """
@@ -66,16 +66,9 @@ class VocalicConfigBundle(ModelConfigBundle):
     fix_sampled_subject_sequence: bool = True
 
     # Inference settings
-    observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
+    observation_normalization: str = NORMALIZATION_PER_FEATURE
 
     # Modules settings
-    state_space_dimension_size: int = 4
-    state_space_dimension_names: List[str] = field(
-        default_factory=lambda: ["latent_pitch",
-                                 "latent_intensity",
-                                 "latent_jitter",
-                                 "latent_shimmer"]
-    )
     num_vocalic_features: int = 4
     vocalic_feature_names: List[str] = field(
         default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
@@ -88,6 +81,36 @@ class VocalicConfigBundle(ModelConfigBundle):
     share_sd_o_across_subjects: bool = True
     share_sd_o_across_dimensions: bool = True
 
+    num_hidden_layers: int = 0
+    hidden_dimension_size: int = 0
+    activation: str = "linear"
+    # Only position is used. # From position to 4 vocalic features
+    weights: List[np.ndarray] = field(default_factory=lambda: [np.ones((1, 4))])
+    mean_w0: float = 0.0
+    sd_w0: float = 1.0
+
+    # To allow splitting features into different groups
+    # If provided, it must be list of a dictionaries in the following format:
+    # {
+    # "name": "name of the group"
+    # "features": ["a list vocalic features to include in this group"]
+    # "weights": None or fixed weights to transform the latent component of the group to
+    # observations. If not given, it will be fit to the data.
+    # Example:
+    # vocalic_groups = [
+    #     {
+    #         "name": "pitch_intensity",
+    #         "features": ["pitch", "intensity"],
+    #         "weights": [np.ones((1, 2))]
+    #     },
+    #     {
+    #         "name": "jitter_shimmer",
+    #         "features": ["jitter", "shimmer"],
+    #         "weights": [np.ones((1, 2))]
+    #     }
+    # ]
+    vocalic_groups: List[Dict[str, Any]] = None
+
     # Metadata parameters. These must be filled before inference.
     time_steps_in_coordination_scale: np.ndarray = None
     subject_indices: np.ndarray = None
@@ -97,7 +120,7 @@ class VocalicConfigBundle(ModelConfigBundle):
 
 
 @dataclass(kw_only=True)
-class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
+class Vocalic2DSemanticLinkConfigBundle(Vocalic2DConfigBundle):
     """
     Container for the different parameters of the vocalic + semantic link model.
     """

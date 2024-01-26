@@ -1,8 +1,8 @@
 from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.model.config_bundle.vocalic import (Vocalic2DConfigBundle,
+from coordination.model.config_bundle.vocalic import (VocalicSemanticLinkConfigBundle,
                                                       VocalicConfigBundle)
-from coordination.model.config_bundle.vocalic_semantic_link import (
-    Vocalic2DSemanticLinkConfigBundle, VocalicSemanticLinkConfigBundle)
+from coordination.model.config_bundle.vocalic_2d import (
+    Vocalic2DSemanticLinkConfigBundle, Vocalic2DConfigBundle)
 from coordination.model.real.vocalic import VocalicModel
 from coordination.model.real.vocalic_2d import Vocalic2DModel
 from coordination.model.real.vocalic_2d_semantic_link import \

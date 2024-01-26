@@ -2,7 +2,7 @@ from typing import Optional
 
 import pymc as pm
 
-from coordination.model.config_bundle.vocalic_semantic_link import \
+from coordination.model.config_bundle.vocalic import \
     VocalicSemanticLinkConfigBundle
 from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
