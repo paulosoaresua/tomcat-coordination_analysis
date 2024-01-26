@@ -9,7 +9,6 @@ from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEA
 from copy import deepcopy
 
 
-@dataclass
 class SerialMetadata(Metadata):
     """
     This class holds metadata for serial modules.

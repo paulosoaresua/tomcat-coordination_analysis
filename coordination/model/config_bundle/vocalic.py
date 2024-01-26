@@ -105,3 +105,6 @@ class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
     a_p: float = 1.0
     b_p: float = 1.0
     p: float = None
+
+    # Metadata parameters. These must be filled before inference.
+    semantic_link_time_steps_in_coordination_scale = np.ndarray = None

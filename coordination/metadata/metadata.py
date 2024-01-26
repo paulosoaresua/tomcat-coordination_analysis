@@ -6,7 +6,6 @@ from typing import Optional
 import numpy as np
 
 
-@dataclass
 class Metadata:
     """
     This class represents a generic metadata.

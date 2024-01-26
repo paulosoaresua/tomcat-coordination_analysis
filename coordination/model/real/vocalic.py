@@ -77,24 +77,7 @@ class VocalicModel(ModelTemplate):
         in changes in the model's modules any time this function is called.
         """
 
-        bundle = self.config_bundle
-        if self.config_bundle.match_vocalic_scale:
-            if self.config_bundle.time_steps_in_coordination_scale is not None:
-                # We estimate coordination at only when at the time steps we have observations.
-                # So, we adjust the number of time steps in the coordination scale to match the
-                # number of time steps in the vocalic component scale
-                bundle = deepcopy(self.config_bundle)
-
-                # We adjust the number of time steps in coordination scale to match that.
-                bundle.num_time_steps_in_coordination_scale = len(
-                    self.config_bundle.time_steps_in_coordination_scale)
-
-                # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
-                # where n is the number of observations.
-                bundle.time_steps_in_coordination_scale = np.arange(
-                    len(self.config_bundle.time_steps_in_coordination_scale))
-
-        bundle = self.new_config_bundle_from_time_step_info(bundle)
+        self._get_adjusted_bundle()
 
         if bundle.constant_coordination:
             coordination = ConstantCoordination(
@@ -188,6 +171,31 @@ class VocalicModel(ModelTemplate):
             coordination=coordination,
             component_groups=[group]
         )
+
+    def _get_adjusted_bundle(self) -> VocalicConfigBundle:
+        """
+        Gets a config bundle with time scale adjusted to the scale matching and fitting options.
+
+        @return: adjusted bundle to use in the construction of the modules.
+        """
+        bundle = self.config_bundle
+        if self.config_bundle.match_vocalic_scale:
+            if self.config_bundle.time_steps_in_coordination_scale is not None:
+                # We estimate coordination at only when at the time steps we have observations.
+                # So, we adjust the number of time steps in the coordination scale to match the
+                # number of time steps in the vocalic component scale
+                bundle = deepcopy(self.config_bundle)
+
+                # We adjust the number of time steps in coordination scale to match that.
+                bundle.num_time_steps_in_coordination_scale = len(
+                    self.config_bundle.time_steps_in_coordination_scale)
+
+                # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
+                # where n is the number of observations.
+                bundle.time_steps_in_coordination_scale = np.arange(
+                    len(self.config_bundle.time_steps_in_coordination_scale))
+
+        return self.new_config_bundle_from_time_step_info(bundle)
 
     def new_config_bundle_from_posterior_samples(
             self,

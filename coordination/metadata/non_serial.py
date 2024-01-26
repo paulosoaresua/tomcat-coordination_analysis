@@ -7,7 +7,6 @@ from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEA
                                                normalize_non_serial_data_per_subject_and_feature)
 
 
-@dataclass
 class NonSerialMetadata(Metadata):
     """
     This class holds metadata for non-serial modules.
