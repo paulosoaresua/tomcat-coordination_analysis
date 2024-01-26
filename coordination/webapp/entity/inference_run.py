@@ -51,7 +51,7 @@ class InferenceRun:
         if "experiment_ids" not in self.execution_params:
             # Older inference runs don't have this field. We use all the directory names under the
             # run as experiment ids.
-            return [d for d in os.listdir(self.run_dir) if os.path.isdir(d)]
+            return [d for d in os.listdir(self.run_dir) if os.path.isdir(f"{self.run_dir}/{d}")]
 
         return self.execution_params["experiment_ids"] if self.execution_params else []
 
@@ -77,7 +77,7 @@ class InferenceRun:
         @param experiment_id: IF of the experiment.
         @return: inference data
         """
-        experiment_dir = f"{self.inference_dir}/{self.run_id}/{experiment_id}"
+        experiment_dir = f"{self.run_dir}/{experiment_id}"
         return InferenceData.from_trace_file_in_directory(experiment_dir)
 
     @property
