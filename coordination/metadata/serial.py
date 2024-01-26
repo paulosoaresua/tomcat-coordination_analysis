@@ -70,7 +70,8 @@ class SerialMetadata(Metadata):
                 subject_indices=self.subject_indices[:len(ts)],
                 prev_time_same_subject=self.prev_time_same_subject[:len(ts)],
                 prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
-                observed_values=self.observed_values[..., :len(ts)],
+                observed_values=self.observed_values[...,
+                                :len(ts)] if self.observed_values is not None else None,
                 normalization_method=self.normalization_method
             )
 

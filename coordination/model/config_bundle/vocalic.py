@@ -12,7 +12,7 @@ from coordination.metadata.metadata import Metadata
 from coordination.metadata.serial import SerialMetadata
 
 
-@dataclass(kw_only=True)
+@dataclass
 class VocalicConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic model.
@@ -96,7 +96,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     observed_values: np.ndarray = None
 
 
-@dataclass(kw_only=True)
+@dataclass
 class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
     """
     Container for the different parameters of the vocalic + semantic link model.
@@ -104,7 +104,7 @@ class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
 
     a_p: float = 1.0
     b_p: float = 1.0
-    p: float = None
+    p: float = 1.0
 
     # Metadata parameters. These must be filled before inference.
-    semantic_link_time_steps_in_coordination_scale = np.ndarray = None
+    semantic_link_time_steps_in_coordination_scale: np.ndarray = None

@@ -119,12 +119,14 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     observed_values: np.ndarray = None
 
 
-@dataclass(kw_only=True)
 class Vocalic2DSemanticLinkConfigBundle(Vocalic2DConfigBundle):
     """
-    Container for the different parameters of the vocalic + semantic link model.
+    Container for the different parameters of the vocalic2D + semantic link model.
     """
 
     a_p: float = 1.0
     b_p: float = 1.0
     p: float = None
+
+    # Metadata parameters. These must be filled before inference.
+    semantic_link_time_steps_in_coordination_scale: np.ndarray = None

@@ -42,7 +42,8 @@ class NonSerialMetadata(Metadata):
 
         return NonSerialMetadata(
             time_steps_in_coordination_scale=ts,
-            observed_values=self.observed_values[..., :len(ts)],
+            observed_values=self.observed_values[...,
+                            :len(ts)] if self.observed_values is not None else None,
             normalization_method=self.normalization_method
         )
 
@@ -88,4 +89,3 @@ class NonSerialMetadata(Metadata):
         ub = obs.shape[-1] if skip_last is None else -skip_last
 
         return obs[..., lb:ub]
-

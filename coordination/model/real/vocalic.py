@@ -41,7 +41,7 @@ class VocalicModel(ModelTemplate):
         @param pymc_model: a PyMC model instance where modules are to be created at. If not
             provided, it will be created along with this model instance.
         """
-        super().__init__(pymc_model, config_bundle)
+        super().__init__(pymc_model=pymc_model, config_bundle=config_bundle)
 
     def _register_metadata(self, config_bundle: VocalicConfigBundle):
         """
@@ -77,7 +77,7 @@ class VocalicModel(ModelTemplate):
         in changes in the model's modules any time this function is called.
         """
 
-        self._get_adjusted_bundle()
+        bundle = self._get_adjusted_bundle()
 
         if bundle.constant_coordination:
             coordination = ConstantCoordination(

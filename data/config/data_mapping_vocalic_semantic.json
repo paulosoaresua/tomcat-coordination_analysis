@@ -1,7 +1,7 @@
 {
   "mappings": [
     {
-      "bundle_param_name": "vocalics_time_steps_in_coordination_scale",
+      "bundle_param_name": "time_steps_in_coordination_scale",
       "data_column_names": [
         "vocalic_time_steps_in_coordination_scale"
       ],
@@ -36,7 +36,7 @@
       "data_type": "array"
     },
     {
-      "bundle_param_name": "observed_vocalic_values",
+      "bundle_param_name": "observed_values",
       "data_column_names": [
         "pitch",
         "intensity",

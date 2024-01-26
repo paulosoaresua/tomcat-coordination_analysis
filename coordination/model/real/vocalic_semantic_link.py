@@ -19,6 +19,8 @@ from coordination.module.observation.spike_observation import SpikeObservation
 from coordination.module.transformation.mlp import MLP
 from coordination.model.real.vocalic import VocalicModel
 from coordination.metadata.non_serial import NonSerialMetadata
+from copy import deepcopy
+import numpy as np
 
 
 class VocalicSemanticLinkModel(VocalicModel):
@@ -42,7 +44,7 @@ class VocalicSemanticLinkModel(VocalicModel):
             provided, it will be created along with this model instance.
         """
 
-        super().__init__(pymc_model, config_bundle)
+        super().__init__(pymc_model=pymc_model, config_bundle=config_bundle)
 
     def _register_metadata(self, config_bundle: VocalicSemanticLinkConfigBundle):
         """
@@ -71,29 +73,65 @@ class VocalicSemanticLinkModel(VocalicModel):
         in changes in the model's modules any time this function is called.
         """
         super()._create_model_from_config_bundle()
-
-        bundle = self._get_adjusted_bundle()
-
-        observed_semantic_links = SpikeObservation(
-            uuid="semantic_link",
-            pymc_model=self.pymc_model,
-            num_subjects=bundle.num_subjects,
-            a_p=bundle.a_p,
-            b_p=bundle.b_p,
-            dimension_name="linked",
-            sampling_time_scale_density=bundle.sampling_time_scale_density,
-            time_steps_in_coordination_scale=(
-                self.metadata["semantic_link"].time_steps_in_coordination_scale
-            ),
-            p=bundle.p,
-        )
-
-        semantic_link_group = ComponentGroup(
-            uuid="semantic_link_group",
-            pymc_model=self.pymc_model,
-            latent_component=NullLatentComponent(),
-            observations=[observed_semantic_links],
-        )
-
         self._model.uuid = "vocalic_semantic_link_model"
-        self._model.component_groups.append(semantic_link_group)
+
+        if self.metadata["semantic_link"].time_steps_in_coordination_scale > 0:
+            # We only add the semantic link module if there's evidence.
+
+            bundle = self._get_adjusted_bundle()
+
+            observed_semantic_links = SpikeObservation(
+                uuid="semantic_link",
+                pymc_model=self.pymc_model,
+                num_subjects=bundle.num_subjects,
+                a_p=bundle.a_p,
+                b_p=bundle.b_p,
+                dimension_name="linked",
+                sampling_time_scale_density=bundle.sampling_time_scale_density,
+                time_steps_in_coordination_scale=(
+                    self.metadata["semantic_link"].time_steps_in_coordination_scale
+                ),
+                p=bundle.p,
+            )
+
+            semantic_link_group = ComponentGroup(
+                uuid="semantic_link_group",
+                pymc_model=self.pymc_model,
+                latent_component=NullLatentComponent(),
+                observations=[observed_semantic_links],
+            )
+            self._model.component_groups.append(semantic_link_group)
+
+    def _get_adjusted_bundle(self) -> VocalicSemanticLinkConfigBundle:
+        """
+        Gets a config bundle with time scale adjusted to the scale matching and fitting options.
+
+        @return: adjusted bundle to use in the construction of the modules.
+        """
+        bundle = self.config_bundle
+        if self.config_bundle.match_vocalic_scale:
+            if self.config_bundle.time_steps_in_coordination_scale is not None:
+                # We estimate coordination at only when at the time steps we have observations.
+                # So, we adjust the number of time steps in the coordination scale to match the
+                # number of time steps in the vocalic component scale
+                bundle = deepcopy(self.config_bundle)
+
+                # We adjust the number of time steps in coordination scale to match that.
+                bundle.num_time_steps_in_coordination_scale = len(
+                    self.config_bundle.time_steps_in_coordination_scale)
+
+                # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
+                # where n is the number of observations.
+                bundle.time_steps_in_coordination_scale = np.arange(
+                    len(self.config_bundle.time_steps_in_coordination_scale))
+
+                # Map each one of the semantic lint time step to the new scale. We can do this
+                # because the time steps with semantic link is a subset of the time steps with
+                # vocalics.
+                time_mapping = {t: new_t for new_t, t in
+                                enumerate(self.config_bundle.time_steps_in_coordination_scale)}
+                for i, t in enumerate(
+                        self.config_bundle.semantic_link_time_steps_in_coordination_scale):
+                    bundle.semantic_link_time_steps_in_coordination_scale[i] = time_mapping[t]
+
+        return self.new_config_bundle_from_time_step_info(bundle)
