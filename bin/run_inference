@@ -206,7 +206,6 @@ def infer(out_dir: str,
             f'--out_dir="{results_folder}" '
             f'--experiment_ids="{experiment_ids}" '
             f'--evidence_filepath="{evidence_filepath}" '
-            f'{model_params_dict_filepath}'
             f'--data_mapping_filepath="{data_mapping_filepath}" '
             f'--model_name="{model_name}" '
             f'--do_prior={do_prior} '
@@ -223,6 +222,9 @@ def infer(out_dir: str,
             f'--num_time_points_ppa={num_time_points_ppa} '
             f'--ppa_window={ppa_window}'
         )
+        if model_params_dict_filepath:
+            call_python_script_command += (
+                f' --model_params_dict_filepath="{model_params_dict_filepath}"')
 
         print(f"\nCalling the following command in the TMUX window {tmux_window_name}.")
         print(call_python_script_command)
