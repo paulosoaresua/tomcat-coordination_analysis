@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
 import pymc as pm
@@ -23,6 +23,12 @@ from coordination.common.utils import adjust_dimensions
 from coordination.module.coordination.constant_coordination import ConstantCoordination
 from coordination.common.functions import logit
 import logging
+from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
+    Serial2DGaussianLatentComponent
+from coordination.module.module import Module
+from coordination.module.transformation.sequential import Sequential
+from coordination.module.transformation.dimension_reduction import \
+    DimensionReduction
 
 
 class VocalicModel(ModelTemplate):
@@ -111,9 +117,167 @@ class VocalicModel(ModelTemplate):
                 unbounded_coordination_observed_values=given_coordination
             )
 
+        if bundle.state_space_2d:
+            groups = self._create_vocalic_2d_groups(bundle)
+        else:
+            groups = self._create_vocalic_groups(bundle)
+
+        self._model = Model(
+            name="vocalic_model",
+            pymc_model=self.pymc_model,
+            coordination=coordination,
+            component_groups=groups
+        )
+
+    def _get_adjusted_bundle(self) -> VocalicConfigBundle:
+        """
+        Gets a config bundle with time scale adjusted to the scale matching and fitting options.
+
+        @return: adjusted bundle to use in the construction of the modules.
+        """
+        bundle = self.config_bundle
+        if self.config_bundle.match_vocalic_scale:
+            if self.config_bundle.time_steps_in_coordination_scale is not None:
+                # We estimate coordination at only when at the time steps we have observations.
+                # So, we adjust the number of time steps in the coordination scale to match the
+                # number of time steps in the vocalic component scale
+                bundle = deepcopy(self.config_bundle)
+
+                # We adjust the number of time steps in coordination scale to match that.
+                bundle.num_time_steps_in_coordination_scale = len(
+                    self.config_bundle.time_steps_in_coordination_scale)
+
+                # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
+                # where n is the number of observations.
+                bundle.time_steps_in_coordination_scale = np.arange(
+                    len(self.config_bundle.time_steps_in_coordination_scale))
+
+        return self.new_config_bundle_from_time_step_info(bundle)
+
+    def _create_vocalic_2d_groups(self, bundle: VocalicConfigBundle) -> List[ComponentGroup]:
+        """
+        Creates component groups for a model of vocalics with 2D state space.
+
+        @param bundle: config bundle holding information on how to parameterize the modules.
+        @return: a list of component groups to be added to the model.
+        """
+        vocalic_metadata: SerialMetadata = self.metadata["speech_vocalics"]
+
+        # In the 2D case, it may be interesting having multiple state space chains with their
+        # own dynamics if different features of a modality have different movement dynamics.
+        vocalic_groups = bundle.vocalic_groups
+        if vocalic_groups is None:
+            vocalic_groups = [
+                {
+                    "name": None,
+                    "features": bundle.vocalic_feature_names,
+                    "weights": bundle.weights,
+                }
+            ]
+
+        groups = []
+        for vocalic_group in vocalic_groups:
+            # Form a tensor of observations by getting only the dimensions of the features
+            # in the group.
+            feature_idx = [
+                bundle.vocalic_feature_names.index(feature)
+                for feature in vocalic_group["features"]
+            ]
+
+            observed_values = np.take_along_axis(
+                vocalic_metadata.normalized_observations,
+                indices=np.array(feature_idx, dtype=int)[:, None],
+                axis=0,
+            ) if bundle.observed_values is not None else None
+
+            # For retro-compatibility, we only add suffix if groups were defined.
+
+            group_name = vocalic_group["name"]
+            suffix = (
+                "" if bundle.vocalic_groups is None else f"_{group_name}"
+            )
+
+            state_space = Serial2DGaussianLatentComponent(
+                uuid=f"state_space{suffix}",
+                pymc_model=self.pymc_model,
+                num_subjects=bundle.num_subjects,
+                mean_mean_a0=bundle.mean_mean_a0,
+                sd_mean_a0=bundle.sd_mean_a0,
+                sd_sd_a=bundle.sd_sd_a,
+                share_mean_a0_across_subjects=bundle.share_mean_a0_across_subjects,
+                share_sd_a_across_subjects=bundle.share_sd_a_across_subjects,
+                share_mean_a0_across_dimensions=bundle.share_mean_a0_across_dimensions,
+                share_sd_a_across_dimensions=bundle.share_sd_a_across_dimensions,
+                sampling_time_scale_density=bundle.sampling_time_scale_density,
+                allow_sampled_subject_repetition=bundle.allow_sampled_subject_repetition,
+                fix_sampled_subject_sequence=bundle.fix_sampled_subject_sequence,
+                time_steps_in_coordination_scale=(
+                    vocalic_metadata.time_steps_in_coordination_scale
+                ),
+                prev_time_same_subject=vocalic_metadata.prev_time_same_subject,
+                prev_time_diff_subject=vocalic_metadata.prev_time_diff_subject,
+                subject_indices=vocalic_metadata.subject_indices,
+                mean_a0=bundle.mean_a0,
+                sd_a=bundle.sd_a,
+                initial_samples=bundle.initial_state_space_samples
+            )
+
+            transformation = Sequential(
+                child_transformations=[
+                    DimensionReduction(keep_dimensions=[0], axis=0),  # position,
+                    MLP(
+                        uuid=f"state_space_to_speech_vocalics_mlp{suffix}",
+                        pymc_model=self.pymc_model,
+                        output_dimension_size=len(vocalic_group["features"]),
+                        mean_w0=bundle.mean_w0,
+                        sd_w0=bundle.sd_w0,
+                        num_hidden_layers=bundle.num_hidden_layers,
+                        hidden_dimension_size=bundle.hidden_dimension_size,
+                        activation=bundle.activation,
+                        axis=0,  # Vocalic features axis
+                        weights=vocalic_group["weights"],
+                    ),
+                ]
+            )
+
+            observation = SerialGaussianObservation(
+                uuid=f"speech_vocalics{suffix}",
+                pymc_model=self.pymc_model,
+                num_subjects=bundle.num_subjects,
+                dimension_size=len(vocalic_group["features"]),
+                sd_sd_o=bundle.sd_sd_o,
+                share_sd_o_across_subjects=bundle.share_sd_o_across_subjects,
+                share_sd_o_across_dimensions=bundle.share_sd_o_across_dimensions,
+                dimension_names=vocalic_group["features"],
+                observed_values=observed_values,
+                time_steps_in_coordination_scale=(
+                    vocalic_metadata.time_steps_in_coordination_scale
+                ),
+                subject_indices=vocalic_metadata.subject_indices,
+                sd_o=bundle.sd_o,
+            )
+
+            group = ComponentGroup(
+                uuid=f"group{suffix}",
+                pymc_model=self.pymc_model,
+                latent_component=state_space,
+                observations=[observation],
+                transformations=[transformation],
+            )
+            groups.append(group)
+
+        return groups
+
+    def _create_vocalic_groups(self, bundle: VocalicConfigBundle) -> List[ComponentGroup]:
+        """
+        Creates component groups for a model of vocalics.
+
+        @param bundle: config bundle holding information on how to parameterize the modules.
+        @return: a list of component groups to be added to the model.
+        """
         vocalic_metadata: SerialMetadata = self.metadata["speech_vocalics"]
         state_space = SerialGaussianLatentComponent(
-            uuid="state_space",
+            uuid=f"state_space",
             pymc_model=self.pymc_model,
             num_subjects=bundle.num_subjects,
             dimension_size=bundle.state_space_dimension_size,
@@ -165,37 +329,7 @@ class VocalicModel(ModelTemplate):
             transformations=None,
         )
 
-        self._model = Model(
-            name="vocalic_model",
-            pymc_model=self.pymc_model,
-            coordination=coordination,
-            component_groups=[group]
-        )
-
-    def _get_adjusted_bundle(self) -> VocalicConfigBundle:
-        """
-        Gets a config bundle with time scale adjusted to the scale matching and fitting options.
-
-        @return: adjusted bundle to use in the construction of the modules.
-        """
-        bundle = self.config_bundle
-        if self.config_bundle.match_vocalic_scale:
-            if self.config_bundle.time_steps_in_coordination_scale is not None:
-                # We estimate coordination at only when at the time steps we have observations.
-                # So, we adjust the number of time steps in the coordination scale to match the
-                # number of time steps in the vocalic component scale
-                bundle = deepcopy(self.config_bundle)
-
-                # We adjust the number of time steps in coordination scale to match that.
-                bundle.num_time_steps_in_coordination_scale = len(
-                    self.config_bundle.time_steps_in_coordination_scale)
-
-                # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
-                # where n is the number of observations.
-                bundle.time_steps_in_coordination_scale = np.arange(
-                    len(self.config_bundle.time_steps_in_coordination_scale))
-
-        return self.new_config_bundle_from_time_step_info(bundle)
+        return [group]
 
     def new_config_bundle_from_posterior_samples(
             self,

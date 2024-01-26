@@ -14,17 +14,23 @@ app:
 vocalic_asist:
 	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data.csv" \
 		--model_name="vocalic" \
-		--data_mapping_filepath="data/config/data_mapping.json" \
-		--model_params_dict_filepath="data/config/params_dict.json"
+		--data_mapping_filepath="data/config/mappings/vocalic_data_mapping.json" \
+		--model_params_dict_filepath="data/config/params/vocalic_params_dict.json"
 
-vocalic_2d_asist:
+vocalic_semantic_asist:
 	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data.csv" \
-		--model_name="vocalic_2d" \
-		--data_mapping_filepath="data/config/data_mapping.json" \
-		--experiment_ids="T000612,T000613"
+		--model_name="vocalic_semantic" \
+		--data_mapping_filepath="data/config/mappings/vocalic_semantic_data_mapping.json" \
+		--model_params_dict_filepath="data/config/params/vocalic_params_dict.json"
 
-vocalic_2d_asist_unconcat:
-	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/asist_data_unconcat.csv" \
-		--model_name="vocalic_2d" \
-		--data_mapping_filepath="data/config/data_mapping.json" \
-		--experiment_ids="T000612,T000613"
+vocalic_tomcat:
+	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/tomcat_data.csv" \
+		--model_name="vocalic" \
+		--data_mapping_filepath="data/config/mappings/vocalic_data_mapping.json" \
+		--model_params_dict_filepath="data/config/params/vocalic_params_dict.json"
+
+vocalic_semantic_tomcat:
+	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/tomcat_data.csv" \
+		--model_name="vocalic_semantic" \
+		--data_mapping_filepath="data/config/mappings/vocalic_semantic_data_mapping.json" \
+		--model_params_dict_filepath="data/config/params/vocalic_params_dict.json"

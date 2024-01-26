@@ -42,9 +42,9 @@ class VocalicConfigBundle(ModelConfigBundle):
 
     # Parameters for inference
     mean_mean_uc0: float = 0.0  # Variable coordination
-    sd_mean_uc0: float = 5.0
+    sd_mean_uc0: float = 1.0
     sd_sd_uc: float = 1.0
-    alpha_c: float = 1.0  # Fix coordination
+    alpha_c: float = 1.0  # Constant coordination
     beta_c: float = 1.0
     # -----------------------
     # State space and observation
@@ -54,11 +54,11 @@ class VocalicConfigBundle(ModelConfigBundle):
     sd_sd_o: float = 1.0
 
     # Given parameter values. Required for sampling, not for inference.
-    mean_uc0: float = 0.0  # Coordination = 0.5
-    sd_uc: float = 0.5
+    mean_uc0: float = None
+    sd_uc: float = None
     mean_a0: float = None
     sd_a: float = None
-    sd_o: float = 0.1
+    sd_o: float = None
 
     # Sampling settings
     sampling_time_scale_density: float = 1.0
@@ -66,9 +66,13 @@ class VocalicConfigBundle(ModelConfigBundle):
     fix_sampled_subject_sequence: bool = True
 
     # Inference settings
-    observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
+    observation_normalization: str = NORMALIZATION_PER_FEATURE  # NORMALIZATION_PER_SUBJECT_AND_FEATURE
 
     # Modules settings
+    state_space_2d: bool = True
+
+    #   The two options below are only used if state_space_2d = False. Otherwise, the latent
+    #   space will be composed of 2 dimensions: position and speed.
     state_space_dimension_size: int = 4
     state_space_dimension_names: List[str] = field(
         default_factory=lambda: ["latent_pitch",
@@ -81,10 +85,10 @@ class VocalicConfigBundle(ModelConfigBundle):
         default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
     )
 
-    share_mean_a0_across_subjects: bool = False
-    share_mean_a0_across_dimensions: bool = False
+    share_mean_a0_across_subjects: bool = True
+    share_mean_a0_across_dimensions: bool = True
     share_sd_a_across_subjects: bool = True
-    share_sd_a_across_dimensions: bool = False
+    share_sd_a_across_dimensions: bool = True
     share_sd_o_across_subjects: bool = True
     share_sd_o_across_dimensions: bool = True
 
@@ -95,6 +99,37 @@ class VocalicConfigBundle(ModelConfigBundle):
     prev_time_diff_subject: np.ndarray = None
     observed_values: np.ndarray = None
 
+    # Extra parameters for the state space 2d case:
+    num_hidden_layers: int = 0
+    hidden_dimension_size: int = 0
+    activation: str = "linear"
+    # Only position is used. # From position to 4 vocalic features
+    weights: List[np.ndarray] = field(default_factory=lambda: [np.ones((1, 4))])
+    mean_w0: float = 0.0
+    sd_w0: float = 1.0
+
+    # To allow splitting features into different groups
+    # If provided, it must be list of a dictionaries in the following format:
+    # {
+    # "name": "name of the group"
+    # "features": ["a list vocalic features to include in this group"]
+    # "weights": None or fixed weights to transform the latent component of the group to
+    # observations. If not given, it will be fit to the data.
+    # Example:
+    # vocalic_groups = [
+    #     {
+    #         "name": "pitch_intensity",
+    #         "features": ["pitch", "intensity"],
+    #         "weights": [np.ones((1, 2))]
+    #     },
+    #     {
+    #         "name": "jitter_shimmer",
+    #         "features": ["jitter", "shimmer"],
+    #         "weights": [np.ones((1, 2))]
+    #     }
+    # ]
+    vocalic_groups: List[Dict[str, Any]] = None
+
 
 @dataclass
 class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
@@ -104,7 +139,7 @@ class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
 
     a_p: float = 1.0
     b_p: float = 1.0
-    p: float = 1.0
+    p: float = None
 
     # Metadata parameters. These must be filled before inference.
     semantic_link_time_steps_in_coordination_scale: np.ndarray = None
