@@ -48,6 +48,11 @@ class InferenceRun:
         @return: list of experiment IDs
         """
 
+        if "experiment_ids" not in self.execution_params:
+            # Older inference runs don't have this field. We use all the directory names under the
+            # run as experiment ids.
+            return [d for d in os.listdir(self.run_dir) if os.path.isdir(d)]
+
         return self.execution_params["experiment_ids"] if self.execution_params else []
 
     @property
