@@ -64,6 +64,16 @@ class ModelVariableSelection:
                 ),
             )
         )
+        options.append(
+            ModelVariableDropDownOption(
+                prefix="[EXTRA]",
+                model_variable_info=ModelVariableInfo(
+                    variable_name="Posterior Predictive Analysis - PPA",
+                    inference_mode="ppa",
+                    dimension_names=[],
+                ),
+            )
+        )
         options.sort(key=lambda x: (x.prefix, x.name))
 
         selected_option = DropDown(

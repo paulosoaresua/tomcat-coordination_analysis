@@ -2,7 +2,9 @@ from abc import abstractmethod
 from typing import Callable, Optional
 
 import arviz as az
+import numpy as np
 import pymc as pm
+import pandas as pd
 
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
@@ -15,6 +17,8 @@ from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.model import Model, ModelSamples
 from copy import deepcopy
 from coordination.metadata.metadata import Metadata
+from coordination.module.serial_observation import SerialObservation
+from coordination.module.non_serial_observation import NonSerialObservation
 
 
 class ModelTemplate:
@@ -225,3 +229,75 @@ class ModelTemplate:
         @param seed: random seed for reproducibility when choosing the samples to keep.
         """
         pass
+
+    def get_ppa_summary(self,
+                        idata: InferenceData,
+                        window_size: int,
+                        num_samples: int,
+                        seed: int) -> pd.DataFrame:
+        """
+        Initializes the model with a subset of samples from the posterior distribution and
+        performs ancestral sampling up to a time window. Then, we compute the MSE of the generated
+        samples and the observations in this window. We also report the MSE of two baseline models
+        fit on previous observed data to predict the observed data in the window: an average model
+        and a linear model.
+
+        @param idata: inference data.
+        @param window_size: how long in the future to generate samples.
+        @param num_samples: number of samples from posterior to use. Samples will be chosen
+            randomly from the posterior samples.
+        @param seed: random seed for reproducibility when choosing the samples to keep.
+        @return: a dataframe with summarized results.
+        """
+        original_bundle = self.config_bundle
+        self.config_bundle = self.new_config_bundle_from_posterior_samples(
+            config_bundle=original_bundle,
+            idata=idata,
+            num_samples=num_samples,
+            seed=seed)
+
+        lb = self.config_bundle.num_time_steps_to_fit
+        ub = lb + window_size
+
+        self.config_bundle.num_time_steps_to_fit = ub
+        samples = self.draw_samples(num_series=num_samples)
+        results = []
+        for g in self._model.component_groups:
+            for o in g.observations:
+                if (not isinstance(o, SerialObservation) and
+                        not isinstance(o, NonSerialObservation)):
+                    # We only compute MSE for observations that generate real values.
+                    continue
+
+                # Prediction and real data in the prediction window
+                real_data = self.metadata[o.uuid].normalized_observations[..., lb:ub]
+                pred_data = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
+                            lb:ub]
+
+                mse = np.square(real_data - pred_data) / np.arange(1, window_size + 1)
+                # Compute the mse across all the dimensions but the last one (the window)
+                mse = mse.mean(axis=mse.shape[:-1])
+
+                results.append({
+                    "model": self._model.uuid,
+                    "variable": o.uuid,
+                    **{f"w{w}": mse[w - 1] for w in range(1, window_size + 1)}
+                })
+
+        return pd.DataFrame(results)
+
+
+if __name__ == "__main__":
+    from coordination.model.config_bundle.vocalic import VocalicConfigBundle
+    from coordination.model.real.vocalic import VocalicModel
+    import pickle
+    from coordination.inference.inference_data import InferenceData
+
+    bundle = VocalicConfigBundle()
+    bundle.num_time_steps_to_fit = 78
+
+    model = VocalicModel(config_bundle=bundle)
+
+    with open("../../.run/inferences/ppa_true/T000612/inference_data.pkl", "rb") as f:
+        idata = InferenceData(pickle.load(f))
+        model.get_ppa_summary(idata, 5, 100, 0)

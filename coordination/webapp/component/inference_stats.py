@@ -79,17 +79,15 @@ class InferenceStats:
             }
         ])
         st.dataframe(stats_df)
-        st.write(f"Peak Points (5s): ", find_peaks(means, width=5)[0])
+        st.write(f"Peak Points (5s): ", ", ".join(find_peaks(means, width=5)[0]))
 
-        self._plot_coordination_distribution(means)
+        self._plot_coordination_distribution()
 
         self._plot_log_probability_distribution()
 
-    def _plot_coordination_distribution(self, overall_coordination: np.ndarray):
+    def _plot_coordination_distribution(self):
         """
         Plots histogram with the distribution of coordination per chain and combined.
-
-        @param overall_coordination: coordination series averaged across all chains and draws.
         """
         color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
         # chain x draw

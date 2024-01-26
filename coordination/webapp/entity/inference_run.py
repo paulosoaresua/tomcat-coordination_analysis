@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.entity.model_variable import ModelVariableInfo
+from coordination.model.template import ModelTemplate
+from coordination.model.builder import ModelBuilder
 
 
 class InferenceRun:
@@ -30,6 +32,15 @@ class InferenceRun:
         if os.path.exists(execution_params_filepath):
             with open(execution_params_filepath, "r") as f:
                 self.execution_params = json.load(f)
+
+    @property
+    def model(self) -> ModelTemplate:
+        if self.execution_params is None:
+            return None
+
+        bundle = ModelBuilder.build_bundle(self.execution_params["model_name"])
+        bundle = type(bundle)(**self.execution_params["model_config_bundle"])
+        return ModelBuilder.build_model(self.execution_params["model_name"], bundle)
 
     @property
     def run_dir(self) -> str:

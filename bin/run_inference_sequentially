@@ -182,6 +182,7 @@ def infer(
                     target_accept=target_accept,
                     progress_saving_frequency=progress_saving_frequency,
                     artifacts_dir=artifacts_dir)
+
                 idata.save_to_directory(artifacts_dir)
 
             logger.info("[SUCCESS]")
