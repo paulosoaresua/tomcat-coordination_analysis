@@ -24,8 +24,9 @@ class Metadata:
         @param observed values for the serial component.
         @param normalization_method: normalization method to apply on observations.
         """
-        self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
-        self.observed_values = observed_values
+        self.time_steps_in_coordination_scale = np.array(time_steps_in_coordination_scale,
+                                                         dtype=int)
+        self.observed_values = np.array(observed_values, dtype=float)
         self.normalization_method = normalization_method
 
     @abstractmethod
