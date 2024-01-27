@@ -287,6 +287,8 @@ class ModelTemplate:
         # Do not exceed the maximum number of time steps. Adjust window size if necessary.
         ub = min(ub, self.config_bundle.num_time_steps_in_coordination_scale)
         window_size = ub - lb
+        print(lb)
+        print(ub)
 
         self.config_bundle.num_time_steps_to_fit = ub
         samples = self.draw_samples(num_series=num_samples)
