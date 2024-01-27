@@ -133,14 +133,6 @@ def infer(
         experiment_out_dir = f"{out_dir}/{experiment_id}"
         os.makedirs(experiment_out_dir, exist_ok=True)
 
-        # All the logs from now on will be written to a file inside the folder with the results for
-        # the experiment.
-        configure_log(verbose=True, log_filepath=f"{experiment_out_dir}/log.txt")
-        logger = logging.getLogger()
-        logger.setLevel(logging.INFO)
-
-        logger.info(f"\nProcessing {experiment_id}...")
-
         # # Data transformation to correct biological differences captured in the signals from
         # different participants. evidence.normalize_per_subject()
         try:
@@ -160,13 +152,28 @@ def infer(
 
             for t in num_time_steps_to_fit:
                 if do_ppa:
+                    # All the logs from now on will be written to a file inside the folder with
+                    # the results for the experiment.
+                    artifacts_dir = f"{experiment_out_dir}/ppa/t_{t}"
+                    os.makedirs(artifacts_dir, exist_ok=True)
+
+                    configure_log(verbose=True, log_filepath=f"{artifacts_dir}/log.txt")
+                    logger = logging.getLogger()
+                    logger.setLevel(logging.INFO)
+
+                    logger.info(f"\nProcessing {experiment_id} PPA with t_{t}...")
+
                     config_bundle.num_time_steps_to_fit = t
                     model = ModelBuilder.build_model(model_name=model_name,
                                                      config_bundle=config_bundle)
-                    artifacts_dir = f"{experiment_out_dir}/ppa/t_{t}"
-                    os.makedirs(artifacts_dir, exist_ok=True)
                 else:
                     artifacts_dir = experiment_out_dir
+
+                    configure_log(verbose=True, log_filepath=f"{artifacts_dir}/log.txt")
+                    logger = logging.getLogger()
+                    logger.setLevel(logging.INFO)
+
+                    logger.info(f"\nProcessing {experiment_id}...")
 
                 idata = fit(
                     model=model,
@@ -223,6 +230,7 @@ def fit(model: ModelTemplate,
     @param artifacts_dir: directory where artifacts must be saved.
     @return: inference data.
     """
+
     global_start_time = time.time()
     model.prepare_for_inference()
     duration = (time.time() - global_start_time)
