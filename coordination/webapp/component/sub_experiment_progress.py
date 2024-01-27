@@ -145,7 +145,7 @@ class SubExperimentProgress:
         with divergence_progress_container:
             ProgressBar(
                 items_name="divergences.",
-                current_value=total_num_divergences,
+                current_value=self.total_num_divergences_,
                 maximum_value=total_num_samples,
             ).create()
 
