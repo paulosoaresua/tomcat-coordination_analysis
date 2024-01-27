@@ -177,7 +177,7 @@ class InferenceData:
         for var, values in rhat.data_vars.items():
             mean = values.to_numpy().mean()
             std = values.to_numpy().std()
-            entry = [var, "yes" if mean < 1.1 else "no", mean, std]
+            entry = [var, "yes" if mean < 1.1 or mean is None else "no", mean, std]
             data.append(entry)
 
         return pd.DataFrame(data, columns=header)
