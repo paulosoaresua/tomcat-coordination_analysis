@@ -87,12 +87,15 @@ class ExperimentProgress:
                 sub_experiment_progress.create_component()
                 all_status.add(sub_experiment_progress.status_)
                 all_divergences.append(sub_experiment_progress.total_num_divergences_)
+
+            if len(all_divergences) > 0:
+                self.total_num_divergences_ = int(np.mean(all_divergences))
         else:
             sub_experiment_progress = SubExperimentProgress(self.inference_run,
                                                             self.experiment_id)
             sub_experiment_progress.create_component()
             all_status.add(sub_experiment_progress.status_)
-            all_divergences.append(sub_experiment_progress.total_num_divergences_)
+            self.total_num_divergences_ = sub_experiment_progress.total_num_divergences_
 
         # Update status based on individual status of the sub experiments.
         if "failed" in all_status:
@@ -103,11 +106,6 @@ class ExperimentProgress:
             self.status_ = "in_progress"
         else:
             self.status_ = "no_logs"
-
-        # Average number of divergences instead. One can still see the individual number of
-        # divergences per sub-experiment if needed.
-        print(all_divergences)
-        self.total_num_divergences_ = int(np.mean(all_divergences))
 
         if self.status_ == "in_progress":
             progress_emoji = ":hourglass:"
