@@ -258,7 +258,7 @@ class ModelTemplate:
             num_samples=num_samples,
             seed=seed)
 
-        lb = self.config_bundle.num_time_steps_to_fit
+        lb = idata.num_time_steps_in_coordination_scale
         ub = lb + window_size
 
         self.config_bundle.num_time_steps_to_fit = ub
@@ -347,7 +347,7 @@ if __name__ == "__main__":
         print("Could not construct the model")
         exit()
 
-    idata = inference_run.get_inference_data("T000612")
+    idata = inference_run.get_inference_data("T000612", "t_78")
     data = inference_run.data
     row_df = data[data["experiment_id"] == "T000612"].iloc[0]
 

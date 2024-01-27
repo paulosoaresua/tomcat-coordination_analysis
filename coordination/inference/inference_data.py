@@ -20,6 +20,15 @@ class InferenceData:
         self.trace = trace
 
     @property
+    def num_time_steps_in_coordination_scale(self) -> int:
+        """
+        Gets the number of time steps in coordination scale.
+
+        @return: umber of time steps in coordination scale.
+        """
+        return len(self.trace.posterior["coordination"]["coordination_time"])
+
+    @property
     def num_divergences(self) -> int:
         """
         Gets the number of divergences in a trace.
