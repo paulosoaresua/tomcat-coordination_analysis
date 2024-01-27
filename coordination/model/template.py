@@ -301,16 +301,9 @@ class ModelTemplate:
 
                 # Prediction and real data in the prediction window
                 full_data = self.metadata[o.uuid].normalized_observations
-                y_test = full_data[..., lb:ub]
-                y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[..., lb:ub]
-
-                print(full_data)
-                print(self.metadata[o.uuid].normalized_observations)
-                print(self.metadata[o.uuid].observed_values)
-                print(lb)
-                print(ub)
-                print(y_test)
-                print(y_hat)
+                y_test = full_data[..., -window_size:]
+                y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
+                        -window_size:]
 
                 mse = np.square(y_test - y_hat) / np.arange(1, window_size + 1)
                 # Compute the mse across all the dimensions but the last one (the window)
@@ -327,7 +320,7 @@ class ModelTemplate:
                 linear = LinearRegression(fit_intercept=True)
                 sc_X = StandardScaler()
                 sc_y = StandardScaler()
-                y_train = full_data[..., :lb]
+                y_train = full_data[..., :(full_data.shape[-1] - window_size)]
                 X_train = sc_X.fit_transform(np.arange(y_train.shape[-1])[:, None])
                 X_test = np.arange(y_test.shape[-1])[:, None] + y_train.shape[-1]
                 for model_name, baseline_model in [("average", average), ("linear", linear)]:
