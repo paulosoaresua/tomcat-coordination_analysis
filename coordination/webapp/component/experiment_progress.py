@@ -6,6 +6,8 @@ import streamlit as st
 
 from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.widget.progress_bar import ProgressBar
+from coordination.webapp.component.sub_experiment_progress import SubExperimentProgress
+import numpy as np
 
 
 class ExperimentProgress:
@@ -71,9 +73,40 @@ class ExperimentProgress:
         """
         Show a title with the experiment ID and an emoji indicating the overall progress. Below,
         individual progress bars for each chain is displayed.
+
+        If an experiment has sub-experiments, their individual status will be displayed.
         """
-        logs = self._read_logs()
-        self.status_ = self._peek_logs(logs)
+        experiment_title_container = st.container()
+        all_status = set()
+        all_divergences = []
+        if self.inference_run.ppa:
+            for sub_exp_id in self.inference_run.get_sub_experiment_ids(self.experiment_id):
+                sub_experiment_progress = SubExperimentProgress(self.inference_run,
+                                                                self.experiment_id,
+                                                                sub_exp_id)
+                sub_experiment_progress.create_component()
+                all_status.add(sub_experiment_progress.status_)
+                all_divergences.append(sub_experiment_progress.total_num_divergences_)
+        else:
+            sub_experiment_progress = SubExperimentProgress(self.inference_run,
+                                                            self.experiment_id)
+            sub_experiment_progress.create_component()
+            all_status.add(sub_experiment_progress.status_)
+            all_divergences.append(sub_experiment_progress.total_num_divergences_)
+
+        # Update status based on individual status of the sub experiments.
+        if "failed" in all_status:
+            self.status_ = "failed"
+        elif "in_progress" in all_status:
+            self.status_ = "in_progress"
+        elif set("in_progress") in all_status:
+            self.status_ = "in_progress"
+        else:
+            self.status_ = "no_logs"
+
+        # Average number of divergences instead. One can still see the individual number of
+        # divergences per sub-experiment if needed.
+        self.total_num_divergences_ = int(np.mean(all_divergences))
 
         if self.status_ == "in_progress":
             progress_emoji = ":hourglass:"
@@ -84,110 +117,5 @@ class ExperimentProgress:
         else:
             progress_emoji = ":question:"
 
-        st.write(f"## {self.experiment_id} {progress_emoji}")
-        divergence_progress_container = st.container()
-
-        col1, col2 = st.columns([0.05, 0.95])
-        with col1:
-            st.write("**Logs:**")
-        with col2:
-            if logs:
-                st.json({"logs": logs}, expanded=False)
-            else:
-                st.write("*:red[No logs found.]*")
-
-        progress_info = self._read_progress_info()
-        if not progress_info:
-            return
-
-        # Use an OrderedDict such that the chains show up in order of their numbers. For instance,
-        # chain1, chain 2, chain 3...
-        total_samples_per_chain = (
-            self.inference_run.execution_params["burn_in"]
-            + self.inference_run.execution_params["num_samples"]
-        )
-        total_num_samples = (
-            total_samples_per_chain * self.inference_run.execution_params["num_chains"]
-        )
-        sorted_chain_names = sorted(list(progress_info["step"].keys()))
-        total_num_divergences = 0
-        st.write("### Samples")
-        for chain in sorted_chain_names:
-            # If a chain has completed its job, do not show progress to avoid rendering overhead.
-            if progress_info["step"][chain] < total_samples_per_chain:
-                ProgressBar(
-                    items_name=f"samples in {chain}",
-                    current_value=progress_info["step"][chain],
-                    maximum_value=total_samples_per_chain,
-                ).create()
-
-        st.write("### Divergences")
-        for chain in sorted_chain_names:
-            if progress_info["step"][chain] < total_samples_per_chain:
-                ProgressBar(
-                    items_name=f"divergences in {chain}",
-                    current_value=progress_info["num_divergences"][chain],
-                    maximum_value=total_samples_per_chain,
-                ).create()
-            total_num_divergences += progress_info["num_divergences"][chain]
-
-        with divergence_progress_container:
-            ProgressBar(
-                items_name="divergences.",
-                current_value=total_num_divergences,
-                maximum_value=total_num_samples,
-            ).create()
-
-    def _read_logs(self) -> Optional[str]:
-        """
-        Gets the logs of the inference run for the experiment ID from a log file saved under the
-        experiment ID folder. We read the log in memory since it's expected to be small.
-
-        @return: content of the log file if such file exists.
-        """
-        experiment_dir = f"{self.inference_run.run_dir}/{self.experiment_id}"
-        log_filepath = f"{experiment_dir}/log.txt"
-        logs = None
-        if os.path.exists(log_filepath):
-            with open(log_filepath, "r") as f:
-                logs = f.read()
-
-        return logs
-
-    @staticmethod
-    def _peek_logs(logs: Optional[str]) -> str:
-        """
-        From the logs, check if an inference run for the experiment ID is still in progress,
-        finished successfully or failed.
-
-        @param logs: logs of an inference run for the experiment ID.
-        @return: inference run status. One of success, failed, in_progress, no_logs.
-        """
-        if not logs:
-            return "no_logs"
-
-        if logs.find("ERROR") >= 0:
-            if logs.rfind("ERROR") > logs.rfind("INFO"):
-                # If there's an INFO after error is because another run is being attempted.
-                return "failed"
-
-        if logs.find("SUCCESS") >= 0:
-            return "success"
-
-        return "in_progress"
-
-    def _read_progress_info(self) -> Optional[Dict[str, float]]:
-        """
-        Reads progress json file for the experiment ID.
-
-        @return: progress dictionary.
-        """
-        experiment_dir = f"{self.inference_run.run_dir}/{self.experiment_id}"
-        progress_filepath = f"{experiment_dir}/progress.json"
-        if not os.path.exists(progress_filepath):
-            return None
-
-        with open(progress_filepath, "r") as f:
-            progress_dict = json.load(f)
-
-        return progress_dict
+        with experiment_title_container:
+            st.write(f"## {self.experiment_id} {progress_emoji}")
