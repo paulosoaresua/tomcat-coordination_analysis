@@ -102,7 +102,7 @@ class ExperimentProgress:
             self.status_ = "failed"
         elif "in_progress" in all_status:
             self.status_ = "in_progress"
-        elif set("success") in all_status:
+        elif set("success") == all_status:
             self.status_ = "success"
         else:
             self.status_ = "no_logs"

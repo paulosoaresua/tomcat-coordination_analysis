@@ -203,7 +203,10 @@ class SubExperimentProgress:
         if not os.path.exists(progress_filepath):
             return None
 
-        with open(progress_filepath, "r") as f:
-            progress_dict = json.load(f)
+        try:
+            with open(progress_filepath, "r") as f:
+                progress_dict = json.load(f)
+        except Exception:
+            return None
 
         return progress_dict
