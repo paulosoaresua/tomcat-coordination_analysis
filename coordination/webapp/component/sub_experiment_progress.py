@@ -184,7 +184,7 @@ class SubExperimentProgress:
                 # If there's an INFO after error is because another run is being attempted.
                 return "failed"
 
-        if logs.find("SUCCESS") >= 0:
+        if logs.find("SUCCESS") >= 0 or logs.find("Duration"):
             return "success"
 
         return "in_progress"
