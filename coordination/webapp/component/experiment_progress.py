@@ -102,13 +102,10 @@ class ExperimentProgress:
             self.status_ = "failed"
         elif "in_progress" in all_status:
             self.status_ = "in_progress"
-        elif set("success") == all_status:
+        elif {"success"} == all_status:
             self.status_ = "success"
         else:
             self.status_ = "no_logs"
-
-        print(all_status)
-        print({"success"} == all_status)
 
         if self.status_ == "in_progress":
             progress_emoji = ":hourglass:"
