@@ -304,6 +304,9 @@ class ModelTemplate:
                 y_test = full_data[..., lb:ub]
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[..., lb:ub]
 
+                print(full_data)
+                print(self.metadata[o.uuid].normalized_observations)
+                print(self.metadata[o.uuid].observed_values)
                 print(lb)
                 print(ub)
                 print(y_test)
