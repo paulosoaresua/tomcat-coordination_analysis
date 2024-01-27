@@ -79,7 +79,8 @@ class InferenceStats:
             }
         ])
         st.dataframe(stats_df)
-        st.write(f"Peak Points (5s): ", ", ".join(find_peaks(means, width=5)[0]))
+        peak_points = ", ".join(find_peaks(means, width=5)[0])
+        st.write(f"Peak Points (5s): {peak_points}")
 
         self._plot_coordination_distribution()
 
