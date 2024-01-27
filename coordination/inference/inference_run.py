@@ -248,4 +248,4 @@ class InferenceRun:
         if not os.path.exists(exp_dir):
             return []
 
-        return [d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")]
+        return sorted([d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")])
