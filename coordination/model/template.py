@@ -304,6 +304,11 @@ class ModelTemplate:
                 y_test = full_data[..., lb:ub]
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[..., lb:ub]
 
+                print(lb)
+                print(ub)
+                print(y_test)
+                print(y_hat)
+
                 mse = np.square(y_test - y_hat) / np.arange(1, window_size + 1)
                 # Compute the mse across all the dimensions but the last one (the window)
                 mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-1]))
