@@ -159,7 +159,7 @@ class InferenceRun:
         """
         experiment_dir = f"{self.run_dir}/{experiment_id}"
         if sub_experiment_id:
-            experiment_dir += f"/{sub_experiment_id}"
+            experiment_dir += f"ppa/{sub_experiment_id}"
         return InferenceData.from_trace_file_in_directory(experiment_dir)
 
     @property
@@ -244,5 +244,5 @@ class InferenceRun:
         @return: list of sub-experiment IDs
         """
 
-        exp_dir = f"{self.run_dir}/{experiment_id}"
+        exp_dir = f"{self.run_dir}/{experiment_id}/ppa"
         return [d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")]

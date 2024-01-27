@@ -158,7 +158,7 @@ class SubExperimentProgress:
         """
         experiment_dir = f"{self.inference_run.run_dir}/{self.experiment_id}"
         if self.sub_experiment_id:
-            experiment_dir += f"/{self.sub_experiment_id}"
+            experiment_dir += f"ppa/{self.sub_experiment_id}"
         log_filepath = f"{experiment_dir}/log.txt"
         logs = None
         if os.path.exists(log_filepath):
@@ -198,7 +198,7 @@ class SubExperimentProgress:
         """
         experiment_dir = f"{self.inference_run.run_dir}/{self.experiment_id}"
         if self.sub_experiment_id:
-            experiment_dir += f"/{self.sub_experiment_id}"
+            experiment_dir += f"/ppa/{self.sub_experiment_id}"
         progress_filepath = f"{experiment_dir}/progress.json"
         if not os.path.exists(progress_filepath):
             return None
