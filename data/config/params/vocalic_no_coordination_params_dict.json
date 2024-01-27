@@ -1,0 +1,9 @@
+{
+  "sd_o": 0.1,
+  "share_mean_a0_across_subjects": false,
+  "share_mean_a0_across_dimensions": false,
+  "share_sd_a_across_dimensions": false,
+  "match_vocalic_scale": false,
+  "constant_coordination": true,
+  "observed_coordination_for_inference": 0
+}
