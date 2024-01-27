@@ -257,19 +257,54 @@ class ModelTemplate:
             idata=idata,
             num_samples=num_samples,
             seed=seed)
+        # Make sure we do not restrict the size of observed data to the number of time steps used
+        # to fit the model during inference.
+        self.config_bundle.num_time_steps_to_fit = None
+        self._create_model_from_config_bundle()
 
+        # Determine the maximum number of time steps to sample
         lb = idata.num_time_steps_in_coordination_scale
-        ub = lb + window_size
-
-        self.config_bundle.num_time_steps_to_fit = ub
-        samples = self.draw_samples(num_series=num_samples)
-        results = []
-
+        ub = None
         for g in self._model.component_groups:
             for o in g.observations:
                 if not isinstance(o, GaussianObservation):
                     # We only compute MSE for observations that generate real values.
                     continue
+
+                # Observations can be sparse. So, we need to get the next time steps in the
+                # observation scale to define as the last time step to sample in the coordination
+                # scale in the model.
+                time_steps = self.metadata[o.uuid].time_steps_in_coordination_scale
+                time_steps = time_steps[time_steps >= lb]
+                if ub is None:
+                    ub = time_steps[:window_size][-1] + 1
+                else:
+                    ub = max(time_steps[:window_size][-1] + 1, ub)
+
+        if ub is None:
+            return None
+
+        # Do not exceed the maximum number of time steps. Adjust window size if necessary.
+        ub = min(ub, self.config_bundle.num_time_steps_in_coordination_scale)
+        window_size = ub - lb
+
+        self.config_bundle.num_time_steps_to_fit = ub
+        samples = self.draw_samples(num_series=num_samples)
+        results = []
+
+        lb = idata.num_time_steps_in_coordination_scale
+        for g in self._model.component_groups:
+            for o in g.observations:
+                if not isinstance(o, GaussianObservation):
+                    # We only compute MSE for observations that generate real values.
+                    continue
+
+                # Observations can be sparse. So, we need to get the next time steps in the
+                # observation scale to define as the last time step to sample in the coordination
+                # scale in the model.
+                time_steps = self.metadata[o.uuid].time_steps_in_coordination_scale
+                time_steps = time_steps[time_steps >= lb]
+                ub = lb + time_steps[:window_size] + 1
 
                 # Prediction and real data in the prediction window
                 full_data = self.metadata[o.uuid].normalized_observations
