@@ -159,7 +159,7 @@ class InferenceRun:
         """
         experiment_dir = f"{self.run_dir}/{experiment_id}"
         if sub_experiment_id:
-            experiment_dir += f"ppa/{sub_experiment_id}"
+            experiment_dir += f"/ppa/{sub_experiment_id}"
         return InferenceData.from_trace_file_in_directory(experiment_dir)
 
     @property
