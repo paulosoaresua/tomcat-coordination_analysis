@@ -135,6 +135,9 @@ def infer(
 
         # # Data transformation to correct biological differences captured in the signals from
         # different participants. evidence.normalize_per_subject()
+        configure_log(verbose=True, log_filepath=f"{experiment_out_dir}/log.txt")
+        main_logger = logging.getLogger()
+        main_logger.setLevel(logging.INFO)
         try:
             config_bundle = ModelBuilder.build_bundle(model_name)
             config_bundle.update(model_params_dict)
@@ -169,10 +172,7 @@ def infer(
                 else:
                     artifacts_dir = experiment_out_dir
 
-                    configure_log(verbose=True, log_filepath=f"{artifacts_dir}/log.txt")
-                    logger = logging.getLogger()
-                    logger.setLevel(logging.INFO)
-
+                    logger = main_logger
                     logger.info(f"\nProcessing {experiment_id}...")
 
                 idata = fit(
@@ -191,10 +191,11 @@ def infer(
                     artifacts_dir=artifacts_dir)
 
                 idata.save_to_directory(artifacts_dir)
+                logger.info("[SUCCESS]")
 
-            logger.info("[SUCCESS]")
+            main_logger.info("[SUCCESS]")
         except Exception as ex:
-            logger.error(ex)
+            main_logger.error(ex)
             raise ex
 
 
