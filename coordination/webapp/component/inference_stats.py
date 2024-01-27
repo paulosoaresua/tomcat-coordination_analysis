@@ -90,6 +90,7 @@ class InferenceStats:
         """
         Plots histogram with the distribution of coordination per chain and combined.
         """
+
         color_palette_iter = itertools.cycle(DEFAULT_COLOR_PALETTE)
         # chain x draw
         coordination_per_chain = (
@@ -106,22 +107,27 @@ class InferenceStats:
         labels = ["All chains"] + [
             f"Chain {i + 1}" for i in range(coordination.shape[0] - 1)
         ]
-        fig = ff.create_distplot(
-            coordination,
-            bin_size=0.01,
-            show_rug=False,
-            group_labels=labels,
-            colors=colors,
-        )
-        fig.update_layout(
-            title_text="Coordination distribution",
-            xaxis_title="Coordination",
-            yaxis_title="Density",
-            # Preserve legend order
-            legend={"traceorder": "normal"},
-            margin=DEFAULT_PLOT_MARGINS,
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = ff.create_distplot(
+                coordination,
+                bin_size=0.01,
+                show_rug=False,
+                group_labels=labels,
+                colors=colors,
+            )
+            fig.update_layout(
+                title_text="Coordination distribution",
+                xaxis_title="Coordination",
+                yaxis_title="Density",
+                # Preserve legend order
+                legend={"traceorder": "normal"},
+                margin=DEFAULT_PLOT_MARGINS,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception:
+            # Constant coordination has no histogram.
+            st.write(":blue[Coordination is constant.]")
+            pass
 
     def _plot_log_probability_distribution(self):
         """
