@@ -146,10 +146,22 @@ def infer(
 
             T = model.num_time_steps_in_coordination_scale
             if do_ppa:
+                # To determine the upper bound, we need to take into account the time steps in the
+                # component's scale because they can be sparse.
+                lb = int(T / 2)
+                ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window) + 1
+
+                if (ub - lb) < ppa_window:
+                    raise ValueError(f"There's not enough datapoint to run PPA with a window size "
+                                     f"of {ppa_window} with at least half of the experiment "
+                                     f"duration being fit by the model. The minimum number of "
+                                     f"time steps required for the analysis is {ub + 1} but the "
+                                     f"model has up to {T} time steps to fit in coordination "
+                                     f"scale.")
+
                 np.random.seed(seed)
                 num_time_steps_to_fit = np.random.choice(
-                    np.arange(int(T / 2), T - ppa_window + 1),
-                    num_time_points_ppa, replace=False)
+                    np.arange(lb, ub), num_time_points_ppa, replace=False)
             else:
                 num_time_steps_to_fit = np.array([T])
 
