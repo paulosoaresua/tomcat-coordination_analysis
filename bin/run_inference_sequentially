@@ -149,7 +149,7 @@ def infer(
                 # To determine the upper bound, we need to take into account the time steps in the
                 # component's scale because they can be sparse.
                 lb = int(T / 2)
-                ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window) + 1
+                ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window)
 
                 if (ub - lb) < ppa_window:
                     raise ValueError(f"There's not enough datapoint to run PPA with a window size "
@@ -160,8 +160,8 @@ def infer(
                                      f"scale.")
 
                 np.random.seed(seed)
-                num_time_steps_to_fit = np.random.choice(
-                    np.arange(lb, ub), num_time_points_ppa, replace=False)
+                num_time_steps_to_fit = sorted(np.random.choice(
+                    np.arange(lb, ub), num_time_points_ppa, replace=False))
             else:
                 num_time_steps_to_fit = np.array([T])
 

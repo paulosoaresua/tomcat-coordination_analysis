@@ -262,8 +262,6 @@ class ModelTemplate:
         self.config_bundle.num_time_steps_to_fit = None
         self._create_model_from_config_bundle()
 
-        print(self.get_smaller_time_step_in_coordination_scale_for_ppa(5))
-
         # Determine the maximum number of time steps to sample
         lb = idata.num_time_steps_in_coordination_scale
         ub = None
@@ -356,7 +354,7 @@ class ModelTemplate:
 
         return pd.DataFrame(results)
 
-    def get_smaller_time_step_in_coordination_scale_for_ppa(self, window_size: int) -> int:
+    def get_smallest_time_step_in_coordination_scale_for_ppa(self, window_size: int) -> int:
         """
         Gets the smaller time allowed so we can perform PPA. This will be the smaller time step
         such that we have enough observations in the future to fill up the window of analysis.
