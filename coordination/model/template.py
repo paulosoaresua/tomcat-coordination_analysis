@@ -286,13 +286,11 @@ class ModelTemplate:
 
         # Do not exceed the maximum number of time steps. Adjust window size if necessary.
         ub = min(ub, self.config_bundle.num_time_steps_in_coordination_scale)
-        window_size = ub - lb
 
         self.config_bundle.num_time_steps_to_fit = ub
         samples = self.draw_samples(num_series=num_samples)
         results = []
 
-        lb = idata.num_time_steps_in_coordination_scale
         for g in self._model.component_groups:
             for o in g.observations:
                 if not isinstance(o, GaussianObservation):
