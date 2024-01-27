@@ -245,4 +245,7 @@ class InferenceRun:
         """
 
         exp_dir = f"{self.run_dir}/{experiment_id}/ppa"
+        if not os.path.exists(exp_dir):
+            return []
+
         return [d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")]
