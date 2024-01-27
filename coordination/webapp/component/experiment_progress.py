@@ -106,6 +106,7 @@ class ExperimentProgress:
 
         # Average number of divergences instead. One can still see the individual number of
         # divergences per sub-experiment if needed.
+        print(all_divergences)
         self.total_num_divergences_ = int(np.mean(all_divergences))
 
         if self.status_ == "in_progress":
