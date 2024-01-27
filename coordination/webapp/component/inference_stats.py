@@ -60,6 +60,10 @@ class InferenceStats:
         )
         means = means.to_numpy()
 
+        if (means == means[0]).all():
+            st.write(":blue[Coordination is constant.]")
+            return
+
         st.write("#### Coordination stats")
         st.write(
             "*:blue[Statistics computed over the mean posterior coordination per time step.]*"
@@ -126,7 +130,7 @@ class InferenceStats:
             st.plotly_chart(fig, use_container_width=True)
         except Exception:
             # Constant coordination has no histogram.
-            st.write(":blue[Coordination is constant.]")
+            st.write(":blue[Coordination is constant is some chains.]")
             pass
 
     def _plot_log_probability_distribution(self):
