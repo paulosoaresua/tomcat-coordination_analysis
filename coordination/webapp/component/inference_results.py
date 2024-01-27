@@ -75,6 +75,7 @@ class InferenceResults:
                 self.inference_run.inference_dir,
                 self.inference_run.run_id,
                 self.experiment_id,
+                sub_experiment_id
             )
             inference_stats_component = InferenceStats(
                 component_key=f"{self.component_key}_inference_stats",
@@ -112,7 +113,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-            inference_dir: str, run_id: str, experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -120,10 +121,11 @@ class InferenceResults:
 
         @param inference_run: inference run object related to the convergence report.
         @param experiment_id: experiment id in the inference run for which to generate the report.
+        @param sub_experiment_id: ID of a sub experiment.
         @return: convergence report.
         """
         inference_run = InferenceRun(inference_dir, run_id)
-        idata = inference_run.get_inference_data(experiment_id)
+        idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
         return idata.generate_convergence_summary()
 
     @staticmethod
