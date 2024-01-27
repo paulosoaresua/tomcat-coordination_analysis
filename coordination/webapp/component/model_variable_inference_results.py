@@ -8,7 +8,7 @@ import streamlit as st
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
                                            DEFAULT_PLOT_MARGINS)
-from coordination.webapp.entity.model_variable import ModelVariableInfo
+from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.utils import plot_series
 
 

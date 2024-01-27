@@ -1,6 +1,6 @@
 import streamlit as st
 
-from coordination.webapp.entity.inference_run import InferenceRun
+from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.utils import get_inference_run_ids
 from coordination.webapp.widget.drop_down import DropDown
 

@@ -17,8 +17,10 @@ from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.model import Model, ModelSamples
 from copy import deepcopy
 from coordination.metadata.metadata import Metadata
-from coordination.module.serial_observation import SerialObservation
-from coordination.module.non_serial_observation import NonSerialObservation
+from coordination.module.observation.gaussian_observation import GaussianObservation
+from coordination.evaluation.training_average import TrainingAverageModel
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
 
 
 class ModelTemplate:
@@ -262,27 +264,66 @@ class ModelTemplate:
         self.config_bundle.num_time_steps_to_fit = ub
         samples = self.draw_samples(num_series=num_samples)
         results = []
+
         for g in self._model.component_groups:
             for o in g.observations:
-                if (not isinstance(o, SerialObservation) and
-                        not isinstance(o, NonSerialObservation)):
+                if not isinstance(o, GaussianObservation):
                     # We only compute MSE for observations that generate real values.
                     continue
 
                 # Prediction and real data in the prediction window
-                real_data = self.metadata[o.uuid].normalized_observations[..., lb:ub]
-                pred_data = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
-                            lb:ub]
+                full_data = self.metadata[o.uuid].normalized_observations
+                y_test = full_data[..., lb:ub]
+                y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[..., lb:ub]
 
-                mse = np.square(real_data - pred_data) / np.arange(1, window_size + 1)
+                mse = np.square(y_test - y_hat) / np.arange(1, window_size + 1)
                 # Compute the mse across all the dimensions but the last one (the window)
-                mse = mse.mean(axis=mse.shape[:-1])
+                mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-1]))
 
                 results.append({
                     "model": self._model.uuid,
                     "variable": o.uuid,
                     **{f"w{w}": mse[w - 1] for w in range(1, window_size + 1)}
                 })
+
+                # Baseline models for comparison
+                average = TrainingAverageModel()
+                linear = LinearRegression(fit_intercept=True)
+                sc_X = StandardScaler()
+                sc_y = StandardScaler()
+                y_train = full_data[..., :lb]
+                X_train = sc_X.fit_transform(np.arange(y_train.shape[-1])[:, None])
+                X_test = np.arange(y_test.shape[-1])[:, None] + y_train.shape[-1]
+                for model_name, baseline_model in [("average", average), ("linear", linear)]:
+                    mses = np.zeros_like(y_test)
+                    for s in range(1 if y_train.ndim == 2 else y_train.shape[0]):
+                        # Serial observations do not have a separate subject dimension.
+                        for f in range(y_train.shape[-2]):
+                            y_train_single = y_train[s, f] if y_train.ndim > 2 else y_train[f]
+                            y_train_single = sc_y.fit_transform(y_train_single[:, None])[:, 0]
+
+                            y_test_single = y_test[s, f] if y_test.ndim > 2 else y_test[f]
+
+                            baseline_model.fit(X_train, y_train_single)
+                            y_hat = baseline_model.predict(sc_X.transform(X_test))
+                            y_hat = sc_y.inverse_transform(y_hat[:, None])[:, 0]
+
+                            mse = np.square(y_test_single - y_hat) / np.arange(1, window_size + 1)
+
+                            if mses.ndim > 2:
+                                mses[s, f] = mse
+                            else:
+                                mses[f] = mse
+
+                    # Compute the mse across all the dimensions but the last one
+                    # (the window)
+                    mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-1]))
+
+                    results.append({
+                        "model": model_name,
+                        "variable": o.uuid,
+                        **{f"w{w}": mse[w - 1] for w in range(1, window_size + 1)}
+                    })
 
         return pd.DataFrame(results)
 
@@ -292,12 +333,25 @@ if __name__ == "__main__":
     from coordination.model.real.vocalic import VocalicModel
     import pickle
     from coordination.inference.inference_data import InferenceData
+    from coordination.inference.inference_run import InferenceRun
 
-    bundle = VocalicConfigBundle()
-    bundle.num_time_steps_to_fit = 78
+    # bundle = VocalicConfigBundle()
+    # bundle.num_time_steps_to_fit = 78
+    #
+    # model = VocalicModel(config_bundle=bundle)
 
-    model = VocalicModel(config_bundle=bundle)
+    inference_run = InferenceRun("/Users/paulosoares/code/tomcat-coordination/.run/inferences/",
+                                 "ppa_true")
+    model = inference_run.model
+    if model is None:
+        print("Could not construct the model")
+        exit()
 
-    with open("../../.run/inferences/ppa_true/T000612/inference_data.pkl", "rb") as f:
-        idata = InferenceData(pickle.load(f))
-        model.get_ppa_summary(idata, 5, 100, 0)
+    idata = inference_run.get_inference_data("T000612")
+    data = inference_run.data
+    row_df = data[data["experiment_id"] == "T000612"].iloc[0]
+
+    # Populate config bundle with the data
+    inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
+
+    model.get_ppa_summary(idata, 5, 100, 0)

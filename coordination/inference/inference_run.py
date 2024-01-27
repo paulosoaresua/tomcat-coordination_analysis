@@ -5,10 +5,15 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
+import pandas as pd
+
 from coordination.inference.inference_data import InferenceData
-from coordination.webapp.entity.model_variable import ModelVariableInfo
+from coordination.inference.model_variable import ModelVariableInfo
 from coordination.model.template import ModelTemplate
 from coordination.model.builder import ModelBuilder
+from coordination.model.config_bundle.bundle import ModelConfigBundle
+from coordination.model.config_bundle.mapper import DataMapper
+from coordination.common.config import settings
 
 
 class InferenceRun:
@@ -34,13 +39,72 @@ class InferenceRun:
                 self.execution_params = json.load(f)
 
     @property
+    def ppa(self) -> bool:
+        """
+        Gets whether the run is a PPA. If affirmative, multiple inferences were performed for each
+        experiment with a different number of time steps being fit.
+
+        @return: True if PPA was performed.
+        """
+        if self.execution_params is None:
+            return False
+
+        return self.execution_params.get("do_ppa", False)
+
+    @property
     def model(self) -> ModelTemplate:
+        """
+        Gets an instance of the model used to fit the data in an inference run.
+
+        @return: model.
+        """
         if self.execution_params is None:
             return None
 
-        bundle = ModelBuilder.build_bundle(self.execution_params["model_name"])
-        bundle = type(bundle)(**self.execution_params["model_config_bundle"])
+        bundle = type(self.config_bundle)(**self.execution_params["model_config_bundle"])
         return ModelBuilder.build_model(self.execution_params["model_name"], bundle)
+
+    @property
+    def data_mapper(self) -> DataMapper:
+        """
+        Gets an instance of the mapper used to map data into config bundle parameters in the
+        inference run.
+
+        @return: data mapper.
+        """
+        if self.execution_params is None:
+            return None
+
+        return DataMapper(self.execution_params["data_mapper"])
+
+    @property
+    def config_bundle(self) -> ModelConfigBundle:
+        """
+        Gets an instance of the config bundle used in the inference run.
+
+        @return: config bundle.
+        """
+        if self.execution_params is None:
+            return None
+
+        return ModelBuilder.build_bundle(self.execution_params["model_name"])
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        Gets an instance of the data frame containing the data for all experiments in the
+        inference run.
+
+        @return: data.
+        """
+        if self.execution_params is None:
+            return None
+
+        lb = self.execution_params["evidence_filepath"].rfind("/") + 1
+        data_filename = self.execution_params["evidence_filepath"][lb:]
+
+        data_filepath = f"{settings.data_dir}/{data_filename}"
+        return pd.read_csv(data_filepath)
 
     @property
     def run_dir(self) -> str:

@@ -2,7 +2,7 @@ import streamlit as st
 
 from coordination.webapp.component.experiment_progress import \
     ExperimentProgress
-from coordination.webapp.entity.inference_run import InferenceRun
+from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.widget.progress_bar import ProgressBar
 
 

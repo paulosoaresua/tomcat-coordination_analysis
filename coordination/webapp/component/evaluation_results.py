@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from coordination.webapp.constants import EVALUATIONS_DIR
-from coordination.webapp.entity.inference_run import InferenceRun
+from coordination.inference.inference_run import InferenceRun
 
 
 class EvaluationResults:

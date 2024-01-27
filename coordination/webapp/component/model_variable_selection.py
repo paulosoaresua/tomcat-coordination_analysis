@@ -1,7 +1,7 @@
 import streamlit as st
 
-from coordination.webapp.entity.inference_run import InferenceRun
-from coordination.webapp.entity.model_variable import ModelVariableInfo
+from coordination.inference.inference_run import InferenceRun
+from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.widget.drop_down import DropDown, DropDownOption
 
 
