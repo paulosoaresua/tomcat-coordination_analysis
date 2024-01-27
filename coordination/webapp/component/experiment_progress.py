@@ -107,6 +107,9 @@ class ExperimentProgress:
         else:
             self.status_ = "no_logs"
 
+        print(all_status)
+        print(set("success") == all_status)
+
         if self.status_ == "in_progress":
             progress_emoji = ":hourglass:"
         elif self.status_ == "success":
