@@ -139,20 +139,27 @@ class InferenceRun:
         @return: inference data.
         """
         for experiment_id in self.experiment_ids:
-            idata = self.get_inference_data(experiment_id)
-            if idata:
-                return idata
+            if self.ppa:
+                for sub_experiment_id in self.get_sub_experiment_ids(experiment_id):
+                    return self.get_inference_data(experiment_id, sub_experiment_id)
+            else:
+                return self.get_inference_data(experiment_id)
 
         return None
 
-    def get_inference_data(self, experiment_id: str) -> Optional[InferenceData]:
+    def get_inference_data(self,
+                           experiment_id: str,
+                           sub_experiment_id: Optional[str] = None) -> InferenceData:
         """
         Gets inference data of an experiment.
 
-        @param experiment_id: IF of the experiment.
+        @param experiment_id: ID of the experiment.
+        @param sub_experiment_id: optional ID of a sub experiment.
         @return: inference data
         """
         experiment_dir = f"{self.run_dir}/{experiment_id}"
+        if sub_experiment_id:
+            experiment_dir += f"/{sub_experiment_id}"
         return InferenceData.from_trace_file_in_directory(experiment_dir)
 
     @property
@@ -228,3 +235,14 @@ class InferenceRun:
         open_tmux_sessions = "".join([o.decode("utf-8") for o in outputs])
 
         return open_tmux_sessions.find(self.execution_params["tmux_session_name"]) >= 0
+
+    def get_sub_experiment_ids(self, experiment_id: str) -> List[str]:
+        """
+        Gets a list of sub-experiment IDs for an experiment ID.
+
+        @param experiment_id: ID of the experiment.
+        @return: list of sub-experiment IDs
+        """
+
+        exp_dir = f"{self.run_dir}/{experiment_id}"
+        return [d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")]

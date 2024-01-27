@@ -454,7 +454,8 @@ class InferenceData:
         """
         return self.trace.sample_stats.lp.to_numpy()
 
-    def get_posterior_samples(self, variable_name: str, sample_idx: Optional[np.ndarray] = None) -> np.ndarray:
+    def get_posterior_samples(self, variable_name: str,
+                              sample_idx: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Return posterior samples from a variable.
 

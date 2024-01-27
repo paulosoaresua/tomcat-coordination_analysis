@@ -361,8 +361,7 @@ class VocalicModel(ModelTemplate):
             new_bundle.initial_coordination_samples = (idata.get_posterior_samples(
                 "coordination", samples_idx))
         else:
-            new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0")[
-                samples_idx]
+            new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0", samples_idx)
             new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
             new_bundle.initial_coordination_samples = (
                 idata.get_posterior_samples("coordination", samples_idx))

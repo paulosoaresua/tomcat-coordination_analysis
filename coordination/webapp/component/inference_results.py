@@ -6,6 +6,7 @@ from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
 from coordination.inference.inference_run import InferenceRun
 from coordination.inference.model_variable import ModelVariableInfo
+from coordination.webapp.widget.drop_down import DropDown
 
 
 class InferenceResults:
@@ -20,7 +21,7 @@ class InferenceResults:
             inference_run: InferenceRun,
             experiment_id: str,
             model_variable_info: ModelVariableInfo,
-            model_variable_dimension: str,
+            model_variable_dimension: str
     ):
         """
         Creates the component.
@@ -50,7 +51,21 @@ class InferenceResults:
 
         st.write(f"### {self.experiment_id}")
 
-        idata = self.inference_run.get_inference_data(self.experiment_id)
+        sub_experiment_id = None
+        if self.inference_run.ppa:
+            sub_experiment_id = DropDown(
+                label="Sub-experiment ID",
+                key=f"{self.component_key}_sub_experiment_run_id_dropdown",
+                options=self.inference_run.get_sub_experiment_ids(self.experiment_id),
+            ).create()
+            if sub_experiment_id:
+                idata = self.inference_run.get_inference_data(self.experiment_id,
+                                                              sub_experiment_id)
+            else:
+                return
+        else:
+            idata = self.inference_run.get_inference_data(self.experiment_id)
+
         if not idata:
             st.write(":red[No inference data found.]")
             return
@@ -80,6 +95,7 @@ class InferenceResults:
                     self.inference_run.inference_dir,
                     self.inference_run.run_id,
                     self.experiment_id,
+                    sub_experiment_id
                 )
                 st.write(ppa_results)
             else:
@@ -113,7 +129,8 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-            inference_dir: str, run_id: str, experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str,
+            sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -121,6 +138,7 @@ class InferenceResults:
 
         @param inference_run: inference run object related to the convergence report.
         @param experiment_id: experiment id in the inference run for which to generate the report.
+        @param sub_experiment_id: ID of a sub experiment.
         @return: convergence report.
         """
         inference_run = InferenceRun(inference_dir, run_id)
@@ -131,7 +149,7 @@ class InferenceResults:
         if model is None:
             return ":red[**Could not construct the model.**]"
 
-        idata = inference_run.get_inference_data(experiment_id)
+        idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
         data = inference_run.data
         row_df = data[data["experiment_id"] == experiment_id].iloc[0]
 
