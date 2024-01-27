@@ -117,11 +117,11 @@ class SubExperimentProgress:
                 total_samples_per_chain * self.inference_run.execution_params["num_chains"]
         )
         sorted_chain_names = sorted(list(progress_info["step"].keys()))
-        total_num_divergences = 0
+        self.total_num_divergences_ = 0
 
         chains_in_progress = []
         for chain in sorted_chain_names:
-            total_num_divergences += progress_info["num_divergences"][chain]
+            self.total_num_divergences_ += progress_info["num_divergences"][chain]
             if progress_info["step"][chain] < total_samples_per_chain:
                 chains_in_progress.append(chain)
 
