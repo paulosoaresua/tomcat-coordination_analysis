@@ -260,6 +260,7 @@ class ModelTemplate:
         # Make sure we do not restrict the size of observed data to the number of time steps used
         # to fit the model during inference.
         self.config_bundle.num_time_steps_to_fit = None
+        print(self.metadata)
         self._create_model_from_config_bundle()
 
         # Determine the maximum number of time steps to sample
