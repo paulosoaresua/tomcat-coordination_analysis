@@ -130,6 +130,13 @@ class VocalicConfigBundle(ModelConfigBundle):
     # ]
     vocalic_groups: List[Dict[str, Any]] = None
 
+    # Parameters for the semantic component
+    a_p: float = 1.0
+    b_p: float = 1.0
+    p: float = None
+
+    semantic_link_time_steps_in_coordination_scale: np.ndarray = None
+
 
 @dataclass
 class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
