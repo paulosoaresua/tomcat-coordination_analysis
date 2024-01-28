@@ -70,6 +70,8 @@ class VocalicSemanticLinkModel(VocalicModel):
             print("Creating")
             print(self.metadata["semantic_link"])
 
+        print(self.metadata)
+
     def _create_model_from_config_bundle(self):
         """
         Creates internal modules of the model using the most up-to-date information in the config
