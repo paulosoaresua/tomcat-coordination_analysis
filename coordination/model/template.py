@@ -303,7 +303,7 @@ class ModelTemplate:
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
                         -window_size:]
 
-                mse = np.square(y_test - y_hat) / np.arange(1, window_size + 1)
+                mse = np.cumsum(np.square(y_test - y_hat), axis=-1) / np.arange(1, window_size + 1)
                 # Compute the mse across all the dimensions but the last one (the window)
                 mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-1]))
 
@@ -335,7 +335,8 @@ class ModelTemplate:
                             y_hat = baseline_model.predict(sc_X.transform(X_test))
                             y_hat = sc_y.inverse_transform(y_hat[:, None])[:, 0]
 
-                            mse = np.square(y_test_single - y_hat) / np.arange(1, window_size + 1)
+                            mse = np.cumsum(np.square(y_test_single - y_hat), axis=-1) / np.arange(
+                                1, window_size + 1)
 
                             if mses.ndim > 2:
                                 mses[s, f] = mse
