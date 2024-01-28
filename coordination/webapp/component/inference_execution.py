@@ -383,9 +383,9 @@ class InferenceExecution:
                 f'--target_accept={execution_params["target_accept"]} '
                 f'--do_ppa={1 if execution_params["do_ppa"] else 0}'
             )
-            if execution_params["num_time_points_ppa"]:
+            if "num_time_points_ppa" in execution_params:
                 command += f' --num_time_points_ppa={execution_params["num_time_points_ppa"]}'
-            if execution_params["num_time_points_ppa"]:
+            if "num_time_points_ppa" in execution_params:
                 command += f' --ppa_window={execution_params["ppa_window"]}'
 
             with st.spinner("Wait for it..."):
