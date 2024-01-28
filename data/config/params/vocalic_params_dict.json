@@ -5,5 +5,6 @@
   "share_mean_a0_across_subjects": false,
   "share_mean_a0_across_dimensions": false,
   "share_sd_a_across_dimensions": false,
-  "match_vocalic_scale": false
+  "match_vocalic_scale": false,
+  "observation_normalization": "norm_per_subject_and_feature"
 }

@@ -3,8 +3,7 @@ from typing import Any, Dict, List, Union
 
 import numpy as np
 
-from coordination.common.normalization import (
-    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
+from coordination.common.normalization import NORMALIZATION_PER_FEATURE
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponent, SerialGaussianLatentComponentSamples
@@ -66,7 +65,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     fix_sampled_subject_sequence: bool = True
 
     # Inference settings
-    observation_normalization: str = NORMALIZATION_PER_SUBJECT_AND_FEATURE
+    observation_normalization: str = NORMALIZATION_PER_FEATURE
 
     # Modules settings
     state_space_2d: bool = False
