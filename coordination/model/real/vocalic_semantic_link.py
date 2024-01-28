@@ -159,7 +159,7 @@ class VocalicSemanticLinkModel(VocalicModel):
         """
         new_bundle = super().new_config_bundle_from_posterior_samples(config_bundle, idata,
                                                                       num_samples, seed)
-        new_bundle = VocalicSemanticLinkConfigBundle(**new_bundle)
+        new_bundle = VocalicSemanticLinkConfigBundle(*new_bundle)
         new_bundle.p = idata.get_posterior_samples("semantic_link_p", samples_idx)
 
         return new_bundle
