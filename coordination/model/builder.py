@@ -15,6 +15,7 @@ from coordination.model.real.fnirs import FNIRSModel
 
 MODELS = {
     "vocalic",
+    "vocalic_2d",
     "vocalic_semantic",
     "fnirs"
 }
@@ -40,6 +41,11 @@ class ModelBuilder:
         if model_name == "vocalic":
             return VocalicConfigBundle()
 
+        if model_name == "vocalic_2d":
+            bundle = VocalicConfigBundle()
+            bundle.state_space_2d = True
+            return bundle
+
         if model_name == "vocalic_semantic":
             return VocalicSemanticLinkConfigBundle()
 
@@ -61,6 +67,10 @@ class ModelBuilder:
 
         if model_name == "vocalic":
             return VocalicModel(config_bundle=config_bundle)
+
+        if model_name == "vocalic_2d":
+            config_bundle.state_space_2d = True
+            return VocalicModel(config_bundle)
 
         if model_name == "vocalic_semantic":
             return VocalicSemanticLinkModel(config_bundle=config_bundle)
