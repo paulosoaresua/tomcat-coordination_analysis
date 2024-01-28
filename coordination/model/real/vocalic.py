@@ -31,6 +31,8 @@ from coordination.module.transformation.dimension_reduction import \
     DimensionReduction
 from coordination.module.observation.spike_observation import SpikeObservation
 from coordination.metadata.non_serial import NonSerialMetadata
+from coordination.module.latent_component.null_latent_component import \
+    NullLatentComponent
 
 
 class VocalicModel(ModelTemplate):
