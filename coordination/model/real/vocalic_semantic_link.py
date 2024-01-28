@@ -137,3 +137,27 @@ class VocalicSemanticLinkModel(VocalicModel):
                     bundle.semantic_link_time_steps_in_coordination_scale[i] = time_mapping[t]
 
         return self.new_config_bundle_from_time_step_info(bundle)
+
+    def new_config_bundle_from_posterior_samples(
+            self,
+            config_bundle: VocalicConfigBundle,
+            idata: InferenceData,
+            num_samples: int,
+            seed: int = DEFAULT_SEED) -> VocalicConfigBundle:
+        """
+        Uses samples from posterior to update a config bundle. Here we set the samples from the
+        posterior in the last time step as initial values for the latent variables. This
+        allows us to generate samples in the future for predictive checks.
+
+        @param config_bundle: original config bundle.
+        @param idata: inference data.
+        @param num_samples: number of samples from posterior to use. Samples will be chosen
+            randomly from the posterior samples.
+        @param seed: random seed for reproducibility when choosing the samples to keep.
+        """
+        new_bundle = super().new_config_bundle_from_posterior_samples(config_bundle, idata,
+                                                                      num_samples, seed)
+
+        new_bundle.p = idata.get_posterior_samples("semantic_link_p", samples_idx)
+
+        return new_bundle

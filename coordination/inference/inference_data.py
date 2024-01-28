@@ -479,6 +479,9 @@ class InferenceData:
             # Value was given, not sampled.
             return self.trace.observed_data[variable_name].to_numpy()
         else:
+            if variable_name not in self.trace.posterior:
+                return None
+
             values = self.trace.posterior[variable_name].stack(
                 sample=["draw", "chain"]).transpose("sample", ...).to_numpy()
 
