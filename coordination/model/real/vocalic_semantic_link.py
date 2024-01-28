@@ -75,9 +75,9 @@ class VocalicSemanticLinkModel(VocalicModel):
         super()._create_model_from_config_bundle()
         self._model.uuid = "vocalic_semantic_link_model"
 
-        if "semantic_link" in self.metadata and self.metadata[
-            "semantic_link"].time_steps_in_coordination_scale is not None and len(
-                self.metadata["semantic_link"].time_steps_in_coordination_scale) > 0:
+        semantic_link_metadata = self.metadata.get("semantic_link", None)
+        if semantic_link_metadata and semantic_link_metadata.time_steps_in_coordination_scale is \
+                not None and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0:
             # We only add the semantic link module if there's evidence.
 
             bundle = self._get_adjusted_bundle()
@@ -91,7 +91,7 @@ class VocalicSemanticLinkModel(VocalicModel):
                 dimension_name="linked",
                 sampling_time_scale_density=bundle.sampling_time_scale_density,
                 time_steps_in_coordination_scale=(
-                    self.metadata["semantic_link"].time_steps_in_coordination_scale
+                    semantic_link_metadata.time_steps_in_coordination_scale
                 ),
                 p=bundle.p,
             )
