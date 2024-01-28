@@ -251,6 +251,7 @@ class ModelTemplate:
         @param seed: random seed for reproducibility when choosing the samples to keep.
         @return: a dataframe with summarized results.
         """
+        print(self.metadata)
         original_bundle = self.config_bundle
         self.config_bundle = self.new_config_bundle_from_posterior_samples(
             config_bundle=original_bundle,
