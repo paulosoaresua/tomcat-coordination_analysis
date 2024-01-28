@@ -381,10 +381,12 @@ class InferenceExecution:
                 f'--num_inference_jobs={execution_params["num_inference_jobs"]} '
                 f'--nuts_init_method="{execution_params["nuts_init_method"]}" '
                 f'--target_accept={execution_params["target_accept"]} '
-                f'--do_ppa={1 if execution_params["do_ppa"] else 0} '
-                f'--num_time_points_ppa={execution_params["num_time_points_ppa"]} '
-                f'--ppa_window={execution_params["ppa_window"]}'
+                f'--do_ppa={1 if execution_params["do_ppa"] else 0}'
             )
+            if execution_params["num_time_points_ppa"]:
+                command += f' --num_time_points_ppa={execution_params["num_time_points_ppa"]}'
+            if execution_params["num_time_points_ppa"]:
+                command += f' --ppa_window={execution_params["ppa_window"]}'
 
             with st.spinner("Wait for it..."):
                 outputs = subprocess.Popen(
