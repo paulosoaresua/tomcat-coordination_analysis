@@ -8,6 +8,13 @@
       "data_type": "array"
     },
     {
+      "bundle_param_name": "semantic_link_time_steps_in_coordination_scale",
+      "data_column_names": [
+        "conversational_semantic_link_time_steps_in_coordination_scale"
+      ],
+      "data_type": "array"
+    },
+    {
       "bundle_param_name": "subject_indices",
       "data_column_names": [
         "vocalic_subjects"
@@ -36,8 +43,7 @@
         "jitter",
         "shimmer"
       ],
-      "data_type": "array",
-      "feature": true
+      "data_type": "array"
     },
     {
       "bundle_param_name": "num_time_steps_in_coordination_scale",
