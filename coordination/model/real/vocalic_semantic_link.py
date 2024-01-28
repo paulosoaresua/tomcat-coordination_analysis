@@ -21,6 +21,7 @@ from coordination.model.real.vocalic import VocalicModel
 from coordination.metadata.non_serial import NonSerialMetadata
 from copy import deepcopy
 import numpy as np
+from coordination.common.constants import DEFAULT_SEED
 
 
 class VocalicSemanticLinkModel(VocalicModel):
