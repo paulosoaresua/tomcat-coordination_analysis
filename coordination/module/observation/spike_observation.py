@@ -115,13 +115,17 @@ class SpikeObservation(Observation):
 
         time_steps = []
         for s in range(num_series):
+            p = self.parameters.p.value
+            if p.ndim > 1:
+                p = p[s]
+
             density_mask = bernoulli(p=self.sampling_time_scale_density).rvs(
                 len(self.coordination_samples.values[s])
             )
 
             # Effectively observe links according to the values of coordination
             links = bernoulli(
-                p=self.coordination_samples.values[s] * self.parameters.p.value
+                p=self.coordination_samples.values[s] * p
             ).rvs()
 
             # Mask out spikes according to the required density.
