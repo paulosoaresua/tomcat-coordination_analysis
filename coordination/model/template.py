@@ -304,13 +304,26 @@ class ModelTemplate:
                         -window_size:]
 
                 mse = np.cumsum(np.square(y_test - y_hat), axis=-1) / np.arange(1, window_size + 1)
-                # Compute the mse across all the dimensions but the last one (the window)
-                mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-1]))
 
+                # Compute the mse across all the dimensions but the last 2 ones: feature and
+                # window.
+                if mse.ndim > 2:
+                    mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-2]))
+
+                for d in range(mse.shape[0]):
+                    results.append({
+                        "model": self._model.uuid,
+                        "variable": o.uuid,
+                        "feature": o.dimension_names[d],
+                        **{f"w{w}": mse[d, w - 1] for w in range(1, window_size + 1)}
+                    })
+
+                # Add an extra dimension to represent the MSE over all features
                 results.append({
                     "model": self._model.uuid,
                     "variable": o.uuid,
-                    **{f"w{w}": mse[w - 1] for w in range(1, window_size + 1)}
+                    "feature": "all",
+                    **{f"w{w}": mse.mean(axis=0)[w - 1] for w in range(1, window_size + 1)}
                 })
 
                 # Baseline models for comparison
@@ -343,14 +356,26 @@ class ModelTemplate:
                             else:
                                 mses[f] = mse
 
-                    # Compute the mse across all the dimensions but the last one
-                    # (the window)
-                    mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-1]))
+                    # Compute the mse across all the dimensions but the last 2 ones: feature and
+                    # window.
+                    mse = mses
+                    if mse.ndim > 2:
+                        mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-2]))
 
+                    for d in range(mse.shape[0]):
+                        results.append({
+                            "model": model_name,
+                            "variable": o.uuid,
+                            "feature": o.dimension_names[d],
+                            **{f"w{w}": mse[d, w - 1] for w in range(1, window_size + 1)}
+                        })
+
+                    # Add an extra dimension to represent the MSE over all features
                     results.append({
                         "model": model_name,
                         "variable": o.uuid,
-                        **{f"w{w}": mse[w - 1] for w in range(1, window_size + 1)}
+                        "feature": "all",
+                        **{f"w{w}": mse.mean(axis=0)[w - 1] for w in range(1, window_size + 1)}
                     })
 
         return pd.DataFrame(results)
@@ -403,5 +428,7 @@ if __name__ == "__main__":
 
     # Populate config bundle with the data
     inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
+    model.config_bundle.match_vocalic_scale = True
 
-    model.get_ppa_summary(idata, 5, 100, 0)
+    df = model.get_ppa_summary(idata, 5, 100, 0)
+    print(df)
