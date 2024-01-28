@@ -22,6 +22,7 @@ from coordination.metadata.non_serial import NonSerialMetadata
 from copy import deepcopy
 import numpy as np
 from coordination.common.constants import DEFAULT_SEED
+from coordination.inference.inference_data import InferenceData
 
 
 class VocalicSemanticLinkModel(VocalicModel):
@@ -141,10 +142,10 @@ class VocalicSemanticLinkModel(VocalicModel):
 
     def new_config_bundle_from_posterior_samples(
             self,
-            config_bundle: VocalicConfigBundle,
+            config_bundle: VocalicSemanticLinkConfigBundle,
             idata: InferenceData,
             num_samples: int,
-            seed: int = DEFAULT_SEED) -> VocalicConfigBundle:
+            seed: int = DEFAULT_SEED) -> VocalicSemanticLinkConfigBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
         posterior in the last time step as initial values for the latent variables. This
@@ -158,7 +159,7 @@ class VocalicSemanticLinkModel(VocalicModel):
         """
         new_bundle = super().new_config_bundle_from_posterior_samples(config_bundle, idata,
                                                                       num_samples, seed)
-
+        new_bundle = VocalicSemanticLinkConfigBundle(**new_bundle)
         new_bundle.p = idata.get_posterior_samples("semantic_link_p", samples_idx)
 
         return new_bundle
