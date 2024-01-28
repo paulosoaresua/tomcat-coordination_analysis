@@ -329,12 +329,10 @@ def log_prob(
 
     prev_same = prev_same * mask_same + (1 - mask_same) * initial_mean
 
-    T = coordination.shape[0]
-    F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
-    F = ptt.set_subtensor(F[:, 1, 1], 1 - coordination * prev_diff_subject_mask)
-
-    U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
-    U = ptt.set_subtensor(U[:, 1, 1], coordination * prev_diff_subject_mask)
+    c = coordination * prev_diff_subject_mask
+    F = ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]]) - ptt.as_tensor(
+        [[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
+    U = ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
 
     # We transform the sample using the fundamental matrix so that we learn to generate samples
     # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
@@ -423,13 +421,13 @@ def random(
 
         c = coordination[t]
         dt_diff = 1
-        F = np.array([[1, dt_diff], [0, 1 - c]])
+        F = np.array([[1, dt_diff], [0, 1 - c * prev_diff_subject_mask[t]]])
         U = np.array(
             [
                 [0, 0],  # position of "b" does not influence position of "a"
                 [
                     0,
-                    c,
+                    c * prev_diff_subject_mask[t],
                 ],  # speed of "b" influences the speed of "a" when there's coordination.
             ]
         )
