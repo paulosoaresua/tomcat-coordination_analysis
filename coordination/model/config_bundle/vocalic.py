@@ -69,6 +69,7 @@ class VocalicConfigBundle(ModelConfigBundle):
 
     # Modules settings
     state_space_2d: bool = False
+    include_semantic: bool = False
 
     #   The two options below are only used if state_space_2d = False. Otherwise, the latent
     #   space will be composed of 2 dimensions: position and speed.

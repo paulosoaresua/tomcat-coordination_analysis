@@ -12,11 +12,13 @@ from coordination.model.real.vocalic_semantic_link import \
 from coordination.model.template import ModelTemplate
 from coordination.model.config_bundle.fnirs import FNIRSConfigBundle
 from coordination.model.real.fnirs import FNIRSModel
+from copy import deepcopy
 
 MODELS = {
     "vocalic",
-    "vocalic_2d",
     "vocalic_semantic",
+    "vocalic_2d",
+    "vocalic_2d_semantic",
     "fnirs"
 }
 
@@ -38,16 +40,15 @@ class ModelBuilder:
         if model_name not in MODELS:
             raise ValueError(f"Invalid model ({model_name}).")
 
-        if model_name == "vocalic":
-            return VocalicConfigBundle()
-
-        if model_name == "vocalic_2d":
+        if "vocalic" in model_name:
             bundle = VocalicConfigBundle()
-            bundle.state_space_2d = True
+            bundle.state_space_2d = False
+            bundle.include_semantic = False
+            if "vocalic_2d" in model_name:
+                bundle.state_space_2d = True
+            if "semantic" in model_name:
+                bundle.include_semantic = True
             return bundle
-
-        if model_name == "vocalic_semantic":
-            return VocalicSemanticLinkConfigBundle()
 
         if model_name == "fnirs":
             return FNIRSConfigBundle()
@@ -65,15 +66,15 @@ class ModelBuilder:
         if model_name not in MODELS:
             raise ValueError(f"Invalid model ({model_name}).")
 
-        if model_name == "vocalic":
-            return VocalicModel(config_bundle=config_bundle)
-
-        if model_name == "vocalic_2d":
-            config_bundle.state_space_2d = True
-            return VocalicModel(config_bundle)
-
-        if model_name == "vocalic_semantic":
-            return VocalicSemanticLinkModel(config_bundle=config_bundle)
+        if "vocalic" in model_name:
+            bundle = deepcopy(config_bundle)
+            bundle.state_space_2d = False
+            bundle.include_semantic = False
+            if "vocalic_2d" in model_name:
+                bundle.state_space_2d = True
+            if "semantic" in model_name:
+                bundle.include_semantic = True
+            return VocalicModel(bundle)
 
         if model_name == "fnirs":
             return FNIRSModel(config_bundle=config_bundle)
