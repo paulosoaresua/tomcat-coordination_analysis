@@ -56,8 +56,6 @@ class VocalicSemanticLinkModel(VocalicModel):
 
         if "semantic_link" in self.metadata:
             metadata: NonSerialMetadata = self.metadata["semantic_link"]
-            print("Getting")
-            print(metadata)
             metadata.time_steps_in_coordination_scale = (
                 config_bundle.semantic_link_time_steps_in_coordination_scale)
         else:
@@ -67,10 +65,6 @@ class VocalicSemanticLinkModel(VocalicModel):
                 observed_values=None,
                 normalization_method=None
             )
-            print("Creating")
-            print(self.metadata["semantic_link"])
-
-        print(self.metadata)
 
     def _create_model_from_config_bundle(self):
         """

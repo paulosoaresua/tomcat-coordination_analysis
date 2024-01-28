@@ -5,6 +5,7 @@ from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEA
                                                NORMALIZATION_PER_FEATURE,
                                                normalize_non_serial_data_per_feature,
                                                normalize_non_serial_data_per_subject_and_feature)
+from copy import deepcopy
 
 
 class NonSerialMetadata(Metadata):
@@ -36,7 +37,7 @@ class NonSerialMetadata(Metadata):
         """
         ts = self.time_steps_in_coordination_scale
         if ts is None:
-            return
+            return deepcopy(self)
 
         ts = ts[ts < max_time_step]
 

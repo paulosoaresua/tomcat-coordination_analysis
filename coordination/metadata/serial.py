@@ -62,18 +62,18 @@ class SerialMetadata(Metadata):
         ts = self.time_steps_in_coordination_scale
         if ts is None:
             return deepcopy(self)
-        else:
-            ts = ts[ts < max_time_step]
-            return SerialMetadata(
-                num_subjects=self.num_subjects,
-                time_steps_in_coordination_scale=ts,
-                subject_indices=self.subject_indices[:len(ts)],
-                prev_time_same_subject=self.prev_time_same_subject[:len(ts)],
-                prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
-                observed_values=self.observed_values[...,
-                                :len(ts)] if self.observed_values is not None else None,
-                normalization_method=self.normalization_method
-            )
+
+        ts = ts[ts < max_time_step]
+        return SerialMetadata(
+            num_subjects=self.num_subjects,
+            time_steps_in_coordination_scale=ts,
+            subject_indices=self.subject_indices[:len(ts)],
+            prev_time_same_subject=self.prev_time_same_subject[:len(ts)],
+            prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
+            observed_values=self.observed_values[...,
+                            :len(ts)] if self.observed_values is not None else None,
+            normalization_method=self.normalization_method
+        )
 
     def _normalize(self, observations: np.ndarray):
         """
