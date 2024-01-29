@@ -48,7 +48,7 @@ class NonSerialMetadata(Metadata):
             normalization_method=self.normalization_method
         )
 
-    def _normalize(self, observations: np.ndarray):
+    def normalize(self, observations: np.ndarray):
         """
         Normalize observations with some method.
 
@@ -81,7 +81,7 @@ class NonSerialMetadata(Metadata):
         @param skip_first: number of time steps to skip.
         @param skip_last: number of time steps to not to include.
         """
-        obs = self._normalize(observations) if normalize else observations
+        obs = self.normalize(observations) if normalize else observations
 
         if obs is None:
             return None

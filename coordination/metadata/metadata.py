@@ -45,10 +45,10 @@ class Metadata:
 
         @return normalized observations.
         """
-        return self._normalize(self.observed_values)
+        return self.normalize(self.observed_values)
 
     @abstractmethod
-    def _normalize(self, observations: np.ndarray):
+    def normalize(self, observations: np.ndarray):
         """
         Normalize observations with some method.
 

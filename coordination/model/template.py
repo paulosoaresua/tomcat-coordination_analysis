@@ -267,11 +267,17 @@ class ModelTemplate:
         # Determine the maximum number of time steps to sample
         lb = idata.num_time_steps_in_coordination_scale
         ub = None
+
+        y_full = {}
         for g in self._model.component_groups:
             for o in g.observations:
                 if not isinstance(o, GaussianObservation):
                     # We only compute MSE for observations that generate real values.
                     continue
+
+                # Store observations here without normalization. For testing, we need to normalize
+                # the fitting window separate from the test window to avoid information leakage.
+                y_full[o.uuid] = self.metadata[o.uuid].observed_values
 
                 # Observations can be sparse. So, we need to get the next time steps in the
                 # observation scale to define as the last time step to sample in the coordination
@@ -300,8 +306,10 @@ class ModelTemplate:
                     continue
 
                 # Prediction and real data in the prediction window
-                full_data = self.metadata[o.uuid].normalized_observations
-                y_test = full_data[..., -window_size:]
+                y_train = self.metadata[o.uuid].normalize(y_full[o.uuid][..., :lb])
+                y_test = self.metadata[o.uuid].normalize(y_full[o.uuid][..., lb:])[...,
+                         :window_size]
+
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
                         -window_size:]
 
@@ -333,7 +341,6 @@ class ModelTemplate:
                 linear = LinearRegression(fit_intercept=True)
                 sc_X = StandardScaler()
                 sc_y = StandardScaler()
-                y_train = full_data[..., :(full_data.shape[-1] - window_size)]
                 X_train = sc_X.fit_transform(np.arange(y_train.shape[-1])[:, None])
                 X_test = np.arange(y_test.shape[-1])[:, None] + y_train.shape[-1]
                 for model_name, baseline_model in [("average", average), ("linear", linear)]:
