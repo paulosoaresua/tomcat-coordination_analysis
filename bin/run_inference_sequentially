@@ -153,7 +153,7 @@ def infer(
                 else:
                     # To determine the upper bound, we need to take into account the time steps
                     # in the component's scale because they can be sparse.
-                    lb = int(T / 2)
+                    lb = int(T / 4)
                     ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window)
 
                     if (ub - lb) < ppa_window:

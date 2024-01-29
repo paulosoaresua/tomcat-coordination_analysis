@@ -21,6 +21,8 @@ from coordination.module.observation.gaussian_observation import GaussianObserva
 from coordination.evaluation.training_average import TrainingAverageModel
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
+from coordination.metadata.serial import SerialMetadata
+from coordination.common.normalization import NORMALIZATION_PER_SUBJECT_AND_FEATURE
 
 
 class ModelTemplate:
@@ -406,11 +408,37 @@ class ModelTemplate:
                     # We only do PPA for observations that generate real values.
                     continue
 
+                if isinstance(self.metadata[o.uuid], SerialMetadata):
+                    metadata: SerialMetadata = self.metadata[o.uuid]
+                    if metadata.normalization_method == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
+                        # Choose a time such that we guarantee to have a minimum of 3 observations
+                        # for the subject so we have some samples to compute z-scores in the test
+                        # window.
+                        counts = {}
+                        subjects_3_utterances = 0
+                        for t in range(len(metadata.subject_indices), 0, -1):
+                            subject = metadata.subject_indices[t - 1]
+                            if subject not in counts:
+                                counts[subject] = 0
+
+                            counts[subject] += 1
+                            if counts[subject] == 3:
+                                subjects_3_utterances += 1
+
+                            if subjects_3_utterances == metadata.num_subjects:
+                                return metadata.time_steps_in_coordination_scale[t - 2]
+
+                        raise ValueError(f"Some of the subjects do not have a minimum of 3 "
+                                         f"utterances so we can perform PPA.")
+
+                # In any other situation, we can just reserve double the window size for testing.
+                # Do 5 windows so we can have enough observations from multiple people for
+                # normalization purposes in the prediction window.
                 if T is None:
-                    T = self.metadata[o.uuid].time_steps_in_coordination_scale[-window_size]
+                    T = self.metadata[o.uuid].time_steps_in_coordination_scale[-2*window_size]
                 else:
                     T = min(T,
-                            self.metadata[o.uuid].time_steps_in_coordination_scale[-window_size])
+                            self.metadata[o.uuid].time_steps_in_coordination_scale[-2*window_size])
 
         return T
 
@@ -427,15 +455,15 @@ if __name__ == "__main__":
     #
     # model = VocalicModel(config_bundle=bundle)
     inference_run = InferenceRun("/Users/paulosoares/code/tomcat-coordination/.run/gauss/",
-                                 "2024.01.27--10.16.25")
+                                 "2024.01.27--16.31.14")
     model = inference_run.model
     if model is None:
         print("Could not construct the model")
         exit()
 
-    idata = inference_run.get_inference_data("T000635", "t_788")
+    idata = inference_run.get_inference_data("074b6d22-f0b3-4faf-b6ec-04dc03b3e697", "t_531")
     data = inference_run.data
-    row_df = data[data["experiment_id"] == "T000635"].iloc[0]
+    row_df = data[data["experiment_id"] == "074b6d22-f0b3-4faf-b6ec-04dc03b3e697"].iloc[0]
 
     # Populate config bundle with the data
     inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
