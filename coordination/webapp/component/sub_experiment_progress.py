@@ -18,20 +18,21 @@ class SubExperimentProgress:
     """
 
     def __init__(self, inference_run: InferenceRun, experiment_id: str,
-                 sub_experiment_id: Optional[str] = None, render_component: bool = True):
+                 sub_experiment_id: Optional[str] = None,
+                 display_sub_experiment_progress: bool = True):
         """
         Creates the component.
 
         @param inference_run: object containing info about an inference run.
         @param experiment_id: experiment id from the inference run.
         @param sub_experiment_id: optional sub-experiment ID.
-        @param render_component: whether to render graphical elements on the screen. If False,
-            status will be computed by nothing will be displayed.
+        @param display_sub_experiment_progress: whether to display the progress of all the
+            sub-experiments of all the experiments in the inference run.
         """
         self.inference_run = inference_run
         self.experiment_id = experiment_id
         self.sub_experiment_id = sub_experiment_id
-        self.render_component = render_component
+        self.display_sub_experiment_progress = display_sub_experiment_progress
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
@@ -85,7 +86,7 @@ class SubExperimentProgress:
         self.status_ = self._peek_logs(logs)
 
         divergence_progress_container = None
-        if self.render_component:
+        if self.display_sub_experiment_progress:
             if self.sub_experiment_id:
                 if self.status_ == "in_progress":
                     progress_emoji = ":hourglass:"
@@ -130,7 +131,7 @@ class SubExperimentProgress:
             if progress_info["step"][chain] < total_samples_per_chain:
                 chains_in_progress.append(chain)
 
-        if self.render_component:
+        if self.display_sub_experiment_progress:
             if chains_in_progress:
                 st.write("#### :violet[Samples]")
                 for chain in chains_in_progress:

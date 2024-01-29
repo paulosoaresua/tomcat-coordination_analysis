@@ -12,13 +12,20 @@ class InferenceRunProgress:
     progress of each experiment under the run and a global status for the run itself.
     """
 
-    def __init__(self, inference_run: InferenceRun):
+    def __init__(self, inference_run: InferenceRun, display_experiment_progress: bool = True,
+            display_sub_experiment_progress: bool = True):
         """
         Creates the component.
 
         @param inference_run: object containing info about an inference run.
+        @param display_experiment_progress: whether to display the progress of all the experiments
+            in the inference run.
+        @param display_sub_experiment_progress: whether to display the progress of all the
+            sub-experiments of all the experiments in the inference run.
         """
         self.inference_run = inference_run
+        self.display_experiment_progress = display_experiment_progress
+        self.display_sub_experiment_progress = display_sub_experiment_progress
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
@@ -36,12 +43,12 @@ class InferenceRunProgress:
         num_experiments_in_progress = 0
         num_experiments_not_started = 0
         num_experiments_failed = 0
-        display_experiment_progress = st.toggle("Display Experiment Progress", value=False)
         experiment_ids = sorted(self.inference_run.experiment_ids)
         for experiment_id in experiment_ids:
             experiment_progress_component = ExperimentProgress(
                 inference_run=self.inference_run, experiment_id=experiment_id,
-                render_component=display_experiment_progress
+                display_experiment_progress=self.display_experiment_progress,
+                display_sub_experiment_progress=self.display_sub_experiment_progress
             )
             experiment_progress_component.create_component()
             num_experiments_succeeded += experiment_progress_component.succeeded

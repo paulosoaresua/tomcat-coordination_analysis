@@ -26,12 +26,6 @@ class Progress:
         """
         Creates the page by adding different components to the screen.
         """
-        inference_progress_component = InferenceProgress(
-            component_key=f"{self.page_key}_inference_progress",
-            inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
-            refresh_rate=REFRESH_RATE,
-        )
-
         col1, col2 = st.columns(2)
         with col1:
             num_runs = st.number_input(
@@ -56,5 +50,19 @@ class Progress:
                 run_id_multi_selection_component.all_run_ids[:idx]
             )
 
-        if st.toggle("Monitor progress"):
-            inference_progress_component.create_component()
+        col1, col2, col3 = st.columns(3)
+        with col2:
+            display_experiment_progress = st.toggle("Display Experiment Progress", value=False)
+        with col3:
+            display_sub_experiment_progress = st.toggle("Display Sub-experiment Progress",
+                                                       value=False)
+        with col1:
+            if st.toggle("Monitor progress"):
+                inference_progress_component = InferenceProgress(
+                    component_key=f"{self.page_key}_inference_progress",
+                    inference_dir=st.session_state[INFERENCE_RESULTS_DIR_STATE_KEY],
+                    refresh_rate=REFRESH_RATE,
+                    display_experiment_progress=display_experiment_progress,
+                    display_sub_experiment_progress=display_sub_experiment_progress,
+                )
+                inference_progress_component.create_component()
