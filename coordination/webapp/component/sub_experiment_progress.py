@@ -18,17 +18,20 @@ class SubExperimentProgress:
     """
 
     def __init__(self, inference_run: InferenceRun, experiment_id: str,
-                 sub_experiment_id: Optional[str] = None):
+                 sub_experiment_id: Optional[str] = None, render_component: bool = True):
         """
         Creates the component.
 
         @param inference_run: object containing info about an inference run.
         @param experiment_id: experiment id from the inference run.
         @param sub_experiment_id: optional sub-experiment ID.
+        @param render_component: whether to render graphical elements on the screen. If False,
+            status will be computed by nothing will be displayed.
         """
         self.inference_run = inference_run
         self.experiment_id = experiment_id
         self.sub_experiment_id = sub_experiment_id
+        self.render_component = render_component
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
@@ -81,27 +84,29 @@ class SubExperimentProgress:
         logs = self._read_logs()
         self.status_ = self._peek_logs(logs)
 
-        if self.status_ == "in_progress":
-            progress_emoji = ":hourglass:"
-        elif self.status_ == "success":
-            progress_emoji = ":white_check_mark:"
-        elif self.status_ == "failed":
-            progress_emoji = ":x:"
-        else:
-            progress_emoji = ":question:"
+        divergence_progress_container = None
+        if self.render_component:
+            if self.sub_experiment_id:
+                if self.status_ == "in_progress":
+                    progress_emoji = ":hourglass:"
+                elif self.status_ == "success":
+                    progress_emoji = ":white_check_mark:"
+                elif self.status_ == "failed":
+                    progress_emoji = ":x:"
+                else:
+                    progress_emoji = ":question:"
 
-        if self.sub_experiment_id:
-            st.write(f"### :orange[{self.sub_experiment_id} {progress_emoji}]")
-        divergence_progress_container = st.container()
+                st.write(f"### :orange[{self.sub_experiment_id} {progress_emoji}]")
+            divergence_progress_container = st.container()
 
-        col1, col2 = st.columns([0.05, 0.95])
-        with col1:
-            st.write("**Logs:**")
-        with col2:
-            if logs:
-                st.json({"logs": logs}, expanded=False)
-            else:
-                st.write("*:red[No logs found.]*")
+            col1, col2 = st.columns([0.05, 0.95])
+            with col1:
+                st.write("**Logs:**")
+            with col2:
+                if logs:
+                    st.json({"logs": logs}, expanded=False)
+                else:
+                    st.write("*:red[No logs found.]*")
 
         progress_info = self._read_progress_info()
         if not progress_info:
@@ -125,29 +130,30 @@ class SubExperimentProgress:
             if progress_info["step"][chain] < total_samples_per_chain:
                 chains_in_progress.append(chain)
 
-        if chains_in_progress:
-            st.write("#### :violet[Samples]")
-            for chain in chains_in_progress:
-                ProgressBar(
-                    items_name=f"samples in {chain}",
-                    current_value=progress_info["step"][chain],
-                    maximum_value=total_samples_per_chain,
-                ).create()
+        if self.render_component:
+            if chains_in_progress:
+                st.write("#### :violet[Samples]")
+                for chain in chains_in_progress:
+                    ProgressBar(
+                        items_name=f"samples in {chain}",
+                        current_value=progress_info["step"][chain],
+                        maximum_value=total_samples_per_chain,
+                    ).create()
 
-            st.write("#### :violet[Divergences]")
-            for chain in chains_in_progress:
-                ProgressBar(
-                    items_name=f"divergences in {chain}",
-                    current_value=progress_info["num_divergences"][chain],
-                    maximum_value=total_samples_per_chain,
-                ).create()
+                st.write("#### :violet[Divergences]")
+                for chain in chains_in_progress:
+                    ProgressBar(
+                        items_name=f"divergences in {chain}",
+                        current_value=progress_info["num_divergences"][chain],
+                        maximum_value=total_samples_per_chain,
+                    ).create()
 
-        with divergence_progress_container:
-            ProgressBar(
-                items_name="divergences.",
-                current_value=self.total_num_divergences_,
-                maximum_value=total_num_samples,
-            ).create()
+            with divergence_progress_container:
+                ProgressBar(
+                    items_name="divergences.",
+                    current_value=self.total_num_divergences_,
+                    maximum_value=total_num_samples,
+                ).create()
 
     def _read_logs(self) -> Optional[str]:
         """

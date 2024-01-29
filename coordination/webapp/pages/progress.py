@@ -56,5 +56,5 @@ class Progress:
                 run_id_multi_selection_component.all_run_ids[:idx]
             )
 
-        if st.checkbox("Monitor progress"):
+        if st.toggle("Monitor progress"):
             inference_progress_component.create_component()

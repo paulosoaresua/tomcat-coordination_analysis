@@ -36,10 +36,12 @@ class InferenceRunProgress:
         num_experiments_in_progress = 0
         num_experiments_not_started = 0
         num_experiments_failed = 0
+        display_experiment_progress = st.toggle("Display Experiment Progress", value=False)
         experiment_ids = sorted(self.inference_run.experiment_ids)
         for experiment_id in experiment_ids:
             experiment_progress_component = ExperimentProgress(
-                inference_run=self.inference_run, experiment_id=experiment_id
+                inference_run=self.inference_run, experiment_id=experiment_id,
+                render_component=display_experiment_progress
             )
             experiment_progress_component.create_component()
             num_experiments_succeeded += experiment_progress_component.succeeded

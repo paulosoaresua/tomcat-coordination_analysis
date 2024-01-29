@@ -18,15 +18,19 @@ class ExperimentProgress:
     create_component to update its content.
     """
 
-    def __init__(self, inference_run: InferenceRun, experiment_id: str):
+    def __init__(self, inference_run: InferenceRun, experiment_id: str,
+                 render_component: bool = True):
         """
         Creates the component.
 
         @param inference_run: object containing info about an inference run.
         @param experiment_id: experiment id from the inference run.
+        @param render_component: whether to render graphical elements on the screen. If False,
+            status will be computed by nothing will be displayed.
         """
         self.inference_run = inference_run
         self.experiment_id = experiment_id
+        self.render_component = render_component
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
@@ -76,14 +80,22 @@ class ExperimentProgress:
 
         If an experiment has sub-experiments, their individual status will be displayed.
         """
-        experiment_title_container = st.container()
+        experiment_title_container = None
+        if self.render_component:
+            experiment_title_container = st.container()
+
         all_status = set()
         all_divergences = []
+        display_experiment_progress = self.render_component
         if self.inference_run.ppa:
+            if self.render_component:
+                display_experiment_progress = st.toggle("Display Sub-experiment Progress",
+                                                        value=False)
             for sub_exp_id in self.inference_run.get_sub_experiment_ids(self.experiment_id):
                 sub_experiment_progress = SubExperimentProgress(self.inference_run,
                                                                 self.experiment_id,
-                                                                sub_exp_id)
+                                                                sub_exp_id,
+                                                                display_experiment_progress)
                 sub_experiment_progress.create_component()
                 all_status.add(sub_experiment_progress.status_)
                 all_divergences.append(sub_experiment_progress.total_num_divergences_)
@@ -92,7 +104,8 @@ class ExperimentProgress:
                 self.total_num_divergences_ = int(np.mean(all_divergences))
         else:
             sub_experiment_progress = SubExperimentProgress(self.inference_run,
-                                                            self.experiment_id)
+                                                            self.experiment_id,
+                                                            display_experiment_progress)
             sub_experiment_progress.create_component()
             all_status.add(sub_experiment_progress.status_)
             self.total_num_divergences_ = sub_experiment_progress.total_num_divergences_
@@ -107,14 +120,15 @@ class ExperimentProgress:
         else:
             self.status_ = "no_logs"
 
-        if self.status_ == "in_progress":
-            progress_emoji = ":hourglass:"
-        elif self.status_ == "success":
-            progress_emoji = ":white_check_mark:"
-        elif self.status_ == "failed":
-            progress_emoji = ":x:"
-        else:
-            progress_emoji = ":question:"
+        if self.render_component:
+            if self.status_ == "in_progress":
+                progress_emoji = ":hourglass:"
+            elif self.status_ == "success":
+                progress_emoji = ":white_check_mark:"
+            elif self.status_ == "failed":
+                progress_emoji = ":x:"
+            else:
+                progress_emoji = ":question:"
 
-        with experiment_title_container:
-            st.write(f"## {self.experiment_id} {progress_emoji}")
+            with experiment_title_container:
+                st.write(f"## {self.experiment_id} {progress_emoji}")
