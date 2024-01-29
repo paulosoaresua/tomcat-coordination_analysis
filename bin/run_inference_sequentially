@@ -60,7 +60,8 @@ def infer(
         progress_saving_frequency: int,
         do_ppa: bool,
         num_time_points_ppa: int,
-        ppa_window: int):
+        ppa_window: int,
+        ppa_time_points: Optional[List[int]]):
     """
     Runs inference for multiple experiments in sequence.
 
@@ -86,6 +87,7 @@ def infer(
     @param do_ppa: whether we want to fit the model multiple times for PPA.
     @param num_time_points_ppa: number of points to sample for PPA.
     @param ppa_window: window size for PPA.
+    @param ppa_time_points: an optional list of fixed time points for PPA.
     """
 
     if not do_prior and not do_posterior:
@@ -146,22 +148,26 @@ def infer(
 
             T = model.num_time_steps_in_coordination_scale
             if do_ppa:
-                # To determine the upper bound, we need to take into account the time steps in the
-                # component's scale because they can be sparse.
-                lb = int(T / 2)
-                ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window)
+                if num_time_points_ppa:
+                    num_time_steps_to_fit = np.array(num_time_points_ppa)
+                else:
+                    # To determine the upper bound, we need to take into account the time steps
+                    # in the component's scale because they can be sparse.
+                    lb = int(T / 2)
+                    ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window)
 
-                if (ub - lb) < ppa_window:
-                    raise ValueError(f"There's not enough datapoint to run PPA with a window size "
-                                     f"of {ppa_window} with at least half of the experiment "
-                                     f"duration being fit by the model. The minimum number of "
-                                     f"time steps required for the analysis is {ub + 1} but the "
-                                     f"model has up to {T} time steps to fit in coordination "
-                                     f"scale.")
+                    if (ub - lb) < ppa_window:
+                        raise ValueError(
+                            f"There's not enough datapoint to run PPA with a window "
+                            f"size of {ppa_window} with at least half of the "
+                            f"experiment duration being fit by the model. The "
+                            f"minimum number of time steps required for the analysis is {ub + 1} "
+                            f"but the model has up to {T} time steps to fit in coordination "
+                            f"scale.")
 
-                np.random.seed(seed)
-                num_time_steps_to_fit = sorted(np.random.choice(
-                    np.arange(lb, ub), num_time_points_ppa, replace=False))
+                    np.random.seed(seed)
+                    num_time_steps_to_fit = sorted(np.random.choice(
+                        np.arange(lb, ub), num_time_points_ppa, replace=False))
             else:
                 num_time_steps_to_fit = np.array([T])
 
@@ -177,6 +183,7 @@ def infer(
                     logger.setLevel(logging.INFO)
 
                     logger.info(f"\nProcessing {experiment_id} PPA with t_{t}...")
+                    print(f"\nProcessing {experiment_id} PPA with t_{t}...")
 
                     config_bundle.num_time_steps_to_fit = t
                     model = ModelBuilder.build_model(model_name=model_name,
@@ -186,6 +193,7 @@ def infer(
 
                     logger = main_logger
                     logger.info(f"\nProcessing {experiment_id}...")
+                    print(f"\nProcessing {experiment_id}...")
 
                 idata = fit(
                     model=model,
@@ -467,11 +475,22 @@ if __name__ == "__main__":
         default=DEFAULT_PPA_WINDOW,
         help="Window size for ppa analysis.",
     )
+    parser.add_argument(
+        "--ppa_time_points",
+        type=str,
+        required=False,
+        help="An optional list of time points for PPA. This is helpful for triggering jobs that "
+             "failed without having to run inference for all the time points that succeeded when "
+             "executing PPA.",
+    )
 
     args = parser.parse_args()
 
+    time_points = None if args.ppa_time_points is None else args.ppa_time_points.split(",")
+    time_points = [int(t) for t in time_points]
+
     infer(out_dir=args.out_dir,
-          experiment_ids=args.experiment_ids.split(","),
+          experiment_ids=list(map(str.strip, args.experiment_ids.split(","))),
           evidence_filepath=args.evidence_filepath,
           model_params_dict_filepath=args.model_params_dict_filepath,
           data_mapping_filepath=args.data_mapping_filepath,
@@ -488,4 +507,5 @@ if __name__ == "__main__":
           progress_saving_frequency=args.progress_saving_frequency,
           do_ppa=args.do_ppa,
           num_time_points_ppa=args.num_time_points_ppa,
-          ppa_window=args.ppa_window)
+          ppa_window=args.ppa_window,
+          ppa_time_points=time_points)
