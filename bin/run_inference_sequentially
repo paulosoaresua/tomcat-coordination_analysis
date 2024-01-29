@@ -148,7 +148,7 @@ def infer(
 
             T = model.num_time_steps_in_coordination_scale
             if do_ppa:
-                if num_time_points_ppa:
+                if ppa_time_points:
                     num_time_steps_to_fit = np.array(ppa_time_points)
                 else:
                     # To determine the upper bound, we need to take into account the time steps
