@@ -141,9 +141,13 @@ class InferenceRun:
         for experiment_id in self.experiment_ids:
             if self.ppa:
                 for sub_experiment_id in self.get_sub_experiment_ids(experiment_id):
-                    return self.get_inference_data(experiment_id, sub_experiment_id)
+                    idata = self.get_inference_data(experiment_id, sub_experiment_id)
+                    if idata is not None:
+                        return idata
             else:
-                return self.get_inference_data(experiment_id)
+                idata = self.get_inference_data(experiment_id)
+                if idata is not None:
+                    return idata
 
         return None
 
