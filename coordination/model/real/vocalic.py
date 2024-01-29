@@ -84,11 +84,18 @@ class VocalicModel(ModelTemplate):
                 metadata: NonSerialMetadata = self.metadata["semantic_link"]
                 metadata.time_steps_in_coordination_scale = (
                     config_bundle.semantic_link_time_steps_in_coordination_scale)
+                if config_bundle.semantic_link_time_steps_in_coordination_scale is not None:
+                    metadata.observed_values = np.ones_like(
+                        config_bundle.semantic_link_time_steps_in_coordination_scale)
             else:
+                obs = None
+                if config_bundle.semantic_link_time_steps_in_coordination_scale is not None:
+                    obs = np.ones_like(
+                        config_bundle.semantic_link_time_steps_in_coordination_scale)
                 self.metadata["semantic_link"] = NonSerialMetadata(
                     time_steps_in_coordination_scale=(
                         config_bundle.semantic_link_time_steps_in_coordination_scale),
-                    observed_values=None,
+                    observed_values=obs,
                     normalization_method=None
                 )
 
@@ -139,7 +146,7 @@ class VocalicModel(ModelTemplate):
             groups = self._create_vocalic_groups(bundle)
 
         if bundle.include_semantic:
-            semantic_link_metadata = self.metadata.get("semantic_link", None)
+            semantic_link_metadata: NonSerialMetadata = self.metadata.get("semantic_link", None)
             if semantic_link_metadata.time_steps_in_coordination_scale is \
                     not None and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0:
                 # We only add the semantic link module if there's evidence.
@@ -156,6 +163,7 @@ class VocalicModel(ModelTemplate):
                         semantic_link_metadata.time_steps_in_coordination_scale
                     ),
                     p=bundle.p,
+                    observed_values=semantic_link_metadata.observed_values
                 )
 
                 semantic_link_group = ComponentGroup(
