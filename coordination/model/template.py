@@ -305,17 +305,15 @@ class ModelTemplate:
                     # We only compute MSE for observations that generate real values.
                     continue
 
-                y_hat_full = np.mean(samples.component_group_samples[o.uuid].values, axis=0)
-
                 # Prediction and real data in the prediction window
-
                 full_data = y_full_metadata[o.uuid].observed_values
-                lb = y_hat_full.shape[-1]
+                lb = idata.trace.observed_data[o.uuid].shape[-1]
                 y_train = y_full_metadata[o.uuid].normalize(full_data, (0, lb))
                 y_test = y_full_metadata[o.uuid].normalize(full_data, (lb, full_data.shape[-1]))[
                          ..., :window_size]
 
-                y_hat = y_hat_full[..., -window_size:]
+                y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
+                        -window_size:]
 
                 mse = np.cumsum(np.square(y_test - y_hat), axis=-1) / np.arange(1, window_size + 1)
 
@@ -435,9 +433,9 @@ if __name__ == "__main__":
         print("Could not construct the model")
         exit()
 
-    idata = inference_run.get_inference_data("T000603", "t_527")
+    idata = inference_run.get_inference_data("T000635", "t_788")
     data = inference_run.data
-    row_df = data[data["experiment_id"] == "T000603"].iloc[0]
+    row_df = data[data["experiment_id"] == "T000635"].iloc[0]
 
     # Populate config bundle with the data
     inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
