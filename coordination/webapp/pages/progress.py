@@ -64,4 +64,4 @@ class Progress:
                     inference_progress_component.preferred_run_ids = (
                         run_id_multi_selection_component.all_run_ids[:idx]
                     )
-                inference_progress_component.create_component()
+        inference_progress_component.create_component()
