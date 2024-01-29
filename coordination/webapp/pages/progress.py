@@ -46,6 +46,8 @@ class Progress:
         with col3:
             display_sub_experiment_progress = st.toggle("Display Sub-experiment Progress",
                                                        value=False)
+
+        inference_progress_component = None
         with col1:
             if st.toggle("Monitor progress"):
                 inference_progress_component = InferenceProgress(
@@ -64,4 +66,6 @@ class Progress:
                     inference_progress_component.preferred_run_ids = (
                         run_id_multi_selection_component.all_run_ids[:idx]
                     )
-        inference_progress_component.create_component()
+
+        if inference_progress_component is not None:
+            inference_progress_component.create_component()
