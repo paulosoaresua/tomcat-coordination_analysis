@@ -268,16 +268,12 @@ class ModelTemplate:
         lb = idata.num_time_steps_in_coordination_scale
         ub = None
 
-        y_full = {}
+        y_full_metadata = {}
         for g in self._model.component_groups:
             for o in g.observations:
                 if not isinstance(o, GaussianObservation):
                     # We only compute MSE for observations that generate real values.
                     continue
-
-                # Store observations here without normalization. For testing, we need to normalize
-                # the fitting window separate from the test window to avoid information leakage.
-                y_full[o.uuid] = self.metadata[o.uuid].observed_values
 
                 # Observations can be sparse. So, we need to get the next time steps in the
                 # observation scale to define as the last time step to sample in the coordination
@@ -288,6 +284,10 @@ class ModelTemplate:
                     ub = time_steps[:window_size][-1] + 1
                 else:
                     ub = max(time_steps[:window_size][-1] + 1, ub)
+
+                # Store observations here without normalization. For testing, we need to normalize
+                # the fitting window separate from the test window to avoid information leakage.
+                y_full_metadata[o.uuid] = deepcopy(self.metadata[o.uuid])
 
         if ub is None:
             return None
@@ -305,13 +305,17 @@ class ModelTemplate:
                     # We only compute MSE for observations that generate real values.
                     continue
 
-                # Prediction and real data in the prediction window
-                y_train = self.metadata[o.uuid].normalize(y_full[o.uuid][..., :lb])
-                y_test = self.metadata[o.uuid].normalize(y_full[o.uuid][..., lb:])[...,
-                         :window_size]
+                y_hat_full = np.mean(samples.component_group_samples[o.uuid].values, axis=0)
 
-                y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,
-                        -window_size:]
+                # Prediction and real data in the prediction window
+
+                full_data = y_full_metadata[o.uuid].observed_values
+                lb = y_hat_full.shape[-1]
+                y_train = y_full_metadata[o.uuid].normalize(full_data, (0, lb))
+                y_test = y_full_metadata[o.uuid].normalize(full_data, (lb, full_data.shape[-1]))[
+                         ..., :window_size]
+
+                y_hat = y_hat_full[..., -window_size:]
 
                 mse = np.cumsum(np.square(y_test - y_hat), axis=-1) / np.arange(1, window_size + 1)
 
@@ -424,20 +428,19 @@ if __name__ == "__main__":
     # bundle.num_time_steps_to_fit = 78
     #
     # model = VocalicModel(config_bundle=bundle)
-    inference_run = InferenceRun("/Users/paulosoares/code/tomcat-coordination/.run/inferences/",
-                                 "ppa_true")
+    inference_run = InferenceRun("/Users/paulosoares/code/tomcat-coordination/.run/gauss/",
+                                 "2024.01.27--10.16.25")
     model = inference_run.model
     if model is None:
         print("Could not construct the model")
         exit()
 
-    idata = inference_run.get_inference_data("T000612", "t_78")
+    idata = inference_run.get_inference_data("T000603", "t_527")
     data = inference_run.data
-    row_df = data[data["experiment_id"] == "T000612"].iloc[0]
+    row_df = data[data["experiment_id"] == "T000603"].iloc[0]
 
     # Populate config bundle with the data
     inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
-    model.config_bundle.match_vocalic_scale = True
 
     df = model.get_ppa_summary(idata, 5, 100, 0)
     print(df)

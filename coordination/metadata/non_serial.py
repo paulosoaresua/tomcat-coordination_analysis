@@ -48,21 +48,28 @@ class NonSerialMetadata(Metadata):
             normalization_method=self.normalization_method
         )
 
-    def normalize(self, observations: np.ndarray):
+    def normalize(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
         """
         Normalize observations with some method.
 
         @param observations: observations to be normalized.
+        @param time_interval: optional time interval. If provided, only the portion of data
+            determined by the interval will be normalized and returned.
         @return normalized observations.
         """
+        if time_interval is None:
+            obs = observations
+        else:
+            obs = observations[..., time_interval[0]:time_interval[1]]
+
         if self.normalization_method is None or observations is None:
-            return observations
+            return obs
 
         if self.normalization_method == NORMALIZATION_PER_FEATURE:
-            return normalize_non_serial_data_per_feature(observations)
+            return normalize_non_serial_data_per_feature(obs)
 
         if self.normalization_method == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
-            return normalize_non_serial_data_per_subject_and_feature(observations)
+            return normalize_non_serial_data_per_subject_and_feature(obs)
 
         raise ValueError(f"Normalization ({method}) is invalid.")
 

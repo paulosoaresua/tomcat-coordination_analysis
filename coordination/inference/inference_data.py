@@ -431,7 +431,7 @@ class InferenceData:
     @classmethod
     def from_trace_file_in_directory(cls, directory: str) -> Optional[InferenceData]:
         filepath = f"{directory}/{TRACE_FILENAME}"
-        if not os.path.exists(directory):
+        if not os.path.exists(filepath):
             return None
 
         try:

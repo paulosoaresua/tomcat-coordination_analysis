@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -48,11 +48,13 @@ class Metadata:
         return self.normalize(self.observed_values)
 
     @abstractmethod
-    def normalize(self, observations: np.ndarray):
+    def normalize(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
         """
         Normalize observations with some method.
 
         @param observations: observations to be normalized.
+        @param time_interval: optional time interval. If provided, only the portion of data
+            determined by the interval will be normalized and returned.
         @return normalized observations.
         """
         pass
