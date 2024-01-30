@@ -31,7 +31,8 @@
     {
       "bundle_param_name": "observed_values",
       "data_column_names": [
-        "pitch"
+        "pitch",
+        "intensity"
       ],
       "data_type": "array"
     },

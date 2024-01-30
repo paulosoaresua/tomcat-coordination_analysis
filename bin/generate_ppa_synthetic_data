@@ -93,16 +93,18 @@ for data_name, model in models:
                 "vocalic_time_steps_in_coordination_scale":
                     samples.component_group_samples[
                         "state_space"].time_steps_in_coordination_scale[n].tolist(),
-                "subject_indices":
+                "vocalic_subjects":
                     samples.component_group_samples["state_space"].subject_indices[n].tolist(),
-                "prev_time_same_subject":
+                "vocalic_previous_time_same_subject":
                     samples.component_group_samples["state_space"].prev_time_same_subject[
                         n].tolist(),
-                "prev_time_diff_subject":
+                "vocalic_previous_time_diff_subject":
                     samples.component_group_samples["state_space"].prev_time_diff_subject[
                         n].tolist(),
-                "observed_values":
-                    samples.component_group_samples["speech_vocalics"].values[n].tolist(),
+                "pitch":
+                    samples.component_group_samples["speech_vocalics"].values[n][0].tolist(),
+                "intensity":
+                    samples.component_group_samples["speech_vocalics"].values[n][1].tolist(),
                 "num_time_steps_in_coordination_scale": T
             }
         )
