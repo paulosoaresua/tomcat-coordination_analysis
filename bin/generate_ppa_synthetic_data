@@ -4,21 +4,23 @@ This script generates and saves .csv datasets for PPA validation on synthetic da
 instantiates the x-model and the c-model and generates samples from them. The data will be saved
 under data/ppa_synthetic.
 """
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from coordination.model.config_bundle.vocalic import VocalicConfigBundle
 from coordination.model.real.vocalic import VocalicModel
 import json
 import numpy as np
+import matplotlib.pyplot as plt
 
 T = 50
 N = 10
 PROCESS_NOISE = 0.01
 OBSERVATION_NOISE = 1.0
 # Different scale per feature
-WEIGHTS = [np.array([[1, 0, 0, 0], [0, 5, 0, 0], [0, 0, 10, 0], [0, 0, 0, 15]])]
+WEIGHTS = [np.array([[1, 0], [0, 5]])]
 # Start at different positions and with different speeds
-INITIAL_STATE = np.array([[0]*4, [5]*4, [10]*4])
+INITIAL_STATE = np.array([[0, 0], [25, 25], [50, 50]])
 
 
 def get_x_model() -> VocalicModel:
@@ -34,8 +36,10 @@ def get_x_model() -> VocalicModel:
         # Set some parameters for data generation
         bundle.sd_a = PROCESS_NOISE
         bundle.sd_o = OBSERVATION_NOISE
-        # bundle.mean_uc0 = 0.0
-        # bundle.sd_uc = 1.0
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.zeros((N, T))
+
         bundle.weights = WEIGHTS
         bundle.mean_a0 = INITIAL_STATE
 

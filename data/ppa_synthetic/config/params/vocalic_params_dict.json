@@ -4,6 +4,8 @@
   "share_sd_a_across_dimensions": true,
   "match_vocalic_scale": false,
   "observation_normalization": "norm_per_feature",
-  "num_vocalic_features": 1,
-  "vocalic_feature_names": ["pitch"]
+  "num_vocalic_features": 2,
+  "state_space_dimension_size": 2,
+  "state_space_dimension_names": ["Latent Pitch", "Latent Intensity"],
+  "vocalic_feature_names": ["Pitch", "Intensity"]
 }
