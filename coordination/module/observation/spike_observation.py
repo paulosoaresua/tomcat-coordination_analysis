@@ -182,7 +182,7 @@ class SpikeObservation(Observation):
                 mu=self.coordination_random_variable[
                     self.time_steps_in_coordination_scale
                 ],
-                sigma=1,
+                sigma=0.01,
                 dims=self.time_axis_name,
                 observed=self.observed_values
             )
