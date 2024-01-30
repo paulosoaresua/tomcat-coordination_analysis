@@ -133,12 +133,8 @@ def infer(out_dir: str,
 
         # Save params dict locally in case we need to rerun the inference to make sure we don't
         # use a different params dict.
-        model_params_dict_filename = model_params_dict_filepath[
-                                     model_params_dict_filepath.rfind(
-                                         "/") + 1:model_params_dict_filepath.rfind(".")]
-        os.makedirs(f"{settings.run_dir}/params/{run_id}/", exist_ok=True)
-        run_id_params_dict_filepath = f"{settings.run_dir}/params/{run_id}" \
-                                      f"/{model_params_dict_filename}.csv"
+        os.makedirs(f"{settings.run_dir}/config/params/", exist_ok=True)
+        run_id_params_dict_filepath = f"{settings.run_dir}/config/params/{run_id}.json"
         with open(f"{run_id_params_dict_filepath}", "w") as f:
             json.dump(model_params_dict, f)
 
@@ -174,6 +170,13 @@ def infer(out_dir: str,
     with open(data_mapping_filepath) as f:
         data_mapping_dict = json.load(f)
         data_mapper = DataMapper(data_mapping_dict)
+
+        # Save data mappings locally in case we need to rerun the inference to make sure we don't
+        # use a different params dict.
+        os.makedirs(f"{settings.run_dir}/config/mappings/", exist_ok=True)
+        run_id_data_mapping_filepath = f"{settings.run_dir}/config/mappings/{run_id}.json"
+        with open(f"{run_id_data_mapping_filepath}", "w") as f:
+            json.dump(data_mapping_dict, f)
 
     config_bundle.update(model_params_dict)
     data_mapper.validate(config_bundle, evidence_df.columns)
