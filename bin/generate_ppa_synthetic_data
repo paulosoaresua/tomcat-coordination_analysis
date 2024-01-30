@@ -15,8 +15,10 @@ T = 50
 N = 10
 PROCESS_NOISE = 0.01
 OBSERVATION_NOISE = 0.01
+# Different scale per feature
+WEIGHTS = [np.array([[1, 0, 0, 0], [0, 5, 0, 0], [0, 0, 10, 0], [0, 0, 0, 15]])]
 # Start at different positions and with different speeds
-INITIAL_STATE = np.array([[0, 0], [5, 5], [10, 10]])
+INITIAL_STATE = np.array([[0]*4, [10]*4, [20]*4])
 
 
 def get_x_model() -> VocalicModel:
@@ -28,13 +30,13 @@ def get_x_model() -> VocalicModel:
     with open("data/ppa_synthetic/config/params/vocalic_no_coordination_params_dict.json",
               "r") as f:
         bundle = VocalicConfigBundle(**json.load(f))
-        bundle.state_space_2d = True
+        # bundle.state_space_2d = True
         # Set some parameters for data generation
         bundle.sd_a = PROCESS_NOISE
         bundle.sd_o = OBSERVATION_NOISE
         # bundle.mean_uc0 = 0.0
         # bundle.sd_uc = 1.0
-        bundle.weights = [np.array([[1]])]
+        bundle.weights = WEIGHTS
         bundle.mean_a0 = INITIAL_STATE
 
         return VocalicModel(bundle)
@@ -50,7 +52,7 @@ def get_c_model(coordination: float) -> VocalicModel:
     with open("data/ppa_synthetic/config/params/vocalic_params_dict.json",
               "r") as f:
         bundle = VocalicConfigBundle(**json.load(f))
-        bundle.state_space_2d = True
+        # bundle.state_space_2d = True
         # Set some parameters for data generation
         bundle.sd_a = PROCESS_NOISE
         bundle.sd_o = OBSERVATION_NOISE
@@ -58,7 +60,7 @@ def get_c_model(coordination: float) -> VocalicModel:
         bundle.constant_coordination = True
         bundle.initial_coordination_samples = np.ones((N, T)) * coordination
 
-        bundle.weights = [np.array([[1]])]
+        bundle.weights = WEIGHTS
         bundle.mean_a0 = INITIAL_STATE
 
         return VocalicModel(bundle)
