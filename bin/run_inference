@@ -106,6 +106,8 @@ def infer(out_dir: str,
     del execution_params["model_params_dict_filepath"]
     del execution_params["data_mapping_filepath"]
 
+    run_id = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
+
     # Leave 20% of the cores free
     num_cores = int(multiprocessing.cpu_count() * 0.8)
     num_required_cores = min(num_chains, num_jobs_per_inference) * num_inference_jobs
@@ -129,11 +131,21 @@ def infer(out_dir: str,
         with open(model_params_dict_filepath) as f:
             model_params_dict = json.load(f)
 
+        # Save params dict locally in case we need to rerun the inference to make sure we don't
+        # use a different params dict.
+        model_params_dict_filename = model_params_dict_filepath[
+                                     model_params_dict_filepath.rfind(
+                                         "/") + 1:model_params_dict_filepath.rfind(".")]
+        os.makedirs(f"{settings.run_dir}/params/{run_id}/", exist_ok=True)
+        run_id_params_dict_filepath = f"{settings.run_dir}/params/{run_id}" \
+                                      f"/{model_params_dict_filename}.csv"
+        with open(f"{run_id_params_dict_filepath}", "w") as f:
+            json.dump(model_params_dict, f)
+
     if not os.path.exists(data_mapping_filepath):
         raise FileNotFoundError(f"Mapping between evidence and model's parameter not found in "
                                 f"{data_mapping_filepath}.")
 
-    run_id = datetime.now().strftime("%Y.%m.%d--%H.%M.%S")
     tmux = TMUX(run_id.replace(".", "_").replace("-", "_"))
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)

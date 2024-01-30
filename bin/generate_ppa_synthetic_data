@@ -82,6 +82,9 @@ models = [
     ("c_data_high", c_model_high),
 ]
 
+# Uncomment the following line to always generate the same dataset.
+# np.random.seed(0)
+
 for data_name, model in models:
     samples = model.draw_samples(num_series=10)
 
