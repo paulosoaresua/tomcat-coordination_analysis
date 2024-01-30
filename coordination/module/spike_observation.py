@@ -94,4 +94,7 @@ class SpikeObservation:
             self.uuid, adjusted_prob, dims=time_dimension, observed=observed_values
         )
 
+        pm.Normal(self.uuid,
+                  )
+
         return p, adjusted_prob

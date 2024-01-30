@@ -161,28 +161,38 @@ class SpikeObservation(Observation):
                      f"{len(self.time_steps_in_coordination_scale)} time steps.")
 
         with self.pymc_model:
-            self.p_random_variable = pm.Beta(
-                name=self.parameters.p.uuid,
-                alpha=adjust_dimensions(self.parameters.p.prior.a, num_rows=1),
-                beta=adjust_dimensions(self.parameters.p.prior.b, num_rows=1),
-                size=1,
-                observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
-            )
+            # self.p_random_variable = pm.Beta(
+            #     name=self.parameters.p.uuid,
+            #     alpha=adjust_dimensions(self.parameters.p.prior.a, num_rows=1),
+            #     beta=adjust_dimensions(self.parameters.p.prior.b, num_rows=1),
+            #     size=1,
+            #     observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
+            # )
 
-            adjusted_prob = pm.Deterministic(
-                f"{self.uuid}_adjusted_p",
-                self.p_random_variable
-                * self.coordination_random_variable[
+            # adjusted_prob = pm.Deterministic(
+            #     f"{self.uuid}_adjusted_p",
+            #     self.p_random_variable
+            #     * self.coordination_random_variable[
+            #         self.time_steps_in_coordination_scale
+            #     ],
+            # )
+
+            self.observation_random_variable = pm.Normal(
+                self.uuid,
+                mu=self.coordination_random_variable[
                     self.time_steps_in_coordination_scale
                 ],
+                sigma=1,
+                dims=self.time_axis_name,
+                observed=self.observed_values
             )
 
-            self.observation_random_variable = pm.Bernoulli(
-                self.uuid,
-                adjusted_prob,
-                dims=self.time_axis_name,
-                observed=self.observed_values,
-            )
+            # self.observation_random_variable = pm.Bernoulli(
+            #     self.uuid,
+            #     adjusted_prob,
+            #     dims=self.time_axis_name,
+            #     observed=self.observed_values,
+            # )
 
     def _add_coordinates(self):
         """
