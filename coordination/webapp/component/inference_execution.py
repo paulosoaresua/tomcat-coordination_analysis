@@ -195,13 +195,14 @@ class InferenceExecution:
                     execution_params["num_time_points_ppa"] = st.number_input(
                         label="Number of Points for PPA",
                         key=f"{self.component_key}_num_time_points_ppa",
-                        value=default_execution_params["num_time_points_ppa"],
+                        value=default_execution_params.get("num_time_points_ppa",
+                                                           DEFAULT_NUM_TIME_POINTS_FOR_PPA),
                     )
                 with col_ppa2:
                     execution_params["ppa_window"] = st.number_input(
                         label="Window Size for PPA",
                         key=f"{self.component_key}_ppa_window",
-                        value=default_execution_params["ppa_window"],
+                        value=default_execution_params.get("ppa_window", DEFAULT_PPA_WINDOW),
                     )
 
         with tab2:
