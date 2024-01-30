@@ -1,0 +1,9 @@
+{
+  "share_mean_a0_across_subjects": false,
+  "share_mean_a0_across_dimensions": false,
+  "share_sd_a_across_dimensions": true,
+  "match_vocalic_scale": false,
+  "observation_normalization": "norm_per_feature",
+  "num_vocalic_features": 1,
+  "vocalic_feature_names": ["pitch"]
+}

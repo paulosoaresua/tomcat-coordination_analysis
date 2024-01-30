@@ -1,0 +1,46 @@
+{
+  "mappings": [
+    {
+      "bundle_param_name": "time_steps_in_coordination_scale",
+      "data_column_names": [
+        "vocalic_time_steps_in_coordination_scale"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "subject_indices",
+      "data_column_names": [
+        "vocalic_subjects"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "prev_time_same_subject",
+      "data_column_names": [
+        "vocalic_previous_time_same_subject"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "prev_time_diff_subject",
+      "data_column_names": [
+        "vocalic_previous_time_diff_subject"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "observed_values",
+      "data_column_names": [
+        "pitch"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "num_time_steps_in_coordination_scale",
+      "data_column_names": [
+        "num_time_steps_in_coordination_scale"
+      ],
+      "data_type": "int"
+    }
+  ]
+}   

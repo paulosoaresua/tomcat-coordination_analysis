@@ -79,3 +79,6 @@ vocalic_no_coordination_tomcat_ppa:
 		--data_mapping_filepath="data/config/mappings/vocalic_data_mapping.json" \
 		--model_params_dict_filepath="data/config/params/vocalic_no_coordination_params_dict.json" \
 		--do_ppa=1
+
+generate_ppa_synthetic_data:
+	PYTHONPATH="." ./bin/generate_ppa_synthetic_data

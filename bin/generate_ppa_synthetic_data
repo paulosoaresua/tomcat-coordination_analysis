@@ -1,0 +1,104 @@
+#!/usr/bin/env python
+"""
+This script generates and saves .csv datasets for PPA validation on synthetic data. It
+instantiates the x-model and the c-model and generates samples from them. The data will be saved
+under data/ppa_synthetic.
+"""
+import pandas as pd
+
+from coordination.model.config_bundle.vocalic import VocalicConfigBundle
+from coordination.model.real.vocalic import VocalicModel
+import json
+import numpy as np
+
+T = 50
+N = 10
+PROCESS_NOISE = 0.01
+OBSERVATION_NOISE = 0.01
+# Start at different positions and with different speeds
+INITIAL_STATE = np.array([[0, 0], [5, 5], [10, 10]])
+
+
+def get_x_model() -> VocalicModel:
+    """
+    Gets an x-model.
+
+    @return: x-model.
+    """
+    with open("data/ppa_synthetic/config/params/vocalic_no_coordination_params_dict.json",
+              "r") as f:
+        bundle = VocalicConfigBundle(**json.load(f))
+        bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.sd_a = PROCESS_NOISE
+        bundle.sd_o = OBSERVATION_NOISE
+        # bundle.mean_uc0 = 0.0
+        # bundle.sd_uc = 1.0
+        bundle.weights = [np.array([[1]])]
+        bundle.mean_a0 = INITIAL_STATE
+
+        return VocalicModel(bundle)
+
+
+def get_c_model(coordination: float) -> VocalicModel:
+    """
+    Gets a c-model.
+
+    @param coordination: value of coordination to fix.
+    @return: c-model.
+    """
+    with open("data/ppa_synthetic/config/params/vocalic_params_dict.json",
+              "r") as f:
+        bundle = VocalicConfigBundle(**json.load(f))
+        bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.sd_a = PROCESS_NOISE
+        bundle.sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.ones((N, T)) * coordination
+
+        bundle.weights = [np.array([[1]])]
+        bundle.mean_a0 = INITIAL_STATE
+
+        return VocalicModel(bundle)
+
+
+x_model = get_x_model()
+c_model_low = get_c_model(0.2)
+c_model_med = get_c_model(0.5)
+c_model_high = get_c_model(1.0)
+
+models = [
+    ("x_data", x_model),
+    ("c_model_low", c_model_low),
+    ("c_model_med", c_model_med),
+    ("c_model_high", c_model_high),
+]
+
+for data_name, model in models:
+    samples = model.draw_samples(num_series=10)
+
+    data = []
+    for n in range(N):
+        data.append(
+            {
+                "experiment_id": n,
+                "vocalic_time_steps_in_coordination_scale":
+                    samples.component_group_samples[
+                        "state_space"].time_steps_in_coordination_scale[n].tolist(),
+                "subject_indices":
+                    samples.component_group_samples["state_space"].subject_indices[n].tolist(),
+                "prev_time_same_subject":
+                    samples.component_group_samples["state_space"].prev_time_same_subject[
+                        n].tolist(),
+                "prev_time_diff_subject":
+                    samples.component_group_samples["state_space"].prev_time_diff_subject[
+                        n].tolist(),
+                "observed_values":
+                    samples.component_group_samples["speech_vocalics"].values[n].tolist(),
+                "num_time_steps_in_coordination_scale": T
+            }
+        )
+
+    pd.DataFrame(data).to_csv(f"data/ppa_synthetic/{data_name}.csv", index_label="number")
