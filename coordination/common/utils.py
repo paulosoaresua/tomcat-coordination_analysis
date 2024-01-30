@@ -30,7 +30,8 @@ class NumpyArrayEncoder(JSONEncoder):
         """
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        if isinstance(obt, np.int):
+        if isinstance(obj, np.int):
+            print(obj)
             return int(obj)
 
         return JSONEncoder.default(self, obj)
