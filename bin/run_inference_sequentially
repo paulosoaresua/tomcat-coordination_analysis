@@ -114,6 +114,7 @@ def infer(
         data_mapper = DataMapper(data_mapping_dict)
 
     evidence_df = pd.read_csv(evidence_filepath, index_col=0)
+    evidence_df["experiment_id"] = evidence_df["experiment_id"].astype(str)
     evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
 
     experiments_in_evidence = sorted(evidence_df["experiment_id"].tolist())
