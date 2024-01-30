@@ -71,9 +71,9 @@ c_model_high = get_c_model(1.0)
 
 models = [
     ("x_data", x_model),
-    ("c_model_low", c_model_low),
-    ("c_model_med", c_model_med),
-    ("c_model_high", c_model_high),
+    ("c_data_low", c_model_low),
+    ("c_data_med", c_model_med),
+    ("c_data_high", c_model_high),
 ]
 
 for data_name, model in models:
