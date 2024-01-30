@@ -30,7 +30,10 @@ class NumpyArrayEncoder(JSONEncoder):
         """
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        if isinstance(obj, np.int):
+        if isinstance(obj, np.int64):
+            print(obj)
+            print(obj)
+            print(obj)
             print(obj)
             return int(obj)
 
