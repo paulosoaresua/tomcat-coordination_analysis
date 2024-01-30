@@ -14,11 +14,11 @@ import numpy as np
 T = 50
 N = 10
 PROCESS_NOISE = 0.01
-OBSERVATION_NOISE = 0.01
+OBSERVATION_NOISE = 1.0
 # Different scale per feature
 WEIGHTS = [np.array([[1, 0, 0, 0], [0, 5, 0, 0], [0, 0, 10, 0], [0, 0, 0, 15]])]
 # Start at different positions and with different speeds
-INITIAL_STATE = np.array([[0]*4, [10]*4, [20]*4])
+INITIAL_STATE = np.array([[0]*4, [5]*4, [10]*4])
 
 
 def get_x_model() -> VocalicModel:
