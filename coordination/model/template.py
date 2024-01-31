@@ -310,8 +310,9 @@ class ModelTemplate:
                 # Prediction and real data in the prediction window
                 full_data = y_full_metadata[o.uuid].observed_values
                 lb = idata.trace.observed_data[o.uuid].shape[-1]
-                y_train = y_full_metadata[o.uuid].normalize(full_data, (0, lb))
-                y_test = y_full_metadata[o.uuid].normalize(full_data, (lb, full_data.shape[-1]))[
+                y_full_metadata[o.uuid].fit(full_data, (0, lb))
+                y_train = y_full_metadata[o.uuid].transform(full_data, (0, lb))
+                y_test = y_full_metadata[o.uuid].transform(full_data, (lb, full_data.shape[-1]))[
                          ..., :window_size]
 
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[...,

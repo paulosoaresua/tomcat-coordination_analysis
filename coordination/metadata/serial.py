@@ -7,6 +7,7 @@ from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEA
                                                normalize_serialized_data_per_feature,
                                                normalize_serialized_data_per_subject_and_feature)
 from copy import deepcopy
+from coordination.common.scaler import SerialScaler
 
 
 class SerialMetadata(Metadata):
@@ -45,12 +46,24 @@ class SerialMetadata(Metadata):
         @param observed values for the serial component.
         @param normalization_method: normalization method to apply on observations.
         """
-        super().__init__(time_steps_in_coordination_scale, observed_values, normalization_method)
+        super().__init__(time_steps_in_coordination_scale, observed_values,
+                         SerialScaler(normalization_method))
 
         self.num_subjects = num_subjects
         self.subject_indices = subject_indices
         self.prev_time_same_subject = prev_time_same_subject
         self.prev_time_diff_subject = prev_time_diff_subject
+
+    @property
+    def normalized_observations(self) -> np.ndarray:
+        """
+        Normalize observations with some method.
+
+        @return normalized observations.
+        """
+        s_scaler: SerialScaler = self.scaler
+        s_scaler.fit(self.observed_values, self.subject_indices, self.num_subjects)
+        return s_scaler.transform(self.observed_values, self.subject_indices)
 
     def truncate(self, max_time_step: int) -> SerialMetadata:
         """
@@ -72,38 +85,8 @@ class SerialMetadata(Metadata):
             prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
             observed_values=self.observed_values[...,
                             :len(ts)] if self.observed_values is not None else None,
-            normalization_method=self.normalization_method
+            normalization_method=self.scaler.normalization_method
         )
-
-    def normalize(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
-        """
-        Normalize observations with some method.
-
-        @param observations: observations to be normalized.
-        @param time_interval: optional time interval. If provided, only the portion of data
-            determined by the interval will be normalized and returned.
-        @return normalized observations.
-        """
-        if time_interval is None:
-            obs = observations
-            sub_idx = self.subject_indices
-        else:
-            obs = observations[..., time_interval[0]:time_interval[1]]
-            sub_idx = self.subject_indices[time_interval[0]:time_interval[1]]
-
-        if self.normalization_method is None or observations is None:
-            return obs
-
-        if self.normalization_method == NORMALIZATION_PER_FEATURE:
-            return normalize_serialized_data_per_feature(obs)
-
-        if self.normalization_method == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
-            return normalize_serialized_data_per_subject_and_feature(
-                data=obs,
-                subject_indices=sub_idx,
-                num_subjects=self.num_subjects)
-
-        raise ValueError(f"Normalization ({method}) is invalid.")
 
     def split_observations_per_subject(
             self,
@@ -133,3 +116,42 @@ class SerialMetadata(Metadata):
             result.append(obs[..., lb:ub][..., idx])
 
         return result
+
+    def fit(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+        """
+        Fits the scaler on some observations.
+
+        @param observations: observations to be normalized.
+        @param time_interval: optional time interval. If provided, only the portion of data
+            determined by the interval will be fit.
+        """
+        if time_interval is None:
+            obs = observations
+            sub_idx = self.subject_indices
+        else:
+            obs = observations[..., time_interval[0]:time_interval[1]]
+            sub_idx = self.subject_indices[..., time_interval[0]:time_interval[1]]
+
+        s_scaler: SerialScaler = self.scaler
+        s_scaler.fit(obs,
+                     subject_indices=sub_idx,
+                     num_subjects=self.num_subjects)
+
+    def transform(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+        """
+        Transforms observations using the fitted scaler.
+
+        @param observations: observations to be normalized.
+        @param time_interval: optional time interval. If provided, only the portion of data
+            determined by the interval will be normalized and returned.
+        @return normalized observations.
+        """
+        if time_interval is None:
+            obs = observations
+            sub_idx = self.subject_indices
+        else:
+            obs = observations[..., time_interval[0]:time_interval[1]]
+            sub_idx = self.subject_indices[..., time_interval[0]:time_interval[1]]
+
+        s_scaler: SerialScaler = self.scaler
+        return s_scaler.transform(obs, subject_indices=sub_idx)

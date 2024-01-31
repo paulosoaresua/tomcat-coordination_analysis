@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from coordination.common.scaler import Scaler
+
 
 class Metadata:
     """
@@ -15,18 +17,18 @@ class Metadata:
             self,
             time_steps_in_coordination_scale: np.array,
             observed_values: np.ndarray,
-            normalization_method: str):
+            scaler: Scaler):
         """
         Creates a serial metadata:
 
         @param time_steps_in_coordination_scale: time indexes in the coordination scale for
             each index in the latent component scale.
         @param observed values for the serial component.
-        @param normalization_method: normalization method to apply on observations.
+        @param scaler: scaler to normalize the data.
         """
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
         self.observed_values = observed_values
-        self.normalization_method = normalization_method
+        self.scaler = scaler
 
     @abstractmethod
     def truncate(self, max_time_step: int) -> Metadata:
@@ -45,12 +47,24 @@ class Metadata:
 
         @return normalized observations.
         """
-        return self.normalize(self.observed_values)
+        self.scaler.fit(self.observed_values)
+        return self.scaler.transform(self.observed_values)
 
     @abstractmethod
-    def normalize(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def fit(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
         """
-        Normalize observations with some method.
+        Fits the scaler on some observations.
+
+        @param observations: observations to be normalized.
+        @param time_interval: optional time interval. If provided, only the portion of data
+            determined by the interval will be fit.
+        """
+        pass
+
+    @abstractmethod
+    def transform(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+        """
+        Transforms observations using the fitted scaler.
 
         @param observations: observations to be normalized.
         @param time_interval: optional time interval. If provided, only the portion of data
