@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import numpy as np
 import pymc as pm
-from scipy.stats import bernoulli
+from scipy.stats import bernoulli, norm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
@@ -124,15 +124,16 @@ class SpikeObservation(Observation):
             )
 
             # Effectively observe links according to the values of coordination
-            links = bernoulli(
-                p=self.coordination_samples.values[s] * p
-            ).rvs()
+            # links = bernoulli(
+            #     p=self.coordination_samples.values[s] * p
+            # ).rvs()
+            links = norm(loc=self.coordination_samples.values[s], sigma=p).rsv()
 
             # Mask out spikes according to the required density.
             links *= density_mask
             # A spike has a constant value of 1.
             # We store the time steps when that a spike was observed
-            time_steps.append(np.array([t for t, l in enumerate(links) if l == 1]))
+            time_steps.append(np.array([t for t, l in enumerate(links) if l > 0.5]))
 
         return SpikeObservationSamples(time_steps)
 
