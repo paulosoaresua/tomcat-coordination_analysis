@@ -177,12 +177,19 @@ class SpikeObservation(Observation):
             #     ],
             # )
 
+            sd_o = pm.HalfNormal(
+                name="sd_o_link",
+                sigma=1,
+                size=1,
+                observed=None
+            )
+
             self.observation_random_variable = pm.Normal(
                 self.uuid,
                 mu=self.coordination_random_variable[
                     self.time_steps_in_coordination_scale
                 ],
-                sigma=0.5,
+                sigma=sd_o,
                 dims=self.time_axis_name,
                 observed=self.observed_values
             )
