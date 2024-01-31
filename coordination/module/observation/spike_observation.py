@@ -25,21 +25,21 @@ class SpikeObservation(Observation):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int,
-        a_p: float,
-        b_p: float,
-        dimension_name: str = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        p_random_variable: Optional[pm.Distribution] = None,
-        observation_random_variable: Optional[pm.Distribution] = None,
-        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        observed_values: Optional[TensorTypes] = None,
-        p: Optional[float] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int,
+            a_p: float,
+            b_p: float,
+            dimension_name: str = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            p_random_variable: Optional[pm.Distribution] = None,
+            observation_random_variable: Optional[pm.Distribution] = None,
+            sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            observed_values: Optional[TensorTypes] = None,
+            p: Optional[float] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -95,7 +95,7 @@ class SpikeObservation(Observation):
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> SpikeObservationSamples:
         """
         Draws spike observation samples using ancestral sampling.
@@ -161,26 +161,35 @@ class SpikeObservation(Observation):
                      f"{len(self.time_steps_in_coordination_scale)} time steps.")
 
         with self.pymc_model:
-            self.p_random_variable = pm.Beta(
+            # self.p_random_variable = pm.Beta(
+            #     name=self.parameters.p.uuid,
+            #     alpha=adjust_dimensions(self.parameters.p.prior.a, num_rows=1),
+            #     beta=adjust_dimensions(self.parameters.p.prior.b, num_rows=1),
+            #     size=1,
+            #     observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
+            # )
+            #
+            # adjusted_prob = pm.Deterministic(
+            #     f"{self.uuid}_adjusted_p",
+            #     self.p_random_variable
+            #     * self.coordination_random_variable[
+            #         self.time_steps_in_coordination_scale
+            #     ],
+            # )
+            #
+            self.p_random_variable = pm.HalfNormal(
                 name=self.parameters.p.uuid,
-                alpha=adjust_dimensions(self.parameters.p.prior.a, num_rows=1),
-                beta=adjust_dimensions(self.parameters.p.prior.b, num_rows=1),
+                sigma=1,
                 size=1,
-                observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
-            )
-
-            adjusted_prob = pm.Deterministic(
-                f"{self.uuid}_adjusted_p",
-                self.p_random_variable
-                * self.coordination_random_variable[
-                    self.time_steps_in_coordination_scale
-                ],
+                observed=self.parameters.p.value,
             )
 
             self.observation_random_variable = pm.Normal(
                 self.uuid,
-                mu=adjusted_prob,
-                sigma=0.01,
+                mu=self.coordination_random_variable[
+                    self.time_steps_in_coordination_scale
+                ],
+                sigma=self.p_random_variable,
                 dims=self.time_axis_name,
                 observed=self.observed_values
             )
