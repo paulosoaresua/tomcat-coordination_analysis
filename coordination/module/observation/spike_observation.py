@@ -127,7 +127,7 @@ class SpikeObservation(Observation):
             # links = bernoulli(
             #     p=self.coordination_samples.values[s] * p
             # ).rvs()
-            links = norm(loc=self.coordination_samples.values[s], sigma=p).rsv()
+            links = norm(loc=self.coordination_samples.values[s], scale=p).rsv()
 
             # Mask out spikes according to the required density.
             links *= density_mask
