@@ -179,7 +179,7 @@ class SpikeObservation(Observation):
             #
             self.p_random_variable = pm.HalfNormal(
                 name=self.parameters.p.uuid,
-                sigma=1,
+                sigma=5,
                 size=1,
                 observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
             )
