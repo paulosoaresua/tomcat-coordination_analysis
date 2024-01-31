@@ -181,7 +181,7 @@ class SpikeObservation(Observation):
                 name=self.parameters.p.uuid,
                 sigma=1,
                 size=1,
-                observed=self.parameters.p.value,
+                observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
             )
 
             self.observation_random_variable = pm.Normal(
