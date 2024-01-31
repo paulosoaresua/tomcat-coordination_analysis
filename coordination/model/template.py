@@ -411,7 +411,7 @@ class ModelTemplate:
 
                 if isinstance(self.metadata[o.uuid], SerialMetadata):
                     metadata: SerialMetadata = self.metadata[o.uuid]
-                    if metadata.normalization_method == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
+                    if metadata.scaler.normalization_method == NORMALIZATION_PER_SUBJECT_AND_FEATURE:
                         # Choose a time such that we guarantee to have a minimum of 3 observations
                         # for the subject so we have some samples to compute z-scores in the test
                         # window.
@@ -436,10 +436,11 @@ class ModelTemplate:
                 # Do 5 windows so we can have enough observations from multiple people for
                 # normalization purposes in the prediction window.
                 if T is None:
-                    T = self.metadata[o.uuid].time_steps_in_coordination_scale[-2*window_size]
+                    T = self.metadata[o.uuid].time_steps_in_coordination_scale[-2 * window_size]
                 else:
                     T = min(T,
-                            self.metadata[o.uuid].time_steps_in_coordination_scale[-2*window_size])
+                            self.metadata[o.uuid].time_steps_in_coordination_scale[
+                                -2 * window_size])
 
         return T
 

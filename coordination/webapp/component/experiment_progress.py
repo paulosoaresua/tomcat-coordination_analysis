@@ -96,7 +96,7 @@ class ExperimentProgress:
                     self.inference_run,
                     self.experiment_id,
                     sub_exp_id,
-                    self.display_sub_experiment_progress)
+                    self.display_sub_experiment_progress and self.display_experiment_progress)
                 sub_experiment_progress.create_component()
                 all_status.add(sub_experiment_progress.status_)
                 all_divergences.append(sub_experiment_progress.total_num_divergences_)
