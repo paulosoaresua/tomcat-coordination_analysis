@@ -1,4 +1,4 @@
-# Probabilistic Modeling of Coordination
+# Probabilistic Modeling of Interpersonal Coordination Processes
 
 ## Requirements
 
@@ -8,111 +8,62 @@ To install requirements:
 pip install -r requirements.txt
 ```
 
-**Note**: To evaluate multiple experiments in parallel with the vocalic models (see Inference > Vocalic Model), you must have TMUX and Conda installed in the machine and the dependencies above installed in a conda environment called `coordination`.
+**Note**: To evaluate multiple experiments in parallel, you must have TMUX and Conda installed in the machine and the dependencies above installed in a conda environment called `coordination`.
 
 ## Modules
 
-The project splits the general model definition into several modules that are put together to construct a concrete instance of a model of coordination. For example, to create a model with a SerialComponent, one can use the modules: Coordination, SerialComponent, and SerialObservation (see VocalicModel's implementation). The available list of modules are:
+The project splits the general model definition into several modules that are put together to construct a concrete instance of a model of coordination. For example, to create a model with constant coordination and serialized latent component, one can use the modules: ConstantCoordination, SerialComponent, and SerialObservation. The available list of modules are:
 
-- **Coordination**: Coordination with transitions defined by a Gaussian random walk and bounded version $\tilde{C}$.
+- **ConstantCoordination**: Continuous coordination that does not change over time.
+- **SigmoidGaussianCoordination**: Coordination with transitions defined by a Gaussian random walk.
 - **SerialComponent**: Serial component with dynamics defined by a Gaussian random walk on blended means (pairwise dependency).
 - **NonSerialComponent**: Non-serial component with dynamics defined by a Gaussian random walk on blended means (multiple dependencies).
 - **SerialObservation**: Gaussian distribution centered on SerialComponent values.
 - **NonSerialObservation**: Gaussian distribution centered on NonSerialComponent values.
-- **SpikeObservation**: Bernoulli distribution weighted by coordination value. Used for sparse binary observations (e.g., semantic link).
-- **SerialMassSpringDamperComponent**: Serial component with dynamics defined by a Hookean spring system with blended states (pairwise dependency).
-- **NonSerialMassSpringDamperComponent**: Non-serial component with dynamics defined by a Hookean spring system with blended states (multiple dependencies).
+- **SpikeObservation**: Normal centered at coordination values over time. Used for sparse binary observations (e.g., semantic link) to increase coordination in certain moments.
 
-## Models
+## Vocalic Model
 
-The project contains 4 different models that can be used to generate data and run inference.
+The project contains a vocalic model (with or without semantic links) that can be used generate data and run inference.
 
-- **SpringModel**: Models coordination as controlling the influence of one spring dynamics on other spring dynamics in a mass-spring-damper system. In this model, each spring is influenced by two others at every time step if there's coordination.
-- **ConversationModel**: Models coordination as controlling the influence of voice intensity from one person on another person's voice intensity, simulating a conversation between a couple. In this model, only one person talks at a time and they are influenced by the previous speaker in a pairwise manner if there's coordination.
-- **VocalicModel**: Models coordination as controlling the influence of vocalic features from one person on another person's vocalic features during a conversation.
-- **VocalicSemanticModel**: Adds semantic links to the VocalicModel to evidence moments of increased coordination.
+The model has a standard interface and parameterization is done via a dataclass to which we call a config bundle. When implementing your own models, we suggest following this approach for compatibility with the webapp where one can trigger new inference runs, monitor their progresses and see different results including plots and histograms of the inferred latent variables.
 
-## Synthetic Data
+To reproduce the image below, execute the commands in `notebooks/Synthetic Vocalic`.
 
-To reproduce the images below, execute the commands in `notebooks/Synthetic Data`.
-
-### Spring Model
-![Spring Model](assets/images/results_spring_model.png)
-
-### Conversation Model
-![Conversation Model](assets/images/results_conversation_model.png)
+![Vocalic Model](assets/images/results_vocalic_model.png)
 
 ## Inference
 
-### Vocalic Model
+We provide a series of `make` commands to run inference jobs to reproduce the results in the paper. Comments are included in the Makefile above each target. Optionally, one can trigger the inferences via the webapp we provide and check the results there.
 
-To reproduce the results with the vocalic model, run the following command from the `scripts` folder:
+The commands will run inferences in sequence for each experiment in the dataset. If you wish to split inferences in multiple jobs, set the environment variable `N_JOBS` to the appropriate number. Bear in mind each job spawns 4 others: one for each chain.  
 
-```parallel_inference
-python run_usar_parallel_inference.py --tmux_session_name="vocalic" --num_parallel_processes=<number_of_experiments_in_parallel> --out_dir=<path-to-save-results> --evidence_filepath=<path-to-data> --model="vocalic" --burn_in=2000 --num_samples=2000 --num_chains=4 --seed=0 --num_inference_jobs=4 --do_prior=0 --do_posterior=1 --vocalic_features="all" --self_dependent=1 --share_mean_a0_across_subject=0 --share_sd_aa_across_subject=1 --share_sd_o_across_subject=1 share_sd_o_across_features=1 --sd_o_vocalic=0.1 --sd_uc=0.5
+## Data
+
+All the data used in the experiments are located in the folder `data/` in the project's root directory. This directory also contains configurations to: 
+
+1. Override the config bundle with specific parameter values we used during experimentation (`data/params/..._params_dict.json`).
+2. Map columns in the data to specific fields in the model's config bundle (`data/mappings/..._vocalic_data_mapping.json`).
+
+## Webapp
+
+The project provides a webapp to execute new runs, monitor the progress of such runs and see results of inference jobs (see images below).
+
+To start the app in the port 8080, do:
+```
+APP_PORT=8080 make app
 ```
 
-**Note**: The script above will run multiple experiments in parallel. See **Requirements** for details on configuration. Suppose one wants to do inference for a subset of experiments. In that case, it is possible to do so without the configuration required for the parallel inference. Just run the following command:
+It is possible to run it in a remote server and access it locally via port forwarding. By default, inferences will be saved in the directory `.run/inferences` but one can change that path in the app or via one of the environment variables described below:
 
-```sequential_inference
-python run_usar_sequential_inference.py --experiment_ids="<list-of-experiment-ids>" --out_dir=<path-to-save-results> --evidence_filepath=<path-to-data> --model="vocalic" --burn_in=2000 --num_samples=2000 --num_chains=4 --seed=0 --num_inference_jobs=4 --do_prior=0 --do_posterior=1 --vocalic_features="all" --self_dependent=1 --share_mean_a0_across_subject=0 --share_sd_aa_across_subject=1 --share_sd_o_across_subject=1 share_sd_o_across_features=1 --sd_o_vocalic=0.1 --sd_uc=0.5
-```
+- **inferences_dir**: directory where inferences must be saved.
+- **data_dir**: directory where datasets are located. 
+- **EVAL_DIR**: directory where evaluations are located. Every time we run an inference run, it will generate a unique ID (timestamp). Traces will be saved under `$inferences_dir/run_id`. We can add extra evaluation objects (.csv and png) in another directory with the format `$EVAL_DIR/run_id` and they will be available in the Evaluations tab in the app.  
 
-### Vocalic + Semantics Model
-
-To reproduce the results with the vocalic + semantics model, replace `--model="vocalic"` in the commands above with `--model="vocalic_semantic"`.
-
-
-## Data Format
-
-The *evidence_filepath* must point to a `.csv` file containing the following columns:
-
-- **experiment_id**: A string containing the ID of the experiment.
-- **num_time_steps_in_coordination_scale**: An integer representing the number of time steps in the coordination scale (e.g., 1020 for a 17-minute-long task).
-- **vocalic_time_steps_in_coordination_scale**: A list of integers representing a mapping between observed vocalic time and coordination time (e.g., [5,10,..] means the first vocalic is observed at time step 5 and the second at time step 10 in the coordination scale).
-- **vocalic_subjects**: A list of integers representing the subjects associated with the observed vocalics (e.g., [0,1,0,...]).
-- **vocalic_previous_time_same_subject**: A list of integers containing the indices of previous observations from the same subject. If there's no previous observation associated with an index, it must be filled with -1. In the example above, this list would be [-1,-1,0,...], meaning the subjects with associated vocalics in index 0 and 1 have no previous vocalics. Vocalics for the subject at index 2 (subject 0), were previously observed at index 0.
-- **vocalic_previous_time_diff_subject**: Similar to the list above but containing indices of previously observed vocalics from a subject other than the one associated with the current index. In the example above, the list would be [-1,0,1,...].
-- **pitch**: A list of average pitch values per utterance.
-- **intensity**: A list of average intensity values per utterance.
-- **jitter**: A list of average jitter values per utterance.
-- **shimmer**: A list of average shimmer values per utterance.
- 
-**Note**: The list entries are associated with each one of the utterances in the task. Thus their dimension must match.
-
-When evaluating semantic linkages, one more column needs to be present in the file and it does not have to match the dimensions of the lists above because semantic links are in a different time scale than vocalic features. The extra column is:
-
-- **conversational_semantic_link_time_steps_in_coordination_scale**: List of integers representing the time steps in the coordination scale when semantic links are observed. 
-
-## Results
-
-Data to reproduce the results below is available under the `data/` directory.
-
-Our models achieve the following performance on the [ASIST Study 3 dataset](https://dataverse.asu.edu/dataset.xhtml?persistentId=doi:10.48349/ASU/QDQ4MH) compared to a baseline predictor:
-
-*Numbers are mean absolute error (MAE) and standard error of the mean.*  
-
-| Mission | Model                                                                | No-Advisor   | Advisor | Combined     |
-|---------|----------------------------------------------------------------------|--------------|----------------|--------------|
-|         | Baseline                                                             | 142 (30) | 106 (18)   | 120 (17) | 
-| A       | Vocalic                                                              | 180 (46) | 101 (19)   | 123 (19) |
-|         | Vocalic + Semantics                                                  | 187 (50) | 106 (19)   | 124 (19) |
-|         | Baseline                                                             | 113 (19) | 179 (25)   | 143 (17) | 
-| B       | Vocalic                                                              | 101 (12) | 110 (27)   | 108 (16) |
-|         | Vocalic + Semantics                                                  | 110 (19) | 135 (24)   | 124 (16) |
-
-And the following performance on the BLINDED Dataset:
-
-*Numbers are MAE and standard error of the mean.*  
-
-| Mission | Model                                                                | Advisor |
-|---------|----------------------------------------------------------------------|----------------|
-|         | Baseline                                                             | 121 (21)   |  
-| A       | Vocalic                                                              | 148 (28)   |
-|         | Vocalic + Semantics                                                  | 140 (19)   |
-|         | Baseline                                                             | 104 (22)   | 
-| B       | Vocalic                                                              | 86 (16)    |
-|         | Vocalic + Semantics                                                  | 72 (17)    |
+![Main Page](assets/images/webapp1.png)
+![Spring Model](assets/images/webapp2.png)
+![Spring Model](assets/images/webapp3.png)
+![Spring Model](assets/images/webapp4.png)
 
 ## License
 

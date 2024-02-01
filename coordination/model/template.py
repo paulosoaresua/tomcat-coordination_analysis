@@ -416,37 +416,3 @@ class ModelTemplate:
                     )
 
         return T
-
-
-if __name__ == "__main__":
-    pass
-
-    from coordination.inference.inference_data import InferenceData
-    from coordination.inference.inference_run import InferenceRun
-
-    # bundle = VocalicConfigBundle()
-    # bundle.num_time_steps_to_fit = 78
-    #
-    # model = VocalicModel(config_bundle=bundle)
-    inference_run = InferenceRun(
-        "/Users/paulosoares/code/tomcat-coordination/.run/gauss/",
-        "2024.01.27--16.31.14",
-    )
-    model = inference_run.model
-    if model is None:
-        print("Could not construct the model")
-        exit()
-
-    idata = inference_run.get_inference_data(
-        "074b6d22-f0b3-4faf-b6ec-04dc03b3e697", "t_531"
-    )
-    data = inference_run.data
-    row_df = data[data["experiment_id"] == "074b6d22-f0b3-4faf-b6ec-04dc03b3e697"].iloc[
-        0
-    ]
-
-    # Populate config bundle with the data
-    inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
-
-    df = model.get_ppa_summary(idata, 5, 100, 0)
-    print(df)
