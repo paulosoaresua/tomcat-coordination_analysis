@@ -153,7 +153,7 @@ class SpikeObservation(Observation):
                 "create_random_variables method."
             )
 
-        if self.p_random_variable is not None:
+        if self.sd_s_random_variable is not None:
             return
 
         if self.time_steps_in_coordination_scale is None:

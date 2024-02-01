@@ -5,7 +5,7 @@ from coordination.model.config_bundle.vocalic import VocalicConfigBundle
 from coordination.model.real.vocalic import VocalicModel
 from coordination.model.template import ModelTemplate
 
-MODELS = {"vocalic"}
+MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic"}
 
 
 class ModelBuilder:

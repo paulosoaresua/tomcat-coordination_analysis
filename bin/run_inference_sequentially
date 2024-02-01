@@ -201,7 +201,6 @@ def infer(
                     f"Time to create random variables: "
                     f"{str(datetime.timedelta(seconds=duration))}.")
 
-                success = False
                 num_retries = 0
                 while num_retries < MAX_NUM_INFERENCE_RETRIES:
                     try:
@@ -224,24 +223,22 @@ def infer(
                             logger.info("[SUCCESS]")
                             break
                     except Exception as ex:
-                        success = False
                         main_logger.error(ex)
 
-                    if not success:
-                        num_retries += 1
-                        if num_retries == MAX_NUM_INFERENCE_RETRIES:
-                            main_logger.error("Maximum number of retrials reached. Aborting "
-                                             "inference for this experiment.")
-                            break
-                        else:
-                            # Sample a time randomly to decrease the potential for keep crashing.
-                            # It happens mostly when inferences are run in parallel and need to
-                            # lock pytensor objects.
-                            wait_time = np.random.uniform(MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY,
-                                                          MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY)
-                            main_logger.info(
-                                f"Inference crashed. Retrying in {wait_time:.2f} seconds.")
-                            time.sleep(wait_time)
+                    num_retries += 1
+                    if num_retries == MAX_NUM_INFERENCE_RETRIES:
+                        main_logger.error("Maximum number of retrials reached. Aborting "
+                                         "inference for this experiment.")
+                        break
+                    else:
+                        # Sample a time randomly to decrease the potential for keep crashing.
+                        # It happens mostly when inferences are run in parallel and need to
+                        # lock pytensor objects.
+                        wait_time = np.random.uniform(MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY,
+                                                      MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY)
+                        main_logger.info(
+                            f"Inference crashed. Retrying in {wait_time:.2f} seconds.")
+                        time.sleep(wait_time)
 
         except Exception as ex:
             main_logger.error(ex)
