@@ -194,6 +194,13 @@ def infer(
                     logger.info(f"\nProcessing {experiment_id}...")
                     print(f"\nProcessing {experiment_id}...")
 
+                global_start_time = time.time()
+                model.prepare_for_inference()
+                duration = (time.time() - global_start_time)
+                logger.info(
+                    f"Time to create random variables: "
+                    f"{str(datetime.timedelta(seconds=duration))}.")
+
                 success = False
                 num_retries = 0
                 while not success and num_retries < MAX_NUM_INFERENCE_RETRIES:
@@ -273,12 +280,6 @@ def fit(model: ModelTemplate,
     @param artifacts_dir: directory where artifacts must be saved.
     @return: inference data.
     """
-
-    global_start_time = time.time()
-    model.prepare_for_inference()
-    duration = (time.time() - global_start_time)
-    logger.info(
-        f"Time to create random variables: {str(datetime.timedelta(seconds=duration))}.")
 
     idata = None
     if do_prior:
