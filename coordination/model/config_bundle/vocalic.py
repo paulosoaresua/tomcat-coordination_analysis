@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Union
 
 import numpy as np
 
-from coordination.common.normalization import NORMALIZATION_PER_FEATURE
+from coordination.common.scaler import NORMALIZATION_PER_FEATURE
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 
 

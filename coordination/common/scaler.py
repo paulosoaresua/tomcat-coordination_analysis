@@ -1,7 +1,7 @@
 import numpy as np
 
-from coordination.common.normalization import (
-    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
+NORMALIZATION_PER_FEATURE = "norm_per_feature"
+NORMALIZATION_PER_SUBJECT_AND_FEATURE = "norm_per_subject_and_feature"
 
 
 class Scaler:

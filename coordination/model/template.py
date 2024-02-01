@@ -6,7 +6,6 @@ import arviz as az
 import numpy as np
 import pandas as pd
 import pymc as pm
-from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 
 from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
@@ -15,9 +14,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_SAMPLES,
                                            DEFAULT_NUTS_INIT_METHOD,
                                            DEFAULT_SEED, DEFAULT_TARGET_ACCEPT)
-from coordination.common.normalization import \
-    NORMALIZATION_PER_SUBJECT_AND_FEATURE
-from coordination.evaluation.training_average import TrainingAverageModel
+from coordination.common.scaler import NORMALIZATION_PER_SUBJECT_AND_FEATURE
 from coordination.inference.inference_data import InferenceData
 from coordination.metadata.metadata import Metadata
 from coordination.metadata.serial import SerialMetadata
@@ -82,9 +79,9 @@ class ModelTemplate:
         """
 
     def draw_samples(
-        self,
-        seed: Optional[int] = DEFAULT_SEED,
-        num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
+            self,
+            seed: Optional[int] = DEFAULT_SEED,
+            num_series: int = DEFAULT_NUM_SAMPLED_SERIES,
     ) -> ModelSamples:
         """
         Draws samples from the model using ancestral sampling and some blending strategy with
@@ -108,7 +105,7 @@ class ModelTemplate:
         self._model.create_random_variables()
 
     def prior_predictive(
-        self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
+            self, seed: Optional[int] = DEFAULT_SEED, num_samples: int = DEFAULT_NUM_SAMPLES
     ) -> InferenceData:
         """
         Executes prior predictive checks in the model.
@@ -126,16 +123,16 @@ class ModelTemplate:
         return self._model.prior_predictive(seed=seed, num_samples=num_samples)
 
     def fit(
-        self,
-        seed: Optional[int] = DEFAULT_SEED,
-        burn_in: int = DEFAULT_BURN_IN,
-        num_samples: int = DEFAULT_NUM_SAMPLES,
-        num_chains: int = DEFAULT_NUM_CHAINS,
-        num_jobs: int = DEFAULT_NUM_JOBS_PER_INFERENCE,
-        nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
-        target_accept: float = DEFAULT_TARGET_ACCEPT,
-        callback: Callable = None,
-        **kwargs,
+            self,
+            seed: Optional[int] = DEFAULT_SEED,
+            burn_in: int = DEFAULT_BURN_IN,
+            num_samples: int = DEFAULT_NUM_SAMPLES,
+            num_chains: int = DEFAULT_NUM_CHAINS,
+            num_jobs: int = DEFAULT_NUM_JOBS_PER_INFERENCE,
+            nuts_init_methods: str = DEFAULT_NUTS_INIT_METHOD,
+            target_accept: float = DEFAULT_TARGET_ACCEPT,
+            callback: Callable = None,
+            **kwargs,
     ) -> InferenceData:
         """
         Performs inference in a model to estimate the latent variables posterior.
@@ -171,7 +168,7 @@ class ModelTemplate:
         )
 
     def posterior_predictive(
-        self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
+            self, posterior_trace: az.InferenceData, seed: Optional[int] = DEFAULT_SEED
     ) -> InferenceData:
         """
         Executes posterior predictive checks in the model.
@@ -193,7 +190,7 @@ class ModelTemplate:
         )
 
     def new_config_bundle_from_time_step_info(
-        self, config_bundle: ModelConfigBundle
+            self, config_bundle: ModelConfigBundle
     ) -> ModelConfigBundle:
         """
         Gets a new config bundle with metadata and observed values adapted to the number of time
@@ -219,11 +216,11 @@ class ModelTemplate:
 
     @abstractmethod
     def new_config_bundle_from_posterior_samples(
-        self,
-        config_bundle: ModelConfigBundle,
-        idata: InferenceData,
-        num_samples: int,
-        seed: int,
+            self,
+            config_bundle: ModelConfigBundle,
+            idata: InferenceData,
+            num_samples: int,
+            seed: int,
     ) -> ModelConfigBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
@@ -238,7 +235,7 @@ class ModelTemplate:
         """
 
     def get_ppa_summary(
-        self, idata: InferenceData, window_size: int, num_samples: int, seed: int
+            self, idata: InferenceData, window_size: int, num_samples: int, seed: int
     ) -> pd.DataFrame:
         """
         Initializes the model with a subset of samples from the posterior distribution and
@@ -313,14 +310,13 @@ class ModelTemplate:
                 full_data = y_full_metadata[o.uuid].observed_values
                 lb = idata.trace.observed_data[o.uuid].shape[-1]
                 y_full_metadata[o.uuid].fit(full_data, (0, lb))
-                y_train = y_full_metadata[o.uuid].transform(full_data, (0, lb))
                 y_test = y_full_metadata[o.uuid].transform(
                     full_data, (lb, full_data.shape[-1])
                 )[..., :window_size]
 
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)[
-                    ..., -window_size:
-                ]
+                        ..., -window_size:
+                        ]
 
                 mse = np.cumsum(np.square(y_test - y_hat), axis=-1) / np.arange(
                     1, window_size + 1
@@ -357,81 +353,10 @@ class ModelTemplate:
                     }
                 )
 
-                # Baseline models for comparison
-                average = TrainingAverageModel()
-                linear = LinearRegression(fit_intercept=True)
-                sc_X = StandardScaler()
-                sc_y = StandardScaler()
-                X_train = sc_X.fit_transform(np.arange(y_train.shape[-1])[:, None])
-                X_test = np.arange(y_test.shape[-1])[:, None] + y_train.shape[-1]
-                for model_name, baseline_model in [
-                    ("average", average),
-                    ("linear", linear),
-                ]:
-                    mses = np.zeros_like(y_test)
-                    for s in range(1 if y_train.ndim == 2 else y_train.shape[0]):
-                        # Serial observations do not have a separate subject dimension.
-                        for f in range(y_train.shape[-2]):
-                            y_train_single = (
-                                y_train[s, f] if y_train.ndim > 2 else y_train[f]
-                            )
-                            y_train_single = sc_y.fit_transform(
-                                y_train_single[:, None]
-                            )[:, 0]
-
-                            y_test_single = (
-                                y_test[s, f] if y_test.ndim > 2 else y_test[f]
-                            )
-
-                            baseline_model.fit(X_train, y_train_single)
-                            y_hat = baseline_model.predict(sc_X.transform(X_test))
-                            y_hat = sc_y.inverse_transform(y_hat[:, None])[:, 0]
-
-                            mse = np.cumsum(
-                                np.square(y_test_single - y_hat), axis=-1
-                            ) / np.arange(1, window_size + 1)
-
-                            if mses.ndim > 2:
-                                mses[s, f] = mse
-                            else:
-                                mses[f] = mse
-
-                    # Compute the mse across all the dimensions but the last 2 ones: feature and
-                    # window.
-                    mse = mses
-                    if mse.ndim > 2:
-                        mse = mse.mean(axis=tuple(list(range(mse.ndim))[:-2]))
-
-                    for d in range(mse.shape[0]):
-                        results.append(
-                            {
-                                "model": model_name,
-                                "variable": o.uuid,
-                                "feature": o.dimension_names[d],
-                                **{
-                                    f"w{w}": mse[d, w - 1]
-                                    for w in range(1, window_size + 1)
-                                },
-                            }
-                        )
-
-                    # Add an extra dimension to represent the MSE over all features
-                    results.append(
-                        {
-                            "model": model_name,
-                            "variable": o.uuid,
-                            "feature": "all",
-                            **{
-                                f"w{w}": mse.mean(axis=0)[w - 1]
-                                for w in range(1, window_size + 1)
-                            },
-                        }
-                    )
-
         return pd.DataFrame(results)
 
     def get_smallest_time_step_in_coordination_scale_for_ppa(
-        self, window_size: int
+            self, window_size: int
     ) -> int:
         """
         Gets the smaller time allowed so we can perform PPA. This will be the smaller time step
@@ -450,8 +375,8 @@ class ModelTemplate:
                 if isinstance(self.metadata[o.uuid], SerialMetadata):
                     metadata: SerialMetadata = self.metadata[o.uuid]
                     if (
-                        metadata.scaler.normalization_method
-                        == NORMALIZATION_PER_SUBJECT_AND_FEATURE
+                            metadata.scaler.normalization_method
+                            == NORMALIZATION_PER_SUBJECT_AND_FEATURE
                     ):
                         # Choose a time such that we guarantee to have a minimum of 3 observations
                         # for the subject so we have some samples to compute z-scores in the test
@@ -481,13 +406,13 @@ class ModelTemplate:
                 if T is None:
                     T = self.metadata[o.uuid].time_steps_in_coordination_scale[
                         -2 * window_size
-                    ]
+                        ]
                 else:
                     T = min(
                         T,
                         self.metadata[o.uuid].time_steps_in_coordination_scale[
                             -2 * window_size
-                        ],
+                            ],
                     )
 
         return T
