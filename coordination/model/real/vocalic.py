@@ -1,38 +1,36 @@
-from typing import Optional, List
+from copy import deepcopy
+from typing import List, Optional
 
 import numpy as np
 import pymc as pm
 
+from coordination.common.constants import DEFAULT_SEED
+from coordination.common.functions import logit
+from coordination.common.utils import adjust_dimensions
+from coordination.inference.inference_data import InferenceData
+from coordination.metadata.non_serial import NonSerialMetadata
+from coordination.metadata.serial import SerialMetadata
 from coordination.model.config_bundle.vocalic import VocalicConfigBundle
 from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
+from coordination.module.coordination.constant_coordination import \
+    ConstantCoordination
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
-from coordination.module.latent_component.serial_gaussian_latent_component import \
-    SerialGaussianLatentComponent, SerialGaussianLatentComponentSamples
-from coordination.module.observation.serial_gaussian_observation import \
-    SerialGaussianObservation
-from coordination.module.transformation.mlp import MLP
-from coordination.inference.inference_data import InferenceData
-from copy import deepcopy
-from coordination.common.constants import DEFAULT_SEED
-from coordination.inference.inference_data import InferenceData
-from coordination.metadata.serial import SerialMetadata
-from coordination.common.utils import adjust_dimensions
-from coordination.module.coordination.constant_coordination import ConstantCoordination
-from coordination.common.functions import logit
-import logging
-from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
-    Serial2DGaussianLatentComponent
-from coordination.module.module import Module
-from coordination.module.transformation.sequential import Sequential
-from coordination.module.transformation.dimension_reduction import \
-    DimensionReduction
-from coordination.module.observation.spike_observation import SpikeObservation
-from coordination.metadata.non_serial import NonSerialMetadata
 from coordination.module.latent_component.null_latent_component import \
     NullLatentComponent
+from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
+    Serial2DGaussianLatentComponent
+from coordination.module.latent_component.serial_gaussian_latent_component import \
+    SerialGaussianLatentComponent
+from coordination.module.observation.serial_gaussian_observation import \
+    SerialGaussianObservation
+from coordination.module.observation.spike_observation import SpikeObservation
+from coordination.module.transformation.dimension_reduction import \
+    DimensionReduction
+from coordination.module.transformation.mlp import MLP
+from coordination.module.transformation.sequential import Sequential
 
 
 class VocalicModel(ModelTemplate):
@@ -42,7 +40,7 @@ class VocalicModel(ModelTemplate):
     """
 
     def __init__(
-            self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
+        self, config_bundle: VocalicConfigBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a vocalic model.
@@ -63,7 +61,8 @@ class VocalicModel(ModelTemplate):
             metadata: SerialMetadata = self.metadata["speech_vocalics"]
             metadata.num_subjects = config_bundle.num_subjects
             metadata.time_steps_in_coordination_scale = (
-                config_bundle.time_steps_in_coordination_scale)
+                config_bundle.time_steps_in_coordination_scale
+            )
             metadata.subject_indices = config_bundle.subject_indices
             metadata.prev_time_same_subject = config_bundle.prev_time_same_subject
             metadata.prev_time_diff_subject = config_bundle.prev_time_diff_subject
@@ -77,26 +76,36 @@ class VocalicModel(ModelTemplate):
                 prev_time_same_subject=config_bundle.prev_time_same_subject,
                 prev_time_diff_subject=config_bundle.prev_time_diff_subject,
                 observed_values=config_bundle.observed_values,
-                normalization_method=config_bundle.observation_normalization
+                normalization_method=config_bundle.observation_normalization,
             )
         if config_bundle.include_semantic:
             if "semantic_link" in self.metadata:
                 metadata: NonSerialMetadata = self.metadata["semantic_link"]
                 metadata.time_steps_in_coordination_scale = (
-                    config_bundle.semantic_link_time_steps_in_coordination_scale)
-                if config_bundle.semantic_link_time_steps_in_coordination_scale is not None:
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                )
+                if (
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                    is not None
+                ):
                     metadata.observed_values = np.ones_like(
-                        config_bundle.semantic_link_time_steps_in_coordination_scale)
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                    )
             else:
                 obs = None
-                if config_bundle.semantic_link_time_steps_in_coordination_scale is not None:
+                if (
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                    is not None
+                ):
                     obs = np.ones_like(
-                        config_bundle.semantic_link_time_steps_in_coordination_scale)
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                    )
                 self.metadata["semantic_link"] = NonSerialMetadata(
                     time_steps_in_coordination_scale=(
-                        config_bundle.semantic_link_time_steps_in_coordination_scale),
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                    ),
                     observed_values=obs,
-                    normalization_method=None
+                    normalization_method=None,
                 )
 
     def _create_model_from_config_bundle(self):
@@ -115,14 +124,14 @@ class VocalicModel(ModelTemplate):
                 alpha_c=bundle.alpha_c,
                 beta_c=bundle.beta_c,
                 initial_samples=bundle.initial_coordination_samples,
-                observed_value=bundle.observed_coordination_for_inference
+                observed_value=bundle.observed_coordination_for_inference,
             )
         else:
             given_coordination = None
             if bundle.observed_coordination_for_inference is not None:
                 given_coordination = adjust_dimensions(
                     logit(bundle.observed_coordination_for_inference),
-                    bundle.num_time_steps_to_fit
+                    bundle.num_time_steps_to_fit,
                 )
 
             initial_samples = None
@@ -137,7 +146,7 @@ class VocalicModel(ModelTemplate):
                 mean_uc0=bundle.mean_uc0,
                 sd_uc=bundle.sd_uc,
                 initial_samples=initial_samples,
-                unbounded_coordination_observed_values=given_coordination
+                unbounded_coordination_observed_values=given_coordination,
             )
 
         if bundle.state_space_2d:
@@ -146,9 +155,13 @@ class VocalicModel(ModelTemplate):
             groups = self._create_vocalic_groups(bundle)
 
         if bundle.include_semantic:
-            semantic_link_metadata: NonSerialMetadata = self.metadata.get("semantic_link", None)
-            if semantic_link_metadata.time_steps_in_coordination_scale is \
-                    not None and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0:
+            semantic_link_metadata: NonSerialMetadata = self.metadata.get(
+                "semantic_link", None
+            )
+            if (
+                semantic_link_metadata.time_steps_in_coordination_scale is not None
+                and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0
+            ):
                 # We only add the semantic link module if there's evidence.
 
                 observed_semantic_links = SpikeObservation(
@@ -163,7 +176,7 @@ class VocalicModel(ModelTemplate):
                         semantic_link_metadata.time_steps_in_coordination_scale
                     ),
                     p=bundle.p,
-                    observed_values=semantic_link_metadata.observed_values
+                    observed_values=semantic_link_metadata.observed_values,
                 )
 
                 semantic_link_group = ComponentGroup(
@@ -184,7 +197,7 @@ class VocalicModel(ModelTemplate):
             name=f"{name}_model",
             pymc_model=self.pymc_model,
             coordination=coordination,
-            component_groups=groups
+            component_groups=groups,
         )
 
     def _get_adjusted_bundle(self) -> VocalicConfigBundle:
@@ -203,26 +216,37 @@ class VocalicModel(ModelTemplate):
 
                 # We adjust the number of time steps in coordination scale to match that.
                 bundle.num_time_steps_in_coordination_scale = len(
-                    self.config_bundle.time_steps_in_coordination_scale)
+                    self.config_bundle.time_steps_in_coordination_scale
+                )
 
                 # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
                 # where n is the number of observations.
                 bundle.time_steps_in_coordination_scale = np.arange(
-                    len(self.config_bundle.time_steps_in_coordination_scale))
+                    len(self.config_bundle.time_steps_in_coordination_scale)
+                )
 
                 if self.config_bundle.include_semantic:
                     # Map each one of the semantic lint time step to the new scale. We can do this
                     # because the time steps with semantic link is a subset of the time steps with
                     # vocalics.
-                    time_mapping = {t: new_t for new_t, t in
-                                    enumerate(self.config_bundle.time_steps_in_coordination_scale)}
+                    time_mapping = {
+                        t: new_t
+                        for new_t, t in enumerate(
+                            self.config_bundle.time_steps_in_coordination_scale
+                        )
+                    }
                     for i, t in enumerate(
-                            self.config_bundle.semantic_link_time_steps_in_coordination_scale):
-                        bundle.semantic_link_time_steps_in_coordination_scale[i] = time_mapping[t]
+                        self.config_bundle.semantic_link_time_steps_in_coordination_scale
+                    ):
+                        bundle.semantic_link_time_steps_in_coordination_scale[
+                            i
+                        ] = time_mapping[t]
 
         return self.new_config_bundle_from_time_step_info(bundle)
 
-    def _create_vocalic_2d_groups(self, bundle: VocalicConfigBundle) -> List[ComponentGroup]:
+    def _create_vocalic_2d_groups(
+        self, bundle: VocalicConfigBundle
+    ) -> List[ComponentGroup]:
         """
         Creates component groups for a model of vocalics with 2D state space.
 
@@ -252,18 +276,20 @@ class VocalicModel(ModelTemplate):
                 for feature in vocalic_group["features"]
             ]
 
-            observed_values = np.take_along_axis(
-                vocalic_metadata.normalized_observations,
-                indices=np.array(feature_idx, dtype=int)[:, None],
-                axis=0,
-            ) if bundle.observed_values is not None else None
+            observed_values = (
+                np.take_along_axis(
+                    vocalic_metadata.normalized_observations,
+                    indices=np.array(feature_idx, dtype=int)[:, None],
+                    axis=0,
+                )
+                if bundle.observed_values is not None
+                else None
+            )
 
             # For retro-compatibility, we only add suffix if groups were defined.
 
             group_name = vocalic_group["name"]
-            suffix = (
-                "" if bundle.vocalic_groups is None else f"_{group_name}"
-            )
+            suffix = "" if bundle.vocalic_groups is None else f"_{group_name}"
 
             state_space = Serial2DGaussianLatentComponent(
                 uuid=f"state_space{suffix}",
@@ -287,7 +313,7 @@ class VocalicModel(ModelTemplate):
                 subject_indices=vocalic_metadata.subject_indices,
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
-                initial_samples=bundle.initial_state_space_samples
+                initial_samples=bundle.initial_state_space_samples,
             )
 
             transformation = Sequential(
@@ -336,7 +362,9 @@ class VocalicModel(ModelTemplate):
 
         return groups
 
-    def _create_vocalic_groups(self, bundle: VocalicConfigBundle) -> List[ComponentGroup]:
+    def _create_vocalic_groups(
+        self, bundle: VocalicConfigBundle
+    ) -> List[ComponentGroup]:
         """
         Creates component groups for a model of vocalics.
 
@@ -345,7 +373,7 @@ class VocalicModel(ModelTemplate):
         """
         vocalic_metadata: SerialMetadata = self.metadata["speech_vocalics"]
         state_space = SerialGaussianLatentComponent(
-            uuid=f"state_space",
+            uuid="state_space",
             pymc_model=self.pymc_model,
             num_subjects=bundle.num_subjects,
             dimension_size=bundle.state_space_dimension_size,
@@ -369,7 +397,7 @@ class VocalicModel(ModelTemplate):
             subject_indices=vocalic_metadata.subject_indices,
             mean_a0=bundle.mean_a0,
             sd_a=bundle.sd_a,
-            initial_samples=bundle.initial_state_space_samples
+            initial_samples=bundle.initial_state_space_samples,
         )
 
         observation = SerialGaussianObservation(
@@ -400,11 +428,12 @@ class VocalicModel(ModelTemplate):
         return [group]
 
     def new_config_bundle_from_posterior_samples(
-            self,
-            config_bundle: VocalicConfigBundle,
-            idata: InferenceData,
-            num_samples: int,
-            seed: int = DEFAULT_SEED) -> VocalicConfigBundle:
+        self,
+        config_bundle: VocalicConfigBundle,
+        idata: InferenceData,
+        num_samples: int,
+        seed: int = DEFAULT_SEED,
+    ) -> VocalicConfigBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
         posterior in the last time step as initial values for the latent variables. This
@@ -419,23 +448,36 @@ class VocalicModel(ModelTemplate):
         new_bundle = deepcopy(config_bundle)
 
         np.random.seed(seed)
-        samples_idx = np.random.choice(idata.num_posterior_samples, num_samples, replace=False)
+        samples_idx = np.random.choice(
+            idata.num_posterior_samples, num_samples, replace=False
+        )
 
-        new_bundle.mean_a0 = idata.get_posterior_samples("state_space_mean_a0", samples_idx)
+        new_bundle.mean_a0 = idata.get_posterior_samples(
+            "state_space_mean_a0", samples_idx
+        )
         new_bundle.sd_a = idata.get_posterior_samples("state_space_sd_a", samples_idx)
-        new_bundle.sd_o = idata.get_posterior_samples("speech_vocalics_sd_o", samples_idx)
+        new_bundle.sd_o = idata.get_posterior_samples(
+            "speech_vocalics_sd_o", samples_idx
+        )
 
         if config_bundle.constant_coordination:
-            new_bundle.initial_coordination_samples = (idata.get_posterior_samples(
-                "coordination", samples_idx))
+            new_bundle.initial_coordination_samples = idata.get_posterior_samples(
+                "coordination", samples_idx
+            )
         else:
-            new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0", samples_idx)
-            new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
-            new_bundle.initial_coordination_samples = (
-                idata.get_posterior_samples("coordination", samples_idx))
+            new_bundle.mean_uc0 = idata.get_posterior_samples(
+                "coordination_mean_uc0", samples_idx
+            )
+            new_bundle.sd_uc = idata.get_posterior_samples(
+                "coordination_sd_uc", samples_idx
+            )
+            new_bundle.initial_coordination_samples = idata.get_posterior_samples(
+                "coordination", samples_idx
+            )
 
-        new_bundle.initial_state_space_samples = (
-            idata.get_posterior_samples("state_space", samples_idx))
+        new_bundle.initial_state_space_samples = idata.get_posterior_samples(
+            "state_space", samples_idx
+        )
 
         if config_bundle.include_semantic:
             new_bundle.p = idata.get_posterior_samples("semantic_link_p", samples_idx)

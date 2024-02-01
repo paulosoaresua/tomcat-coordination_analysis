@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union
 
@@ -15,7 +14,6 @@ from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import (HalfNormalParameterPrior,
                                                   Parameter)
-import logging
 
 
 class GaussianObservation(Observation, ABC):

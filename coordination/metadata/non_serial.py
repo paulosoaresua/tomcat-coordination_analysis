@@ -1,12 +1,12 @@
 from __future__ import annotations
-import numpy as np
-from coordination.metadata.metadata import Metadata
-from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEATURE,
-                                               NORMALIZATION_PER_FEATURE,
-                                               normalize_non_serial_data_per_feature,
-                                               normalize_non_serial_data_per_subject_and_feature)
+
 from copy import deepcopy
+from typing import List, Optional, Tuple
+
+import numpy as np
+
 from coordination.common.scaler import Scaler
+from coordination.metadata.metadata import Metadata
 
 
 class NonSerialMetadata(Metadata):
@@ -15,10 +15,11 @@ class NonSerialMetadata(Metadata):
     """
 
     def __init__(
-            self,
-            time_steps_in_coordination_scale: np.array,
-            observed_values: np.ndarray,
-            normalization_method: str):
+        self,
+        time_steps_in_coordination_scale: np.array,
+        observed_values: np.ndarray,
+        normalization_method: str,
+    ):
         """
         Creates a serial metadata:
 
@@ -27,8 +28,11 @@ class NonSerialMetadata(Metadata):
         @param observed values for the serial component.
         @param normalization_method: normalization method to apply on observations.
         """
-        super().__init__(time_steps_in_coordination_scale, observed_values,
-                         Scaler(normalization_method))
+        super().__init__(
+            time_steps_in_coordination_scale,
+            observed_values,
+            Scaler(normalization_method),
+        )
 
     def truncate(self, max_time_step: int) -> NonSerialMetadata:
         """
@@ -45,17 +49,19 @@ class NonSerialMetadata(Metadata):
 
         return NonSerialMetadata(
             time_steps_in_coordination_scale=ts,
-            observed_values=self.observed_values[...,
-                            :len(ts)] if self.observed_values is not None else None,
-            normalization_method=self.scaler.normalization_method
+            observed_values=self.observed_values[..., : len(ts)]
+            if self.observed_values is not None
+            else None,
+            normalization_method=self.scaler.normalization_method,
         )
 
     def split_observations_per_subject(
-            self,
-            observations: np.ndarray,
-            normalize: bool,
-            skip_first: Optional[int] = None,
-            skip_last: Optional[int] = None) -> List[np.ndarray]:
+        self,
+        observations: np.ndarray,
+        normalize: bool,
+        skip_first: Optional[int] = None,
+        skip_last: Optional[int] = None,
+    ) -> List[np.ndarray]:
         """
         Returns a list of observations per speaker as a list of arrays.
 
@@ -75,7 +81,9 @@ class NonSerialMetadata(Metadata):
 
         return obs[..., lb:ub]
 
-    def fit(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def fit(
+        self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None
+    ):
         """
         Fits the scaler on some observations.
 
@@ -86,11 +94,13 @@ class NonSerialMetadata(Metadata):
         if time_interval is None:
             obs = observations
         else:
-            obs = observations[..., time_interval[0]:time_interval[1]]
+            obs = observations[..., time_interval[0] : time_interval[1]]
 
         self.scaler.fit(obs)
 
-    def transform(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def transform(
+        self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None
+    ):
         """
         Transforms observations using the fitted scaler.
 
@@ -102,6 +112,6 @@ class NonSerialMetadata(Metadata):
         if time_interval is None:
             obs = observations
         else:
-            obs = observations[..., time_interval[0]:time_interval[1]]
+            obs = observations[..., time_interval[0] : time_interval[1]]
 
         return self.scaler.transform(obs)

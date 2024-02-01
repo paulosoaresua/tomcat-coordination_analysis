@@ -1,8 +1,8 @@
 import streamlit as st
 
+from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.component.experiment_progress import \
     ExperimentProgress
-from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.widget.progress_bar import ProgressBar
 
 
@@ -12,8 +12,12 @@ class InferenceRunProgress:
     progress of each experiment under the run and a global status for the run itself.
     """
 
-    def __init__(self, inference_run: InferenceRun, display_experiment_progress: bool = True,
-            display_sub_experiment_progress: bool = True):
+    def __init__(
+        self,
+        inference_run: InferenceRun,
+        display_experiment_progress: bool = True,
+        display_sub_experiment_progress: bool = True,
+    ):
         """
         Creates the component.
 
@@ -46,9 +50,10 @@ class InferenceRunProgress:
         experiment_ids = sorted(self.inference_run.experiment_ids)
         for experiment_id in experiment_ids:
             experiment_progress_component = ExperimentProgress(
-                inference_run=self.inference_run, experiment_id=experiment_id,
+                inference_run=self.inference_run,
+                experiment_id=experiment_id,
                 display_experiment_progress=self.display_experiment_progress,
-                display_sub_experiment_progress=self.display_sub_experiment_progress
+                display_sub_experiment_progress=self.display_sub_experiment_progress,
             )
             experiment_progress_component.create_component()
             num_experiments_succeeded += experiment_progress_component.succeeded

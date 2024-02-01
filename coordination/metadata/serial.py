@@ -1,13 +1,12 @@
 from __future__ import annotations
-import numpy as np
-from coordination.metadata.metadata import Metadata
-from dataclasses import dataclass
-from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEATURE,
-                                               NORMALIZATION_PER_FEATURE,
-                                               normalize_serialized_data_per_feature,
-                                               normalize_serialized_data_per_subject_and_feature)
+
 from copy import deepcopy
+from typing import List, Optional, Tuple
+
+import numpy as np
+
 from coordination.common.scaler import SerialScaler
+from coordination.metadata.metadata import Metadata
 
 
 class SerialMetadata(Metadata):
@@ -16,14 +15,15 @@ class SerialMetadata(Metadata):
     """
 
     def __init__(
-            self,
-            num_subjects: int,
-            time_steps_in_coordination_scale: np.array,
-            subject_indices: np.ndarray,
-            prev_time_same_subject: np.ndarray,
-            prev_time_diff_subject: np.ndarray,
-            observed_values: np.ndarray,
-            normalization_method: str):
+        self,
+        num_subjects: int,
+        time_steps_in_coordination_scale: np.array,
+        subject_indices: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        observed_values: np.ndarray,
+        normalization_method: str,
+    ):
         """
         Creates a serial metadata:
 
@@ -46,8 +46,11 @@ class SerialMetadata(Metadata):
         @param observed values for the serial component.
         @param normalization_method: normalization method to apply on observations.
         """
-        super().__init__(time_steps_in_coordination_scale, observed_values,
-                         SerialScaler(normalization_method))
+        super().__init__(
+            time_steps_in_coordination_scale,
+            observed_values,
+            SerialScaler(normalization_method),
+        )
 
         self.num_subjects = num_subjects
         self.subject_indices = subject_indices
@@ -80,20 +83,22 @@ class SerialMetadata(Metadata):
         return SerialMetadata(
             num_subjects=self.num_subjects,
             time_steps_in_coordination_scale=ts,
-            subject_indices=self.subject_indices[:len(ts)],
-            prev_time_same_subject=self.prev_time_same_subject[:len(ts)],
-            prev_time_diff_subject=self.prev_time_diff_subject[:len(ts)],
-            observed_values=self.observed_values[...,
-                            :len(ts)] if self.observed_values is not None else None,
-            normalization_method=self.scaler.normalization_method
+            subject_indices=self.subject_indices[: len(ts)],
+            prev_time_same_subject=self.prev_time_same_subject[: len(ts)],
+            prev_time_diff_subject=self.prev_time_diff_subject[: len(ts)],
+            observed_values=self.observed_values[..., : len(ts)]
+            if self.observed_values is not None
+            else None,
+            normalization_method=self.scaler.normalization_method,
         )
 
     def split_observations_per_subject(
-            self,
-            observations: np.ndarray,
-            normalize: bool,
-            skip_first: Optional[int] = None,
-            skip_last: Optional[int] = None) -> List[np.ndarray]:
+        self,
+        observations: np.ndarray,
+        normalize: bool,
+        skip_first: Optional[int] = None,
+        skip_last: Optional[int] = None,
+    ) -> List[np.ndarray]:
         """
         Returns a list of observations per speaker as a list of arrays.
 
@@ -112,12 +117,18 @@ class SerialMetadata(Metadata):
         lb = 0 if skip_first is None else skip_first
         ub = obs.shape[-1] if skip_last is None else -skip_last
         for s in range(self.num_subjects):
-            idx = [t for t, subject in enumerate(self.subject_indices[lb:ub]) if s == subject]
+            idx = [
+                t
+                for t, subject in enumerate(self.subject_indices[lb:ub])
+                if s == subject
+            ]
             result.append(obs[..., lb:ub][..., idx])
 
         return result
 
-    def fit(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def fit(
+        self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None
+    ):
         """
         Fits the scaler on some observations.
 
@@ -129,15 +140,15 @@ class SerialMetadata(Metadata):
             obs = observations
             sub_idx = self.subject_indices
         else:
-            obs = observations[..., time_interval[0]:time_interval[1]]
-            sub_idx = self.subject_indices[..., time_interval[0]:time_interval[1]]
+            obs = observations[..., time_interval[0] : time_interval[1]]
+            sub_idx = self.subject_indices[..., time_interval[0] : time_interval[1]]
 
         s_scaler: SerialScaler = self.scaler
-        s_scaler.fit(obs,
-                     subject_indices=sub_idx,
-                     num_subjects=self.num_subjects)
+        s_scaler.fit(obs, subject_indices=sub_idx, num_subjects=self.num_subjects)
 
-    def transform(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def transform(
+        self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None
+    ):
         """
         Transforms observations using the fitted scaler.
 
@@ -150,8 +161,8 @@ class SerialMetadata(Metadata):
             obs = observations
             sub_idx = self.subject_indices
         else:
-            obs = observations[..., time_interval[0]:time_interval[1]]
-            sub_idx = self.subject_indices[..., time_interval[0]:time_interval[1]]
+            obs = observations[..., time_interval[0] : time_interval[1]]
+            sub_idx = self.subject_indices[..., time_interval[0] : time_interval[1]]
 
         s_scaler: SerialScaler = self.scaler
         return s_scaler.transform(obs, subject_indices=sub_idx)

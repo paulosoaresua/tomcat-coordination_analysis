@@ -3,7 +3,6 @@ from typing import Dict, Union
 import numpy as np
 
 from coordination.common.types import ParameterValueType
-from coordination.metadata.metadata import Metadata
 
 
 class ModelConfigBundle:

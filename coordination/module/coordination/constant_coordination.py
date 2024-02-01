@@ -1,23 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import numpy as np
 import pymc as pm
 from scipy.stats import beta
 
-from coordination.common.functions import sigmoid
-from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
-from coordination.module.constants import (DEFAULT_NUM_TIME_STEPS,
-                                           DEFAULT_UNB_COORDINATION_MEAN_PARAM,
-                                           DEFAULT_UNB_COORDINATION_SD_PARAM)
+from coordination.module.constants import DEFAULT_NUM_TIME_STEPS
 from coordination.module.coordination.coordination import Coordination
-from coordination.module.module import ModuleParameters, ModuleSamples
-from coordination.module.parametrization2 import (HalfNormalParameterPrior,
-                                                  NormalParameterPrior,
-                                                  Parameter)
-import logging
+from coordination.module.module import ModuleSamples
 
 
 class ConstantCoordination(Coordination):
@@ -27,14 +20,14 @@ class ConstantCoordination(Coordination):
     """
 
     def __init__(
-            self,
-            pymc_model: pm.Model,
-            num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
-            alpha_c: float = 1,
-            beta_c: float = 1,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            observed_value: Optional[float] = None,
-            initial_samples: Optional[np.ndarray] = None
+        self,
+        pymc_model: pm.Model,
+        num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
+        alpha_c: float = 1,
+        beta_c: float = 1,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        observed_value: Optional[float] = None,
+        initial_samples: Optional[np.ndarray] = None,
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -63,9 +56,7 @@ class ConstantCoordination(Coordination):
         self.beta_c = beta_c
         self.initial_samples = initial_samples
 
-    def draw_samples(
-            self, seed: Optional[int], num_series: int
-    ) -> SigmoidGaussianCoordinationSamples:
+    def draw_samples(self, seed: Optional[int], num_series: int) -> ModuleSamples:
         """
         Draw coordination samples. A sample is a time series of coordination.
 
@@ -77,28 +68,35 @@ class ConstantCoordination(Coordination):
         super().draw_samples(seed, num_series)
 
         if self.alpha_c is None:
-            raise ValueError(f"Value of the parameter alpha is undefined.")
+            raise ValueError("Value of the parameter alpha is undefined.")
 
         if self.beta_c is None:
-            raise ValueError(f"Value of the parameter beta is undefined.")
+            raise ValueError("Value of the parameter beta is undefined.")
 
-        logging.info(f"Drawing {self.__class__.__name__} with {self.num_time_steps} time "
-                     f"steps.")
+        logging.info(
+            f"Drawing {self.__class__.__name__} with {self.num_time_steps} time "
+            f"steps."
+        )
 
         if self.initial_samples is not None:
             dt = self.num_time_steps - self.initial_samples.shape[-1]
             if dt > 0:
                 values = np.concatenate(
-                    [self.initial_samples,
-                     np.ones((num_series, dt)) * self.initial_samples[:, -1][:, None]],
-                    axis=-1
+                    [
+                        self.initial_samples,
+                        np.ones((num_series, dt))
+                        * self.initial_samples[:, -1][:, None],
+                    ],
+                    axis=-1,
                 )
             else:
                 values = self.initial_samples
             return ModuleSamples(values)
 
         coordination = beta(self.alpha_c, self.beta_c).rvs(num_series)
-        values = np.ones((num_series, self.num_time_steps)) * np.array(coordination)[:, None]
+        values = (
+            np.ones((num_series, self.num_time_steps)) * np.array(coordination)[:, None]
+        )
 
         return ModuleSamples(values=values)
 
@@ -109,8 +107,10 @@ class ConstantCoordination(Coordination):
 
         with self.pymc_model:
             if self.coordination_random_variable is None:
-                logging.info(f"Fitting {self.__class__.__name__} with {self.num_time_steps} time "
-                             f"steps.")
+                logging.info(
+                    f"Fitting {self.__class__.__name__} with {self.num_time_steps} time "
+                    f"steps."
+                )
 
                 # Add coordinates to the model
                 if self.time_axis_name not in self.pymc_model.coords:
@@ -123,11 +123,11 @@ class ConstantCoordination(Coordination):
                     alpha=self.alpha_c,
                     beta=self.beta_c,
                     size=1,
-                    observed=adjust_dimensions(self.observed_values, 1)
+                    observed=adjust_dimensions(self.observed_values, 1),
                 )
 
                 self.coordination_random_variable = pm.Deterministic(
                     name=self.uuid,
                     var=single_coordination.repeat(self.num_time_steps),
-                    dims=[self.time_axis_name]
+                    dims=[self.time_axis_name],
                 )

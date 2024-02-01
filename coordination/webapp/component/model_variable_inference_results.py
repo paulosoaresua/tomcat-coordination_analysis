@@ -6,9 +6,9 @@ import plotly.figure_factory as ff
 import streamlit as st
 
 from coordination.inference.inference_data import InferenceData
+from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
                                            DEFAULT_PLOT_MARGINS)
-from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.utils import plot_series
 
 
@@ -163,8 +163,8 @@ class ModelVariableInferenceResults:
             if means.ndim == 2:
                 # Serialized data. Axes are (dimension x time)
                 # Get subject indices and time indices from the coded coordinates of the data along
-                # the time axis. Each time coordinate is coded as "subject#time" when a serial module
-                # is created.
+                # the time axis. Each time coordinate is coded as "subject#time" when a serial
+                # module is created.
                 subject_indices = np.array(
                     [
                         int(x.split("#")[0])
@@ -183,9 +183,11 @@ class ModelVariableInferenceResults:
                 )
                 unique_subjects = sorted(list(set(subject_indices)))
                 for s in unique_subjects:
-                    # Get the indices in the time series belonging to subject "s". In a serial module,
-                    # only one subject is observed at a time.
-                    idx = [i for i, subject in enumerate(subject_indices) if subject == s]
+                    # Get the indices in the time series belonging to subject "s". In a serial
+                    # module, only one subject is observed at a time.
+                    idx = [
+                        i for i, subject in enumerate(subject_indices) if subject == s
+                    ]
                     y = (
                         means.loc[self.dimension][idx]
                         if isinstance(self.dimension, str)

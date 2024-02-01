@@ -21,7 +21,7 @@ def normalize_serialized_data_per_subject_and_feature(
     normalized_values = np.zeros_like(data)
     for subject in range(num_subjects):
         # Get values for a specific subject across time.
-        idx = np.array(subject_indices[:data.shape[-1]]) == subject
+        idx = np.array(subject_indices[: data.shape[-1]]) == subject
         data_per_subject = np.array(data)[:, idx]
         mean = np.mean(data_per_subject, axis=-1, keepdims=True)  # mean across time
         std = np.std(data_per_subject, axis=-1, keepdims=True)

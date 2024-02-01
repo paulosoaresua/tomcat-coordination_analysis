@@ -42,10 +42,13 @@ class Progress:
 
         col1, col2, col3 = st.columns(3)
         with col2:
-            display_experiment_progress = st.toggle("Display Experiment Progress", value=False)
+            display_experiment_progress = st.toggle(
+                "Display Experiment Progress", value=False
+            )
         with col3:
-            display_sub_experiment_progress = st.toggle("Display Sub-experiment Progress",
-                                                       value=False)
+            display_sub_experiment_progress = st.toggle(
+                "Display Sub-experiment Progress", value=False
+            )
 
         inference_progress_component = None
         with col1:
@@ -62,7 +65,9 @@ class Progress:
                         run_id_multi_selection_component.selected_run_ids_
                     )
                 else:
-                    idx = min(num_runs, len(run_id_multi_selection_component.all_run_ids))
+                    idx = min(
+                        num_runs, len(run_id_multi_selection_component.all_run_ids)
+                    )
                     inference_progress_component.preferred_run_ids = (
                         run_id_multi_selection_component.all_run_ids[:idx]
                     )

@@ -17,9 +17,13 @@ class SubExperimentProgress:
     it needs a call to create_component to update its content.
     """
 
-    def __init__(self, inference_run: InferenceRun, experiment_id: str,
-                 sub_experiment_id: Optional[str] = None,
-                 display_sub_experiment_progress: bool = True):
+    def __init__(
+        self,
+        inference_run: InferenceRun,
+        experiment_id: str,
+        sub_experiment_id: Optional[str] = None,
+        display_sub_experiment_progress: bool = True,
+    ):
         """
         Creates the component.
 
@@ -116,11 +120,11 @@ class SubExperimentProgress:
         # Use an OrderedDict such that the chains show up in order of their numbers. For instance,
         # chain1, chain 2, chain 3...
         total_samples_per_chain = (
-                self.inference_run.execution_params["burn_in"]
-                + self.inference_run.execution_params["num_samples"]
+            self.inference_run.execution_params["burn_in"]
+            + self.inference_run.execution_params["num_samples"]
         )
         total_num_samples = (
-                total_samples_per_chain * self.inference_run.execution_params["num_chains"]
+            total_samples_per_chain * self.inference_run.execution_params["num_chains"]
         )
         sorted_chain_names = sorted(list(progress_info["step"].keys()))
         self.total_num_divergences_ = 0
@@ -196,8 +200,7 @@ class SubExperimentProgress:
 
         return "in_progress"
 
-    def _read_progress_info(self) -> Optional[
-        Dict[str, float]]:
+    def _read_progress_info(self) -> Optional[Dict[str, float]]:
         """
         Reads progress json file for the experiment ID.
 

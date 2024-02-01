@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import List, Optional
 
 import numpy as np
@@ -12,7 +13,6 @@ from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
 from coordination.module.parametrization2 import BetaParameterPrior, Parameter
-import logging
 
 
 class SpikeObservation(Observation):
@@ -25,21 +25,21 @@ class SpikeObservation(Observation):
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int,
-            a_p: float,
-            b_p: float,
-            dimension_name: str = None,
-            coordination_samples: Optional[ModuleSamples] = None,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            p_random_variable: Optional[pm.Distribution] = None,
-            observation_random_variable: Optional[pm.Distribution] = None,
-            sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            observed_values: Optional[TensorTypes] = None,
-            p: Optional[float] = None,
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int,
+        a_p: float,
+        b_p: float,
+        dimension_name: str = None,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        p_random_variable: Optional[pm.Distribution] = None,
+        observation_random_variable: Optional[pm.Distribution] = None,
+        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
+        p: Optional[float] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -95,7 +95,7 @@ class SpikeObservation(Observation):
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
     def draw_samples(
-            self, seed: Optional[int], num_series: int
+        self, seed: Optional[int], num_series: int
     ) -> SpikeObservationSamples:
         """
         Draws spike observation samples using ancestral sampling.
@@ -158,8 +158,10 @@ class SpikeObservation(Observation):
         if self.time_steps_in_coordination_scale is None:
             raise ValueError("time_steps_in_coordination_scale is undefined.")
 
-        logging.info(f"Fitting {self.__class__.__name__} with "
-                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
+        logging.info(
+            f"Fitting {self.__class__.__name__} with "
+            f"{len(self.time_steps_in_coordination_scale)} time steps."
+        )
 
         with self.pymc_model:
             # self.p_random_variable = pm.Beta(
@@ -192,7 +194,7 @@ class SpikeObservation(Observation):
                 ],
                 sigma=self.p_random_variable,
                 dims=self.time_axis_name,
-                observed=self.observed_values
+                observed=self.observed_values,
             )
 
             # self.observation_random_variable = pm.Bernoulli(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import List, Optional, Union
 
 import numpy as np
@@ -10,7 +11,6 @@ from coordination.common.types import TensorTypes
 from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import (DEFAULT_NUM_SUBJECTS,
                                            DEFAULT_OBSERVATION_DIMENSION_SIZE,
-                                           DEFAULT_OBSERVATION_NORMALIZATION,
                                            DEFAULT_OBSERVATION_SD_PARAM,
                                            DEFAULT_SHARING_ACROSS_DIMENSIONS,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS)
@@ -19,7 +19,6 @@ from coordination.module.latent_component.serial_gaussian_latent_component impor
 from coordination.module.observation.gaussian_observation import \
     GaussianObservation
 from coordination.module.observation.observation import ObservationSamples
-import logging
 
 
 class NonSerialGaussianObservation(GaussianObservation):
@@ -155,8 +154,10 @@ class NonSerialGaussianObservation(GaussianObservation):
         # it is also broadcast across subjects (first axis has size 1)
         sd_o = self.sd_o_random_variable[..., None]
 
-        logging.info(f"Fitting {self.__class__.__name__} with "
-                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
+        logging.info(
+            f"Fitting {self.__class__.__name__} with "
+            f"{len(self.time_steps_in_coordination_scale)} time steps."
+        )
 
         with self.pymc_model:
             self.observation_random_variable = pm.Normal(

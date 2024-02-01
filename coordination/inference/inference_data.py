@@ -208,7 +208,7 @@ class InferenceData:
         return None
 
     def average_posterior_samples(
-            self, variable_name: str, return_std: bool
+        self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior distribution.
@@ -224,7 +224,7 @@ class InferenceData:
         return self._average_samples(variable_name, return_std, "posterior")
 
     def average_prior_predictive_samples(
-            self, variable_name: str, return_std: bool
+        self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's prior predictive distribution.
@@ -240,7 +240,7 @@ class InferenceData:
         return self._average_samples(variable_name, return_std, "prior_predictive")
 
     def average_posterior_predictive_samples(
-            self, variable_name: str, return_std: bool
+        self, variable_name: str, return_std: bool
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples of a variable's posterior predictive distribution.
@@ -256,7 +256,7 @@ class InferenceData:
         return self._average_samples(variable_name, return_std, "posterior_predictive")
 
     def _average_samples(
-            self, variable_name: str, return_std: bool, inference_mode: str
+        self, variable_name: str, return_std: bool, inference_mode: str
     ) -> Union[Tuple[xarray.DataArray, xarray.DataArray], xarray.DataArray]:
         """
         Gets the mean values from the samples in the trace.
@@ -299,14 +299,14 @@ class InferenceData:
             )
 
     def plot_time_series_posterior(
-            self,
-            variable_name: str,
-            include_bands: bool,
-            value_bounds: Optional[Tuple[float, float]] = None,
-            ax: Optional[plt.axis] = None,
-            dimension: Union[int, str] = 0,
-            show_time_in_coordination_scale: bool = True,
-            **kwargs,
+        self,
+        variable_name: str,
+        include_bands: bool,
+        value_bounds: Optional[Tuple[float, float]] = None,
+        ax: Optional[plt.axis] = None,
+        dimension: Union[int, str] = 0,
+        show_time_in_coordination_scale: bool = True,
+        **kwargs,
     ) -> plt.axis:
         """
         Plots the time series of samples draw from the posterior distribution.
@@ -371,10 +371,14 @@ class InferenceData:
                     else means[dimension, idx]
                 )
                 y_std = (
-                    stds.loc[dimension][idx]
-                    if isinstance(dimension, str)
-                    else stds[dimension, idx]
-                ) if stds is not None else None
+                    (
+                        stds.loc[dimension][idx]
+                        if isinstance(dimension, str)
+                        else stds[dimension, idx]
+                    )
+                    if stds is not None
+                    else None
+                )
                 plot_series(
                     x=time_steps[idx],
                     y=y,
@@ -396,10 +400,14 @@ class InferenceData:
                     else means[s, dimension]
                 )
                 y_std = (
-                    stds[s].loc[dimension]
-                    if isinstance(dimension, str)
-                    else stds[s, dimension]
-                ) if stds is not None else None
+                    (
+                        stds[s].loc[dimension]
+                        if isinstance(dimension, str)
+                        else stds[s, dimension]
+                    )
+                    if stds is not None
+                    else None
+                )
                 plot_series(
                     x=time_steps,
                     y=y,
@@ -465,8 +473,9 @@ class InferenceData:
         """
         return self.trace.sample_stats.lp.to_numpy()
 
-    def get_posterior_samples(self, variable_name: str,
-                              sample_idx: Optional[np.ndarray] = None) -> np.ndarray:
+    def get_posterior_samples(
+        self, variable_name: str, sample_idx: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """
         Return posterior samples from a variable.
 
@@ -482,8 +491,12 @@ class InferenceData:
             if variable_name not in self.trace.posterior:
                 return None
 
-            values = self.trace.posterior[variable_name].stack(
-                sample=["draw", "chain"]).transpose("sample", ...).to_numpy()
+            values = (
+                self.trace.posterior[variable_name]
+                .stack(sample=["draw", "chain"])
+                .transpose("sample", ...)
+                .to_numpy()
+            )
 
             if values.ndim == 1:
                 values = values[:, None]

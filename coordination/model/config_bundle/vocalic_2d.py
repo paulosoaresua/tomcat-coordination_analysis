@@ -3,13 +3,8 @@ from typing import Any, Dict, List, Union
 
 import numpy as np
 
-from coordination.common.normalization import (
-    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
+from coordination.common.normalization import NORMALIZATION_PER_FEATURE
 from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.module.latent_component.serial_gaussian_latent_component import \
-    SerialGaussianLatentComponent, SerialGaussianLatentComponentSamples
-from coordination.metadata.metadata import Metadata
-from coordination.metadata.serial import SerialMetadata
 
 
 @dataclass
@@ -17,6 +12,7 @@ class Vocalic2DConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic model.
     """
+
     num_subjects: int = 3
     num_time_steps_in_coordination_scale: int = 100
 

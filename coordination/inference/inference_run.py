@@ -7,13 +7,13 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from coordination.common.config import settings
 from coordination.inference.inference_data import InferenceData
 from coordination.inference.model_variable import ModelVariableInfo
-from coordination.model.template import ModelTemplate
 from coordination.model.builder import ModelBuilder
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.config_bundle.mapper import DataMapper
-from coordination.common.config import settings
+from coordination.model.template import ModelTemplate
 
 
 class InferenceRun:
@@ -61,7 +61,9 @@ class InferenceRun:
         if self.execution_params is None:
             return None
 
-        bundle = type(self.config_bundle)(**self.execution_params["model_config_bundle"])
+        bundle = type(self.config_bundle)(
+            **self.execution_params["model_config_bundle"]
+        )
         return ModelBuilder.build_model(self.execution_params["model_name"], bundle)
 
     @property
@@ -126,7 +128,11 @@ class InferenceRun:
         if "experiment_ids" not in self.execution_params:
             # Older inference runs don't have this field. We use all the directory names under the
             # run as experiment ids.
-            return [d for d in os.listdir(self.run_dir) if os.path.isdir(f"{self.run_dir}/{d}")]
+            return [
+                d
+                for d in os.listdir(self.run_dir)
+                if os.path.isdir(f"{self.run_dir}/{d}")
+            ]
 
         return self.execution_params["experiment_ids"] if self.execution_params else []
 
@@ -151,9 +157,9 @@ class InferenceRun:
 
         return None
 
-    def get_inference_data(self,
-                           experiment_id: str,
-                           sub_experiment_id: Optional[str] = None) -> InferenceData:
+    def get_inference_data(
+        self, experiment_id: str, sub_experiment_id: Optional[str] = None
+    ) -> InferenceData:
         """
         Gets inference data of an experiment.
 
@@ -252,4 +258,6 @@ class InferenceRun:
         if not os.path.exists(exp_dir):
             return []
 
-        return sorted([d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")])
+        return sorted(
+            [d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")]
+        )

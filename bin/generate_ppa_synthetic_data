@@ -4,14 +4,14 @@ This script generates and saves .csv datasets for PPA validation on synthetic da
 instantiates the x-model and the c-model and generates samples from them. The data will be saved
 under data/ppa_synthetic.
 """
+import json
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from coordination.model.config_bundle.vocalic import VocalicConfigBundle
 from coordination.model.real.vocalic import VocalicModel
-import json
-import numpy as np
-import matplotlib.pyplot as plt
 
 T = 50
 N = 10

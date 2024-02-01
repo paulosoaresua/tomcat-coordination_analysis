@@ -51,7 +51,7 @@ class FNIRSModel(ModelTemplate):
                 pymc_model=self.pymc_model,
                 num_time_steps=self.config_bundle.num_time_steps_in_coordination_scale,
                 alpha=self.config_bundle.alpha,
-                beta=self.config_bundle.beta
+                beta=self.config_bundle.beta,
             )
         else:
             coordination = SigmoidGaussianCoordination(

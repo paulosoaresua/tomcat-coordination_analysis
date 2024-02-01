@@ -5,10 +5,6 @@ import numpy as np
 
 from coordination.common.normalization import NORMALIZATION_PER_FEATURE
 from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.module.latent_component.serial_gaussian_latent_component import \
-    SerialGaussianLatentComponent, SerialGaussianLatentComponentSamples
-from coordination.metadata.metadata import Metadata
-from coordination.metadata.serial import SerialMetadata
 
 
 @dataclass
@@ -16,6 +12,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     """
     Container for the different parameters of the vocalic model.
     """
+
     num_subjects: int = 3
     num_time_steps_in_coordination_scale: int = 100
 
@@ -75,10 +72,12 @@ class VocalicConfigBundle(ModelConfigBundle):
     #   space will be composed of 2 dimensions: position and speed.
     state_space_dimension_size: int = 4
     state_space_dimension_names: List[str] = field(
-        default_factory=lambda: ["latent_pitch",
-                                 "latent_intensity",
-                                 "latent_jitter",
-                                 "latent_shimmer"]
+        default_factory=lambda: [
+            "latent_pitch",
+            "latent_intensity",
+            "latent_jitter",
+            "latent_shimmer",
+        ]
     )
     num_vocalic_features: int = 4
     vocalic_feature_names: List[str] = field(

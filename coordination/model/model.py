@@ -32,7 +32,7 @@ class Model(Module):
         name: str,
         pymc_model: pm.Model,
         coordination: Coordination,
-        component_groups: List[ComponentGroup]
+        component_groups: List[ComponentGroup],
     ):
         """
         Creates a model instance.

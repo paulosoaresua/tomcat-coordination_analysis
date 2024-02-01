@@ -1,26 +1,13 @@
-from coordination.model.config_bundle.bundle import ModelConfigBundle
-from coordination.model.config_bundle.vocalic import (VocalicSemanticLinkConfigBundle,
-                                                      VocalicConfigBundle)
-from coordination.model.config_bundle.vocalic_2d import (
-    Vocalic2DSemanticLinkConfigBundle, Vocalic2DConfigBundle)
-from coordination.model.real.vocalic import VocalicModel
-from coordination.model.real.vocalic_2d import Vocalic2DModel
-from coordination.model.real.vocalic_2d_semantic_link import \
-    Vocalic2DSemanticLinkModel
-from coordination.model.real.vocalic_semantic_link import \
-    VocalicSemanticLinkModel
-from coordination.model.template import ModelTemplate
-from coordination.model.config_bundle.fnirs import FNIRSConfigBundle
-from coordination.model.real.fnirs import FNIRSModel
 from copy import deepcopy
 
-MODELS = {
-    "vocalic",
-    "vocalic_semantic",
-    "vocalic_2d",
-    "vocalic_2d_semantic",
-    "fnirs"
-}
+from coordination.model.config_bundle.bundle import ModelConfigBundle
+from coordination.model.config_bundle.fnirs import FNIRSConfigBundle
+from coordination.model.config_bundle.vocalic import VocalicConfigBundle
+from coordination.model.real.fnirs import FNIRSModel
+from coordination.model.real.vocalic import VocalicModel
+from coordination.model.template import ModelTemplate
+
+MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic", "fnirs"}
 
 
 class ModelBuilder:

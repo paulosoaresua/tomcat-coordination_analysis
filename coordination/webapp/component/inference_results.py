@@ -1,11 +1,11 @@
 import pandas as pd
 import streamlit as st
 
+from coordination.inference.inference_run import InferenceRun
+from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.component.inference_stats import InferenceStats
 from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
-from coordination.inference.inference_run import InferenceRun
-from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -16,12 +16,12 @@ class InferenceResults:
     """
 
     def __init__(
-            self,
-            component_key: str,
-            inference_run: InferenceRun,
-            experiment_id: str,
-            model_variable_info: ModelVariableInfo,
-            model_variable_dimension: str
+        self,
+        component_key: str,
+        inference_run: InferenceRun,
+        experiment_id: str,
+        model_variable_info: ModelVariableInfo,
+        model_variable_dimension: str,
     ):
         """
         Creates the component.
@@ -59,8 +59,9 @@ class InferenceResults:
                 options=self.inference_run.get_sub_experiment_ids(self.experiment_id),
             ).create()
             if sub_experiment_id:
-                idata = self.inference_run.get_inference_data(self.experiment_id,
-                                                              sub_experiment_id)
+                idata = self.inference_run.get_inference_data(
+                    self.experiment_id, sub_experiment_id
+                )
             else:
                 return
         else:
@@ -75,7 +76,7 @@ class InferenceResults:
                 self.inference_run.inference_dir,
                 self.inference_run.run_id,
                 self.experiment_id,
-                sub_experiment_id
+                sub_experiment_id,
             )
             inference_stats_component = InferenceStats(
                 component_key=f"{self.component_key}_inference_stats",
@@ -96,7 +97,7 @@ class InferenceResults:
                     self.inference_run.inference_dir,
                     self.inference_run.run_id,
                     self.experiment_id,
-                    sub_experiment_id
+                    sub_experiment_id,
                 )
                 st.write(ppa_results)
             else:
@@ -113,7 +114,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -131,8 +132,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-            inference_dir: str, run_id: str, experiment_id: str,
-            sub_experiment_id: str
+        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -162,7 +162,7 @@ class InferenceResults:
             idata=idata,
             window_size=inference_run.execution_params["ppa_window"],
             num_samples=100,
-            seed=0
+            seed=0,
         )
 
         return summary_df

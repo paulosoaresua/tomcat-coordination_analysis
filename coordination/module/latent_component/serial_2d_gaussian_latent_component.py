@@ -32,33 +32,33 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            coordination_samples: Optional[ModuleSamples] = None,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            mean_a0_random_variable: Optional[pm.Distribution] = None,
-            sd_a_random_variable: Optional[pm.Distribution] = None,
-            sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-            allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-            fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            subject_indices: Optional[np.ndarray] = None,
-            prev_time_same_subject: Optional[np.ndarray] = None,
-            prev_time_diff_subject: Optional[np.ndarray] = None,
-            observed_values: Optional[TensorTypes] = None,
-            mean_a0: Optional[Union[float, np.ndarray]] = None,
-            sd_a: Optional[Union[float, np.ndarray]] = None,
-            initial_samples: Optional[np.ndarray] = None
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+        allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+        fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        subject_indices: Optional[np.ndarray] = None,
+        prev_time_same_subject: Optional[np.ndarray] = None,
+        prev_time_diff_subject: Optional[np.ndarray] = None,
+        observed_values: Optional[TensorTypes] = None,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
+        initial_samples: Optional[np.ndarray] = None,
     ):
         """
         Creates a serial 2D Gaussian latent component.
@@ -149,19 +149,19 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             prev_time_diff_subject=prev_time_diff_subject,
             mean_a0=mean_a0,
             sd_a=sd_a,
-            initial_samples=initial_samples
+            initial_samples=initial_samples,
         )
 
     def _draw_from_system_dynamics(
-            self,
-            coordination_sampled_series: np.ndarray,
-            time_steps_in_coordination_scale: np.ndarray,
-            subjects_in_time: np.ndarray,
-            prev_time_same_subject: np.ndarray,
-            prev_time_diff_subject: np.ndarray,
-            mean_a0: np.ndarray,
-            sd_a: np.ndarray,
-            init_values: Optional[np.ndarray] = None
+        self,
+        coordination_sampled_series: np.ndarray,
+        time_steps_in_coordination_scale: np.ndarray,
+        subjects_in_time: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        mean_a0: np.ndarray,
+        sd_a: np.ndarray,
+        init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values with the following updating equations for the state of the component at time
@@ -270,16 +270,17 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
+
 def log_prob(
-        sample: ptt.TensorVariable,
-        initial_mean: ptt.TensorVariable,
-        sigma: ptt.TensorVariable,
-        coordination: ptt.TensorVariable,
-        prev_time_same_subject: ptt.TensorConstant,
-        prev_time_diff_subject: ptt.TensorConstant,
-        prev_same_subject_mask: ptt.TensorConstant,
-        prev_diff_subject_mask: ptt.TensorConstant,
-        self_dependent: ptt.TensorConstant,
+    sample: ptt.TensorVariable,
+    initial_mean: ptt.TensorVariable,
+    sigma: ptt.TensorVariable,
+    coordination: ptt.TensorVariable,
+    prev_time_same_subject: ptt.TensorConstant,
+    prev_time_diff_subject: ptt.TensorConstant,
+    prev_same_subject_mask: ptt.TensorConstant,
+    prev_diff_subject_mask: ptt.TensorConstant,
+    self_dependent: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -330,8 +331,10 @@ def log_prob(
     prev_same = prev_same * mask_same + (1 - mask_same) * initial_mean
 
     c = coordination * prev_diff_subject_mask
-    F = ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]]) - ptt.as_tensor(
-        [[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
+    F = (
+        ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]])
+        - ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
+    )
     U = ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
 
     # We transform the sample using the fundamental matrix so that we learn to generate samples
@@ -352,16 +355,16 @@ def log_prob(
 
 
 def random(
-        initial_mean: np.ndarray,
-        sigma: np.ndarray,
-        coordination: np.ndarray,
-        prev_time_same_subject: np.ndarray,
-        prev_time_diff_subject: np.ndarray,
-        prev_same_subject_mask: np.ndarray,
-        prev_diff_subject_mask: np.ndarray,
-        self_dependent: bool,
-        rng: Optional[np.random.Generator] = None,
-        size: Optional[Tuple[int]] = None,
+    initial_mean: np.ndarray,
+    sigma: np.ndarray,
+    coordination: np.ndarray,
+    prev_time_same_subject: np.ndarray,
+    prev_time_diff_subject: np.ndarray,
+    prev_same_subject_mask: np.ndarray,
+    prev_diff_subject_mask: np.ndarray,
+    self_dependent: bool,
+    rng: Optional[np.random.Generator] = None,
+    size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
     """
     Generates samples from of a serial latent component for prior predictive checks.

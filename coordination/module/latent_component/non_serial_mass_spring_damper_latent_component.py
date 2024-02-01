@@ -4,7 +4,6 @@ from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import pymc as pm
-import pytensor as pt
 import pytensor.tensor as ptt
 from scipy.linalg import expm
 from scipy.stats import norm
@@ -32,31 +31,31 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
     """
 
     def __init__(
-            self,
-            uuid: str,
-            pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
-            spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
-            mass: np.ndarray = DEFAULT_MASS,
-            dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
-            dt: float = DEFAULT_DT,
-            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-            coordination_samples: Optional[ModuleSamples] = None,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            mean_a0_random_variable: Optional[pm.Distribution] = None,
-            sd_a_random_variable: Optional[pm.Distribution] = None,
-            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            observed_values: Optional[TensorTypes] = None,
-            mean_a0: Optional[Union[float, np.ndarray]] = None,
-            sd_a: Optional[Union[float, np.ndarray]] = None,
+        self,
+        uuid: str,
+        pymc_model: pm.Model,
+        num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        spring_constant: np.ndarray = DEFAULT_SPRING_CONSTANT,
+        mass: np.ndarray = DEFAULT_MASS,
+        dampening_coefficient: np.ndarray = DEFAULT_DAMPENING_COEFFICIENT,
+        dt: float = DEFAULT_DT,
+        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
     ):
         """
         Creates a non-serial mass-spring-damper latent component.
@@ -162,7 +161,9 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
             raise ValueError(f"The dt ({dt}) must be a positive number.")
 
         if num_subjects > 2:
-            raise NotImplementedError("Dynamics not implemented for more than 2 masses yet.")
+            raise NotImplementedError(
+                "Dynamics not implemented for more than 2 masses yet."
+            )
 
         self.spring_constant = spring_constant
         self.mass = mass
@@ -186,11 +187,11 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
         self.F = np.concatenate(F, axis=0)
 
     def _draw_from_system_dynamics(
-            self,
-            sampled_coordination: np.ndarray,
-            time_steps_in_coordination_scale: np.ndarray,
-            mean_a0: np.ndarray,
-            sd_a: np.ndarray,
+        self,
+        sampled_coordination: np.ndarray,
+        time_steps_in_coordination_scale: np.ndarray,
+        mean_a0: np.ndarray,
+        sd_a: np.ndarray,
     ) -> np.ndarray:
         """
         Draws values from a mass-spring-damper system dynamics using the fundamental matrices.
@@ -233,7 +234,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
                 # n x 1 x 1
                 c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
                     :, None, None
-                    ]
+                ]
 
                 # Here, second-order differential equations that describe the dynamics of coupled
                 # oscillators with two masses are:
@@ -256,7 +257,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
                         [0, 1, 0, 0],
                         [9, -d_a, 9, 0],  # 9 is a placeholder
                         [0, 0, 0, 1],
-                        [9, 0, 9, -d_b]
+                        [9, 0, 9, -d_b],
                     ]
                 )[None, :].repeat(num_series, axis=0)
 
@@ -273,7 +274,8 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
                 # [x_a, v_a, x_b, v_b].
                 concatenated_state = values[..., t - 1].reshape((num_series, -1))
                 blended_mean = np.einsum("ijk,ik->ij", F, concatenated_state).reshape(
-                    (num_series, self.num_subjects, self.dimension_size))
+                    (num_series, self.num_subjects, self.dimension_size)
+                )
 
                 values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
 
@@ -291,12 +293,7 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
         # Template motion matrix. Sampled coordination will complement some cells during inference.
         A = np.array(
-            [
-                [0, 1, 0, 0],
-                [-f_a, -d_a, 9, 0],
-                [0, 0, 0, 1],
-                [9, 0, -f_b, -d_b]
-            ]
+            [[0, 1, 0, 0], [-f_a, -d_a, 9, 0], [0, 0, 0, 1], [9, 0, -f_b, -d_b]]
         )
         return A, self.dt
 
@@ -320,13 +317,13 @@ class NonSerialMassSpringDamperLatentComponent(NonSerialGaussianLatentComponent)
 
 
 def log_prob(
-        sample: ptt.TensorVariable,
-        initial_mean: ptt.TensorVariable,
-        sigma: ptt.TensorVariable,
-        coordination: ptt.TensorVariable,
-        self_dependent: ptt.TensorConstant,
-        A: ptt.TensorConstant,
-        dt: ptt.TensorConstant
+    sample: ptt.TensorVariable,
+    initial_mean: ptt.TensorVariable,
+    sigma: ptt.TensorVariable,
+    coordination: ptt.TensorVariable,
+    self_dependent: ptt.TensorConstant,
+    A: ptt.TensorConstant,
+    dt: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -381,8 +378,9 @@ def log_prob(
     # Flatten the last two dimensions to create the state vector
     # [x_a, v_a, x_b, v_b].
     concatenated_state = sample[..., :-1].reshape((-1, T - 1)).T  # T-1 x 4
-    blended_mean = ptt.batched_tensordot(F, concatenated_state, axes=[(2,), (1,)]).T.reshape(
-        (N, D, T - 1))
+    blended_mean = ptt.batched_tensordot(
+        F, concatenated_state, axes=[(2,), (1,)]
+    ).T.reshape((N, D, T - 1))
 
     # # Contains the sum of previous values of other subjects for each subject scaled by 1/(s-1).
     # # We discard the last value as that is not a previous value of any other.

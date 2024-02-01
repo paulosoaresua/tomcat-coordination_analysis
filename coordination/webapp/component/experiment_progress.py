@@ -1,13 +1,9 @@
-import json
-import os
-from typing import Dict, Optional
-
+import numpy as np
 import streamlit as st
 
 from coordination.inference.inference_run import InferenceRun
-from coordination.webapp.widget.progress_bar import ProgressBar
-from coordination.webapp.component.sub_experiment_progress import SubExperimentProgress
-import numpy as np
+from coordination.webapp.component.sub_experiment_progress import \
+    SubExperimentProgress
 
 
 class ExperimentProgress:
@@ -18,9 +14,13 @@ class ExperimentProgress:
     create_component to update its content.
     """
 
-    def __init__(self, inference_run: InferenceRun, experiment_id: str,
-                 display_experiment_progress: bool = True,
-                 display_sub_experiment_progress: bool = True):
+    def __init__(
+        self,
+        inference_run: InferenceRun,
+        experiment_id: str,
+        display_experiment_progress: bool = True,
+        display_sub_experiment_progress: bool = True,
+    ):
         """
         Creates the component.
 
@@ -91,12 +91,16 @@ class ExperimentProgress:
         all_status = set()
         all_divergences = []
         if self.inference_run.ppa:
-            for sub_exp_id in self.inference_run.get_sub_experiment_ids(self.experiment_id):
+            for sub_exp_id in self.inference_run.get_sub_experiment_ids(
+                self.experiment_id
+            ):
                 sub_experiment_progress = SubExperimentProgress(
                     self.inference_run,
                     self.experiment_id,
                     sub_exp_id,
-                    self.display_sub_experiment_progress and self.display_experiment_progress)
+                    self.display_sub_experiment_progress
+                    and self.display_experiment_progress,
+                )
                 sub_experiment_progress.create_component()
                 all_status.add(sub_experiment_progress.status_)
                 all_divergences.append(sub_experiment_progress.total_num_divergences_)
@@ -107,7 +111,8 @@ class ExperimentProgress:
             sub_experiment_progress = SubExperimentProgress(
                 self.inference_run,
                 self.experiment_id,
-                display_sub_experiment_progress=self.display_experiment_progress)
+                display_sub_experiment_progress=self.display_experiment_progress,
+            )
             sub_experiment_progress.create_component()
             all_status.add(sub_experiment_progress.status_)
             self.total_num_divergences_ = sub_experiment_progress.total_num_divergences_

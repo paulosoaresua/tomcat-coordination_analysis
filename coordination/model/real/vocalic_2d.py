@@ -1,13 +1,19 @@
+import logging
+from copy import deepcopy
 from typing import Optional
 
 import numpy as np
 import pymc as pm
-import logging
 
+from coordination.common.constants import DEFAULT_SEED
+from coordination.inference.inference_data import InferenceData
+from coordination.metadata.serial import SerialMetadata
 from coordination.model.config_bundle.vocalic_2d import Vocalic2DConfigBundle
 from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
+from coordination.module.coordination.constant_coordination import \
+    ConstantCoordination
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
 from coordination.module.latent_component.serial_2d_gaussian_latent_component import \
@@ -18,11 +24,6 @@ from coordination.module.transformation.dimension_reduction import \
     DimensionReduction
 from coordination.module.transformation.mlp import MLP
 from coordination.module.transformation.sequential import Sequential
-from coordination.module.coordination.constant_coordination import ConstantCoordination
-from copy import deepcopy
-from coordination.common.constants import DEFAULT_SEED
-from coordination.inference.inference_data import InferenceData
-from coordination.metadata.serial import SerialMetadata
 
 
 class Vocalic2DModel(ModelTemplate):
@@ -33,9 +34,9 @@ class Vocalic2DModel(ModelTemplate):
     """
 
     def __init__(
-            self,
-            config_bundle: Vocalic2DConfigBundle,
-            pymc_model: Optional[pm.Model] = None,
+        self,
+        config_bundle: Vocalic2DConfigBundle,
+        pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a vocalic model.
@@ -61,7 +62,7 @@ class Vocalic2DModel(ModelTemplate):
             prev_time_same_subject=self.config_bundle.prev_time_same_subject,
             prev_time_diff_subject=self.config_bundle.prev_time_diff_subject,
             observed_values=self.config_bundle.observed_values,
-            normalization_method=self.config_bundle.observation_normalization
+            normalization_method=self.config_bundle.observation_normalization,
         )
 
     def _create_model_from_config_bundle(self):
@@ -80,7 +81,7 @@ class Vocalic2DModel(ModelTemplate):
                 num_time_steps=bundle.num_time_steps_in_coordination_scale,
                 alpha_c=bundle.alpha,
                 beta_c=bundle.beta,
-                initial_samples=bundle.unbounded_coordination_posterior_samples
+                initial_samples=bundle.unbounded_coordination_posterior_samples,
             )
         else:
             coordination = SigmoidGaussianCoordination(
@@ -91,7 +92,7 @@ class Vocalic2DModel(ModelTemplate):
                 sd_sd_uc=bundle.sd_sd_uc,
                 mean_uc0=bundle.mean_uc0,
                 sd_uc=bundle.sd_uc,
-                initial_samples=bundle.unbounded_coordination_posterior_samples
+                initial_samples=bundle.unbounded_coordination_posterior_samples,
             )
 
         vocalic_groups = bundle.vocalic_groups
@@ -114,18 +115,20 @@ class Vocalic2DModel(ModelTemplate):
                 for feature in vocalic_group["features"]
             ]
             # TODO: new
-            observed_values = np.take_along_axis(
-                vocalic_metadata.normalized_observations,
-                indices=np.array(feature_idx, dtype=int)[:, None],
-                axis=0,
-            ) if bundle.observed_values is not None else None
+            observed_values = (
+                np.take_along_axis(
+                    vocalic_metadata.normalized_observations,
+                    indices=np.array(feature_idx, dtype=int)[:, None],
+                    axis=0,
+                )
+                if bundle.observed_values is not None
+                else None
+            )
 
             # For retro-compatibility, we only add suffix if groups were defined.
 
             group_name = vocalic_group["name"]
-            suffix = (
-                "" if bundle.vocalic_groups is None else f"_{group_name}"
-            )
+            suffix = "" if bundle.vocalic_groups is None else f"_{group_name}"
             state_space = Serial2DGaussianLatentComponent(
                 uuid=f"state_space{suffix}",
                 pymc_model=self.pymc_model,
@@ -151,7 +154,7 @@ class Vocalic2DModel(ModelTemplate):
                 subject_indices=vocalic_metadata.subject_indices,
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
-                initial_samples=bundle.state_space_posterior_samples
+                initial_samples=bundle.state_space_posterior_samples,
             )
 
             transformation = Sequential(
@@ -208,8 +211,8 @@ class Vocalic2DModel(ModelTemplate):
         )
 
     def new_config_bundle_from_time_step_info(
-            self,
-            config_bundle: Vocalic2DConfigBundle) -> Vocalic2DConfigBundle:
+        self, config_bundle: Vocalic2DConfigBundle
+    ) -> Vocalic2DConfigBundle:
         """
         Gets a new config bundle with metadata and observed values adapted to the number of time
         steps in coordination scale in case we don't want to fit just a portion of the time series.
@@ -225,19 +228,22 @@ class Vocalic2DModel(ModelTemplate):
                 # So, we adjust the number of time steps in the coordination scale to match the
                 # vocalics latent component scale.
                 new_bundle.num_time_steps_in_coordination_scale = len(
-                    config_bundle.time_steps_in_coordination_scale)
-                new_bundle.time_steps_in_coordination_scale = np.arange(len(
-                    config_bundle.time_steps_in_coordination_scale))
+                    config_bundle.time_steps_in_coordination_scale
+                )
+                new_bundle.time_steps_in_coordination_scale = np.arange(
+                    len(config_bundle.time_steps_in_coordination_scale)
+                )
 
         new_bundle = super().new_config_bundle_from_time_step_info(new_bundle)
         return new_bundle
 
     def new_config_bundle_from_posterior_samples(
-            self,
-            config_bundle: Vocalic2DConfigBundle,
-            idata: InferenceData,
-            num_samples: int,
-            seed: int = DEFAULT_SEED) -> Vocalic2DConfigBundle:
+        self,
+        config_bundle: Vocalic2DConfigBundle,
+        idata: InferenceData,
+        num_samples: int,
+        seed: int = DEFAULT_SEED,
+    ) -> Vocalic2DConfigBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
         posterior in the last time step as initial values for the latent variables. This
@@ -252,23 +258,35 @@ class Vocalic2DModel(ModelTemplate):
         new_bundle = deepcopy(config_bundle)
 
         np.random.seed(seed)
-        samples_idx = np.random.choice(idata.num_posterior_samples, num_samples, replace=False)
+        samples_idx = np.random.choice(
+            idata.num_posterior_samples, num_samples, replace=False
+        )
 
-        new_bundle.mean_a0 = idata.get_posterior_samples("state_space_mean_a0", samples_idx)
+        new_bundle.mean_a0 = idata.get_posterior_samples(
+            "state_space_mean_a0", samples_idx
+        )
         new_bundle.sd_a = idata.get_posterior_samples("state_space_sd_a", samples_idx)
-        new_bundle.sd_o = idata.get_posterior_samples("speech_vocalics_sd_o", samples_idx)
+        new_bundle.sd_o = idata.get_posterior_samples(
+            "speech_vocalics_sd_o", samples_idx
+        )
 
         if config_bundle.constant_coordination:
-            new_bundle.initial_coordination_samples = (idata.get_posterior_samples(
-                "coordination", samples_idx))
+            new_bundle.initial_coordination_samples = idata.get_posterior_samples(
+                "coordination", samples_idx
+            )
         else:
             new_bundle.mean_uc0 = idata.get_posterior_samples("coordination_mean_uc0")[
-                samples_idx]
-            new_bundle.sd_uc = idata.get_posterior_samples("coordination_sd_uc", samples_idx)
-            new_bundle.initial_coordination_samples = (
-                idata.get_posterior_samples("coordination", samples_idx))
+                samples_idx
+            ]
+            new_bundle.sd_uc = idata.get_posterior_samples(
+                "coordination_sd_uc", samples_idx
+            )
+            new_bundle.initial_coordination_samples = idata.get_posterior_samples(
+                "coordination", samples_idx
+            )
 
-        new_bundle.state_space_posterior_samples = (
-            idata.get_posterior_samples("state_space", samples_idx))
+        new_bundle.state_space_posterior_samples = idata.get_posterior_samples(
+            "state_space", samples_idx
+        )
 
         return new_bundle

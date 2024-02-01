@@ -1,28 +1,19 @@
+from copy import deepcopy
 from typing import Optional
 
+import numpy as np
 import pymc as pm
 
-from coordination.model.config_bundle.vocalic import \
-    VocalicSemanticLinkConfigBundle
-from coordination.model.model import Model
-from coordination.model.template import ModelTemplate
-from coordination.module.component_group import ComponentGroup
-from coordination.module.coordination.sigmoid_gaussian_coordination import \
-    SigmoidGaussianCoordination
-from coordination.module.latent_component.null_latent_component import \
-    NullLatentComponent
-from coordination.module.latent_component.serial_gaussian_latent_component import \
-    SerialGaussianLatentComponent
-from coordination.module.observation.serial_gaussian_observation import \
-    SerialGaussianObservation
-from coordination.module.observation.spike_observation import SpikeObservation
-from coordination.module.transformation.mlp import MLP
-from coordination.model.real.vocalic import VocalicModel
-from coordination.metadata.non_serial import NonSerialMetadata
-from copy import deepcopy
-import numpy as np
 from coordination.common.constants import DEFAULT_SEED
 from coordination.inference.inference_data import InferenceData
+from coordination.metadata.non_serial import NonSerialMetadata
+from coordination.model.config_bundle.vocalic import \
+    VocalicSemanticLinkConfigBundle
+from coordination.model.real.vocalic import VocalicModel
+from coordination.module.component_group import ComponentGroup
+from coordination.module.latent_component.null_latent_component import \
+    NullLatentComponent
+from coordination.module.observation.spike_observation import SpikeObservation
 
 
 class VocalicSemanticLinkModel(VocalicModel):
@@ -33,9 +24,9 @@ class VocalicSemanticLinkModel(VocalicModel):
     """
 
     def __init__(
-            self,
-            config_bundle: VocalicSemanticLinkConfigBundle,
-            pymc_model: Optional[pm.Model] = None,
+        self,
+        config_bundle: VocalicSemanticLinkConfigBundle,
+        pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a vocalic + semantic link model.
@@ -59,13 +50,15 @@ class VocalicSemanticLinkModel(VocalicModel):
         if "semantic_link" in self.metadata:
             metadata: NonSerialMetadata = self.metadata["semantic_link"]
             metadata.time_steps_in_coordination_scale = (
-                config_bundle.semantic_link_time_steps_in_coordination_scale)
+                config_bundle.semantic_link_time_steps_in_coordination_scale
+            )
         else:
             self.metadata["semantic_link"] = NonSerialMetadata(
                 time_steps_in_coordination_scale=(
-                    config_bundle.semantic_link_time_steps_in_coordination_scale),
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                ),
                 observed_values=None,
-                normalization_method=None
+                normalization_method=None,
             )
 
     def _create_model_from_config_bundle(self):
@@ -78,8 +71,11 @@ class VocalicSemanticLinkModel(VocalicModel):
         self._model.uuid = "vocalic_semantic_link_model"
 
         semantic_link_metadata = self.metadata.get("semantic_link", None)
-        if semantic_link_metadata and semantic_link_metadata.time_steps_in_coordination_scale is \
-                not None and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0:
+        if (
+            semantic_link_metadata
+            and semantic_link_metadata.time_steps_in_coordination_scale is not None
+            and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0
+        ):
             # We only add the semantic link module if there's evidence.
 
             bundle = self._get_adjusted_bundle()
@@ -122,30 +118,40 @@ class VocalicSemanticLinkModel(VocalicModel):
 
                 # We adjust the number of time steps in coordination scale to match that.
                 bundle.num_time_steps_in_coordination_scale = len(
-                    self.config_bundle.time_steps_in_coordination_scale)
+                    self.config_bundle.time_steps_in_coordination_scale
+                )
 
                 # Now the time steps of the vocalics won't have any gaps. They will be 0,1,2,...,n,
                 # where n is the number of observations.
                 bundle.time_steps_in_coordination_scale = np.arange(
-                    len(self.config_bundle.time_steps_in_coordination_scale))
+                    len(self.config_bundle.time_steps_in_coordination_scale)
+                )
 
                 # Map each one of the semantic lint time step to the new scale. We can do this
                 # because the time steps with semantic link is a subset of the time steps with
                 # vocalics.
-                time_mapping = {t: new_t for new_t, t in
-                                enumerate(self.config_bundle.time_steps_in_coordination_scale)}
+                time_mapping = {
+                    t: new_t
+                    for new_t, t in enumerate(
+                        self.config_bundle.time_steps_in_coordination_scale
+                    )
+                }
                 for i, t in enumerate(
-                        self.config_bundle.semantic_link_time_steps_in_coordination_scale):
-                    bundle.semantic_link_time_steps_in_coordination_scale[i] = time_mapping[t]
+                    self.config_bundle.semantic_link_time_steps_in_coordination_scale
+                ):
+                    bundle.semantic_link_time_steps_in_coordination_scale[
+                        i
+                    ] = time_mapping[t]
 
         return self.new_config_bundle_from_time_step_info(bundle)
 
     def new_config_bundle_from_posterior_samples(
-            self,
-            config_bundle: VocalicSemanticLinkConfigBundle,
-            idata: InferenceData,
-            num_samples: int,
-            seed: int = DEFAULT_SEED) -> VocalicSemanticLinkConfigBundle:
+        self,
+        config_bundle: VocalicSemanticLinkConfigBundle,
+        idata: InferenceData,
+        num_samples: int,
+        seed: int = DEFAULT_SEED,
+    ) -> VocalicSemanticLinkConfigBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
         posterior in the last time step as initial values for the latent variables. This
@@ -157,8 +163,9 @@ class VocalicSemanticLinkModel(VocalicModel):
             randomly from the posterior samples.
         @param seed: random seed for reproducibility when choosing the samples to keep.
         """
-        new_bundle = super().new_config_bundle_from_posterior_samples(config_bundle, idata,
-                                                                      num_samples, seed)
+        new_bundle = super().new_config_bundle_from_posterior_samples(
+            config_bundle, idata, num_samples, seed
+        )
         new_bundle = VocalicSemanticLinkConfigBundle(**new_bundle.__dict__)
         new_bundle.p = idata.get_posterior_samples("semantic_link_p", samples_idx)
 

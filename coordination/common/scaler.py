@@ -1,6 +1,7 @@
 import numpy as np
-from coordination.common.normalization import (NORMALIZATION_PER_SUBJECT_AND_FEATURE,
-                                               NORMALIZATION_PER_FEATURE)
+
+from coordination.common.normalization import (
+    NORMALIZATION_PER_FEATURE, NORMALIZATION_PER_SUBJECT_AND_FEATURE)
 
 
 class Scaler:
@@ -37,8 +38,6 @@ class Scaler:
             self._mean = np.mean(X, axis=-1, keepdims=True)  # mean across time
             self._std = np.std(X, axis=-1, keepdims=True)
 
-        raise ValueError(f"Normalization ({method}) is invalid.")
-
     def transform(self, X: np.ndarray) -> np.ndarray:
         """
         Transforms the data with the stored mean and standard deviation from a previous fit.
@@ -70,7 +69,12 @@ class SerialScaler(Scaler):
         self._mean = None
         self._std = None
 
-    def fit(self, X: np.ndarray, subject_indices: np.ndarray = None, num_subjects: int = None):
+    def fit(
+        self,
+        X: np.ndarray,
+        subject_indices: np.ndarray = None,
+        num_subjects: int = None,
+    ):
         """
         Fits the data by computing and storing means and standard deviation.
 
@@ -93,12 +97,16 @@ class SerialScaler(Scaler):
             self._std = np.zeros((num_subjects, X.shape[0]))
             for subject in range(num_subjects):
                 # Get values for a specific subject across time.
-                idx = np.array(subject_indices[:X.shape[-1]]) == subject
+                idx = np.array(subject_indices[: X.shape[-1]]) == subject
                 data_per_subject = np.array(X)[:, idx]
-                self._mean[subject] = np.mean(data_per_subject, axis=-1)  # mean across time
+                self._mean[subject] = np.mean(
+                    data_per_subject, axis=-1
+                )  # mean across time
                 self._std[subject] = np.std(data_per_subject, axis=-1)
 
-    def transform(self, X: np.ndarray, subject_indices: np.ndarray = None) -> np.ndarray:
+    def transform(
+        self, X: np.ndarray, subject_indices: np.ndarray = None
+    ) -> np.ndarray:
         """
         Transforms the data with the stored mean and standard deviation from a previous fit.
 

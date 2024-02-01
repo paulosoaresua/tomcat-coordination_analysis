@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC
 from typing import Optional
 
@@ -8,7 +9,6 @@ import pymc as pm
 from coordination.module.latent_component.latent_component import \
     LatentComponent
 from coordination.module.module import ModuleSamples
-import logging
 
 
 class NullLatentComponent(LatentComponent, ABC):

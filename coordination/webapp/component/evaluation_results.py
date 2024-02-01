@@ -3,8 +3,8 @@ import os
 import pandas as pd
 import streamlit as st
 
-from coordination.webapp.constants import EVALUATIONS_DIR
 from coordination.inference.inference_run import InferenceRun
+from coordination.webapp.constants import EVALUATIONS_DIR
 
 
 class EvaluationResults:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
@@ -22,7 +23,6 @@ from coordination.module.latent_component.gaussian_latent_component import \
 from coordination.module.latent_component.latent_component import \
     LatentComponentSamples
 from coordination.module.module import ModuleSamples
-import logging
 
 
 class NonSerialGaussianLatentComponent(GaussianLatentComponent):
@@ -57,7 +57,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         observed_values: Optional[TensorTypes] = None,
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
-            initial_samples: Optional[np.ndarray] = None
+        initial_samples: Optional[np.ndarray] = None,
     ):
         """
         Creates a non-serial latent component.
@@ -200,14 +200,18 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         if self.initial_samples is None:
             num_time_steps_in_cpn_scale = int(
-                self.coordination_samples.num_time_steps / self.sampling_relative_frequency
+                self.coordination_samples.num_time_steps
+                / self.sampling_relative_frequency
             )
 
             time_steps_in_coordination_scale = (
-                np.arange(num_time_steps_in_cpn_scale) * self.sampling_relative_frequency
+                np.arange(num_time_steps_in_cpn_scale)
+                * self.sampling_relative_frequency
             ).astype(int)
         else:
-            time_steps_in_coordination_scale = [self.time_steps_in_coordination_scale] * num_series
+            time_steps_in_coordination_scale = [
+                self.time_steps_in_coordination_scale
+            ] * num_series
 
         # Draw values from the system dynamics. The default model generates samples by following a
         # Gaussian random walk with blended values from different subjects according to the
@@ -218,7 +222,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             mean_a0=mean_a0,
             sd_a=sd_a,
-            init_values=None if self.initial_samples is None else self.initial_samples
+            init_values=None if self.initial_samples is None else self.initial_samples,
         )
 
         return LatentComponentSamples(
@@ -234,7 +238,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         time_steps_in_coordination_scale: np.ndarray,
         mean_a0: np.ndarray,
         sd_a: np.ndarray,
-            init_values: Optional[np.ndarray] = None
+        init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default non serial component generates samples
@@ -322,8 +326,10 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         if self.latent_component_random_variable is not None:
             return
 
-        logging.info(f"Fitting {self.__class__.__name__} with "
-                     f"{len(self.time_steps_in_coordination_scale)} time steps.")
+        logging.info(
+            f"Fitting {self.__class__.__name__} with "
+            f"{len(self.time_steps_in_coordination_scale)} time steps."
+        )
 
         log_prob_params = (
             mean_a0,

@@ -19,23 +19,18 @@ import pandas as pd
 
 from coordination.callback.progress_saver_callback import ProgressSaverCallback
 from coordination.common.config import settings
-from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
-                                           DEFAULT_NUM_JOBS_PER_INFERENCE,
-                                           DEFAULT_NUM_SAMPLES,
-                                           DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_PROGRESS_SAVING_FREQUENCY,
-                                           DEFAULT_SEED,
-                                           DEFAULT_TARGET_ACCEPT,
-                                           DEFAULT_NUM_TIME_POINTS_FOR_PPA,
-                                           DEFAULT_PPA_WINDOW,
-                                           MAX_NUM_INFERENCE_RETRIES,
-                                           MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY,
-                                           MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY)
+from coordination.common.constants import (
+    DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS, DEFAULT_NUM_JOBS_PER_INFERENCE,
+    DEFAULT_NUM_SAMPLES, DEFAULT_NUM_TIME_POINTS_FOR_PPA,
+    DEFAULT_NUTS_INIT_METHOD, DEFAULT_PPA_WINDOW,
+    DEFAULT_PROGRESS_SAVING_FREQUENCY, DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
+    MAX_NUM_INFERENCE_RETRIES, MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY,
+    MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY)
 from coordination.common.log import configure_log
+from coordination.inference.inference_data import InferenceData
 from coordination.model.builder import MODELS, ModelBuilder
 from coordination.model.config_bundle.mapper import DataMapper
 from coordination.model.template import ModelTemplate
-from coordination.inference.inference_data import InferenceData
 
 # PyMC 5.0.2 prints some warnings when we use GaussianRandomWalk. The snippet below silences them.
 if not sys.warnoptions:

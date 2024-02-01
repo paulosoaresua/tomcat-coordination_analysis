@@ -6,6 +6,7 @@ import pymc as pm
 from coordination.common.utils import adjust_dimensions
 from coordination.model.config_bundle.conversation import \
     ConversationConfigBundle
+from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
@@ -15,7 +16,6 @@ from coordination.module.latent_component.serial_mass_spring_damper_latent_compo
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
 from coordination.module.transformation.mlp import MLP
-from coordination.model.model import Model
 
 
 class ConversationModel(ModelTemplate):
@@ -69,7 +69,8 @@ class ConversationModel(ModelTemplate):
             ),
             mass=np.ones(self.config_bundle.num_subjects),
             dampening_coefficient=adjust_dimensions(
-                self.config_bundle.dampening_coefficient, num_rows=self.config_bundle.num_subjects
+                self.config_bundle.dampening_coefficient,
+                num_rows=self.config_bundle.num_subjects,
             ),
             dt=self.config_bundle.time_step_size_in_seconds,
             mean_mean_a0=self.config_bundle.mean_mean_a0,
@@ -131,9 +132,7 @@ class ConversationModel(ModelTemplate):
             pymc_model=self.pymc_model,
             latent_component=state_space,
             observations=[observation],
-            transformations=[transformation]
-            if transformation is not None
-            else None,
+            transformations=[transformation] if transformation is not None else None,
         )
 
         self._model = Model(
@@ -141,5 +140,5 @@ class ConversationModel(ModelTemplate):
             pymc_model=self.pymc_model,
             coordination=coordination,
             component_groups=[group],
-            coordination_samples=self.config_bundle.coordination_samples
+            coordination_samples=self.config_bundle.coordination_samples,
         )

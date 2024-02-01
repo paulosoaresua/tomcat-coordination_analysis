@@ -5,12 +5,12 @@ import pandas as pd
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
+from scipy.signal import find_peaks
 
+from coordination.common.functions import mean_at_peaks, peaks_count
 from coordination.inference.inference_data import InferenceData
 from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
                                            DEFAULT_PLOT_MARGINS)
-from coordination.common.functions import (mean_at_peaks, peaks_count)
-from scipy.signal import find_peaks
 
 
 class InferenceStats:
@@ -19,10 +19,10 @@ class InferenceStats:
     """
 
     def __init__(
-            self,
-            component_key: str,
-            inference_data: InferenceData,
-            convergence_report: pd.DataFrame,
+        self,
+        component_key: str,
+        inference_data: InferenceData,
+        convergence_report: pd.DataFrame,
     ):
         """
         Creates the component.
@@ -46,11 +46,15 @@ class InferenceStats:
 
         st.write("#### Model stats")
         st.write("**Divergences**")
-        p_divergence = (100.0 * self.inference_data.num_divergences /
-                        self.inference_data.num_posterior_samples)
+        p_divergence = (
+            100.0
+            * self.inference_data.num_divergences
+            / self.inference_data.num_posterior_samples
+        )
         st.write(
             f"{self.inference_data.num_divergences} out of "
-            f"{self.inference_data.num_posterior_samples} ({p_divergence:.1f}%)")
+            f"{self.inference_data.num_posterior_samples} ({p_divergence:.1f}%)"
+        )
 
         st.write("**Convergence**")
         st.dataframe(self.convergence_report, use_container_width=True)
@@ -68,20 +72,22 @@ class InferenceStats:
         st.write(
             "*:blue[Statistics computed over the mean posterior coordination per time step.]*"
         )
-        stats_df = pd.DataFrame([
-            {
-                "Mean": f"{means.mean():.4f}",
-                "Mean at Peaks (5s)": f"{mean_at_peaks(means, 5):.4f}",
-                "#Peaks (5s)": f"{peaks_count(means, 5):.4f}",
-                "Median": f"{np.median(means):.4f}",
-                "Std": f"{means.std():.4f}",
-                "Signal-to-Noise": f"{np.mean(means) / np.std(means):.4f}",
-                "Mean Last 5": f"{np.mean(means[-5:]):.4f}",
-                "Mean Last 10": f"{np.mean(means[-10:]):.4f}",
-                "Mean First Half": f"{np.mean(means[:int(len(means) / 2)]):.4f}",
-                "Mean Second Half": f"{np.mean(means[int(len(means) / 2):]):.4f}",
-            }
-        ])
+        stats_df = pd.DataFrame(
+            [
+                {
+                    "Mean": f"{means.mean():.4f}",
+                    "Mean at Peaks (5s)": f"{mean_at_peaks(means, 5):.4f}",
+                    "#Peaks (5s)": f"{peaks_count(means, 5):.4f}",
+                    "Median": f"{np.median(means):.4f}",
+                    "Std": f"{means.std():.4f}",
+                    "Signal-to-Noise": f"{np.mean(means) / np.std(means):.4f}",
+                    "Mean Last 5": f"{np.mean(means[-5:]):.4f}",
+                    "Mean Last 10": f"{np.mean(means[-10:]):.4f}",
+                    "Mean First Half": f"{np.mean(means[:int(len(means) / 2)]):.4f}",
+                    "Mean Second Half": f"{np.mean(means[int(len(means) / 2):]):.4f}",
+                }
+            ]
+        )
         st.dataframe(stats_df)
         peak_points = ", ".join(map(str, find_peaks(means, width=5)[0]))
         st.write(f"Peak Points (5s): {peak_points}")
@@ -105,7 +111,11 @@ class InferenceStats:
 
         # Add combination of all chains
         coordination = np.concatenate(
-            [coordination_per_chain.mean(axis=0, keepdims=True), coordination_per_chain], axis=0
+            [
+                coordination_per_chain.mean(axis=0, keepdims=True),
+                coordination_per_chain,
+            ],
+            axis=0,
         )
         colors = [next(color_palette_iter) for _ in range(coordination.shape[0])]
         labels = ["All chains"] + [
@@ -131,7 +141,6 @@ class InferenceStats:
         except Exception:
             # Constant coordination has no histogram.
             st.write(":blue[Coordination is constant is some chains.]")
-            pass
 
     def _plot_log_probability_distribution(self):
         """

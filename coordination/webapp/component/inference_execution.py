@@ -13,9 +13,10 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_NUM_INFERENCE_JOBS,
                                            DEFAULT_NUM_JOBS_PER_INFERENCE,
                                            DEFAULT_NUM_SAMPLES,
+                                           DEFAULT_NUM_TIME_POINTS_FOR_PPA,
                                            DEFAULT_NUTS_INIT_METHOD,
-                                           DEFAULT_SEED, DEFAULT_TARGET_ACCEPT, DEFAULT_PPA_WINDOW,
-                                           DEFAULT_NUM_TIME_POINTS_FOR_PPA)
+                                           DEFAULT_PPA_WINDOW, DEFAULT_SEED,
+                                           DEFAULT_TARGET_ACCEPT)
 from coordination.model.builder import MODELS
 from coordination.model.config_bundle.mapper import DataMapper
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
@@ -195,14 +196,17 @@ class InferenceExecution:
                     execution_params["num_time_points_ppa"] = st.number_input(
                         label="Number of Points for PPA",
                         key=f"{self.component_key}_num_time_points_ppa",
-                        value=default_execution_params.get("num_time_points_ppa",
-                                                           DEFAULT_NUM_TIME_POINTS_FOR_PPA),
+                        value=default_execution_params.get(
+                            "num_time_points_ppa", DEFAULT_NUM_TIME_POINTS_FOR_PPA
+                        ),
                     )
                 with col_ppa2:
                     execution_params["ppa_window"] = st.number_input(
                         label="Window Size for PPA",
                         key=f"{self.component_key}_ppa_window",
-                        value=default_execution_params.get("ppa_window", DEFAULT_PPA_WINDOW),
+                        value=default_execution_params.get(
+                            "ppa_window", DEFAULT_PPA_WINDOW
+                        ),
                     )
 
         with tab2:
@@ -342,8 +346,8 @@ class InferenceExecution:
         """
 
         if st.button(
-                label="Run Inference",
-                disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
+            label="Run Inference",
+            disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
         ):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.
@@ -385,7 +389,9 @@ class InferenceExecution:
                 f'--do_ppa={1 if execution_params["do_ppa"] else 0}'
             )
             if "num_time_points_ppa" in execution_params:
-                command += f' --num_time_points_ppa={execution_params["num_time_points_ppa"]}'
+                command += (
+                    f' --num_time_points_ppa={execution_params["num_time_points_ppa"]}'
+                )
             if "num_time_points_ppa" in execution_params:
                 command += f' --ppa_window={execution_params["ppa_window"]}'
 

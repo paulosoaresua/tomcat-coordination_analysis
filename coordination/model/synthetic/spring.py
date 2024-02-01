@@ -4,6 +4,7 @@ import pymc as pm
 
 from coordination.common.utils import adjust_dimensions
 from coordination.model.config_bundle.spring import SpringConfigBundle
+from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
 from coordination.module.component_group import ComponentGroup
 from coordination.module.coordination.sigmoid_gaussian_coordination import \
@@ -13,7 +14,6 @@ from coordination.module.latent_component.non_serial_mass_spring_damper_latent_c
 from coordination.module.observation.non_serial_gaussian_observation import \
     NonSerialGaussianObservation
 from coordination.module.transformation.mlp import MLP
-from coordination.model.model import Model
 
 
 class SpringModel(ModelTemplate):
@@ -28,9 +28,9 @@ class SpringModel(ModelTemplate):
     """
 
     def __init__(
-            self,
-            config_bundle: SpringConfigBundle,
-            pymc_model: Optional[pm.Model] = None,
+        self,
+        config_bundle: SpringConfigBundle,
+        pymc_model: Optional[pm.Model] = None,
     ):
         """
         Creates a conversation model.
@@ -63,13 +63,15 @@ class SpringModel(ModelTemplate):
             pymc_model=self.pymc_model,
             num_subjects=self.config_bundle.num_springs,
             spring_constant=adjust_dimensions(
-                self.config_bundle.spring_constant, num_rows=self.config_bundle.num_springs
+                self.config_bundle.spring_constant,
+                num_rows=self.config_bundle.num_springs,
             ),
             mass=adjust_dimensions(
                 self.config_bundle.mass, num_rows=self.config_bundle.num_springs
             ),
             dampening_coefficient=adjust_dimensions(
-                self.config_bundle.dampening_coefficient, num_rows=self.config_bundle.num_springs
+                self.config_bundle.dampening_coefficient,
+                num_rows=self.config_bundle.num_springs,
             ),
             dt=self.config_bundle.time_step_size_in_seconds,
             mean_mean_a0=self.config_bundle.mean_mean_a0,
@@ -84,7 +86,7 @@ class SpringModel(ModelTemplate):
                 self.config_bundle.time_steps_in_coordination_scale
             ),
             mean_a0=self.config_bundle.mean_a0,
-            sd_a=self.config_bundle.sd_a
+            sd_a=self.config_bundle.sd_a,
         )
 
         transformation = None
@@ -123,9 +125,7 @@ class SpringModel(ModelTemplate):
             pymc_model=self.pymc_model,
             latent_component=state_space,
             observations=[observation],
-            transformations=[transformation]
-            if transformation is not None
-            else None,
+            transformations=[transformation] if transformation is not None else None,
         )
 
         self._model = Model(
@@ -133,5 +133,5 @@ class SpringModel(ModelTemplate):
             pymc_model=self.pymc_model,
             coordination=coordination,
             component_groups=[group],
-            coordination_samples=self.config_bundle.coordination_samples
+            coordination_samples=self.config_bundle.coordination_samples,
         )

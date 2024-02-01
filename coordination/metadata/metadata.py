@@ -1,7 +1,7 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Optional, Tuple
+
+from abc import abstractmethod
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -14,10 +14,11 @@ class Metadata:
     """
 
     def __init__(
-            self,
-            time_steps_in_coordination_scale: np.array,
-            observed_values: np.ndarray,
-            scaler: Scaler):
+        self,
+        time_steps_in_coordination_scale: np.array,
+        observed_values: np.ndarray,
+        scaler: Scaler,
+    ):
         """
         Creates a serial metadata:
 
@@ -38,7 +39,6 @@ class Metadata:
         @param max_time_step: maximum time step value.
         @return: new metadata with adjusted arrays.
         """
-        pass
 
     @property
     def normalized_observations(self) -> np.ndarray:
@@ -51,7 +51,9 @@ class Metadata:
         return self.scaler.transform(self.observed_values)
 
     @abstractmethod
-    def fit(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def fit(
+        self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None
+    ):
         """
         Fits the scaler on some observations.
 
@@ -59,10 +61,11 @@ class Metadata:
         @param time_interval: optional time interval. If provided, only the portion of data
             determined by the interval will be fit.
         """
-        pass
 
     @abstractmethod
-    def transform(self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None):
+    def transform(
+        self, observations: np.ndarray, time_interval: Optional[Tuple[int, int]] = None
+    ):
         """
         Transforms observations using the fitted scaler.
 
@@ -71,15 +74,15 @@ class Metadata:
             determined by the interval will be normalized and returned.
         @return normalized observations.
         """
-        pass
 
     @abstractmethod
     def split_observations_per_subject(
-            self,
-            observations: np.ndarray,
-            normalize: bool,
-            skip_first: Optional[int] = None,
-            skip_last: Optional[int] = None) -> List[np.ndarray]:
+        self,
+        observations: np.ndarray,
+        normalize: bool,
+        skip_first: Optional[int] = None,
+        skip_last: Optional[int] = None,
+    ) -> List[np.ndarray]:
         """
         Returns a list of observations per speaker as a list of arrays.
 
@@ -89,4 +92,3 @@ class Metadata:
         @param skip_first: number of time steps to skip.
         @param skip_last: number of time steps to not to include.
         """
-        pass
