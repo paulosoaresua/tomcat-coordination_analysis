@@ -27,7 +27,10 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
                                            DEFAULT_SEED,
                                            DEFAULT_TARGET_ACCEPT,
                                            DEFAULT_NUM_TIME_POINTS_FOR_PPA,
-                                           DEFAULT_PPA_WINDOW)
+                                           DEFAULT_PPA_WINDOW,
+                                           MAX_NUM_INFERENCE_RETRIES,
+                                           MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY,
+                                           MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY)
 from coordination.common.log import configure_log
 from coordination.model.builder import MODELS, ModelBuilder
 from coordination.model.config_bundle.mapper import DataMapper
@@ -196,25 +199,48 @@ def infer(
                     logger.info(f"\nProcessing {experiment_id}...")
                     print(f"\nProcessing {experiment_id}...")
 
-                idata = fit(
-                    model=model,
-                    logger=logger,
-                    do_prior=do_prior,
-                    do_posterior=do_posterior,
-                    seed=seed,
-                    burn_in=burn_in,
-                    num_samples=num_samples,
-                    num_chains=num_chains,
-                    num_jobs=num_jobs,
-                    nuts_init_method=nuts_init_method,
-                    target_accept=target_accept,
-                    progress_saving_frequency=progress_saving_frequency,
-                    artifacts_dir=artifacts_dir)
+                success = False
+                num_retries = 0
+                while not success and num_retries < MAX_NUM_INFERENCE_RETRIES:
+                    try:
+                        idata = fit(
+                            model=model,
+                            logger=logger,
+                            do_prior=do_prior,
+                            do_posterior=do_posterior,
+                            seed=seed,
+                            burn_in=burn_in,
+                            num_samples=num_samples,
+                            num_chains=num_chains,
+                            num_jobs=num_jobs,
+                            nuts_init_method=nuts_init_method,
+                            target_accept=target_accept,
+                            progress_saving_frequency=progress_saving_frequency,
+                            artifacts_dir=artifacts_dir)
+                        if idata is not None:
+                            success = True
+                            idata.save_to_directory(artifacts_dir)
+                            logger.info("[SUCCESS]")
+                    except Exception as ex:
+                        success = False
+                        main_logger.error(ex)
 
-                idata.save_to_directory(artifacts_dir)
-                logger.info("[SUCCESS]")
+                    if not success:
+                        num_retries += 1
+                        if num_retries == MAX_NUM_INFERENCE_RETRIES:
+                            main_logger.info("Maximum number of retrials reached. Aborting "
+                                             "inference for this experiment.")
+                            break
+                        else:
+                            # Sample a time randomly to decrease the potential for keep crashing.
+                            # It happens mostly when inferences are run in parallel and need to
+                            # lock pytensor objects.
+                            wait_time = np.random.uniform(MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY,
+                                                          MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY)
+                            main_logger.info(
+                                f"Inference crashed. Retrying in {wait_time:.2f} seconds.")
+                            time.sleep(wait_time)
 
-            main_logger.info("[SUCCESS]")
         except Exception as ex:
             main_logger.error(ex)
             raise ex
