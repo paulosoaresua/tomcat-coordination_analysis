@@ -13,8 +13,7 @@ from coordination.module.constants import (DEFAULT_MLP_ACTIVATION,
                                            DEFAULT_MLP_NUM_HIDDEN_LAYERS,
                                            DEFAULT_MLP_SD_WEIGHTS)
 from coordination.module.module import ModuleParameters, ModuleSamples
-from coordination.module.parametrization import (NormalParameterPrior,
-                                                 Parameter)
+from coordination.module.parametrization import NormalParameterPrior, Parameter
 from coordination.module.transformation.transformation import Transformation
 
 ACTIVATIONS = {

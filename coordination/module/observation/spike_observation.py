@@ -12,7 +12,8 @@ from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
-from coordination.module.parametrization import HalfNormalParameterPrior, Parameter
+from coordination.module.parametrization import (HalfNormalParameterPrior,
+                                                 Parameter)
 
 
 class SpikeObservation(Observation):
@@ -209,7 +210,9 @@ class SpikeObservationParameters(ModuleParameters):
         @param module_uuid: unique ID of the observation module.
         @param sd_sd_s: parameter a of the hyper-prior (HalfNormal) of the parameter sd_s.
         """
-        self.sd_s = Parameter(uuid=f"{module_uuid}_sd_s", prior=HalfNormalParameterPrior(sd_sd_s))
+        self.sd_s = Parameter(
+            uuid=f"{module_uuid}_sd_s", prior=HalfNormalParameterPrior(sd_sd_s)
+        )
 
 
 class SpikeObservationSamples(ModuleSamples):
