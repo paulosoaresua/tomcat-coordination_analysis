@@ -119,13 +119,14 @@ models = [
 # random numbers samples independently from N(0,1).
 samples = x_model.draw_samples(num_series=10)
 
+np.random.seed(0)
 data = []
 for n in range(N):
     random_values = np.random.rand(
         *samples.component_group_samples["speech_vocalics"].values[n].shape)
     data.append(
         {
-            "experiment_id": n,
+            "experiment_id": f"exp{n}",
             "vocalic_time_steps_in_coordination_scale":
                 samples.component_group_samples[
                     "state_space"].time_steps_in_coordination_scale[n].tolist(),
