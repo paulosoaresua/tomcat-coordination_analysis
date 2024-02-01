@@ -44,7 +44,7 @@ def plot_series(
             upper_band = np.minimum(upper_band, value_bounds[1])
 
         ax.fill_between(
-            x, lower_band, upper_band, color=kwargs.pop("color", None), alpha=0.5
+            x, lower_band, upper_band, color=kwargs.get("color", None), alpha=0.5
         )
 
     if (
