@@ -2,7 +2,7 @@
   "sd_mean_uc0": 5.0,
   "sd_uc": 0.5,
   "sd_o": 0.1,
-  "p": 5.0,
+  "sd_s": 5.0,
   "share_mean_a0_across_subjects": false,
   "share_mean_a0_across_dimensions": false,
   "share_sd_a_across_dimensions": false,
