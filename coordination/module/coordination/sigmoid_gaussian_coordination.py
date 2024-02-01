@@ -15,9 +15,9 @@ from coordination.module.constants import (DEFAULT_NUM_TIME_STEPS,
                                            DEFAULT_UNB_COORDINATION_SD_PARAM)
 from coordination.module.coordination.coordination import Coordination
 from coordination.module.module import ModuleParameters, ModuleSamples
-from coordination.module.parametrization2 import (HalfNormalParameterPrior,
-                                                  NormalParameterPrior,
-                                                  Parameter)
+from coordination.module.parametrization import (HalfNormalParameterPrior,
+                                                 NormalParameterPrior,
+                                                 Parameter)
 
 
 class SigmoidGaussianCoordination(Coordination):

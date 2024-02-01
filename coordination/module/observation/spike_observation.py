@@ -12,14 +12,15 @@ from coordination.common.utils import adjust_dimensions
 from coordination.module.constants import DEFAULT_SAMPLING_TIME_SCALE_DENSITY
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
-from coordination.module.parametrization2 import BetaParameterPrior, Parameter
+from coordination.module.parametrization import HalfNormalParameterPrior, Parameter
 
 
 class SpikeObservation(Observation):
     """
-    This class represents a binary series of observations (O) sampled from a Bernoulli distribution
-    with parameter (p) that depends on the value of coordination. The intuition is that high
-    coordination is more likely to generate spikes in observations of this kind. This, this module
+    This class represents a binary series of observations (O) sampled from a normal distribution
+    centered in the coordination values with parameter (sd_s). The intuition is that high
+    coordination is more likely to generate spikes in observations of this kind. The strength of
+    the spike is controlled by sd_s. The larger, the smaller the influence. This, this module
     is can be used to model binary data that is 1 whenever it is expected that coordination is
     high.
     """
@@ -29,17 +30,16 @@ class SpikeObservation(Observation):
         uuid: str,
         pymc_model: pm.Model,
         num_subjects: int,
-        a_p: float,
-        b_p: float,
+        sd_sd_s: float,
         dimension_name: str = None,
         coordination_samples: Optional[ModuleSamples] = None,
         coordination_random_variable: Optional[pm.Distribution] = None,
-        p_random_variable: Optional[pm.Distribution] = None,
+        sd_s_random_variable: Optional[pm.Distribution] = None,
         observation_random_variable: Optional[pm.Distribution] = None,
         sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
         time_steps_in_coordination_scale: Optional[np.array] = None,
         observed_values: Optional[TensorTypes] = None,
-        p: Optional[float] = None,
+        sd_s: Optional[float] = None,
     ):
         """
         Creates a Gaussian observation.
@@ -47,15 +47,14 @@ class SpikeObservation(Observation):
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
-        @param a_p: parameter a of the hyper-prior (Beta) of the parameter p (Bernoulli).
-        @param b_p: parameter b of the hyper-prior (Beta) of the parameter p (Bernoulli).
+        @param sd_sd_s: parameter a of the hyper-prior (HalfNormal) of the parameter sd_s.
         @param dimension_name: name of the single dimension of the observation module. If not
             informed, this will be 0.
         @param coordination_samples: coordination samples to be used in a call to draw_samples.
             This variable must be set before such a call.
         @param coordination_random_variable: coordination random variable to be used in a call to
             create_random_variables. This variable must be set before such a call.
-        @param p_random_variable: random variable to be used in a call to
+        @param sd_s_random_variable: random variable to be used in a call to
             create_random_variables. If not set, it will be created in such a call.
         @param observation_random_variable: observation random variable to be used in a
             call to create_random_variables. If not set, it will be created in such a call.
@@ -69,7 +68,7 @@ class SpikeObservation(Observation):
             each index in the observation scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
-        @param p: parameter p of the Bernoulli distribution of the module. It needs to be given
+        @param sd_s: parameter sd_s of the Normal distribution of the module. It needs to be given
             for sampling but not for inference if it needs to be inferred. If not provided now,
             it can be set later via the module parameters variable.
         """
@@ -79,7 +78,7 @@ class SpikeObservation(Observation):
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
-            parameters=SpikeObservationParameters(module_uuid=uuid, a_p=a_p, b_p=b_p),
+            parameters=SpikeObservationParameters(module_uuid=uuid, sd_sd_s=sd_sd_s),
             num_subjects=num_subjects,
             dimension_size=1,
             dimension_names=[dimension_name],
@@ -88,9 +87,9 @@ class SpikeObservation(Observation):
             observation_random_variable=observation_random_variable,
             observed_values=observed_values,
         )
-        self.parameters.p.value = p
+        self.parameters.sd_s.value = sd_s
 
-        self.p_random_variable = p_random_variable
+        self.sd_s_random_variable = sd_s_random_variable
         self.sampling_time_scale_density = sampling_time_scale_density
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
 
@@ -115,9 +114,9 @@ class SpikeObservation(Observation):
 
         time_steps = []
         for s in range(num_series):
-            p = self.parameters.p.value
-            if p.ndim > 1:
-                p = p[s]
+            sd_s = self.parameters.sd_s.value
+            if sd_s.ndim > 1:
+                sd_s = sd_s[s]
 
             density_mask = bernoulli(p=self.sampling_time_scale_density).rvs(
                 len(self.coordination_samples.values[s])
@@ -127,13 +126,14 @@ class SpikeObservation(Observation):
             # links = bernoulli(
             #     p=self.coordination_samples.values[s] * p
             # ).rvs()
-            links = norm(loc=self.coordination_samples.values[s], scale=p).rvs()
+            links = norm(loc=self.coordination_samples.values[s], scale=sd_s).rvs()
 
             # Mask out spikes according to the required density.
             links *= density_mask
             # A spike has a constant value of 1.
             # We store the time steps when that a spike was observed
-            time_steps.append(np.array([t for t, l in enumerate(links) if l > 0.5]))
+            # Simple rule to determine a spike here if we want to generate synthetic data.
+            time_steps.append(np.array([t for t, l in enumerate(links) if l > 0.8]))
 
         return SpikeObservationSamples(time_steps)
 
@@ -164,27 +164,11 @@ class SpikeObservation(Observation):
         )
 
         with self.pymc_model:
-            # self.p_random_variable = pm.Beta(
-            #     name=self.parameters.p.uuid,
-            #     alpha=adjust_dimensions(self.parameters.p.prior.a, num_rows=1),
-            #     beta=adjust_dimensions(self.parameters.p.prior.b, num_rows=1),
-            #     size=1,
-            #     observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
-            # )
-            #
-            # adjusted_prob = pm.Deterministic(
-            #     f"{self.uuid}_adjusted_p",
-            #     self.p_random_variable
-            #     * self.coordination_random_variable[
-            #         self.time_steps_in_coordination_scale
-            #     ],
-            # )
-            #
-            self.p_random_variable = pm.HalfNormal(
-                name=self.parameters.p.uuid,
-                sigma=5,
+            self.sd_s_random_variable = pm.HalfNormal(
+                name=self.parameters.sd_s.uuid,
+                sigma=adjust_dimensions(self.parameters.sd_s.prior.sd, 1),
                 size=1,
-                observed=adjust_dimensions(self.parameters.p.value, num_rows=1),
+                observed=adjust_dimensions(self.parameters.sd_s.value, num_rows=1),
             )
 
             self.observation_random_variable = pm.Normal(
@@ -192,17 +176,10 @@ class SpikeObservation(Observation):
                 mu=self.coordination_random_variable[
                     self.time_steps_in_coordination_scale
                 ],
-                sigma=self.p_random_variable,
+                sigma=self.sd_s_random_variable,
                 dims=self.time_axis_name,
                 observed=self.observed_values,
             )
-
-            # self.observation_random_variable = pm.Bernoulli(
-            #     self.uuid,
-            #     adjusted_prob,
-            #     dims=self.time_axis_name,
-            #     observed=self.observed_values,
-            # )
 
     def _add_coordinates(self):
         """
@@ -225,15 +202,14 @@ class SpikeObservationParameters(ModuleParameters):
     This class stores values and hyper-priors of the parameters of the spike observation module.
     """
 
-    def __init__(self, module_uuid: str, a_p: float, b_p: float):
+    def __init__(self, module_uuid: str, sd_sd_s: float):
         """
         Creates an object to store spike observation parameter info.
 
         @param module_uuid: unique ID of the observation module.
-        @param a_p: parameter a of the hyper-prior (Beta) of the parameter p (Bernoulli).
-        @param b_p: parameter b of the hyper-prior (Beta) of the parameter p (Bernoulli).
+        @param sd_sd_s: parameter a of the hyper-prior (HalfNormal) of the parameter sd_s.
         """
-        self.p = Parameter(uuid=f"{module_uuid}_p", prior=BetaParameterPrior(a_p, b_p))
+        self.sd_s = Parameter(uuid=f"{module_uuid}_sd_s", prior=HalfNormalParameterPrior(sd_sd_s))
 
 
 class SpikeObservationSamples(ModuleSamples):

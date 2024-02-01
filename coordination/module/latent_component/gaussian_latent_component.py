@@ -11,9 +11,9 @@ from coordination.common.utils import adjust_dimensions
 from coordination.module.latent_component.latent_component import \
     LatentComponent
 from coordination.module.module import ModuleParameters, ModuleSamples
-from coordination.module.parametrization2 import (HalfNormalParameterPrior,
-                                                  NormalParameterPrior,
-                                                  Parameter)
+from coordination.module.parametrization import (HalfNormalParameterPrior,
+                                                 NormalParameterPrior,
+                                                 Parameter)
 
 
 class GaussianLatentComponent(LatentComponent, ABC):

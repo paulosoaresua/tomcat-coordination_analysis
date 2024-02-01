@@ -168,14 +168,13 @@ class VocalicModel(ModelTemplate):
                     uuid="semantic_link",
                     pymc_model=self.pymc_model,
                     num_subjects=bundle.num_subjects,
-                    a_p=bundle.a_p,
-                    b_p=bundle.b_p,
+                    sd_sd_s=bundle.sd_sd_s,
                     dimension_name="linked",
                     sampling_time_scale_density=bundle.sampling_time_scale_density,
                     time_steps_in_coordination_scale=(
                         semantic_link_metadata.time_steps_in_coordination_scale
                     ),
-                    p=bundle.p,
+                    sd_s=bundle.sd_s,
                     observed_values=semantic_link_metadata.observed_values,
                 )
 
@@ -480,6 +479,6 @@ class VocalicModel(ModelTemplate):
         )
 
         if config_bundle.include_semantic:
-            new_bundle.p = idata.get_posterior_samples("semantic_link_p", samples_idx)
+            new_bundle.sd_s = idata.get_posterior_samples("semantic_link_sd_s", samples_idx)
 
         return new_bundle

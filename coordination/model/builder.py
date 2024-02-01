@@ -7,7 +7,7 @@ from coordination.model.real.fnirs import FNIRSModel
 from coordination.model.real.vocalic import VocalicModel
 from coordination.model.template import ModelTemplate
 
-MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic", "fnirs"}
+MODELS = {"vocalic"}
 
 
 class ModelBuilder:
@@ -37,9 +37,6 @@ class ModelBuilder:
                 bundle.include_semantic = True
             return bundle
 
-        if model_name == "fnirs":
-            return FNIRSConfigBundle()
-
     @staticmethod
     def build_model(model_name: str, config_bundle: ModelConfigBundle) -> ModelTemplate:
         """
@@ -62,6 +59,3 @@ class ModelBuilder:
             if "semantic" in model_name:
                 bundle.include_semantic = True
             return VocalicModel(bundle)
-
-        if model_name == "fnirs":
-            return FNIRSModel(config_bundle=config_bundle)

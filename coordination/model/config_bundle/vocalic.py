@@ -130,22 +130,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     vocalic_groups: List[Dict[str, Any]] = None
 
     # Parameters for the semantic component
-    a_p: float = 1.0
-    b_p: float = 1.0
-    p: float = None
+    sd_sd_s: float = 5.0
+    sd_s: float = None
 
-    semantic_link_time_steps_in_coordination_scale: np.ndarray = None
-
-
-@dataclass
-class VocalicSemanticLinkConfigBundle(VocalicConfigBundle):
-    """
-    Container for the different parameters of the vocalic + semantic link model.
-    """
-
-    a_p: float = 1.0
-    b_p: float = 1.0
-    p: float = None
-
-    # Metadata parameters. These must be filled before inference.
     semantic_link_time_steps_in_coordination_scale: np.ndarray = None

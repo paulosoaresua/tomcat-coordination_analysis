@@ -8,7 +8,7 @@ import pymc as pm
 
 from coordination.common.types import TensorTypes
 from coordination.common.utils import set_random_seed
-from coordination.module.parametrization2 import Parameter
+from coordination.module.parametrization import Parameter
 
 
 class Module:

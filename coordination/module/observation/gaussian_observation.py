@@ -12,8 +12,8 @@ from coordination.module.latent_component.latent_component import \
     LatentComponentSamples
 from coordination.module.module import ModuleParameters, ModuleSamples
 from coordination.module.observation.observation import Observation
-from coordination.module.parametrization2 import (HalfNormalParameterPrior,
-                                                  Parameter)
+from coordination.module.parametrization import (HalfNormalParameterPrior,
+                                                 Parameter)
 
 
 class GaussianObservation(Observation, ABC):
