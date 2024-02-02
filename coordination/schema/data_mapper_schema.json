@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Schema for mapper responsible for mapping columns from a pandas dataframe to config bundle attributes.",
+  "type": "object",
+  "properties": {
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "bundle_attr_name": {
+            "type": "string",
+            "description": "Name of the attribute in the model's config bundle object."
+          },
+          "data_column_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of the columns in the pandas dataframe containing evidence for the model. Multiple columns will be concatenated along the row axis. For serial modules, this is treated as the multiple dimensions of the observed data. For non-serial modules, the axis 0 and 1 will be swapped such that the first axis indexes subjects and the second the different dimensions of the data. If the parameter is not an observation, it will be treated as the data_type informed."
+          },
+          "data_type": {
+            "type": "string",
+            "enum": [
+              "array",
+              "int",
+              "float"
+            ],
+            "description": "The type of the data."
+          },
+          "feature": {
+            "type": "boolean",
+            "description": "Whether the column represents a feature instead of metadata."
+          }
+        },
+        "required": [
+          "bundle_param_name",
+          "data_column_names",
+          "data_type"
+        ]
+      }
+    }
+  },
+  "required": [
+    "mappings"
+  ]
+}

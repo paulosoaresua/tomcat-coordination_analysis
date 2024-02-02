@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+"""
+This script generates and saves .csv datasets for PPA validation on synthetic data. It
+instantiates the x-model and the c-model and generates samples from them. The data will be saved
+under data/ppa_synthetic.
+"""
+import json
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+from coordination.model.config_bundle.vocalic import VocalicConfigBundle
+from coordination.model.real.vocalic import VocalicModel
+
+T = 50
+N = 10
+PROCESS_NOISE = 0.01
+OBSERVATION_NOISE = 1.0
+# Different scale per feature
+WEIGHTS = [np.array([[1, 0], [0, 5]])]
+# Start at different positions and with different speeds
+INITIAL_STATE = np.array([[0, 0], [25, 25], [50, 50]])
+
+
+def get_x_model() -> VocalicModel:
+    """
+    Gets an x-model.
+
+    @return: x-model.
+    """
+    with open("data/synthetic/config/params/vocalic_no_coordination_params_dict.json",
+              "r") as f:
+        bundle = VocalicConfigBundle(**json.load(f))
+        # bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.sd_a = PROCESS_NOISE
+        bundle.sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.zeros((N, T))
+
+        bundle.weights = WEIGHTS
+        bundle.mean_a0 = INITIAL_STATE
+
+        return VocalicModel(bundle)
+
+
+def get_c_model(coordination: float) -> VocalicModel:
+    """
+    Gets a c-model.
+
+    @param coordination: value of coordination to fix.
+    @return: c-model.
+    """
+    with open("data/synthetic/config/params/vocalic_params_dict.json",
+              "r") as f:
+        bundle = VocalicConfigBundle(**json.load(f))
+        # bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.sd_a = PROCESS_NOISE
+        bundle.sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.ones((N, T)) * coordination
+
+        bundle.weights = WEIGHTS
+        bundle.mean_a0 = INITIAL_STATE
+
+        return VocalicModel(bundle)
+
+
+x_model = get_x_model()
+c_model_low = get_c_model(0.2)
+c_model_med = get_c_model(0.5)
+c_model_high = get_c_model(1.0)
+
+models = [
+    ("x_data", x_model),
+    ("c_data_low", c_model_low),
+    ("c_data_med", c_model_med),
+    ("c_data_high", c_model_high),
+]
+
+# Uncomment the following line to always generate the same dataset.
+# np.random.seed(0)
+
+for data_name, model in models:
+    samples = model.draw_samples(num_series=10)
+
+    data = []
+    for n in range(N):
+        data.append(
+            {
+                "experiment_id": f"exp{n}",
+                "vocalic_time_steps_in_coordination_scale":
+                    samples.component_group_samples[
+                        "state_space"].time_steps_in_coordination_scale[n].tolist(),
+                "vocalic_subjects":
+                    samples.component_group_samples["state_space"].subject_indices[n].tolist(),
+                "vocalic_previous_time_same_subject":
+                    samples.component_group_samples["state_space"].prev_time_same_subject[
+                        n].tolist(),
+                "vocalic_previous_time_diff_subject":
+                    samples.component_group_samples["state_space"].prev_time_diff_subject[
+                        n].tolist(),
+                "pitch":
+                    samples.component_group_samples["speech_vocalics"].values[n][0].tolist(),
+                "intensity":
+                    samples.component_group_samples["speech_vocalics"].values[n][1].tolist(),
+                "num_time_steps_in_coordination_scale": T
+            }
+        )
+
+    pd.DataFrame(data).to_csv(f"data/synthetic/{data_name}.csv", index_label="number")
+
+# Random Data
+# Use samples from one of the models to get the metadata. We will replace the actual data with
+# random numbers samples independently from N(0,1).
+samples = x_model.draw_samples(num_series=10)
+
+np.random.seed(0)
+data = []
+for n in range(N):
+    random_values = np.random.rand(
+        *samples.component_group_samples["speech_vocalics"].values[n].shape)
+    data.append(
+        {
+            "experiment_id": f"exp{n}",
+            "vocalic_time_steps_in_coordination_scale":
+                samples.component_group_samples[
+                    "state_space"].time_steps_in_coordination_scale[n].tolist(),
+            "vocalic_subjects":
+                samples.component_group_samples["state_space"].subject_indices[n].tolist(),
+            "vocalic_previous_time_same_subject":
+                samples.component_group_samples["state_space"].prev_time_same_subject[
+                    n].tolist(),
+            "vocalic_previous_time_diff_subject":
+                samples.component_group_samples["state_space"].prev_time_diff_subject[
+                    n].tolist(),
+            "pitch": random_values[0].tolist(),
+            "intensity": random_values[1].tolist(),
+            "num_time_steps_in_coordination_scale": T
+        }
+    )
+
+pd.DataFrame(data).to_csv(f"data/synthetic/random_data.csv", index_label="number")

@@ -1,0 +1,532 @@
+#!/usr/bin/env python
+"""
+This script performs inferences in a subset of USAR experiments from a .csv file with vocalic and
+semantic link data. Inferences are performed sequentially, i.e., experiment by experiment until
+all experiments are covered.
+"""
+
+import argparse
+import datetime
+import json
+import logging
+import os
+import sys
+import time
+from typing import Any, List, Optional
+
+import numpy as np
+import pandas as pd
+
+from coordination.callback.progress_saver_callback import ProgressSaverCallback
+from coordination.common.config import settings
+from coordination.common.constants import (
+    DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS, DEFAULT_NUM_JOBS_PER_INFERENCE,
+    DEFAULT_NUM_SAMPLES, DEFAULT_NUM_TIME_POINTS_FOR_PPA,
+    DEFAULT_NUTS_INIT_METHOD, DEFAULT_PPA_WINDOW,
+    DEFAULT_PROGRESS_SAVING_FREQUENCY, DEFAULT_SEED, DEFAULT_TARGET_ACCEPT,
+    MAX_NUM_INFERENCE_RETRIES, MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY,
+    MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY)
+from coordination.common.log import configure_log
+from coordination.inference.inference_data import InferenceData
+from coordination.model.builder import MODELS, ModelBuilder
+from coordination.model.config_bundle.mapper import DataMapper
+from coordination.model.template import ModelTemplate
+
+# PyMC 5.0.2 prints some warnings when we use GaussianRandomWalk. The snippet below silences them.
+if not sys.warnoptions:
+    import warnings
+
+    warnings.simplefilter("ignore")
+
+
+def infer(
+        out_dir: str,
+        experiment_ids: List[str],
+        evidence_filepath: str,
+        model_params_dict_filepath: Optional[str],
+        data_mapping_filepath: str,
+        model_name: str,
+        do_prior: bool,
+        do_posterior: bool,
+        seed: Optional[int],
+        burn_in: int,
+        num_samples: int,
+        num_chains: int,
+        num_jobs: int,
+        nuts_init_method: str,
+        target_accept: float,
+        progress_saving_frequency: int,
+        do_ppa: bool,
+        num_time_points_ppa: int,
+        ppa_window: int,
+        ppa_time_points: Optional[List[int]]):
+    """
+    Runs inference for multiple experiments in sequence.
+
+    @param out_dir: directory where results must be saved.
+    @param experiment_ids: a comma-separated list of experiment ids to run inference for.
+    @param evidence_filepath: path of the .csv file containing evidence for the model.
+    @param model_params_dict_filepath: path of the .json file containing values to replace model
+        parameter's default values.
+    @param data_mapping_filepath: path to the file containing a mapping between config bundle
+        attributes and columns in the evidence dataframe.
+    @param model_name: name of the model. One of ["vocalic, "vocalic_semantic"].
+    @param do_prior: whether to perform prior predictive checks.
+    @param do_posterior: whether to fit the model and perform posterior predictive checks.
+    @param seed: random seed for reproducibility.
+    @param burn_in: number of samples in the warm-up phase.
+    @param num_samples: number of samples from the posterior distribution.
+    @param num_chains: number of parallel chains.
+    @param num_jobs: number of jobs per inference up to the number of chains.
+    @param nuts_init_method: initialization method for the NUTS inference algorithm.
+    @param target_accept: acceptance probability.
+    @param progress_saving_frequency: frequency to save progress in number of samples drawn per
+        chain.
+    @param do_ppa: whether we want to fit the model multiple times for PPA.
+    @param num_time_points_ppa: number of points to sample for PPA.
+    @param ppa_window: window size for PPA.
+    @param ppa_time_points: an optional list of fixed time points for PPA.
+    """
+
+    if not do_prior and not do_posterior:
+        raise ValueError("No inference to be performed. Set do_prior and/or do_posterior to True.")
+
+    if not os.path.exists(evidence_filepath):
+        raise FileNotFoundError(f"Evidence not found in {evidence_filepath}.")
+
+    model_params_dict = None
+    if model_params_dict_filepath:
+        if not os.path.exists(model_params_dict_filepath):
+            raise FileNotFoundError(
+                f"Dictionary of parameter values not found in {model_params_dict_filepath}.")
+
+        with open(model_params_dict_filepath) as f:
+            model_params_dict = json.load(f)
+
+    if not os.path.exists(data_mapping_filepath):
+        raise FileNotFoundError(f"Mapping between evidence and model's parameter not found in "
+                                f"{data_mapping_filepath}.")
+
+    with open(data_mapping_filepath) as f:
+        data_mapping_dict = json.load(f)
+        data_mapper = DataMapper(data_mapping_dict)
+
+    evidence_df = pd.read_csv(evidence_filepath, index_col=0)
+    evidence_df["experiment_id"] = evidence_df["experiment_id"].astype(str)
+    evidence_df = evidence_df[evidence_df["experiment_id"].isin(experiment_ids)]
+
+    experiments_in_evidence = sorted(evidence_df["experiment_id"].tolist())
+    experiments_not_in_evidence = sorted(
+        list(set(experiment_ids).difference(set(experiments_in_evidence))))
+
+    experiment_list = "\n".join(experiments_in_evidence)
+    if do_ppa:
+        print(f"\nRunning inference with PPA for experiments:\n{experiment_list}\n")
+    else:
+        print(f"\nRunning inference for experiments:\n{experiment_list}\n")
+
+    if len(experiments_not_in_evidence) > 0:
+        experiment_list = "\n".join(experiments_not_in_evidence)
+        print(f"\nSkipping inference for experiments not in the evidence file: {experiment_list}")
+
+    for experiment_id in experiment_ids:
+        row_df = evidence_df[evidence_df["experiment_id"] == experiment_id].iloc[0, :]
+        experiment_out_dir = f"{out_dir}/{experiment_id}"
+        os.makedirs(experiment_out_dir, exist_ok=True)
+
+        # # Data transformation to correct biological differences captured in the signals from
+        # different participants. evidence.normalize_per_subject()
+        configure_log(verbose=True, log_filepath=f"{experiment_out_dir}/log.txt")
+        main_logger = logging.getLogger()
+        main_logger.setLevel(logging.INFO)
+        try:
+            config_bundle = ModelBuilder.build_bundle(model_name)
+            config_bundle.update(model_params_dict)
+            data_mapper.update_config_bundle(config_bundle, row_df)
+            model = ModelBuilder.build_model(model_name=model_name, config_bundle=config_bundle)
+
+            T = model.num_time_steps_in_coordination_scale
+            if do_ppa:
+                if ppa_time_points:
+                    num_time_steps_to_fit = np.array(ppa_time_points)
+                else:
+                    # To determine the upper bound, we need to take into account the time steps
+                    # in the component's scale because they can be sparse.
+                    lb = int(T / 2)
+                    ub = model.get_smallest_time_step_in_coordination_scale_for_ppa(ppa_window)
+
+                    if (ub - lb) < ppa_window:
+                        raise ValueError(
+                            f"There's not enough datapoint to run PPA with a window "
+                            f"size of {ppa_window} with at least half of the "
+                            f"experiment duration being fit by the model. The "
+                            f"minimum number of time steps required for the analysis is {ub + 1} "
+                            f"but the model has up to {T} time steps to fit in coordination "
+                            f"scale.")
+
+                    np.random.seed(seed)
+                    num_time_steps_to_fit = sorted(np.random.choice(
+                        np.arange(lb, ub), num_time_points_ppa, replace=False))
+            else:
+                num_time_steps_to_fit = np.array([T])
+
+            for t in num_time_steps_to_fit:
+                if do_ppa:
+                    # All the logs from now on will be written to a file inside the folder with
+                    # the results for the experiment.
+                    artifacts_dir = f"{experiment_out_dir}/ppa/t_{t}"
+                    os.makedirs(artifacts_dir, exist_ok=True)
+
+                    configure_log(verbose=True, log_filepath=f"{artifacts_dir}/log.txt")
+                    logger = logging.getLogger()
+                    logger.setLevel(logging.INFO)
+
+                    logger.info(f"\nProcessing {experiment_id} PPA with t_{t}...")
+                    print(f"\nProcessing {experiment_id} PPA with t_{t}...")
+
+                    config_bundle.num_time_steps_to_fit = t
+                    model = ModelBuilder.build_model(model_name=model_name,
+                                                     config_bundle=config_bundle)
+                else:
+                    artifacts_dir = experiment_out_dir
+
+                    logger = main_logger
+                    logger.info(f"\nProcessing {experiment_id}...")
+                    print(f"\nProcessing {experiment_id}...")
+
+                start_time = time.time()
+                model.prepare_for_inference()
+                duration = (time.time() - start_time)
+                logger.info(
+                    f"Time to create random variables: "
+                    f"{str(datetime.timedelta(seconds=duration))}.")
+
+                num_retries = 0
+                while num_retries < MAX_NUM_INFERENCE_RETRIES:
+                    try:
+                        idata = fit(
+                            model=model,
+                            logger=logger,
+                            do_prior=do_prior,
+                            do_posterior=do_posterior,
+                            seed=seed,
+                            burn_in=burn_in,
+                            num_samples=num_samples,
+                            num_chains=num_chains,
+                            num_jobs=num_jobs,
+                            nuts_init_method=nuts_init_method,
+                            target_accept=target_accept,
+                            progress_saving_frequency=progress_saving_frequency,
+                            artifacts_dir=artifacts_dir)
+                        if idata is not None:
+                            idata.save_to_directory(artifacts_dir)
+                            logger.info("[SUCCESS]")
+                            break
+                    except Exception as ex:
+                        main_logger.error(ex)
+
+                    num_retries += 1
+                    if num_retries == MAX_NUM_INFERENCE_RETRIES:
+                        main_logger.error("Maximum number of retrials reached. Aborting "
+                                         "inference for this experiment.")
+                        break
+                    else:
+                        # Sample a time randomly to decrease the potential for keep crashing.
+                        # It happens mostly when inferences are run in parallel and need to
+                        # lock pytensor objects.
+                        wait_time = np.random.uniform(MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY,
+                                                      MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY)
+                        main_logger.info(
+                            f"Inference crashed. Retrying in {wait_time:.2f} seconds.")
+                        time.sleep(wait_time)
+
+        except Exception as ex:
+            main_logger.error(ex)
+            raise ex
+
+
+def fit(model: ModelTemplate,
+        logger: Any,
+        do_prior: bool,
+        do_posterior: bool,
+        seed: int,
+        burn_in: int,
+        num_samples: int,
+        num_chains: int,
+        num_jobs: int,
+        nuts_init_method: str,
+        target_accept: float,
+        progress_saving_frequency: int,
+        artifacts_dir: str) -> InferenceData:
+    """
+    Fits a model.
+
+    @param model: model.
+    @param logger: logger to log messages.
+    @param do_prior: whether to run predictive prior.
+    @param do_posterior: whether to fit the model to estimate its posterior distribution.
+    @param seed: random seed for reproducibility.
+    @param burn_in: number of samples in the warm-up phase.
+    @param num_samples: number of samples from the posterior distribution.
+    @param num_chains: number of parallel chains.
+    @param num_jobs: number of jobs per inference up to the number of chains.
+    @param nuts_init_method: initialization method for the NUTS inference algorithm.
+    @param target_accept: acceptance probability.
+    @param progress_saving_frequency: frequency to save progress in number of samples drawn per
+        chain.
+    @param artifacts_dir: directory where artifacts must be saved.
+    @return: inference data.
+    """
+
+    global_start_time = time.time()
+    idata = None
+    if do_prior:
+        logger.info("Prior predictive check")
+        try:
+            start_time = time.time()
+            idata = model.prior_predictive(num_samples=num_samples, seed=seed)
+            duration = (time.time() - start_time)
+            logger.info(
+                f"Time to run prior predictive check: "
+                f"{str(datetime.timedelta(seconds=duration))}.")
+        except Exception as ex:
+            logger.error(ex)
+
+    if do_posterior:
+        logger.info("Fitting model...")
+        try:
+            start_time = time.time()
+            idata_posterior = model.fit(
+                seed=seed,
+                burn_in=burn_in,
+                num_samples=num_samples,
+                num_chains=num_chains,
+                num_jobs=num_jobs,
+                nuts_init_method=nuts_init_method,
+                target_accept=target_accept,
+                callback=ProgressSaverCallback(out_dir=artifacts_dir,
+                                               saving_frequency=progress_saving_frequency))
+            duration = (time.time() - start_time)
+            logger.info(
+                f"Time to run posterior inference: "
+                f"{str(datetime.timedelta(seconds=duration))}.")
+        except Exception as ex:
+            logger.error(ex)
+            return
+
+        if idata is None:
+            idata = idata_posterior
+        else:
+            idata.add(idata_posterior)
+
+        start_time = time.time()
+        idata_posterior_predictive = model.posterior_predictive(
+            posterior_trace=idata.trace,
+            seed=seed)
+        duration = (time.time() - start_time)
+        logger.info(
+            f"Time to run posterior predictive check: "
+            f"{str(datetime.timedelta(seconds=duration))}.")
+        idata.add(idata_posterior_predictive)
+
+        # Log the percentage of divergences
+        perc_divergences = 100.0 * idata.num_divergences / idata.num_posterior_samples
+        logger.info(
+            f"{idata.num_divergences} divergences in {idata.num_posterior_samples} "
+            f"samples --> {perc_divergences}%."
+        )
+
+        duration = (time.time() - global_start_time)
+        logger.info(f"Duration: {str(datetime.timedelta(seconds=duration))}")
+
+    return idata
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Runs NUTS inference algorithm per experiment (in sequence) for a series of "
+                    "experiments in a .csv file. Prior predictive checks can be performed with or "
+                    "without posterior inference and checks. A final inference data object with "
+                    "the results is saved by experiment in its corresponding folder created under "
+                    "the informed output directory. Individual logs are also saved in a txt file "
+                    "under the same folder."
+    )
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        default=settings.inferences_dir,
+        required=False,
+        help="Directory where artifacts must be saved.",
+    )
+    parser.add_argument(
+        "--experiment_ids",
+        type=str,
+        required=True,
+        help="A list of experiment ids separated by comma for which we want to perform inference. "
+             "If more than one experiment is provided, inference will be performed sequentially, "
+             "i.e., for one experiment at a time. Experiment ids must be separated by comma.",
+    )
+    parser.add_argument(
+        "--evidence_filepath",
+        type=str,
+        required=True,
+        help="Path of the .csv file containing the evidence data.",
+    )
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        required=True,
+        choices=MODELS,
+        help="Model name.",
+    )
+    parser.add_argument(
+        "--model_params_dict_filepath",
+        type=str,
+        required=False,
+        help="Path of the .json file containing parameters of the model to override default "
+             "values."
+    )
+    parser.add_argument(
+        "--data_mapping_filepath",
+        type=str,
+        required=True,
+        help="Path of the .json file containing a mapping between column names in the .csv file "
+             "containing evidence to the model and config bundle parameters required for "
+             "inference."
+    )
+    parser.add_argument(
+        "--do_prior",
+        type=int,
+        required=False,
+        default=1,
+        help="Whether to perform prior predictive check. Use the value 0 to deactivate.",
+    )
+    parser.add_argument(
+        "--do_posterior",
+        type=int,
+        required=False,
+        default=1,
+        help="Whether to perform posterior inference. Use the value 0 to deactivate.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        required=False,
+        default=DEFAULT_SEED,
+        help="Random seed to use during inference.",
+    )
+    parser.add_argument(
+        "--burn_in",
+        type=int,
+        required=False,
+        default=DEFAULT_BURN_IN,
+        help="Number of samples to discard per chain during posterior inference.",
+    )
+    parser.add_argument(
+        "--num_samples",
+        type=int,
+        required=False,
+        default=DEFAULT_NUM_SAMPLES,
+        help="Number of samples to keep per chain during posterior inference.",
+    )
+    parser.add_argument(
+        "--num_chains",
+        type=int,
+        required=False,
+        default=DEFAULT_NUM_CHAINS,
+        help="Number of chains to use during posterior inference.",
+    )
+    parser.add_argument(
+        "--num_jobs",
+        type=int,
+        required=False,
+        default=DEFAULT_NUM_JOBS_PER_INFERENCE,
+        help="Number of jobs to use per inference process. The effective number of jobs is "
+             "min(num_jobs, num_chains).",
+    )
+    parser.add_argument(
+        "--nuts_init_method",
+        type=str,
+        required=False,
+        default=DEFAULT_NUTS_INIT_METHOD,
+        help="NUTS initialization method.",
+    )
+    parser.add_argument(
+        "--target_accept",
+        type=float,
+        required=False,
+        default=DEFAULT_TARGET_ACCEPT,
+        help="Target acceptance probability used to control step size and reduce "
+             "divergences during inference.",
+    )
+    parser.add_argument(
+        "--progress_saving_frequency",
+        type=int,
+        required=False,
+        default=DEFAULT_PROGRESS_SAVING_FREQUENCY,
+        help="Frequency at which to save the progress in number of samples. For instance, if x, "
+             "progress will be saved at every x samples per chain.",
+    )
+    parser.add_argument(
+        "--do_ppa",
+        type=int,
+        required=False,
+        default=0,
+        help="Whether to fit the model multiple times for later posterior predictive analysis. If "
+             "this option is enabled, this script will fit the model multiple times, one for each "
+             "time point sampled for ppa analysis, determined by num_time_points_for_ppa. The "
+             "sampled time points determine the number of time steps we want to use to fit the "
+             "model. The maximum number of time steps is determined by the number of time steps "
+             "in coordination scale minus ppa_window parameter for each experiment. Inference "
+             "data objects will be saved to a directory called ppa/t_x under each experiment "
+             "inference run dir, where x indicates the number of time steps used to fit the data "
+             "(the sampled time point)."
+    )
+    parser.add_argument(
+        "--num_time_points_ppa",
+        type=int,
+        required=False,
+        default=DEFAULT_NUM_TIME_POINTS_FOR_PPA,
+        help="Number of time points to sample if ppa analysis is enabled."
+    )
+    parser.add_argument(
+        "--ppa_window",
+        type=int,
+        required=False,
+        default=DEFAULT_PPA_WINDOW,
+        help="Window size for ppa analysis.",
+    )
+    parser.add_argument(
+        "--ppa_time_points",
+        type=str,
+        required=False,
+        help="An optional list of time points for PPA. This is helpful for triggering jobs that "
+             "failed without having to run inference for all the time points that succeeded when "
+             "executing PPA.",
+    )
+
+    args = parser.parse_args()
+
+    time_points = None if args.ppa_time_points is None else args.ppa_time_points.split(",")
+    time_points = None if time_points is None else [int(t) for t in time_points]
+
+    infer(out_dir=args.out_dir,
+          experiment_ids=list(map(str.strip, args.experiment_ids.split(","))),
+          evidence_filepath=args.evidence_filepath,
+          model_params_dict_filepath=args.model_params_dict_filepath,
+          data_mapping_filepath=args.data_mapping_filepath,
+          model_name=args.model_name,
+          do_prior=args.do_prior,
+          do_posterior=args.do_posterior,
+          seed=args.seed,
+          burn_in=args.burn_in,
+          num_samples=args.num_samples,
+          num_chains=args.num_chains,
+          num_jobs=args.num_jobs,
+          nuts_init_method=args.nuts_init_method,
+          target_accept=args.target_accept,
+          progress_saving_frequency=args.progress_saving_frequency,
+          do_ppa=args.do_ppa,
+          num_time_points_ppa=args.num_time_points_ppa,
+          ppa_window=args.ppa_window,
+          ppa_time_points=time_points)

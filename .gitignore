@@ -127,6 +127,7 @@ dmypy.json
 .vscode/
 
 .run/
+.webapp/
 boards/
 run/
 notebooks/formatting.py
