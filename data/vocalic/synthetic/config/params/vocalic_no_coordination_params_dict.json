@@ -1,0 +1,13 @@
+{
+  "share_mean_a0_across_subjects": false,
+  "share_mean_a0_across_dimensions": false,
+  "share_sd_a_across_dimensions": true,
+  "match_vocalic_scale": false,
+  "observation_normalization": "norm_per_feature",
+  "num_vocalic_features": 2,
+  "state_space_dimension_size": 2,
+  "state_space_dimension_names": ["Latent Pitch", "Latent Intensity"],
+  "vocalic_feature_names": ["Pitch", "Intensity"],
+  "constant_coordination": true,
+  "observed_coordination_for_inference": 0
+}
