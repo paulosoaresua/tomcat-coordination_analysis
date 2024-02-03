@@ -388,11 +388,14 @@ class InferenceExecution:
                 # will execute over the full list of experiments in the dataset.
                 experiment_ids_arg = ""
 
+            evidence_filepath = f"{st.session_state[DATA_DIR_STATE_KEY]}/" \
+                                f"{execution_params['data_filepath']}"
+
             command = (
                 'PYTHONPATH="." '
                 "./bin/run_inference "
                 f'--out_dir="{self.inference_dir}" '
-                f'--evidence_filepath="{execution_params["data_filepath"]}" '
+                f'--evidence_filepath="{evidence_filepath}" '
                 f"{experiment_ids_arg}"
                 f'--model_name="{execution_params["model"]}" '
                 f'--data_mapping_filepath="{data_mapping_filepath}" '
