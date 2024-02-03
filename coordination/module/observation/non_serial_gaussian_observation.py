@@ -131,6 +131,8 @@ class NonSerialGaussianObservation(GaussianObservation):
         ):
             # A different value per series. We expect it's already in the correct dimensions.
             sd_o = self.parameters.sd_o.value
+            print("SHAPE")
+            print(sd_o.shape)
         else:
             sd_o = adjust_dimensions(
                 self.parameters.sd_o.value,
@@ -144,6 +146,10 @@ class NonSerialGaussianObservation(GaussianObservation):
 
         # Broadcast across time
         sd_o = sd_o[:, None]
+        print("SHAPE AFTER TIME")
+        print(sd_o.shape)
+        print("SHAPE LATENT")
+        print(self.latent_component_samples.values)
 
         sampled_values = norm(loc=self.latent_component_samples.values, scale=sd_o).rvs(
             size=self.latent_component_samples.values.shape
