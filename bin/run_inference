@@ -239,6 +239,14 @@ def infer(out_dir: str,
             call_python_script_command += (
                 f' --model_params_dict_filepath="{run_id_params_dict_filepath}"')
 
+        # When executing multiple runs in parallel, multiple issues can happen with Pytensor due
+        # to compilation and locks. So, before calling the sequential runs, we change the
+        # compilation directory such that we have a different directory per run.
+        comp_format = f"compiledir_{run_id}_{i}"  # compilation directory name format
+        pytensor_flags = f"PYTENSOR_FLAGS='compiledir_format={comp_format}," \
+                         f"base_compiledir={settings.pytensor_comp_dir}'"
+        call_python_script_command = f"{pytensor_flags} {call_python_script_command}"
+
         print(f"\nCalling the following command in the TMUX window {tmux_window_name}.")
         print(call_python_script_command)
 
