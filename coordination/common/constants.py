@@ -15,6 +15,6 @@ DEFAULT_NUM_TIME_POINTS_FOR_PPA = 10
 DEFAULT_PPA_WINDOW = 5
 MAX_NUM_INFERENCE_RETRIES = 5
 MIN_WAIT_TIME_BEFORE_INFERENCE_RETRY = (
-    1  # We will sample a number randomly in the min max range.
+    5  # We will sample a number randomly in the min max range.
 )
-MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY = 5
+MAX_WAIT_TIME_BEFORE_INFERENCE_RETRY = 10
