@@ -256,10 +256,15 @@ class InferenceExecution:
                 execution_params["data_filepath"]
             )
 
+            if default_execution_params["experiment_ids"] is None:
+                selected_exp_ids = None
+            else:
+                selected_exp_ids = [e for e in default_execution_params["experiment_ids"] if
+                                    e in set(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY])]
             execution_params["experiment_ids"] = st.multiselect(
                 label="Experiments",
                 key=f"{self.component_key}_experiments",
-                default=default_execution_params["experiment_ids"],
+                default=selected_exp_ids,
                 options=st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY],
             )
             if len(execution_params["experiment_ids"]) == 0:
@@ -364,8 +369,8 @@ class InferenceExecution:
         """
 
         if st.button(
-            label="Run Inference",
-            disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
+                label="Run Inference",
+                disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
         ):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.

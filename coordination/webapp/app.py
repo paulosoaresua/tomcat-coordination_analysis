@@ -36,7 +36,7 @@ if DATA_DIR_STATE_KEY not in st.session_state:
     st.session_state[DATA_DIR_STATE_KEY] = settings.data_dir
 
 if WEBAPP_RUN_DIR_STATE_KEY not in st.session_state:
-    st.session_state[WEBAPP_RUN_DIR_STATE_KEY] = settings.data_dir
+    st.session_state[WEBAPP_RUN_DIR_STATE_KEY] = settings.webapp_run_dir
 
 if AVAILABLE_EXPERIMENTS_STATE_KEY not in st.session_state:
     st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = []
