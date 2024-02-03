@@ -321,8 +321,7 @@ class ModelTemplate:
                 print(y_hat_train.shape)
                 y_hat_test = y_hat[..., -window_size:]
 
-                # For the train, we compute the mean over all time steps
-                mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1).mean(axis=-1)
+                mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1)
                 mse_test = np.cumsum(np.square(y_test - y_hat_test), axis=-1) / np.arange(
                     1, window_size + 1
                 )
@@ -331,6 +330,8 @@ class ModelTemplate:
                 # time.
                 if mse_test.ndim > 2:
                     mse_train = mse_train.mean(axis=tuple(list(range(mse_train.ndim))[:-2]))
+                    # For the train, we compute the mean over all time steps
+                    mse_train = mse_train.mean(axis=-1)
                     mse_test = mse_test.mean(axis=tuple(list(range(mse_test.ndim))[:-2]))
 
                 for d in range(mse_test.shape[0]):
