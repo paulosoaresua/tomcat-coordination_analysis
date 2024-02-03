@@ -288,8 +288,7 @@ class InferenceExecution:
 
         return execution_params
 
-    @staticmethod
-    def _save_execution_params(execution_params: Dict[str, Any], filename: str):
+    def _save_execution_params(self, execution_params: Dict[str, Any], filename: str):
         """
         Saves a dictionary of execution parameters for later usage.
 
