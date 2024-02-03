@@ -124,13 +124,26 @@ class NonSerialGaussianObservation(GaussianObservation):
         dim_sd_o_dimensions = (
             1 if self.share_sd_o_across_dimensions else self.dimension_size
         )
-        sd_o = adjust_dimensions(
-            self.parameters.sd_o.value,
-            num_rows=dim_sd_o_subjects,
-            num_cols=dim_sd_o_dimensions,
-        )[
-            None, :, :, None
-        ]  # broadcast across series and time
+
+        if (
+            isinstance(self.parameters.sd_o.value, np.ndarray)
+            and self.parameters.sd_o.value.ndim == 3
+        ):
+            # A different value per series. We expect it's already in the correct dimensions.
+            sd_o = self.parameters.sd_o.value
+        else:
+            sd_o = adjust_dimensions(
+                self.parameters.sd_o.value,
+                num_rows=dim_sd_o_subjects,
+                num_cols=dim_sd_o_dimensions,
+            )
+            if self.share_sd_o_across_subjects:
+                sd_o = sd_o.repeat(self.num_subjects, axis=0)
+
+            sd_o = sd_o[None, :].repeat(num_series, axis=0)
+
+        # Broadcast across time
+        sd_o = sd_o[:, None]
 
         sampled_values = norm(loc=self.latent_component_samples.values, scale=sd_o).rvs(
             size=self.latent_component_samples.values.shape

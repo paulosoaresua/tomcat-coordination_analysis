@@ -181,22 +181,39 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             1 if self.share_sd_a_across_dimensions else self.dimension_size
         )
 
-        # Adjust dimensions according to parameter sharing specification
-        mean_a0 = adjust_dimensions(
-            self.parameters.mean_a0.value,
-            num_rows=dim_mean_a_subjects,
-            num_cols=dim_mean_a_dimensions,
-        )
-        if self.share_mean_a0_across_subjects:
-            mean_a0 = mean_a0.repeat(self.num_subjects, axis=0)
+        if (
+            isinstance(self.parameters.mean_a0.value, np.ndarray)
+            and self.parameters.mean_a0.value.ndim == 3
+        ):
+            # A different value per series. We expect it's already in the correct dimensions.
+            mean_a0 = self.parameters.mean_a0.value
+        else:
+            mean_a0 = adjust_dimensions(
+                self.parameters.mean_a0.value,
+                num_rows=dim_mean_a_subjects,
+                num_cols=dim_mean_a_dimensions,
+            )
+            if self.share_mean_a0_across_subjects:
+                mean_a0 = mean_a0.repeat(self.num_subjects, axis=0)
 
-        sd_a = adjust_dimensions(
-            self.parameters.sd_a.value,
-            num_rows=dim_sd_a_subjects,
-            num_cols=dim_sd_a_dimensions,
-        )
-        if self.share_sd_a_across_subjects:
-            sd_a = sd_a.repeat(self.num_subjects, axis=0)
+            mean_a0 = mean_a0[None, :].repeat(num_series, axis=0)
+
+        if (
+            isinstance(self.parameters.sd_a.value, np.ndarray)
+            and self.parameters.sd_a.value.ndim == 3
+        ):
+            # A different value per series. We expect it's already in the correct dimensions.
+            sd_a = self.parameters.sd_a.value
+        else:
+            sd_a = adjust_dimensions(
+                self.parameters.sd_a.value,
+                num_rows=dim_sd_a_subjects,
+                num_cols=dim_sd_a_dimensions,
+            )
+            if self.share_sd_a_across_subjects:
+                sd_a = sd_a.repeat(self.num_subjects, axis=0)
+
+            sd_a = sd_a[None, :].repeat(num_series, axis=0)
 
         if self.initial_samples is None:
             num_time_steps_in_cpn_scale = int(
@@ -275,7 +292,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         for t in range(t0, num_time_steps):
             if t == 0:
-                values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
+                values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
                     size=(num_series, self.num_subjects, self.dimension_size)
                 )
             else:
@@ -296,7 +313,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
                 blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 
-                values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
+                values[..., t] = norm(loc=blended_mean, scale=sd_a).rvs()
 
         return values
 
