@@ -269,7 +269,7 @@ class BrainModel(ModelTemplate):
             "fnirs_state_space_sd_a", samples_idx
         )
         new_bundle.fnirs_sd_o = idata.get_posterior_samples(
-            "fnirs_speech_vocalics_sd_o", samples_idx
+            "fnirs_sd_o", samples_idx
         )
 
         if config_bundle.constant_coordination:
