@@ -315,10 +315,7 @@ class ModelTemplate:
                 )[..., :window_size]
 
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)
-                print(y_hat.shape)
                 y_hat_train = y_hat[..., :y_train.shape[-1]]
-                print(y_train.shape)
-                print(y_hat_train.shape)
                 y_hat_test = y_hat[..., -window_size:]
 
                 mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1)
