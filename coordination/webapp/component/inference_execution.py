@@ -20,8 +20,8 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
 from coordination.model.builder import MODELS
 from coordination.model.config_bundle.mapper import DataMapper
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
-                                           WEBAPP_RUN_DIR_STATE_KEY,
-                                           DATA_DIR_STATE_KEY)
+                                           DATA_DIR_STATE_KEY,
+                                           WEBAPP_RUN_DIR_STATE_KEY)
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -50,7 +50,9 @@ class InferenceExecution:
 
         @return: Directory where execution parameters are saved.
         """
-        return f"{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}/inference/execution_params"
+        return (
+            f"{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}/inference/execution_params"
+        )
 
     @property
     def temporary_dir(self) -> str:
@@ -245,15 +247,18 @@ class InferenceExecution:
             execution_params["data_filepath"] = st.text_input(
                 label="Data Filepath",
                 key=f"{self.component_key}_data_filepath",
-                value=default_execution_params["data_filepath"]
+                value=default_execution_params["data_filepath"],
             )
             InferenceExecution._load_available_experiment_list(
                 execution_params["data_filepath"]
             )
 
             if default_execution_params["experiment_ids"]:
-                selected_exp_ids = [e for e in default_execution_params["experiment_ids"] if
-                                    e in set(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY])]
+                selected_exp_ids = [
+                    e
+                    for e in default_execution_params["experiment_ids"]
+                    if e in set(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY])
+                ]
             else:
                 selected_exp_ids = []
 
@@ -364,8 +369,8 @@ class InferenceExecution:
         """
 
         if st.button(
-                label="Run Inference",
-                disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
+            label="Run Inference",
+            disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
         ):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.
@@ -388,8 +393,10 @@ class InferenceExecution:
                 # will execute over the full list of experiments in the dataset.
                 experiment_ids_arg = ""
 
-            evidence_filepath = f"{st.session_state[DATA_DIR_STATE_KEY]}/" \
-                                f"{execution_params['data_filepath']}"
+            evidence_filepath = (
+                f"{st.session_state[DATA_DIR_STATE_KEY]}/"
+                f"{execution_params['data_filepath']}"
+            )
 
             command = (
                 'PYTHONPATH="." '

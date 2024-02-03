@@ -1,10 +1,10 @@
 from copy import deepcopy
 
+from coordination.model.config_bundle.brain import BrainBundle
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.config_bundle.vocalic import VocalicConfigBundle
-from coordination.model.config_bundle.brain import BrainBundle
-from coordination.model.real.vocalic import VocalicModel
 from coordination.model.real.brain import BrainModel
+from coordination.model.real.vocalic import VocalicModel
 from coordination.model.template import ModelTemplate
 
 MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic", "brain"}

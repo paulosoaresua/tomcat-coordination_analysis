@@ -21,7 +21,9 @@ class InferenceRun:
     Represents a container for information related to an inference run.
     """
 
-    def __init__(self, inference_dir: str, run_id: str, data_dir: str = settings.data_dir):
+    def __init__(
+        self, inference_dir: str, run_id: str, data_dir: str = settings.data_dir
+    ):
         """
         Creates an inference run object.
 

@@ -1,5 +1,3 @@
-import os
-
 import plotly.express as px
 
 # Session keys

@@ -6,6 +6,7 @@ import streamlit as st
 from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.component.inference_run_progress import \
     InferenceRunProgress
+from coordination.webapp.constants import DATA_DIR_STATE_KEY
 from coordination.webapp.utils import get_inference_run_ids
 
 
@@ -16,13 +17,13 @@ class InferenceProgress:
     """
 
     def __init__(
-            self,
-            component_key: str,
-            inference_dir: str,
-            refresh_rate: int,
-            preferred_run_ids: Optional[List[str]] = None,
-            display_experiment_progress: bool = True,
-            display_sub_experiment_progress: bool = True,
+        self,
+        component_key: str,
+        inference_dir: str,
+        refresh_rate: int,
+        preferred_run_ids: Optional[List[str]] = None,
+        display_experiment_progress: bool = True,
+        display_sub_experiment_progress: bool = True,
     ):
         """
         Creates the component.
@@ -81,8 +82,9 @@ class InferenceProgress:
 
                     for i, run_id in enumerate(run_ids):
                         inference_run = InferenceRun(
-                            inference_dir=self.inference_dir, run_id=run_id,
-                            data_dir=st.session_state[DATA_DIR_STATE_KEY]
+                            inference_dir=self.inference_dir,
+                            run_id=run_id,
+                            data_dir=st.session_state[DATA_DIR_STATE_KEY],
                         )
 
                         if not inference_run.execution_params:

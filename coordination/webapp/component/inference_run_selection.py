@@ -1,6 +1,7 @@
 import streamlit as st
 
 from coordination.inference.inference_run import InferenceRun
+from coordination.webapp.constants import DATA_DIR_STATE_KEY
 from coordination.webapp.utils import get_inference_run_ids
 from coordination.webapp.widget.drop_down import DropDown
 
@@ -37,9 +38,11 @@ class InferenceRunSelection:
         ).create()
 
         if run_id:
-            self.selected_inference_run_ = InferenceRun(self.inference_dir, run_id,
-                                                        data_dir=st.session_state[
-                                                            DATA_DIR_STATE_KEY])
+            self.selected_inference_run_ = InferenceRun(
+                self.inference_dir,
+                run_id,
+                data_dir=st.session_state[DATA_DIR_STATE_KEY],
+            )
 
             if self.selected_inference_run_.execution_params:
                 # Display execution parameter under the drop down

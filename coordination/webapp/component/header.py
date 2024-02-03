@@ -1,9 +1,9 @@
 import streamlit as st
 
-from coordination.webapp.constants import (WEBAPP_RUN_DIR_STATE_KEY,
-                                           INFERENCE_RESULTS_DIR_STATE_KEY,
+from coordination.webapp.constants import (DATA_DIR_STATE_KEY,
                                            EVALUATIONS_DIR_STATE_KEY,
-                                           DATA_DIR_STATE_KEY)
+                                           INFERENCE_RESULTS_DIR_STATE_KEY,
+                                           WEBAPP_RUN_DIR_STATE_KEY)
 
 
 class Header:
@@ -24,7 +24,9 @@ class Header:
         )
         st.write(f"Evaluations: *:blue[{st.session_state[EVALUATIONS_DIR_STATE_KEY]}]*")
         st.write(f"Data: *:blue[{st.session_state[DATA_DIR_STATE_KEY]}]*")
-        st.write(f"Temporary Files: *:blue[{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}]*")
+        st.write(
+            f"Temporary Files: *:blue[{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}]*"
+        )
 
         with st.expander("Configure Directories", expanded=False):
             inference_dir = st.text_input(

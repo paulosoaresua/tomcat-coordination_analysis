@@ -3,10 +3,10 @@ import streamlit as st
 from coordination.common.config import settings
 from coordination.webapp.component.header import Header
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
-                                           INFERENCE_RESULTS_DIR_STATE_KEY,
-                                           WEBAPP_RUN_DIR_STATE_KEY,
+                                           DATA_DIR_STATE_KEY,
                                            EVALUATIONS_DIR_STATE_KEY,
-                                           DATA_DIR_STATE_KEY)
+                                           INFERENCE_RESULTS_DIR_STATE_KEY,
+                                           WEBAPP_RUN_DIR_STATE_KEY)
 from coordination.webapp.pages.new_run import NewRun
 from coordination.webapp.pages.progress import Progress
 from coordination.webapp.pages.run_vs_run import RunVsRun
