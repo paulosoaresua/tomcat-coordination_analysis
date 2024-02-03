@@ -131,8 +131,6 @@ class NonSerialGaussianObservation(GaussianObservation):
         ):
             # A different value per series. We expect it's already in the correct dimensions.
             sd_o = self.parameters.sd_o.value
-            print("SHAPE")
-            print(sd_o.shape)
         else:
             sd_o = adjust_dimensions(
                 self.parameters.sd_o.value,
