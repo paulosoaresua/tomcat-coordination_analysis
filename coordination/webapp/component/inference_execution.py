@@ -20,8 +20,7 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
 from coordination.model.builder import MODELS
 from coordination.model.config_bundle.mapper import DataMapper
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
-                                           INFERENCE_PARAMETERS_DIR,
-                                           INFERENCE_TMP_DIR)
+                                           WEBAPP_RUN_DIR_STATE_KEY)
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -41,6 +40,27 @@ class InferenceExecution:
         self.component_key = component_key
         self.inference_dir = inference_dir
 
+    @property
+    def execution_params_dir(self) -> str:
+        """
+        Gets directory where execution parameter files are saved. Execution parameter files will
+        save the entries for the fields in the new run page for later usage so we don't have to
+        type them all again.
+
+        @return: Directory where execution parameters are saved.
+        """
+        return f"{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}/inference/execution_params"
+
+    @property
+    def temporary_dir(self) -> str:
+        """
+        Gets directory where temporary model params dict (config bundle) and data mappings are
+        saved for later reference by the inference script.
+
+        @return: Directory where model params dict and data mapping of the latest run are saved.
+        """
+        return f"{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}/inference/tmp"
+
     def create_component(self):
         """
         Creates area in the screen for selection of an inference run id. Below is presented a json
@@ -51,9 +71,9 @@ class InferenceExecution:
         selected_default_execution_params_file = DropDown(
             label="Default Execution Parameters",
             key=f"{self.component_key}_default_execution_parameters_dropdown",
-            options=InferenceExecution._get_saved_execution_parameter_files(),
+            options=self._get_saved_execution_parameter_files(),
         ).create()
-        execution_params = InferenceExecution._load_saved_execution_params(
+        execution_params = self._load_saved_execution_params(
             selected_default_execution_params_file
         )
 
@@ -72,27 +92,25 @@ class InferenceExecution:
         with col_right:
             self._create_execution_params_saving_area(execution_params)
 
-    @staticmethod
-    def _get_saved_execution_parameter_files() -> List[str]:
+    def _get_saved_execution_parameter_files(self) -> List[str]:
         """
         Gets the list of filenames with saved execution parameters.
 
         @return: list of files with saved execution parameters.
         """
-        if os.path.exists(INFERENCE_PARAMETERS_DIR):
+        if os.path.exists(self.execution_params_dir):
             saved_params_list = sorted(
                 [
                     f
-                    for f in os.listdir(INFERENCE_PARAMETERS_DIR)
-                    if os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")
+                    for f in os.listdir(self.execution_params_dir)
+                    if os.path.isfile(f"{self.execution_params_dir}/{f}")
                 ]
             )
             return saved_params_list
 
         return []
 
-    @staticmethod
-    def _load_saved_execution_params(filename: str) -> Optional[Dict[str, Any]]:
+    def _load_saved_execution_params(self, filename: str) -> Optional[Dict[str, Any]]:
         """
         Gets a dictionary with saved execution params.
 
@@ -100,7 +118,7 @@ class InferenceExecution:
         @return: dictionary with saved execution params.
         """
         if filename:
-            with open(f"{INFERENCE_PARAMETERS_DIR}/{filename}", "r") as f:
+            with open(f"{self.execution_params_dir}/{filename}", "r") as f:
                 return json.load(f)
 
         return None
@@ -301,8 +319,8 @@ class InferenceExecution:
                     "Invalid data mapping. Make sure to enter a valid json object."
                 )
 
-            os.makedirs(INFERENCE_PARAMETERS_DIR, exist_ok=True)
-            with open(f"{INFERENCE_PARAMETERS_DIR}/{filename}.json", "w") as f:
+            os.makedirs(self.execution_params_dir, exist_ok=True)
+            with open(f"{self.execution_params_dir}/{filename}.json", "w") as f:
                 json.dump(execution_params_copy, f)
         else:
             raise Exception(
@@ -324,7 +342,7 @@ class InferenceExecution:
         )
         if st.button(label="Save Parameters"):
             try:
-                InferenceExecution._save_execution_params(execution_params, filename)
+                self._save_execution_params(execution_params, filename)
                 with st.spinner("Saving..."):
                     # Wait a bit so there's has time for the file to be saved and loaded in the
                     # dropdown when the page refreshes.
@@ -351,13 +369,14 @@ class InferenceExecution:
         ):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.
-            os.makedirs(f"{INFERENCE_TMP_DIR}", exist_ok=True)
+            tmp_dir = f"{st.session_state[WEBAPP_RUN_DIR_STATE_KEY]}/inference/tmp"
+            os.makedirs(f"{tmp_dir}", exist_ok=True)
 
-            model_params_filepath = f"{INFERENCE_TMP_DIR}/params_dict.json"
+            model_params_filepath = f"{tmp_dir}/params_dict.json"
             with open(model_params_filepath, "w") as f:
                 json.dump(json.loads(execution_params["model_params"]), f)
 
-            data_mapping_filepath = f"{INFERENCE_TMP_DIR}/data_mapping.json"
+            data_mapping_filepath = f"{tmp_dir}/data_mapping.json"
             with open(data_mapping_filepath, "w") as f:
                 json.dump(json.loads(execution_params["data_mapping"]), f)
 
