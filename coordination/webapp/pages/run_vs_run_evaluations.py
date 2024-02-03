@@ -3,7 +3,7 @@ import streamlit as st
 from coordination.webapp.component.evaluation_results import EvaluationResults
 from coordination.webapp.component.inference_run_selection import \
     InferenceRunSelection
-from coordination.webapp.constants import EVALUATIONS_DIR
+from coordination.webapp.constants import EVALUATIONS_DIR_STATE_KEY
 
 
 class RunVsRunEvaluations:
@@ -24,8 +24,6 @@ class RunVsRunEvaluations:
         """
         Creates the page by adding different components to the screen.
         """
-        st.write(f"Evaluations dir: *:blue[{EVALUATIONS_DIR}]*")
-
         col_left, col_right = st.columns(2)
         with col_left:
             RunVsRunEvaluations._populate_column(column_key=f"{self.page_key}_left_col")
@@ -45,7 +43,7 @@ class RunVsRunEvaluations:
         """
         inference_run_component = InferenceRunSelection(
             component_key=f"{column_key}_inference_run_selector",
-            inference_dir=EVALUATIONS_DIR,
+            inference_dir=st.session_state[EVALUATIONS_DIR_STATE_KEY],
         )
         inference_run_component.create_component()
 
