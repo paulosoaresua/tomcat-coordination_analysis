@@ -20,7 +20,8 @@ from coordination.common.constants import (DEFAULT_BURN_IN, DEFAULT_NUM_CHAINS,
 from coordination.model.builder import MODELS
 from coordination.model.config_bundle.mapper import DataMapper
 from coordination.webapp.constants import (AVAILABLE_EXPERIMENTS_STATE_KEY,
-                                           WEBAPP_RUN_DIR_STATE_KEY)
+                                           WEBAPP_RUN_DIR_STATE_KEY,
+                                           DATA_DIR_STATE_KEY)
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -250,11 +251,12 @@ class InferenceExecution:
                 execution_params["data_filepath"]
             )
 
-            if len(execution_params["data_filepath"]) == 0:
-                selected_exp_ids = []
-            else:
-                selected_exp_ids = [e for e in execution_params["data_filepath"] if
+            if default_execution_params["experiment_ids"]:
+                selected_exp_ids = [e for e in default_execution_params["experiment_ids"] if
                                     e in set(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY])]
+            else:
+                selected_exp_ids = []
+
             execution_params["experiment_ids"] = st.multiselect(
                 label="Experiments",
                 key=f"{self.component_key}_experiments",
@@ -436,9 +438,10 @@ class InferenceExecution:
         if not data_filepath:
             return
 
-        if os.path.exists(data_filepath):
+        full_data_filepath = f"{st.session_state[DATA_DIR_STATE_KEY]}/{data_filepath}"
+        if os.path.exists(full_data_filepath):
             try:
-                df = pd.read_csv(data_filepath)
+                df = pd.read_csv(full_data_filepath)
                 st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY] = sorted(
                     list(df["experiment_id"])
                 )
