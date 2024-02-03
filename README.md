@@ -36,7 +36,9 @@ To reproduce the image below, execute the commands in `notebooks/Synthetic Vocal
 
 We provide a series of `make` commands to run inference jobs to reproduce the results in the paper. Comments are included in the Makefile above each target. Optionally, one can trigger the inferences via the webapp we provide and check the results there.
 
-The commands will run inferences in sequence for each experiment in the dataset. If you wish to split inferences in multiple jobs, set the environment variable `N_JOBS` to the appropriate number. Bear in mind each job spawns 4 others: one for each chain.  
+The commands will run inferences in sequence for each experiment in the dataset. If you wish to split inferences in multiple jobs, set the environment variable `N_JOBS` to the appropriate number. Bear in mind each job spawns 4 others: one for each chain.
+
+The compiled `pytensor` objects will be placed under the folder `.pytensor_compiles` in the project root. This is to avoid errors due to concurrent locks when we try to fit multiple models at the same time. From time to time, you may want to clean that directory to save space. You can change that directory by setting the environment variable `pytensor_comp_dir` before calling the `run_inference` script or the webapp if triggering inferences from there.
 
 ## Data
 
@@ -58,12 +60,12 @@ It is possible to run it in a remote server and access it locally via port forwa
 
 - **inferences_dir**: directory where inferences must be saved.
 - **data_dir**: directory where datasets are located. 
-- **EVAL_DIR**: directory where evaluations are located. Every time we run an inference run, it will generate a unique ID (timestamp). Traces will be saved under `$inferences_dir/run_id`. We can add extra evaluation objects (.csv and png) in another directory with the format `$EVAL_DIR/run_id` and they will be available in the Evaluations tab in the app.  
+- **evaluations_dir**: directory where evaluations are located. Every time we run an inference run, it will generate a unique ID (timestamp). Traces will be saved under `$inferences_dir/run_id`. We can add extra evaluation objects (.csv and png) in another directory with the format `$EVAL_DIR/run_id` and they will be available in the Evaluations tab in the app.  
 
-![Main Page](assets/images/webapp1.png)
-![Spring Model](assets/images/webapp2.png)
-![Spring Model](assets/images/webapp3.png)
-![Spring Model](assets/images/webapp4.png)
+![Page1](assets/images/webapp1.png)
+![Page2](assets/images/webapp2.png)
+![Page3](assets/images/webapp3.png)
+![Page4](assets/images/webapp4.png)
 
 ## License
 

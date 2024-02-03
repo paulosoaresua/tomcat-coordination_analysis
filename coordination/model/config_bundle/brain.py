@@ -105,7 +105,7 @@ class BrainBundle(ModelConfigBundle):
     # "features": ["a list fnirs channels to include in this group"]
     # observations. If not given, it will be fit to the data.
     # Example:
-    # vocalic_groups = [
+    # fnirs_groups = [
     #     {
     #         "name": "s1_d1_s1_d2",
     #         "features": ["s1_d1", "s1_d2"]
