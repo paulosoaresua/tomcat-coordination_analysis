@@ -315,7 +315,7 @@ class ModelTemplate:
                 )[..., :window_size]
 
                 y_hat = np.mean(samples.component_group_samples[o.uuid].values, axis=0)
-                y_hat_train = y_hat[..., :-window_size]
+                y_hat_train = y_hat[..., :y_train.shape[-1]]
                 y_hat_test = y_hat[..., -window_size:]
 
                 mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1) / np.arange(
