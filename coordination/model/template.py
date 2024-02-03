@@ -321,15 +321,14 @@ class ModelTemplate:
                 print(y_hat_train.shape)
                 y_hat_test = y_hat[..., -window_size:]
 
-                mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1) / np.arange(
-                    1, window_size + 1
-                )
+                # For the train, we compute the mean over all time steps
+                mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1).mean(axis=-1)
                 mse_test = np.cumsum(np.square(y_test - y_hat_test), axis=-1) / np.arange(
                     1, window_size + 1
                 )
 
                 # Compute the mse across all the dimensions but the last 2 ones: feature and
-                # window.
+                # time.
                 if mse_test.ndim > 2:
                     mse_train = mse_train.mean(axis=tuple(list(range(mse_train.ndim))[:-2]))
                     mse_test = mse_test.mean(axis=tuple(list(range(mse_test.ndim))[:-2]))
@@ -354,8 +353,9 @@ class ModelTemplate:
                             "variable": o.uuid,
                             "feature": o.dimension_names[d],
                             "mode": "train",
+                            # Repeat the same value on all the windows
                             **{
-                                f"w{w}": mse_train[d, w - 1]
+                                f"w{w}": mse_train[d]
                                 for w in range(1, window_size + 1)
                             },
                         }
@@ -380,8 +380,9 @@ class ModelTemplate:
                         "variable": o.uuid,
                         "feature": "all",
                         "mode": "train",
+                        # Repeat the same value on all the windows
                         **{
-                            f"w{w}": mse_train.mean(axis=0)[w - 1]
+                            f"w{w}": mse_train.mean()
                             for w in range(1, window_size + 1)
                         },
                     }
