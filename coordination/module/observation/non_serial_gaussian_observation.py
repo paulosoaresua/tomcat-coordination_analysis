@@ -145,11 +145,7 @@ class NonSerialGaussianObservation(GaussianObservation):
             sd_o = sd_o[None, :].repeat(num_series, axis=0)
 
         # Broadcast across time
-        sd_o = sd_o[:, None]
-        print("SHAPE AFTER TIME")
-        print(sd_o.shape)
-        print("SHAPE LATENT")
-        print(self.latent_component_samples.values)
+        sd_o = sd_o[:, :, :, None]
 
         sampled_values = norm(loc=self.latent_component_samples.values, scale=sd_o).rvs(
             size=self.latent_component_samples.values.shape
