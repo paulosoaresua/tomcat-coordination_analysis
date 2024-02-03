@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     inferences_dir: str = ".run/inferences"
     evaluations_dir: str = ".run/evaluations"
     webapp_run_dir: str = ".webapp"
-    pytensor_comp_dir = ".pytensor_compiles"
+    pytensor_comp_dir: str = ".pytensor_compiles"
 
 
 settings = Settings()
