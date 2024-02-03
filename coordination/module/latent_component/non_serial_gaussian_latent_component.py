@@ -311,7 +311,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         # be entries for all the subjects at every time step.
         if self.share_mean_a0_across_subjects:
             # subject x dimension
-            mean_a0 = self.mean_a0_random_variable.mean_a0.repeat(
+            mean_a0 = self.mean_a0_random_variable.repeat(
                 self.num_subjects, axis=0
             )
         else:

@@ -52,6 +52,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         observed_values: Optional[TensorTypes] = None,
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
+        initial_samples: Optional[np.ndarray] = None,
     ):
         """
         Creates a non-serial 2D Gaussian latent component.
@@ -93,6 +94,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
             be given for sampling but not for inference if it needs to be inferred. If not
             provided now, it can be set later via the module parameters variable.
+        @param initial_samples: samples from the posterior to use during a call to draw_samples.
+            This is useful to do predictive checks by sampling data in the future.
         """
         super().__init__(
             uuid=uuid,
@@ -117,6 +120,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             observed_values=observed_values,
             mean_a0=mean_a0,
             sd_a=sd_a,
+            initial_samples=initial_samples,
         )
 
         self.subject_names = subject_names
@@ -128,6 +132,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         time_steps_in_coordination_scale: np.ndarray,
         mean_a0: np.ndarray,
         sd_a: np.ndarray,
+        init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values with the following updating equations for the state of the component at time
@@ -154,17 +159,19 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         # n: number of series (first dimension of coordination)
         # s: number of subjects
         # d: dimension size
+        N = self.num_subjects
+        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
 
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros(
             (num_series, self.num_subjects, self.dimension_size, num_time_steps)
         )
+        t0 = 0 if init_values is None else init_values.shape[-1]
+        if init_values is not None:
+            values[..., :t0] = init_values
 
-        N = self.num_subjects
-        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
-
-        for t in range(num_time_steps):
+        for t in range(t0, num_time_steps):
             if t == 0:
                 values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
                     size=(num_series, self.num_subjects, self.dimension_size)

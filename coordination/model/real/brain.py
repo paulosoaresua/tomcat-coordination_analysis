@@ -1,0 +1,294 @@
+from copy import deepcopy
+from typing import List, Optional
+
+import numpy as np
+import pymc as pm
+
+from coordination.common.constants import DEFAULT_SEED
+from coordination.common.functions import logit
+from coordination.common.utils import adjust_dimensions
+from coordination.inference.inference_data import InferenceData
+from coordination.metadata.non_serial import NonSerialMetadata
+from coordination.model.config_bundle.brain import BrainBundle
+from coordination.model.model import Model
+from coordination.model.template import ModelTemplate
+from coordination.module.component_group import ComponentGroup
+from coordination.module.coordination.constant_coordination import \
+    ConstantCoordination
+from coordination.module.coordination.sigmoid_gaussian_coordination import \
+    SigmoidGaussianCoordination
+from coordination.module.latent_component.non_serial_2d_gaussian_latent_component import \
+    NonSerial2DGaussianLatentComponent
+from coordination.module.observation.non_serial_gaussian_observation import \
+    NonSerialGaussianObservation
+from coordination.module.transformation.dimension_reduction import \
+    DimensionReduction
+from coordination.module.transformation.mlp import MLP
+from coordination.module.transformation.sequential import Sequential
+
+
+class BrainModel(ModelTemplate):
+    """
+    This class represents a brain model that measures how coordination affects the entrainment
+    among fNIRS and EKG signals across different subjects.
+    """
+
+    def __init__(
+        self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
+    ):
+        """
+        Creates a brain model.
+
+        @param config_bundle: container for the different parameters of the brain model.
+        @param pymc_model: a PyMC model instance where modules are to be created at. If not
+            provided, it will be created along with this model instance.
+        """
+        super().__init__(pymc_model=pymc_model, config_bundle=config_bundle)
+
+    def _register_metadata(self, config_bundle: BrainBundle):
+        """
+        Add entries to the metadata dictionary from values filled in a config bundle. This will
+        allow adjustment of time steps later if we want to fit/sample less time steps than the
+        informed in the original config bundle.
+        """
+        if "fnirs" in self.metadata:
+            metadata: NonSerialMetadata = self.metadata["fnirs"]
+            metadata.time_steps_in_coordination_scale = (
+                config_bundle.fnirs_time_steps_in_coordination_scale
+            )
+            metadata.observed_values = config_bundle.fnirs_observed_values
+            metadata.normalization_method = config_bundle.observation_normalization
+        else:
+            self.metadata["fnirs"] = NonSerialMetadata(
+                time_steps_in_coordination_scale=(
+                    config_bundle.fnirs_time_steps_in_coordination_scale
+                ),
+                observed_values=config_bundle.fnirs_observed_values,
+                normalization_method=config_bundle.observation_normalization,
+            )
+
+    def _create_model_from_config_bundle(self):
+        """
+        Creates internal modules of the model using the most up-to-date information in the config
+        bundle. This allows the config bundle to be updated after the model creation, reflecting
+        in changes in the model's modules any time this function is called.
+        """
+
+        bundle = self._get_adjusted_bundle()
+
+        if bundle.constant_coordination:
+            coordination = ConstantCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=bundle.num_time_steps_to_fit,
+                alpha_c=bundle.alpha_c,
+                beta_c=bundle.beta_c,
+                initial_samples=bundle.initial_coordination_samples,
+                observed_value=bundle.observed_coordination_for_inference,
+            )
+        else:
+            given_coordination = None
+            if bundle.observed_coordination_for_inference is not None:
+                given_coordination = adjust_dimensions(
+                    logit(bundle.observed_coordination_for_inference),
+                    bundle.num_time_steps_to_fit,
+                )
+
+            initial_samples = None
+            if bundle.initial_coordination_samples is not None:
+                initial_samples = logit(bundle.initial_coordination_samples)
+            coordination = SigmoidGaussianCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=bundle.num_time_steps_to_fit,
+                mean_mean_uc0=bundle.mean_mean_uc0,
+                sd_mean_uc0=bundle.sd_mean_uc0,
+                sd_sd_uc=bundle.sd_sd_uc,
+                mean_uc0=bundle.mean_uc0,
+                sd_uc=bundle.sd_uc,
+                initial_samples=initial_samples,
+                unbounded_coordination_observed_values=given_coordination,
+            )
+
+        groups = self._create_fnirs_groups(bundle)
+
+        name = "brain_fnirs"
+        if bundle.include_ekg:
+            name += "_ekg"
+
+        self._model = Model(
+            name=f"{name}_model",
+            pymc_model=self.pymc_model,
+            coordination=coordination,
+            component_groups=groups,
+        )
+
+    def _get_adjusted_bundle(self) -> BrainBundle:
+        """
+        Gets a config bundle with time scale adjusted to the scale matching and fitting options.
+
+        @return: adjusted bundle to use in the construction of the modules.
+        """
+        return self.new_config_bundle_from_time_step_info(self.config_bundle)
+
+    def _create_fnirs_groups(self, bundle: BrainBundle) -> List[ComponentGroup]:
+        """
+        Creates component groups for the fnirs component.
+
+        @param bundle: config bundle holding information on how to parameterize the modules.
+        @return: a list of component groups to be added to the model.
+        """
+        fnirs_metadata: NonSerialMetadata = self.metadata["fnirs"]
+
+        # In the 2D case, it may be interesting having multiple state space chains with their
+        # own dynamics if different features of a modality have different movement dynamics.
+        fnirs_groups = bundle.fnirs_groups
+        if fnirs_groups is None:
+            fnirs_groups = [{"name": None, "features": bundle.fnirs_channel_names}]
+
+        groups = []
+        for fnirs_group in fnirs_groups:
+            # Form a tensor of observations by getting only the dimensions of the features
+            # in the group.
+            feature_idx = [
+                bundle.fnirs_channel_names.index(feature)
+                for feature in fnirs_group["features"]
+            ]
+
+            observed_values = (
+                np.take_along_axis(
+                    fnirs_metadata.normalized_observations,
+                    indices=np.array(feature_idx, dtype=int)[None, :, None],
+                    axis=1,
+                )
+                if bundle.fnirs_observed_values is not None
+                else None
+            )
+
+            # For retro-compatibility, we only add suffix if groups were defined.
+            group_name = fnirs_group["name"]
+            suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
+
+            state_space = NonSerial2DGaussianLatentComponent(
+                uuid=f"fnirs_state_space{suffix}",
+                pymc_model=self.pymc_model,
+                num_subjects=bundle.num_subjects,
+                mean_mean_a0=bundle.fnirs_mean_mean_a0,
+                sd_mean_a0=bundle.fnirs_sd_mean_a0,
+                sd_sd_a=bundle.fnirs_sd_sd_a,
+                share_mean_a0_across_subjects=bundle.fnirs_share_mean_a0_across_subjects,
+                share_sd_a_across_subjects=bundle.fnirs_share_sd_a_across_subjects,
+                share_mean_a0_across_dimensions=bundle.fnirs_share_mean_a0_across_dimensions,
+                share_sd_a_across_dimensions=bundle.fnirs_share_sd_a_across_dimensions,
+                time_steps_in_coordination_scale=(
+                    fnirs_metadata.time_steps_in_coordination_scale
+                ),
+                mean_a0=bundle.fnirs_mean_a0,
+                sd_a=bundle.fnirs_sd_a,
+                sampling_relative_frequency=bundle.sampling_relative_frequency,
+                initial_samples=bundle.initial_fnirs_state_space_samples,
+            )
+
+            # We assume data is normalize and add a transformation with fixed unitary weights that
+            # bring the position in the state space to a collection of channels in the
+            # observations.
+            transformation = Sequential(
+                child_transformations=[
+                    DimensionReduction(keep_dimensions=[0], axis=1),  # position,
+                    MLP(
+                        uuid=f"fnirs_state_space_to_speech_vocalics_mlp{suffix}",
+                        pymc_model=self.pymc_model,
+                        output_dimension_size=len(fnirs_group["features"]),
+                        mean_w0=0,
+                        sd_w0=1,
+                        num_hidden_layers=0,
+                        hidden_dimension_size=0,
+                        activation="linear",
+                        axis=1,  # fnirs channel axis
+                        weights=[np.ones((1, bundle.num_fnirs_channels))],
+                    ),
+                ]
+            )
+
+            observation = NonSerialGaussianObservation(
+                uuid=f"fnirs{suffix}",
+                pymc_model=self.pymc_model,
+                num_subjects=bundle.num_subjects,
+                dimension_size=len(fnirs_group["features"]),
+                sd_sd_o=bundle.fnirs_sd_sd_o,
+                share_sd_o_across_subjects=bundle.fnirs_share_sd_o_across_subjects,
+                share_sd_o_across_dimensions=bundle.fnirs_share_sd_o_across_dimensions,
+                dimension_names=fnirs_group["features"],
+                observed_values=observed_values,
+                time_steps_in_coordination_scale=(
+                    fnirs_metadata.time_steps_in_coordination_scale
+                ),
+                sd_o=bundle.fnirs_sd_o,
+            )
+
+            group = ComponentGroup(
+                uuid=f"fnirs_group{suffix}",
+                pymc_model=self.pymc_model,
+                latent_component=state_space,
+                observations=[observation],
+                transformations=[transformation],
+            )
+            groups.append(group)
+
+        return groups
+
+    def new_config_bundle_from_posterior_samples(
+        self,
+        config_bundle: BrainBundle,
+        idata: InferenceData,
+        num_samples: int,
+        seed: int = DEFAULT_SEED,
+    ) -> BrainBundle:
+        """
+        Uses samples from posterior to update a config bundle. Here we set the samples from the
+        posterior in the last time step as initial values for the latent variables. This
+        allows us to generate samples in the future for predictive checks.
+
+        @param config_bundle: original config bundle.
+        @param idata: inference data.
+        @param num_samples: number of samples from posterior to use. Samples will be chosen
+            randomly from the posterior samples.
+        @param seed: random seed for reproducibility when choosing the samples to keep.
+        """
+        new_bundle = deepcopy(config_bundle)
+
+        # TODO: adjust this when there are fnirs groups.
+
+        np.random.seed(seed)
+        samples_idx = np.random.choice(
+            idata.num_posterior_samples, num_samples, replace=False
+        )
+
+        new_bundle.fnirs_mean_a0 = idata.get_posterior_samples(
+            "fnirs_state_space_mean_a0", samples_idx
+        )
+        new_bundle.fnirs_sd_a = idata.get_posterior_samples(
+            "fnirs_state_space_sd_a", samples_idx
+        )
+        new_bundle.fnirs_sd_o = idata.get_posterior_samples(
+            "fnirs_speech_vocalics_sd_o", samples_idx
+        )
+
+        if config_bundle.constant_coordination:
+            new_bundle.initial_coordination_samples = idata.get_posterior_samples(
+                "coordination", samples_idx
+            )
+        else:
+            new_bundle.mean_uc0 = idata.get_posterior_samples(
+                "coordination_mean_uc0", samples_idx
+            )
+            new_bundle.sd_uc = idata.get_posterior_samples(
+                "coordination_sd_uc", samples_idx
+            )
+            new_bundle.initial_coordination_samples = idata.get_posterior_samples(
+                "coordination", samples_idx
+            )
+
+        new_bundle.initial_state_space_samples = idata.get_posterior_samples(
+            "fnirs_state_space", samples_idx
+        )
+
+        return new_bundle

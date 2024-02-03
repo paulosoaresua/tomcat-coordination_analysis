@@ -2,10 +2,12 @@ from copy import deepcopy
 
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 from coordination.model.config_bundle.vocalic import VocalicConfigBundle
+from coordination.model.config_bundle.brain import BrainBundle
 from coordination.model.real.vocalic import VocalicModel
+from coordination.model.real.brain import BrainModel
 from coordination.model.template import ModelTemplate
 
-MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic"}
+MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic", "brain"}
 
 
 class ModelBuilder:
@@ -35,6 +37,9 @@ class ModelBuilder:
                 bundle.include_semantic = True
             return bundle
 
+        if "brain" in model_name:
+            return BrainBundle()
+
     @staticmethod
     def build_model(model_name: str, config_bundle: ModelConfigBundle) -> ModelTemplate:
         """
@@ -57,3 +62,6 @@ class ModelBuilder:
             if "semantic" in model_name:
                 bundle.include_semantic = True
             return VocalicModel(bundle)
+
+        if "brain" in model_name:
+            return BrainModel(config_bundle)

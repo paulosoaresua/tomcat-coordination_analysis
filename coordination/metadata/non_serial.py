@@ -94,7 +94,8 @@ class NonSerialMetadata(Metadata):
         if time_interval is None:
             obs = observations
         else:
-            obs = observations[..., time_interval[0] : time_interval[1]]
+            lb, ub = time_interval
+            obs = observations[..., lb:ub]
 
         self.scaler.fit(obs)
 
@@ -112,6 +113,7 @@ class NonSerialMetadata(Metadata):
         if time_interval is None:
             obs = observations
         else:
-            obs = observations[..., time_interval[0] : time_interval[1]]
+            lb, ub = time_interval
+            obs = observations[..., lb:ub]
 
         return self.scaler.transform(obs)
