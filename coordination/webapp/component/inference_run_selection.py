@@ -37,7 +37,9 @@ class InferenceRunSelection:
         ).create()
 
         if run_id:
-            self.selected_inference_run_ = InferenceRun(self.inference_dir, run_id)
+            self.selected_inference_run_ = InferenceRun(self.inference_dir, run_id,
+                                                        data_dir=st.session_state[
+                                                            DATA_DIR_STATE_KEY])
 
             if self.selected_inference_run_.execution_params:
                 # Display execution parameter under the drop down

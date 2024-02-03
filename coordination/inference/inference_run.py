@@ -21,14 +21,16 @@ class InferenceRun:
     Represents a container for information related to an inference run.
     """
 
-    def __init__(self, inference_dir: str, run_id: str):
+    def __init__(self, inference_dir: str, run_id: str, data_dir: str = settings.data_dir):
         """
         Creates an inference run object.
 
         @param inference_dir: directory where the inference run if saved.
+        @param data_dir: directory where datasets are located.
         @param run_id: ID of the inference run.
         """
         self.inference_dir = inference_dir
+        self.data_dir = data_dir
         self.run_id = run_id
 
         self.execution_params = None
@@ -105,7 +107,7 @@ class InferenceRun:
         lb = self.execution_params["evidence_filepath"].rfind("/") + 1
         data_filename = self.execution_params["evidence_filepath"][lb:]
 
-        data_filepath = f"{settings.data_dir}/{data_filename}"
+        data_filepath = f"{self.data_dir}/{data_filename}"
         return pd.read_csv(data_filepath)
 
     @property

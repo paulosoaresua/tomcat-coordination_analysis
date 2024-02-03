@@ -7,6 +7,7 @@ from coordination.webapp.component.inference_stats import InferenceStats
 from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
 from coordination.webapp.widget.drop_down import DropDown
+from coordination.webapp.constants import DATA_DIR_STATE_KEY
 
 
 class InferenceResults:
@@ -16,12 +17,12 @@ class InferenceResults:
     """
 
     def __init__(
-        self,
-        component_key: str,
-        inference_run: InferenceRun,
-        experiment_id: str,
-        model_variable_info: ModelVariableInfo,
-        model_variable_dimension: str,
+            self,
+            component_key: str,
+            inference_run: InferenceRun,
+            experiment_id: str,
+            model_variable_info: ModelVariableInfo,
+            model_variable_dimension: str,
     ):
         """
         Creates the component.
@@ -114,7 +115,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -125,14 +126,15 @@ class InferenceResults:
         @param sub_experiment_id: ID of a sub experiment.
         @return: convergence report.
         """
-        inference_run = InferenceRun(inference_dir, run_id)
+        inference_run = InferenceRun(inference_dir, run_id,
+                                     data_dir=st.session_state[DATA_DIR_STATE_KEY])
         idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
         return idata.generate_convergence_summary()
 
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -143,7 +145,8 @@ class InferenceResults:
         @param sub_experiment_id: ID of a sub experiment.
         @return: convergence report.
         """
-        inference_run = InferenceRun(inference_dir, run_id)
+        inference_run = InferenceRun(inference_dir, run_id,
+                                     data_dir=st.session_state[DATA_DIR_STATE_KEY])
         if not inference_run.ppa:
             return None
 
