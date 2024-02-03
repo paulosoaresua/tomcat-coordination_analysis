@@ -241,25 +241,19 @@ class InferenceExecution:
                 options=model_options,
             )
 
-            def update_experiment_list():
-                data_filepath = st.session_state[f"{self.component_key}_data_filepath"]
-                InferenceExecution._load_available_experiment_list(data_filepath)
-                default_execution_params["experiment_ids"] = None
-
             execution_params["data_filepath"] = st.text_input(
                 label="Data Filepath",
                 key=f"{self.component_key}_data_filepath",
-                value=default_execution_params["data_filepath"],
-                on_change=update_experiment_list,
+                value=default_execution_params["data_filepath"]
             )
             InferenceExecution._load_available_experiment_list(
                 execution_params["data_filepath"]
             )
 
-            if default_execution_params["experiment_ids"] is None:
-                selected_exp_ids = None
+            if len(execution_params["data_filepath"]) == 0:
+                selected_exp_ids = []
             else:
-                selected_exp_ids = [e for e in default_execution_params["experiment_ids"] if
+                selected_exp_ids = [e for e in execution_params["data_filepath"] if
                                     e in set(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY])]
             execution_params["experiment_ids"] = st.multiselect(
                 label="Experiments",
