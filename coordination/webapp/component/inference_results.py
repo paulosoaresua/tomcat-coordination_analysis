@@ -107,7 +107,7 @@ class InferenceResults:
         elif self.model_variable_info.inference_mode == "dataset":
             data = self.inference_run.data
             data = data[data["experiment_id"] == self.experiment_id].iloc[0]
-            if pd.api.is_numeric_dtype(data[self.model_variable_dimension]):
+            if pd.api.types.is_numeric_dtype(data[self.model_variable_dimension]):
                 st.write(data[self.model_variable_dimension])
             else:
                 curve = np.array(literal_eval(data))
