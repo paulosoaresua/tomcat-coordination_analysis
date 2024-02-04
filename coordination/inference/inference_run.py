@@ -110,7 +110,7 @@ class InferenceRun:
         data_filename = self.execution_params["evidence_filepath"][lb:]
 
         data_filepath = f"{self.data_dir}/{data_filename}"
-        return pd.read_csv(data_filepath)
+        return pd.read_csv(data_filepath, index_col=0)
 
     @property
     def run_dir(self) -> str:
