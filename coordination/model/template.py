@@ -76,6 +76,7 @@ class ModelTemplate:
         bundle. This allows the config bundle to be updated after the model creation, reflecting
         in changes in the model's modules any time this function is called.
         """
+        pass
 
     def draw_samples(
             self,
@@ -263,6 +264,8 @@ class ModelTemplate:
         self.config_bundle.num_time_steps_to_fit = None
 
         self._create_model_from_config_bundle()
+
+        print(self.config_bundle.fnirs_group)
 
         # Determine the maximum number of time steps to sample
         lb = idata.num_time_steps_in_coordination_scale
