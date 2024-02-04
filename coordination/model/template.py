@@ -300,6 +300,8 @@ class ModelTemplate:
         samples = self.draw_samples(num_series=num_samples)
         results = []
 
+        mse_train_global = []
+        mse_test_global = []
         for g in self._model.component_groups:
             for o in g.observations:
                 if not isinstance(o, GaussianObservation):
@@ -360,6 +362,10 @@ class ModelTemplate:
                         }
                     )
 
+                # We store this to later compute global RMSEs. For all modalities and features.
+                mse_train_global.append(mse_train)
+                mse_test_global.append(mse_test)
+
                 # Add an extra dimension to represent the MSE over all features
                 results.append(
                     {
@@ -386,6 +392,35 @@ class ModelTemplate:
                         },
                     }
                 )
+
+        # Add an extra dimension to represent the MSE over all features of all modalities
+        results.append(
+            {
+                "model": self._model.uuid,
+                "variable": "all",
+                "feature": "all",
+                "mode": "test",
+                **{
+                    # Mean over modalities and features
+                    f"w{w}": np.mean(mse_test_global.mean(axis=(0, 1)))[w - 1]
+                    for w in range(1, window_size + 1)
+                },
+            }
+        )
+        results.append(
+            {
+                "model": self._model.uuid,
+                "variable": "all",
+                "feature": "all",
+                "mode": "train",
+                # Repeat the same value on all the windows
+                **{
+                    # Mean over modalities and features
+                    f"w{w}": np.mean(mse_train_global.mean(axis=(0, 1)))
+                    for w in range(1, window_size + 1)
+                },
+            }
+        )
 
         return pd.DataFrame(results)
 
