@@ -60,23 +60,23 @@ class BrainModel(ModelTemplate):
             # Form a tensor of observations by getting only the dimensions of the features
             # in the group.
             feature_idx = [
-                bundle.fnirs_channel_names.index(feature)
+                config_bundle.fnirs_channel_names.index(feature)
                 for feature in fnirs_group["features"]
             ]
 
             observed_values = (
                 np.take_along_axis(
-                    fnirs_metadata.normalized_observations,
+                    config_bundle.fnirs_observed_values,
                     indices=np.array(feature_idx, dtype=int)[None, :, None],
                     axis=1,
                 )
-                if bundle.fnirs_observed_values is not None
+                if config_bundle.fnirs_observed_values is not None
                 else None
             )
 
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = fnirs_group["name"]
-            suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
+            suffix = "" if config_bundle.fnirs_groups is None else f"_{group_name}"
 
             if f"fnirs{suffix}" in self.metadata:
                 metadata: NonSerialMetadata = self.metadata[f"fnirs{suffix}"]
