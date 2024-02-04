@@ -34,7 +34,7 @@ class BrainModel(ModelTemplate):
     """
 
     def __init__(
-        self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
+            self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a brain model.
@@ -170,12 +170,29 @@ class BrainModel(ModelTemplate):
             fnirs_groups = [{"name": None, "features": bundle.fnirs_channel_names}]
 
         groups = []
-        for fnirs_group in fnirs_groups:
+        for i, fnirs_group in enumerate(fnirs_groups):
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = fnirs_group["name"]
             suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
 
             fnirs_metadata = self.metadata[f"fnirs{suffix}"]
+
+            # One value for each group can be given in form of a list. This also happens when
+            # filling these parameters from the posterior samples from different groups.
+            if isinstance(bundle.fnirs_mean_a0, list):
+                mean_a0 = bundle.fnirs_mean_a0[i]
+            else:
+                mean_a0 = bundle.fnirs_mean_a0
+
+            if isinstance(bundle.fnirs_sd_a, list):
+                sd_a = bundle.fnirs_sd_a[i]
+            else:
+                sd_a = bundle.fnirs_sd_a
+
+            if isinstance(bundle.initial_fnirs_state_space_samples, list):
+                initial_state_space_samples = bundle.initial_fnirs_state_space_samples[i]
+            else:
+                initial_state_space_samples = bundle.initial_fnirs_state_space_samples
 
             state_space = NonSerial2DGaussianLatentComponent(
                 uuid=f"fnirs_state_space{suffix}",
@@ -191,12 +208,11 @@ class BrainModel(ModelTemplate):
                 time_steps_in_coordination_scale=(
                     fnirs_metadata.time_steps_in_coordination_scale
                 ),
-                mean_a0=bundle.fnirs_mean_a0,
-                sd_a=bundle.fnirs_sd_a,
+                mean_a0=mean_a0,
+                sd_a=sd_a,
                 sampling_relative_frequency=bundle.sampling_relative_frequency,
-                initial_samples=bundle.initial_fnirs_state_space_samples,
+                initial_samples=initial_state_space_samples,
             )
-
             # We assume data is normalize and add a transformation with fixed unitary weights that
             # bring the position in the state space to a collection of channels in the
             # observations.
@@ -218,6 +234,11 @@ class BrainModel(ModelTemplate):
                 ]
             )
 
+            if isinstance(bundle.fnirs_sd_o, list):
+                sd_o = bundle.fnirs_sd_o[i]
+            else:
+                sd_o = bundle.fnirs_sd_o
+
             observation = NonSerialGaussianObservation(
                 uuid=f"fnirs{suffix}",
                 pymc_model=self.pymc_model,
@@ -231,7 +252,7 @@ class BrainModel(ModelTemplate):
                 time_steps_in_coordination_scale=(
                     fnirs_metadata.time_steps_in_coordination_scale
                 ),
-                sd_o=bundle.fnirs_sd_o,
+                sd_o=sd_o,
             )
 
             group = ComponentGroup(
@@ -246,11 +267,11 @@ class BrainModel(ModelTemplate):
         return groups
 
     def new_config_bundle_from_posterior_samples(
-        self,
-        config_bundle: BrainBundle,
-        idata: InferenceData,
-        num_samples: int,
-        seed: int = DEFAULT_SEED,
+            self,
+            config_bundle: BrainBundle,
+            idata: InferenceData,
+            num_samples: int,
+            seed: int = DEFAULT_SEED,
     ) -> BrainBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
@@ -265,22 +286,36 @@ class BrainModel(ModelTemplate):
         """
         new_bundle = deepcopy(config_bundle)
 
-        # TODO: adjust this when there are fnirs groups.
-
         np.random.seed(seed)
         samples_idx = np.random.choice(
             idata.num_posterior_samples, num_samples, replace=False
         )
 
-        new_bundle.fnirs_mean_a0 = idata.get_posterior_samples(
-            "fnirs_state_space_mean_a0", samples_idx
-        )
-        new_bundle.fnirs_sd_a = idata.get_posterior_samples(
-            "fnirs_state_space_sd_a", samples_idx
-        )
-        new_bundle.fnirs_sd_o = idata.get_posterior_samples(
-            "fnirs_sd_o", samples_idx
-        )
+        fnirs_groups = bundle.fnirs_groups
+        if fnirs_groups is None:
+            fnirs_groups = [{"name": None, "features": bundle.fnirs_channel_names}]
+
+        new_bundle.fnirs_mean_a0 = []
+        new_bundle.fnirs_sd_a = []
+        new_bundle.fnirs_sd_o = []
+        new_bundle.initial_state_space_samples = []
+        for fnirs_group in fnirs_groups:
+            # For retro-compatibility, we only add suffix if groups were defined.
+            group_name = fnirs_group["name"]
+            suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
+
+            new_bundle.fnirs_mean_a0.append(idata.get_posterior_samples(
+                f"fnirs_state_space_{suffix}_mean_a0", samples_idx
+            ))
+            new_bundle.fnirs_sd_a.append(idata.get_posterior_samples(
+                f"fnirs_state_space_{suffix}_sd_a", samples_idx
+            ))
+            new_bundle.fnirs_sd_o.append(idata.get_posterior_samples(
+                f"fnirs_{suffix}_sd_o", samples_idx
+            ))
+            new_bundle.initial_state_space_samples.append(idata.get_posterior_samples(
+                "fnirs_state_space", samples_idx
+            ))
 
         if config_bundle.constant_coordination:
             new_bundle.initial_coordination_samples = idata.get_posterior_samples(
@@ -297,8 +332,6 @@ class BrainModel(ModelTemplate):
                 "coordination", samples_idx
             )
 
-        new_bundle.initial_state_space_samples = idata.get_posterior_samples(
-            "fnirs_state_space", samples_idx
-        )
+
 
         return new_bundle

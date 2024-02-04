@@ -265,9 +265,6 @@ class ModelTemplate:
 
         self._create_model_from_config_bundle()
 
-        print(self.config_bundle.fnirs_groups)
-        print(self.metadata.keys())
-
         # Determine the maximum number of time steps to sample
         lb = idata.num_time_steps_in_coordination_scale
         ub = None
