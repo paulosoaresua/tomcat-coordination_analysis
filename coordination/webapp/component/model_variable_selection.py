@@ -1,6 +1,7 @@
 import numpy as np
 import streamlit as st
 import pandas as pd
+from ast import literal_eval
 
 from coordination.inference.inference_run import InferenceRun
 from coordination.inference.model_variable import ModelVariableInfo
@@ -86,6 +87,8 @@ class ModelVariableSelection:
                     dimensions.append(col)
                 else:
                     try:
+                        print(col)
+                        print(np.stack(data[col].apply(literal_eval)).shape)
                         if np.stack(data[col].apply(literal_eval)).ndim == 2:
                             dimensions.append(col)
                     except Exception:
