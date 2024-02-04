@@ -324,8 +324,7 @@ def plot_series(
             mode="lines+markers" if marker else "lines",
             line=dict(color=color),
             name=label,
-            showlegend=label is not None,
-            marker=marker
+            showlegend=label is not None
         )
     )
 
