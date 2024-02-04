@@ -363,8 +363,9 @@ class ModelTemplate:
                     )
 
                 # We store this to later compute global RMSEs. For all modalities and features.
-                mse_train_global.append(mse_train)
-                mse_test_global.append(mse_test)
+                # Mean over features.
+                mse_train_global.append(mse_train.mean(axis=0))
+                mse_test_global.append(mse_test.mean(axis=0))
 
                 # Add an extra dimension to represent the MSE over all features
                 results.append(
@@ -401,8 +402,8 @@ class ModelTemplate:
                 "feature": "all",
                 "mode": "test",
                 **{
-                    # Mean over modalities and features
-                    f"w{w}": np.mean(mse_test_global, axis=(0, 1))[w - 1]
+                    # Mean over modalities
+                    f"w{w}": np.mean(mse_test_global, axis=0)[w - 1]
                     for w in range(1, window_size + 1)
                 },
             }
@@ -415,8 +416,8 @@ class ModelTemplate:
                 "mode": "train",
                 # Repeat the same value on all the windows
                 **{
-                    # Mean over modalities and features
-                    f"w{w}": np.mean(mse_train_global, axis=(0, 1))
+                    # Mean over modalities
+                    f"w{w}": np.mean(mse_train_global, axis=0)
                     for w in range(1, window_size + 1)
                 },
             }
