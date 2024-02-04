@@ -291,9 +291,9 @@ class BrainModel(ModelTemplate):
             idata.num_posterior_samples, num_samples, replace=False
         )
 
-        fnirs_groups = bundle.fnirs_groups
+        fnirs_groups = new_bundle.fnirs_groups
         if fnirs_groups is None:
-            fnirs_groups = [{"name": None, "features": bundle.fnirs_channel_names}]
+            fnirs_groups = [{"name": None, "features": new_bundle.fnirs_channel_names}]
 
         new_bundle.fnirs_mean_a0 = []
         new_bundle.fnirs_sd_a = []
@@ -302,7 +302,7 @@ class BrainModel(ModelTemplate):
         for fnirs_group in fnirs_groups:
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = fnirs_group["name"]
-            suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
+            suffix = "" if new_bundle.fnirs_groups is None else f"_{group_name}"
 
             new_bundle.fnirs_mean_a0.append(idata.get_posterior_samples(
                 f"fnirs_state_space_{suffix}_mean_a0", samples_idx
