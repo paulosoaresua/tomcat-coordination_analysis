@@ -86,7 +86,7 @@ class BrainModel(ModelTemplate):
                 metadata.observed_values = observed_values
                 metadata.normalization_method = config_bundle.observation_normalization
             else:
-                self.metadata["fnirs"] = NonSerialMetadata(
+                self.metadata[f"fnirs{suffix}"] = NonSerialMetadata(
                     time_steps_in_coordination_scale=(
                         config_bundle.fnirs_time_steps_in_coordination_scale
                     ),
