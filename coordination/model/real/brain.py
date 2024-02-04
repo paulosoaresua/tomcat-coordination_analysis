@@ -213,7 +213,7 @@ class BrainModel(ModelTemplate):
                         hidden_dimension_size=0,
                         activation="linear",
                         axis=1,  # fnirs channel axis
-                        weights=[np.ones((1, bundle.num_fnirs_channels))],
+                        weights=[np.ones((1, len(fnirs_group["features"])))],
                     ),
                 ]
             )
