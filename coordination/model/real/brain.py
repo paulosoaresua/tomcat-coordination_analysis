@@ -51,21 +51,48 @@ class BrainModel(ModelTemplate):
         allow adjustment of time steps later if we want to fit/sample less time steps than the
         informed in the original config bundle.
         """
-        if "fnirs" in self.metadata:
-            metadata: NonSerialMetadata = self.metadata["fnirs"]
-            metadata.time_steps_in_coordination_scale = (
-                config_bundle.fnirs_time_steps_in_coordination_scale
-            )
-            metadata.observed_values = config_bundle.fnirs_observed_values
-            metadata.normalization_method = config_bundle.observation_normalization
+        if config_bundle.fnirs_groups is None:
+            fnirs_groups = [{"name": None, "features": config_bundle.fnirs_channel_names}]
         else:
-            self.metadata["fnirs"] = NonSerialMetadata(
-                time_steps_in_coordination_scale=(
-                    config_bundle.fnirs_time_steps_in_coordination_scale
-                ),
-                observed_values=config_bundle.fnirs_observed_values,
-                normalization_method=config_bundle.observation_normalization,
+            fnirs_groups = config_bundle.fnirs_groups
+
+        for fnirs_group in fnirs_groups:
+            # Form a tensor of observations by getting only the dimensions of the features
+            # in the group.
+            feature_idx = [
+                bundle.fnirs_channel_names.index(feature)
+                for feature in fnirs_group["features"]
+            ]
+
+            observed_values = (
+                np.take_along_axis(
+                    fnirs_metadata.normalized_observations,
+                    indices=np.array(feature_idx, dtype=int)[None, :, None],
+                    axis=1,
+                )
+                if bundle.fnirs_observed_values is not None
+                else None
             )
+
+            # For retro-compatibility, we only add suffix if groups were defined.
+            group_name = fnirs_group["name"]
+            suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
+
+            if f"fnirs{suffix}" in self.metadata:
+                metadata: NonSerialMetadata = self.metadata[f"fnirs{suffix}"]
+                metadata.time_steps_in_coordination_scale = (
+                    config_bundle.fnirs_time_steps_in_coordination_scale
+                )
+                metadata.observed_values = observed_values
+                metadata.normalization_method = config_bundle.observation_normalization
+            else:
+                self.metadata["fnirs"] = NonSerialMetadata(
+                    time_steps_in_coordination_scale=(
+                        config_bundle.fnirs_time_steps_in_coordination_scale
+                    ),
+                    observed_values=observed_values,
+                    normalization_method=config_bundle.observation_normalization,
+                )
 
     def _create_model_from_config_bundle(self):
         """
@@ -136,8 +163,6 @@ class BrainModel(ModelTemplate):
         @param bundle: config bundle holding information on how to parameterize the modules.
         @return: a list of component groups to be added to the model.
         """
-        fnirs_metadata: NonSerialMetadata = self.metadata["fnirs"]
-
         # In the 2D case, it may be interesting having multiple state space chains with their
         # own dynamics if different features of a modality have different movement dynamics.
         fnirs_groups = bundle.fnirs_groups
@@ -146,26 +171,11 @@ class BrainModel(ModelTemplate):
 
         groups = []
         for fnirs_group in fnirs_groups:
-            # Form a tensor of observations by getting only the dimensions of the features
-            # in the group.
-            feature_idx = [
-                bundle.fnirs_channel_names.index(feature)
-                for feature in fnirs_group["features"]
-            ]
-
-            observed_values = (
-                np.take_along_axis(
-                    fnirs_metadata.normalized_observations,
-                    indices=np.array(feature_idx, dtype=int)[None, :, None],
-                    axis=1,
-                )
-                if bundle.fnirs_observed_values is not None
-                else None
-            )
-
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = fnirs_group["name"]
             suffix = "" if bundle.fnirs_groups is None else f"_{group_name}"
+
+            fnirs_metadata = self.metadata[f"fnirs{suffix}"]
 
             state_space = NonSerial2DGaussianLatentComponent(
                 uuid=f"fnirs_state_space{suffix}",
@@ -217,7 +227,7 @@ class BrainModel(ModelTemplate):
                 share_sd_o_across_subjects=bundle.fnirs_share_sd_o_across_subjects,
                 share_sd_o_across_dimensions=bundle.fnirs_share_sd_o_across_dimensions,
                 dimension_names=fnirs_group["features"],
-                observed_values=observed_values,
+                observed_values=fnirs_metadata.normalized_observations,
                 time_steps_in_coordination_scale=(
                     fnirs_metadata.time_steps_in_coordination_scale
                 ),
