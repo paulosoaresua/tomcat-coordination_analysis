@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 from ast import literal_eval
+import numpy as np
 
 from coordination.inference.inference_run import InferenceRun
 from coordination.inference.model_variable import ModelVariableInfo
