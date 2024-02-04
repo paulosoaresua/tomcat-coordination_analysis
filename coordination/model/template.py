@@ -318,7 +318,7 @@ class ModelTemplate:
                 y_hat_train = y_hat[..., :y_train.shape[-1]]
                 y_hat_test = y_hat[..., -window_size:]
 
-                mse_train = np.cumsum(np.square(y_train - y_hat_train), axis=-1)
+                mse_train = np.square(y_train - y_hat_train)
                 mse_test = np.cumsum(np.square(y_test - y_hat_test), axis=-1) / np.arange(
                     1, window_size + 1
                 )
