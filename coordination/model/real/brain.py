@@ -305,16 +305,16 @@ class BrainModel(ModelTemplate):
             suffix = "" if new_bundle.fnirs_groups is None else f"_{group_name}"
 
             new_bundle.fnirs_mean_a0.append(idata.get_posterior_samples(
-                f"fnirs_state_space_{suffix}_mean_a0", samples_idx
+                f"fnirs_state_space{suffix}_mean_a0", samples_idx
             ))
             new_bundle.fnirs_sd_a.append(idata.get_posterior_samples(
-                f"fnirs_state_space_{suffix}_sd_a", samples_idx
+                f"fnirs_state_space{suffix}_sd_a", samples_idx
             ))
             new_bundle.fnirs_sd_o.append(idata.get_posterior_samples(
-                f"fnirs_{suffix}_sd_o", samples_idx
+                f"fnirs{suffix}_sd_o", samples_idx
             ))
             new_bundle.initial_state_space_samples.append(idata.get_posterior_samples(
-                "fnirs_state_space", samples_idx
+                f"fnirs_state_space{suffix}", samples_idx
             ))
 
         if config_bundle.constant_coordination:
