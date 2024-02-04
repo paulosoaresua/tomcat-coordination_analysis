@@ -103,6 +103,8 @@ class InferenceResults:
                 st.write(ppa_results)
             else:
                 st.write(":red[PPA not performed in this inference run.]")
+        elif self.model_variable_info.inference_mode == "dataset":
+            st.write("Display outcome measure from dataset")
         else:
             model_variable_inference_results_component = ModelVariableInferenceResults(
                 component_key=f"{self.component_key}_model_variable_inference_results",
