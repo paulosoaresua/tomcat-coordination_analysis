@@ -10,6 +10,7 @@ from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
 from coordination.webapp.constants import DATA_DIR_STATE_KEY, DEFAULT_PLOT_MARGINS
 from coordination.webapp.widget.drop_down import DropDown
+from coordination.webapp.utils import plot_series
 
 
 class InferenceResults:
@@ -115,7 +116,8 @@ class InferenceResults:
                 time_steps = np.arange(len(curve))
                 fig = plot_series(
                     x=time_steps,
-                    y=curve
+                    y=curve,
+                    marker=True
                 )
                 fig.update_layout(
                     xaxis_title="Time Step",
