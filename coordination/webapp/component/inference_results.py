@@ -112,7 +112,7 @@ class InferenceResults:
             if pd.api.types.is_numeric_dtype(data[self.model_variable_dimension]):
                 st.write(data[self.model_variable_dimension])
             else:
-                curve = np.array(literal_eval(data))
+                curve = np.array(literal_eval(data[self.model_variable_dimension]))
                 time_steps = np.arange(len(curve))
                 fig = plot_series(
                     x=time_steps,
