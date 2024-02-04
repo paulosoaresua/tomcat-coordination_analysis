@@ -402,7 +402,7 @@ class ModelTemplate:
                 "mode": "test",
                 **{
                     # Mean over modalities and features
-                    f"w{w}": np.mean(mse_test_global.mean(axis=(0, 1)))[w - 1]
+                    f"w{w}": np.mean(mse_test_global, axis=(0, 1))[w - 1]
                     for w in range(1, window_size + 1)
                 },
             }
@@ -416,7 +416,7 @@ class ModelTemplate:
                 # Repeat the same value on all the windows
                 **{
                     # Mean over modalities and features
-                    f"w{w}": np.mean(mse_train_global.mean(axis=(0, 1)))
+                    f"w{w}": np.mean(mse_train_global, axis=(0, 1))
                     for w in range(1, window_size + 1)
                 },
             }
