@@ -87,8 +87,6 @@ class ModelVariableSelection:
                     dimensions.append(col)
                 else:
                     try:
-                        print(col)
-                        print(np.stack(data[col].apply(literal_eval)).shape)
                         if np.stack(data[col].apply(literal_eval)).ndim == 2:
                             dimensions.append(col)
                     except Exception:

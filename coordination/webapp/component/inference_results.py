@@ -1,12 +1,13 @@
 import pandas as pd
 import streamlit as st
+from ast import literal_eval
 
 from coordination.inference.inference_run import InferenceRun
 from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.component.inference_stats import InferenceStats
 from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
-from coordination.webapp.constants import DATA_DIR_STATE_KEY
+from coordination.webapp.constants import DATA_DIR_STATE_KEY, DEFAULT_PLOT_MARGINS
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -17,12 +18,12 @@ class InferenceResults:
     """
 
     def __init__(
-        self,
-        component_key: str,
-        inference_run: InferenceRun,
-        experiment_id: str,
-        model_variable_info: ModelVariableInfo,
-        model_variable_dimension: str,
+            self,
+            component_key: str,
+            inference_run: InferenceRun,
+            experiment_id: str,
+            model_variable_info: ModelVariableInfo,
+            model_variable_dimension: str,
     ):
         """
         Creates the component.
@@ -104,7 +105,27 @@ class InferenceResults:
             else:
                 st.write(":red[PPA not performed in this inference run.]")
         elif self.model_variable_info.inference_mode == "dataset":
-            st.write("Display outcome measure from dataset")
+            data = self.inference_run.data
+            data = data[data["experiment_id"] == self.experiment_id].iloc[0]
+            if pd.api.is_numeric_dtype(data[self.model_variable_dimension]):
+                st.write(data[self.model_variable_dimension])
+            else:
+                curve = np.array(literal_eval(data))
+                time_steps = np.arange(len(curve))
+                fig = plot_series(
+                    x=time_steps,
+                    y=curve
+                )
+                fig.update_layout(
+                    xaxis_title="Time Step",
+                    yaxis_title=self.model_variable_dimension,
+                    # Preserve legend order
+                    legend={"traceorder": "normal"},
+                    margin=DEFAULT_PLOT_MARGINS,
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
         else:
             model_variable_inference_results_component = ModelVariableInferenceResults(
                 component_key=f"{self.component_key}_model_variable_inference_results",
@@ -117,7 +138,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -137,7 +158,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
