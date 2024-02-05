@@ -247,6 +247,13 @@ def infer(out_dir: str,
                          f"base_compiledir={settings.pytensor_comp_dir}'"
         call_python_script_command = f"{pytensor_flags} {call_python_script_command}"
 
+        # The environment variables below will make sure each chain does not take all the
+        # resources, slowing down inference. This will prevent chains from spawning threads of
+        # their own.
+        blas_flags = f"MKL_NUM_THREADS={num_chains} OMP_NUM_THREADS={num_chains} " \
+                     f"OPENBLAS_NUM_THREADS={num_chains}"
+        call_python_script_command = f"{blas_flags} {call_python_script_command}"
+
         print(f"\nCalling the following command in the TMUX window {tmux_window_name}.")
         print(call_python_script_command)
 
