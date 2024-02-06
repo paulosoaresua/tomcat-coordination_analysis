@@ -231,9 +231,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                     * self.sampling_relative_frequency
             ).astype(int)
         else:
-            time_steps_in_coordination_scale = [
-                                                   self.time_steps_in_coordination_scale
-                                               ] * num_series
+            time_steps_in_coordination_scale = np.array(self.time_steps_in_coordination_scale)
 
         # Draw values from the system dynamics. The default model generates samples by following a
         # Gaussian random walk with blended values from different subjects according to the
@@ -315,7 +313,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                 if self.self_dependent:
                     prev_same = values[..., t - 1]  # n x s x d
                 else:
-                    prev_same = mean_a0[None, :]  # n x s x d
+                    prev_same = mean_a0  # n x s x d
 
                 blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
 

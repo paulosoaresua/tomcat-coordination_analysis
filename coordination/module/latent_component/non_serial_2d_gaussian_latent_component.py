@@ -178,7 +178,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
         for t in range(t0, num_time_steps):
             if t == 0:
-                values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
+                values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
                     size=(num_series, self.num_subjects, self.dimension_size)
                 )
             else:

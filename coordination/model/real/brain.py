@@ -300,7 +300,7 @@ class BrainModel(ModelTemplate):
         new_bundle.fnirs_mean_a0 = []
         new_bundle.fnirs_sd_a = []
         new_bundle.fnirs_sd_o = []
-        new_bundle.initial_state_space_samples = []
+        new_bundle.initial_fnirs_state_space_samples = []
         for fnirs_group in fnirs_groups:
             # For retro-compatibility, we only add suffix if groups were defined.
             group_name = fnirs_group["name"]
@@ -315,7 +315,7 @@ class BrainModel(ModelTemplate):
             new_bundle.fnirs_sd_o.append(idata.get_posterior_samples(
                 f"fnirs{suffix}_sd_o", samples_idx
             ))
-            new_bundle.initial_state_space_samples.append(idata.get_posterior_samples(
+            new_bundle.initial_fnirs_state_space_samples.append(idata.get_posterior_samples(
                 f"fnirs_state_space{suffix}", samples_idx
             ))
 
