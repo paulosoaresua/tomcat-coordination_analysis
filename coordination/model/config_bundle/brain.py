@@ -110,12 +110,12 @@ class BrainBundle(ModelConfigBundle):
     #     {
     #         "name": "s1_d1_s1_d2",
     #         "features": ["s1_d1", "s1_d2"],
-    #         "symmetric_coordination": True,
+    #         "asymmetric_coordination": False,
     #     },
     #     {
     #         "name": "s3_d1_s3_d2",
     #         "features": ["s3_d1", "s3_d2"],
-    #         "symmetric_coordination": True,
+    #         "asymmetric_coordination": False,
     #     }
     # ]
     fnirs_groups: List[Dict[str, Any]] = None
