@@ -60,6 +60,7 @@ class BrainBundle(ModelConfigBundle):
 
     # Modules settings
     include_ekg: bool = False
+    asymmetric_coordination: bool = False
 
     num_fnirs_channels: int = 20
     fnirs_channel_names: List[str] = field(
@@ -108,11 +109,13 @@ class BrainBundle(ModelConfigBundle):
     # fnirs_groups = [
     #     {
     #         "name": "s1_d1_s1_d2",
-    #         "features": ["s1_d1", "s1_d2"]
+    #         "features": ["s1_d1", "s1_d2"],
+    #         "symmetric_coordination": True,
     #     },
     #     {
     #         "name": "s3_d1_s3_d2",
     #         "features": ["s3_d1", "s3_d2"],
+    #         "symmetric_coordination": True,
     #     }
     # ]
     fnirs_groups: List[Dict[str, Any]] = None

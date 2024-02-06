@@ -67,6 +67,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     # Modules settings
     state_space_2d: bool = False
     include_semantic: bool = False
+    asymmetric_coordination: bool = False
 
     #   The two options below are only used if state_space_2d = False. Otherwise, the latent
     #   space will be composed of 2 dimensions: position and speed.
@@ -119,12 +120,14 @@ class VocalicConfigBundle(ModelConfigBundle):
     #     {
     #         "name": "pitch_intensity",
     #         "features": ["pitch", "intensity"],
-    #         "weights": [np.ones((1, 2))]
+    #         "weights": [np.ones((1, 2))],
+    #         "asymmetric_coordination": false
     #     },
     #     {
     #         "name": "jitter_shimmer",
     #         "features": ["jitter", "shimmer"],
-    #         "weights": [np.ones((1, 2))]
+    #         "weights": [np.ones((1, 2))],
+    #         "asymmetric_coordination": false
     #     }
     # ]
     vocalic_groups: List[Dict[str, Any]] = None

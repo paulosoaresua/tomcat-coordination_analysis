@@ -30,29 +30,30 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        subject_names: Optional[List[str]] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        observed_values: Optional[TensorTypes] = None,
-        mean_a0: Optional[Union[float, np.ndarray]] = None,
-        sd_a: Optional[Union[float, np.ndarray]] = None,
-        initial_samples: Optional[np.ndarray] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            subject_names: Optional[List[str]] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            observed_values: Optional[TensorTypes] = None,
+            mean_a0: Optional[Union[float, np.ndarray]] = None,
+            sd_a: Optional[Union[float, np.ndarray]] = None,
+            initial_samples: Optional[np.ndarray] = None,
+            asymmetric_coordination: bool = False
     ):
         """
         Creates a non-serial 2D Gaussian latent component.
@@ -96,6 +97,9 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             provided now, it can be set later via the module parameters variable.
         @param initial_samples: samples from the posterior to use during a call to draw_samples.
             This is useful to do predictive checks by sampling data in the future.
+        @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
+            the value of a component for one subject depends on the negative of the combination of
+            the others.
         """
         super().__init__(
             uuid=uuid,
@@ -121,18 +125,19 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             mean_a0=mean_a0,
             sd_a=sd_a,
             initial_samples=initial_samples,
+            asymmetric_coordination=asymmetric_coordination
         )
 
         self.subject_names = subject_names
         self.sampling_relative_frequency = sampling_relative_frequency
 
     def _draw_from_system_dynamics(
-        self,
-        sampled_coordination: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
-        init_values: Optional[np.ndarray] = None,
+            self,
+            sampled_coordination: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
+            init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values with the following updating equations for the state of the component at time
@@ -178,11 +183,12 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 )
             else:
                 c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
+                c_mask = -1 if self.asymmetric_coordination else 1
 
                 # n x s x d
                 prev_others = np.einsum(
                     "ij,kjl->kil", sum_matrix_others, values[..., t - 1]
-                )
+                ) * c_mask
                 prev_same = values[..., t - 1]  # n x s x d
 
                 # The matrix F multiplied by the state of a component "a" at time t - 1
@@ -237,11 +243,12 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    self_dependent: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        self_dependent: ptt.TensorConstant,
+        symmetry_mask: int,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -257,6 +264,7 @@ def log_prob(
         deviation is associated with the subject at that time.
     @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @return: log-probability of the sample.
     """
 
@@ -272,8 +280,8 @@ def log_prob(
     # We discard the last value as that is not a previous value of any other.
     sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
     prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[
-        ..., :-1
-    ]  # S x 2 x T-1
+                  ..., :-1
+                  ] * symmetry_mask  # S x 2 x T-1
     prev_same = sample[..., :-1]  # S x 2 x T-1
 
     # Coordination does not affect the component in the first time step because the subjects have
@@ -320,12 +328,13 @@ def log_prob(
 
 
 def random(
-    initial_mean: np.ndarray,
-    sigma: np.ndarray,
-    coordination: np.ndarray,
-    self_dependent: bool,
-    rng: Optional[np.random.Generator] = None,
-    size: Optional[Tuple[int]] = None,
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        self_dependent: bool,
+        symmetry_mask: int,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
     """
     Generates samples from of a non-serial latent component for prior predictive checks.
@@ -340,6 +349,7 @@ def random(
         deviation is associated with the subject at that time.
     @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @param rng: random number generator.
     @param size: size of the sample.
 
@@ -358,7 +368,7 @@ def random(
 
     sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
     for t in np.arange(1, T):
-        prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # S x D
+        prev_others = np.dot(sum_matrix_others, sample[..., t - 1]) * symmetry_mask  # S x D
         prev_same = sample[..., t - 1]  # S x D
 
         c = coordination[t]

@@ -32,33 +32,34 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
-        allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
-        fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        subject_indices: Optional[np.ndarray] = None,
-        prev_time_same_subject: Optional[np.ndarray] = None,
-        prev_time_diff_subject: Optional[np.ndarray] = None,
-        observed_values: Optional[TensorTypes] = None,
-        mean_a0: Optional[Union[float, np.ndarray]] = None,
-        sd_a: Optional[Union[float, np.ndarray]] = None,
-        initial_samples: Optional[np.ndarray] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_time_scale_density: float = DEFAULT_SAMPLING_TIME_SCALE_DENSITY,
+            allow_sampled_subject_repetition: bool = DEFAULT_SUBJECT_REPETITION_FLAG,
+            fix_sampled_subject_sequence: bool = DEFAULT_FIXED_SUBJECT_SEQUENCE_FLAG,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            subject_indices: Optional[np.ndarray] = None,
+            prev_time_same_subject: Optional[np.ndarray] = None,
+            prev_time_diff_subject: Optional[np.ndarray] = None,
+            observed_values: Optional[TensorTypes] = None,
+            mean_a0: Optional[Union[float, np.ndarray]] = None,
+            sd_a: Optional[Union[float, np.ndarray]] = None,
+            initial_samples: Optional[np.ndarray] = None,
+            asymmetric_coordination: bool = False
     ):
         """
         Creates a serial 2D Gaussian latent component.
@@ -119,6 +120,9 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             provided now, it can be set later via the module parameters variable.
         @param initial_samples: samples from the posterior to use during a call to draw_samples.
             This is useful to do predictive checks by sampling data in the future.
+        @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
+            the value of a component for one subject depends on the negative of the combination of
+            the others.
         """
         super().__init__(
             uuid=uuid,
@@ -150,18 +154,19 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             mean_a0=mean_a0,
             sd_a=sd_a,
             initial_samples=initial_samples,
+            asymmetric_coordination=asymmetric_coordination
         )
 
     def _draw_from_system_dynamics(
-        self,
-        coordination_sampled_series: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        subjects_in_time: np.ndarray,
-        prev_time_same_subject: np.ndarray,
-        prev_time_diff_subject: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
-        init_values: Optional[np.ndarray] = None,
+            self,
+            coordination_sampled_series: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            subjects_in_time: np.ndarray,
+            prev_time_same_subject: np.ndarray,
+            prev_time_diff_subject: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
+            init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values with the following updating equations for the state of the component at time
@@ -216,10 +221,11 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
                 values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dimension_size)
             else:
                 c = coordination_sampled_series[time_steps_in_coordination_scale[t]]
+                c_mask = -1 if self.asymmetric_coordination else 1
 
                 prev_same = values[..., prev_time_same_subject[t]]
 
-                prev_other = values[..., prev_time_diff_subject[t]]
+                prev_other = values[..., prev_time_diff_subject[t]] * c_mask
 
                 # The matrix F multiplied by the state of a component "a" at time t - 1
                 # ([P(t-1), S(t-1)]) gives us:
@@ -272,15 +278,16 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    prev_time_same_subject: ptt.TensorConstant,
-    prev_time_diff_subject: ptt.TensorConstant,
-    prev_same_subject_mask: ptt.TensorConstant,
-    prev_diff_subject_mask: ptt.TensorConstant,
-    self_dependent: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        prev_time_same_subject: ptt.TensorConstant,
+        prev_time_diff_subject: ptt.TensorConstant,
+        prev_same_subject_mask: ptt.TensorConstant,
+        prev_diff_subject_mask: ptt.TensorConstant,
+        self_dependent: ptt.TensorConstant,
+        symmetry_mask: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -311,13 +318,14 @@ def log_prob(
         is -1.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
         Not used by this implementation as self_dependency is fixed to True.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @return: log-probability of the sample.
     """
 
     # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
     # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
     # case the first dimension of the sample component is one.
-    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # D x T
+    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape) * symmetry_mask  # D x T
 
     # The component's value for a subject depends on its previous value for the same subject.
     prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # D x T
@@ -332,8 +340,8 @@ def log_prob(
 
     c = coordination * prev_diff_subject_mask
     F = (
-        ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]])
-        - ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
+            ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]])
+            - ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
     )
     U = ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
 
@@ -355,16 +363,17 @@ def log_prob(
 
 
 def random(
-    initial_mean: np.ndarray,
-    sigma: np.ndarray,
-    coordination: np.ndarray,
-    prev_time_same_subject: np.ndarray,
-    prev_time_diff_subject: np.ndarray,
-    prev_same_subject_mask: np.ndarray,
-    prev_diff_subject_mask: np.ndarray,
-    self_dependent: bool,
-    rng: Optional[np.random.Generator] = None,
-    size: Optional[Tuple[int]] = None,
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        prev_time_same_subject: np.ndarray,
+        prev_time_diff_subject: np.ndarray,
+        prev_same_subject_mask: np.ndarray,
+        prev_diff_subject_mask: np.ndarray,
+        self_dependent: bool,
+        symmetry_mask: int,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
     """
     Generates samples from of a serial latent component for prior predictive checks.
@@ -393,6 +402,7 @@ def random(
     @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
         is -1.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @param rng: random number generator.
     @param size: size of the sample.
 
@@ -411,7 +421,7 @@ def random(
     sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
 
     for t in np.arange(1, T):
-        prev_other = sample[..., prev_time_diff_subject[t]]  # D
+        prev_other = sample[..., prev_time_diff_subject[t]] * symmetry_mask  # D
 
         # Previous sample from the same individual
         if prev_same_subject_mask[t] == 1:
