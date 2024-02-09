@@ -153,7 +153,7 @@ class BrainModel(ModelTemplate):
             )
 
         groups = self._create_fnirs_groups(bundle)
-        groups.append(self._create_gsr_groups(bundle))
+        groups.append(self._create_gsr_group(bundle))
 
         name = "brain_fnirs"
         if bundle.include_gsr:
