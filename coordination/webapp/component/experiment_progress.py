@@ -134,6 +134,9 @@ class ExperimentProgress:
             self.status_ = "no_logs"
 
         if self.display_experiment_progress:
+            if self.hide_completed_experiment and self.succeeded:
+                return
+
             if self.status_ == "in_progress":
                 progress_emoji = ":hourglass:"
             elif self.status_ == "success":
