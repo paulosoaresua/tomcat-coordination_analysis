@@ -98,8 +98,8 @@ vocalic_no_coordination_tomcat_rmse:
 ######################################################################################
 
 # Generate x-data dn c-data with x-model and c-models
-generate_ppa_synthetic_data:
-	PYTHONPATH="." ./bin/generate_ppa_synthetic_data
+generate_ppa_synthetic_data_vocalic_model:
+	PYTHONPATH="." ./bin/generate_ppa_synthetic_data_vocalic_model
 
 x_model_x_data_rmse:
 	PYTHONPATH="." ./bin/run_inference --evidence_filepath="data/vocalic/synthetic/x_data.csv" \
@@ -142,3 +142,11 @@ c_model_random_data_rmse:
 		--data_mapping_filepath="data/vocalic/synthetic/config/mappings/vocalic_data_mapping.json" \
 		--model_params_dict_filepath="data/vocalic/synthetic/config/params/vocalic_params_dict.json" \
 		--do_ppa=1
+
+######################################################################################
+#################################  BRAIN #############################################
+######################################################################################
+
+# Generate x-data dn c-data with x-model and c-models
+generate_ppa_synthetic_data_brain_model:
+	PYTHONPATH="." ./bin/generate_ppa_synthetic_data_brain_model

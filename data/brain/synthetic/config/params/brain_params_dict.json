@@ -1,0 +1,8 @@
+{
+  "fnirs_share_mean_a0_across_subjects": false,
+  "fnirs_share_mean_a0_across_dimensions": false,
+  "fnirs_share_sd_a_across_dimensions": true,
+  "observation_normalization": "norm_per_feature",
+  "num_fnirs_channels": 2,
+  "fnirs_channel_names": ["s1_d1", "s1_d2"]
+}
