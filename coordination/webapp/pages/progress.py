@@ -40,7 +40,7 @@ class Progress:
             )
             run_id_multi_selection_component.create_component()
 
-        col1, col2, col3, col4 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col2:
             display_experiment_progress = st.toggle(
                 "Display Experiment Progress", value=False
