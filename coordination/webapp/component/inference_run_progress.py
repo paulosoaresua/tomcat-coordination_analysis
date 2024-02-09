@@ -17,6 +17,7 @@ class InferenceRunProgress:
         inference_run: InferenceRun,
         display_experiment_progress: bool = True,
         display_sub_experiment_progress: bool = True,
+            hide_completed_experiment: bool = True
     ):
         """
         Creates the component.
@@ -26,10 +27,13 @@ class InferenceRunProgress:
             in the inference run.
         @param display_sub_experiment_progress: whether to display the progress of all the
             sub-experiments of all the experiments in the inference run.
+        @param hide_completed_experiment: whether to hide successfully completed experiments from
+            the list.
         """
         self.inference_run = inference_run
         self.display_experiment_progress = display_experiment_progress
         self.display_sub_experiment_progress = display_sub_experiment_progress
+        self.hide_completed_experiment = hide_completed_experiment
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
@@ -54,6 +58,7 @@ class InferenceRunProgress:
                 experiment_id=experiment_id,
                 display_experiment_progress=self.display_experiment_progress,
                 display_sub_experiment_progress=self.display_sub_experiment_progress,
+                hide_completed_experiment=self.hide_completed_experiment
             )
             experiment_progress_component.create_component()
             num_experiments_succeeded += experiment_progress_component.succeeded

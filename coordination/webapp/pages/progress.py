@@ -40,7 +40,7 @@ class Progress:
             )
             run_id_multi_selection_component.create_component()
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(3)
         with col2:
             display_experiment_progress = st.toggle(
                 "Display Experiment Progress", value=False
@@ -48,6 +48,10 @@ class Progress:
         with col3:
             display_sub_experiment_progress = st.toggle(
                 "Display Sub-experiment Progress", value=False
+            )
+        with col4:
+            hide_completed_experiment = st.toggle(
+                "Hide Completed Experiments", value=True
             )
 
         inference_progress_component = None
@@ -59,6 +63,7 @@ class Progress:
                     refresh_rate=REFRESH_RATE,
                     display_experiment_progress=display_experiment_progress,
                     display_sub_experiment_progress=display_sub_experiment_progress,
+                    hide_completed_experiment=hide_completed_experiment
                 )
                 if run_id_multi_selection_component.selected_run_ids_:
                     inference_progress_component.preferred_run_ids = (

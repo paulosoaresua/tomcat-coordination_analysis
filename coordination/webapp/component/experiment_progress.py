@@ -15,11 +15,12 @@ class ExperimentProgress:
     """
 
     def __init__(
-        self,
-        inference_run: InferenceRun,
-        experiment_id: str,
-        display_experiment_progress: bool = True,
-        display_sub_experiment_progress: bool = True,
+            self,
+            inference_run: InferenceRun,
+            experiment_id: str,
+            display_experiment_progress: bool = True,
+            display_sub_experiment_progress: bool = True,
+            hide_completed_experiment: bool = True
     ):
         """
         Creates the component.
@@ -30,11 +31,14 @@ class ExperimentProgress:
             in the inference run.
         @param display_sub_experiment_progress: whether to display the progress of all the
             sub-experiments of all the experiments in the inference run.
+        @param hide_completed_experiment: whether to hide successfully completed experiments from
+            the list.
         """
         self.inference_run = inference_run
         self.experiment_id = experiment_id
         self.display_experiment_progress = display_experiment_progress
         self.display_sub_experiment_progress = display_sub_experiment_progress
+        self.hide_completed_experiment = hide_completed_experiment
 
         # Values saved within page loading and available to the next components to be loaded.
         # Not persisted through the session.
@@ -92,14 +96,15 @@ class ExperimentProgress:
         all_divergences = []
         if self.inference_run.ppa:
             for sub_exp_id in self.inference_run.get_sub_experiment_ids(
-                self.experiment_id
+                    self.experiment_id
             ):
                 sub_experiment_progress = SubExperimentProgress(
                     self.inference_run,
                     self.experiment_id,
                     sub_exp_id,
-                    self.display_sub_experiment_progress
-                    and self.display_experiment_progress,
+                    display_sub_experiment_progress=(self.display_sub_experiment_progress
+                                                     and self.display_experiment_progress),
+                    hide_completed_experiment=self.hide_completed_experiment
                 )
                 sub_experiment_progress.create_component()
                 all_status.add(sub_experiment_progress.status_)
@@ -112,6 +117,7 @@ class ExperimentProgress:
                 self.inference_run,
                 self.experiment_id,
                 display_sub_experiment_progress=self.display_experiment_progress,
+                hide_completed_experiment=self.hide_completed_experiment
             )
             sub_experiment_progress.create_component()
             all_status.add(sub_experiment_progress.status_)

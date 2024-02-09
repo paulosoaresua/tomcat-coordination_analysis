@@ -17,13 +17,14 @@ class InferenceProgress:
     """
 
     def __init__(
-        self,
-        component_key: str,
-        inference_dir: str,
-        refresh_rate: int,
-        preferred_run_ids: Optional[List[str]] = None,
-        display_experiment_progress: bool = True,
-        display_sub_experiment_progress: bool = True,
+            self,
+            component_key: str,
+            inference_dir: str,
+            refresh_rate: int,
+            preferred_run_ids: Optional[List[str]] = None,
+            display_experiment_progress: bool = True,
+            display_sub_experiment_progress: bool = True,
+            hide_completed_experiment: bool = True
     ):
         """
         Creates the component.
@@ -37,6 +38,8 @@ class InferenceProgress:
             in the inference run.
         @param display_sub_experiment_progress: whether to display the progress of all the
             sub-experiments of all the experiments in the inference run.
+        @param hide_completed_experiment: whether to hide successfully completed experiments from
+            the list.
         """
         self.component_key = component_key
         self.inference_dir = inference_dir
@@ -44,6 +47,7 @@ class InferenceProgress:
         self.refresh_rate = refresh_rate
         self.display_experiment_progress = display_experiment_progress
         self.display_sub_experiment_progress = display_sub_experiment_progress
+        self.hide_completed_experiment = hide_completed_experiment
 
     def create_component(self):
         """
@@ -96,6 +100,7 @@ class InferenceProgress:
                                 inference_run,
                                 self.display_experiment_progress,
                                 self.display_sub_experiment_progress,
+                                self.hide_completed_experiment
                             )
                             inference_progress_component.create_component()
 
