@@ -28,6 +28,7 @@ class BrainBundle(ModelConfigBundle):
     # steps desired have been reached.
     initial_coordination_samples: np.ndarray = None
     initial_fnirs_state_space_samples: np.ndarray = None
+    initial_gsr_state_space_samples: np.ndarray = None
 
     # Whether to use a constant model of coordination
     constant_coordination: bool = False
@@ -45,12 +46,21 @@ class BrainBundle(ModelConfigBundle):
     fnirs_sd_sd_a: float = 1.0
     fnirs_sd_sd_o: float = 1.0
 
+    gsr_mean_mean_a0: float = 0.0
+    gsr_sd_mean_a0: float = 1.0
+    gsr_sd_sd_a: float = 1.0
+    gsr_sd_sd_o: float = 1.0
+
     # Given parameter values. Required for sampling, not for inference.
     mean_uc0: float = None
     sd_uc: float = None
     fnirs_mean_a0: float = None
     fnirs_sd_a: float = None
     fnirs_sd_o: float = None
+
+    gsr_mean_a0: float = None
+    gsr_sd_a: float = None
+    gsr_sd_o: float = None
 
     # Sampling settings
     sampling_relative_frequency: float = 1.0
@@ -60,7 +70,9 @@ class BrainBundle(ModelConfigBundle):
 
     # Modules settings
     include_ekg: bool = False
+    include_gsr: bool = False
     asymmetric_coordination: bool = False
+    gsr_asymmetric_coordination: bool = False
 
     num_fnirs_channels: int = 20
     fnirs_channel_names: List[str] = field(
@@ -95,9 +107,18 @@ class BrainBundle(ModelConfigBundle):
     fnirs_share_sd_o_across_subjects: bool = True
     fnirs_share_sd_o_across_dimensions: bool = True
 
+    gsr_share_mean_a0_across_subjects: bool = True
+    gsr_share_mean_a0_across_dimensions: bool = True
+    gsr_share_sd_a_across_subjects: bool = True
+    gsr_share_sd_a_across_dimensions: bool = True
+    gsr_share_sd_o_across_subjects: bool = True
+
     # Metadata parameters. These must be filled before inference.
     fnirs_time_steps_in_coordination_scale: np.ndarray = None
     fnirs_observed_values: np.ndarray = None
+
+    gsr_time_steps_in_coordination_scale: np.ndarray = None
+    gsr_observed_values: np.ndarray = None
 
     # To allow splitting features into different groups
     # If provided, it must be list of a dictionaries in the following format:

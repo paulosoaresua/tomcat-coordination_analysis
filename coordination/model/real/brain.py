@@ -94,6 +94,23 @@ class BrainModel(ModelTemplate):
                     normalization_method=config_bundle.observation_normalization,
                 )
 
+        if config_bundle.include_gsr:
+            if "gsr" in self.metadata:
+                metadata: NonSerialMetadata = self.metadata["gsr"]
+                metadata.time_steps_in_coordination_scale = (
+                    config_bundle.gsr_time_steps_in_coordination_scale
+                )
+                metadata.observed_values = config_bundle.gsr_observed_values
+                metadata.normalization_method = config_bundle.observation_normalization
+            else:
+                self.metadata["gsr"] = NonSerialMetadata(
+                    time_steps_in_coordination_scale=(
+                        config_bundle.gsr_time_steps_in_coordination_scale
+                    ),
+                    observed_values=config_bundle.gsr_observed_values,
+                    normalization_method=config_bundle.observation_normalization,
+                )
+
     def _create_model_from_config_bundle(self):
         """
         Creates internal modules of the model using the most up-to-date information in the config
@@ -136,10 +153,11 @@ class BrainModel(ModelTemplate):
             )
 
         groups = self._create_fnirs_groups(bundle)
+        groups.append(self._create_gsr_groups(bundle))
 
         name = "brain_fnirs"
-        if bundle.include_ekg:
-            name += "_ekg"
+        if bundle.include_gsr:
+            name += "_gsr"
 
         self._model = Model(
             name=f"{name}_model",
@@ -215,7 +233,7 @@ class BrainModel(ModelTemplate):
                 initial_samples=initial_state_space_samples,
                 asymmetric_coordination=fnirs_group["asymmetric_coordination"]
             )
-            # We assume data is normalize and add a transformation with fixed unitary weights that
+            # We assume data is normalized and add a transformation with fixed unitary weights that
             # bring the position in the state space to a collection of channels in the
             # observations.
             transformation = Sequential(
@@ -268,6 +286,86 @@ class BrainModel(ModelTemplate):
 
         return groups
 
+    def _create_gsr_group(self, bundle: BrainBundle) -> ComponentGroup:
+        """
+        Creates component groups for the gsr component.
+
+        @param bundle: config bundle holding information on how to parameterize the modules.
+        @return: a list of component groups to be added to the model.
+        """
+        # In the 2D case, it may be interesting having multiple state space chains with their
+        # own dynamics if different features of a modality have different movement dynamics.
+        gsr_metadata = self.metadata["gsr"]
+
+        # One value for each group can be given in form of a list. This also happens when
+        # filling these parameters from the posterior samples from different groups.
+        state_space = NonSerial2DGaussianLatentComponent(
+            uuid=f"gsr_state_space",
+            pymc_model=self.pymc_model,
+            num_subjects=bundle.num_subjects,
+            mean_mean_a0=bundle.gsr_mean_mean_a0,
+            sd_mean_a0=bundle.gsr_sd_mean_a0,
+            sd_sd_a=bundle.gsr_sd_sd_a,
+            share_mean_a0_across_subjects=bundle.gsr_share_mean_a0_across_subjects,
+            share_sd_a_across_subjects=bundle.gsr_share_sd_a_across_subjects,
+            share_mean_a0_across_dimensions=bundle.gsr_share_mean_a0_across_dimensions,
+            share_sd_a_across_dimensions=bundle.gsr_share_sd_a_across_dimensions,
+            time_steps_in_coordination_scale=(
+                gsr_metadata.time_steps_in_coordination_scale
+            ),
+            mean_a0=bundle.gsr_mean_a0,
+            sd_a=bundle.gsr_sd_a,
+            sampling_relative_frequency=bundle.sampling_relative_frequency,
+            initial_samples=bundle.initial_gsr_state_space_samples,
+            asymmetric_coordination=bundle.gsr_asymmetric_coordination
+        )
+        # We assume data is normalized and add a transformation with fixed unitary weights that
+        # bring the position in the state space to a collection of channels in the
+        # observations.
+        transformation = Sequential(
+            child_transformations=[
+                DimensionReduction(keep_dimensions=[0], axis=1),  # position,
+                MLP(
+                    uuid="gsr_state_space_to_speech_vocalics_mlp",
+                    pymc_model=self.pymc_model,
+                    output_dimension_size=1,
+                    mean_w0=0,
+                    sd_w0=1,
+                    num_hidden_layers=0,
+                    hidden_dimension_size=0,
+                    activation="linear",
+                    axis=1,  # gsr feature axis
+                    weights=[np.ones((1, 1))],
+                ),
+            ]
+        )
+
+        observation = NonSerialGaussianObservation(
+            uuid="gsr",
+            pymc_model=self.pymc_model,
+            num_subjects=bundle.num_subjects,
+            dimension_size=1,
+            sd_sd_o=bundle.gsr_sd_sd_o,
+            share_sd_o_across_subjects=bundle.gsr_share_sd_o_across_subjects,
+            share_sd_o_across_dimensions=True,
+            dimension_names="gsr",
+            observed_values=gsr_metadata.normalized_observations,
+            time_steps_in_coordination_scale=(
+                gsr_metadata.time_steps_in_coordination_scale
+            ),
+            sd_o=bundle.gsr_sd_o,
+        )
+
+        group = ComponentGroup(
+            uuid=f"fnirs_group{suffix}",
+            pymc_model=self.pymc_model,
+            latent_component=state_space,
+            observations=[observation],
+            transformations=[transformation],
+        )
+
+        return group
+
     def new_config_bundle_from_posterior_samples(
             self,
             config_bundle: BrainBundle,
@@ -318,6 +416,19 @@ class BrainModel(ModelTemplate):
             new_bundle.initial_fnirs_state_space_samples.append(idata.get_posterior_samples(
                 f"fnirs_state_space{suffix}", samples_idx
             ))
+
+        new_bundle.gsr_mean_a0 = idata.get_posterior_samples(
+                f"gsr_state_space_mean_a0", samples_idx
+            )
+        new_bundle.gsr_sd_a = idata.get_posterior_samples(
+                f"gsr_state_space_sd_a", samples_idx
+            )
+        new_bundle.gsr_sd_o = idata.get_posterior_samples(
+                f"gsr_sd_o", samples_idx
+            )
+        new_bundle.initial_gsr_state_space_samples = idata.get_posterior_samples(
+                f"gsr_state_space", samples_idx
+            )
 
         if config_bundle.constant_coordination:
             new_bundle.initial_coordination_samples = idata.get_posterior_samples(
