@@ -155,7 +155,10 @@ class BrainModel(ModelTemplate):
         groups = self._create_fnirs_groups(bundle)
 
         if bundle.include_gsr:
+            print("Adding GSR group")
             groups.append(self._create_gsr_group(bundle))
+        else:
+            print("Not adding GSR group")
 
         name = "brain_fnirs"
         if bundle.include_gsr:
