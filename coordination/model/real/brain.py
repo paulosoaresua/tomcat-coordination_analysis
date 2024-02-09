@@ -155,10 +155,7 @@ class BrainModel(ModelTemplate):
         groups = self._create_fnirs_groups(bundle)
 
         if bundle.include_gsr:
-            print("Adding GSR group")
             groups.append(self._create_gsr_group(bundle))
-        else:
-            print("Not adding GSR group")
 
         name = "brain_fnirs"
         if bundle.include_gsr:
@@ -353,7 +350,7 @@ class BrainModel(ModelTemplate):
             sd_sd_o=bundle.gsr_sd_sd_o,
             share_sd_o_across_subjects=bundle.gsr_share_sd_o_across_subjects,
             share_sd_o_across_dimensions=True,
-            dimension_names="gsr",
+            dimension_names=["gsr"],
             observed_values=gsr_metadata.normalized_observations,
             time_steps_in_coordination_scale=(
                 gsr_metadata.time_steps_in_coordination_scale
