@@ -359,7 +359,7 @@ class BrainModel(ModelTemplate):
         )
 
         group = ComponentGroup(
-            uuid=f"fnirs_group{suffix}",
+            uuid=f"gsr_group",
             pymc_model=self.pymc_model,
             latent_component=state_space,
             observations=[observation],
