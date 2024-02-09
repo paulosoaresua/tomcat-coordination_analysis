@@ -369,8 +369,8 @@ class InferenceExecution:
         """
 
         if st.button(
-            label="Run Inference",
-            disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
+                label="Run Inference",
+                disabled=len(st.session_state[AVAILABLE_EXPERIMENTS_STATE_KEY]) == 0,
         ):
             # Save the model parameters and data mapping dictionaries to a temporary folder so
             # that the inference script can read them.
@@ -398,6 +398,10 @@ class InferenceExecution:
                 f"{execution_params['data_filepath']}"
             )
 
+            do_ppa = 1 if execution_params["do_ppa"] else 0
+            # We only do predictive checks in normal mode (no PPA) to avoid creating very large
+            # and saving storage space.
+            do_checks = 1 - ppa
             command = (
                 'PYTHONPATH="." '
                 "./bin/run_inference "
@@ -415,7 +419,9 @@ class InferenceExecution:
                 f'--num_inference_jobs={execution_params["num_inference_jobs"]} '
                 f'--nuts_init_method="{execution_params["nuts_init_method"]}" '
                 f'--target_accept={execution_params["target_accept"]} '
-                f'--do_ppa={1 if execution_params["do_ppa"] else 0}'
+                f'--do_ppa={do_ppa} '
+                f'--do_prior={do_checks} '
+                f'--do_posterior_predictive={do_checks}'
             )
             if "num_time_points_ppa" in execution_params:
                 command += (
