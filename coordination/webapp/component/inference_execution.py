@@ -401,7 +401,7 @@ class InferenceExecution:
             do_ppa = 1 if execution_params["do_ppa"] else 0
             # We only do predictive checks in normal mode (no PPA) to avoid creating very large
             # and saving storage space.
-            do_checks = 1 - ppa
+            do_checks = 1 - do_ppa
             command = (
                 'PYTHONPATH="." '
                 "./bin/run_inference "
