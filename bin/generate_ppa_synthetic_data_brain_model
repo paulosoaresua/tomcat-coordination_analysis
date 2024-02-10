@@ -20,6 +20,8 @@ OBSERVATION_NOISE = 1.0
 # Position and speed for each subject start with different values
 INITIAL_STATE = np.array([[0, 0], [25, 25], [50, 50]])
 
+ROOT_DIR = "data/brain/synthetic"
+
 
 def get_x_model() -> BrainModel:
     """
@@ -27,7 +29,7 @@ def get_x_model() -> BrainModel:
 
     @return: x-model.
     """
-    with open("data/brain/synthetic/config/params/brain_no_coordination_params_dict.json",
+    with open(f"{ROOT_DIR}/config/params/brain_no_coordination_params_dict.json",
               "r") as f:
         bundle = BrainBundle(**json.load(f))
         # bundle.state_space_2d = True
@@ -37,6 +39,7 @@ def get_x_model() -> BrainModel:
 
         bundle.constant_coordination = True
         bundle.initial_coordination_samples = np.zeros((N, T))
+        bundle.num_time_steps_in_coordination_scale = T
 
         bundle.fnirs_mean_a0 = INITIAL_STATE
 
@@ -50,7 +53,7 @@ def get_c_model(coordination: float) -> BrainModel:
     @param coordination: value of coordination to fix.
     @return: c-model.
     """
-    with open("data/brain/synthetic/config/params/brain_params_dict.json",
+    with open(f"{ROOT_DIR}/config/params/brain_params_dict.json",
               "r") as f:
         bundle = BrainBundle(**json.load(f))
         # bundle.state_space_2d = True
@@ -60,6 +63,7 @@ def get_c_model(coordination: float) -> BrainModel:
 
         bundle.constant_coordination = True
         bundle.initial_coordination_samples = np.ones((N, T)) * coordination
+        bundle.num_time_steps_in_coordination_scale = T
 
         bundle.fnirs_mean_a0 = INITIAL_STATE
 
@@ -91,14 +95,14 @@ for data_name, model in models:
                     samples.component_group_samples[
                         "fnirs_state_space"].time_steps_in_coordination_scale[n].tolist(),
                 "s1_d1":
-                    samples.component_group_samples["fnirs"].values[n][0].tolist(),
+                    samples.component_group_samples["fnirs"].values[n][:, 0].tolist(),
                 "s1_d2":
-                    samples.component_group_samples["fnirs"].values[n][1].tolist(),
+                    samples.component_group_samples["fnirs"].values[n][:, 1].tolist(),
                 "num_time_steps_in_coordination_scale": T
             }
         )
 
-    pd.DataFrame(data).to_csv(f"data/brain/synthetic/{data_name}.csv", index_label="number")
+    pd.DataFrame(data).to_csv(f"{ROOT_DIR}/{data_name}.csv", index_label="number")
 
 # Random Data
 # Use samples from one of the models to get the metadata. We will replace the actual data with
@@ -116,10 +120,10 @@ for n in range(N):
             "fnirs_time_steps_in_coordination_scale":
                 samples.component_group_samples[
                     "fnirs_state_space"].time_steps_in_coordination_scale[n].tolist(),
-            "s1_d1": random_values[0].tolist(),
-            "s1_d2": random_values[1].tolist(),
+            "s1_d1": random_values[:, 0].tolist(),
+            "s1_d2": random_values[:, 1].tolist(),
             "num_time_steps_in_coordination_scale": T
         }
     )
 
-pd.DataFrame(data).to_csv(f"data/brain/synthetic/random_data.csv", index_label="number")
+pd.DataFrame(data).to_csv(f"{ROOT_DIR}/random_data.csv", index_label="number")
