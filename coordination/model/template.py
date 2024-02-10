@@ -289,7 +289,6 @@ class ModelTemplate:
                 # Store observations here without normalization. For testing, we need to normalize
                 # the fitting window separate from the test window to avoid information leakage.
                 y_full_metadata[o.uuid] = deepcopy(self.metadata[o.uuid])
-                print(o.uuid)
 
         if ub is None:
             return None
