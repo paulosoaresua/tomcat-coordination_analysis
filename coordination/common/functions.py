@@ -36,7 +36,7 @@ def mean_at_peaks(x: np.ndarray, seconds: int) -> np.ndarray:
     if len(peaks) > 0:
         return x[peaks].mean()
     else:
-        return -1
+        return x.mean()
 
 
 def peaks_count(x: np.ndarray, seconds: int) -> int:
