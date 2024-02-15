@@ -84,6 +84,7 @@ class BrainBundle(ModelConfigBundle):
     # Modules settings
     include_ekg: bool = False
     include_gsr: bool = False
+    include_vocalic: bool = False
     asymmetric_coordination: bool = False
     gsr_asymmetric_coordination: bool = False
     self_dependent_latent_states: bool = True

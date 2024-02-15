@@ -9,6 +9,7 @@ from coordination.common.functions import logit
 from coordination.common.utils import adjust_dimensions
 from coordination.inference.inference_data import InferenceData
 from coordination.metadata.non_serial import NonSerialMetadata
+from coordination.metadata.serial import SerialMetadata
 from coordination.model.config_bundle.brain import BrainBundle
 from coordination.model.model import Model
 from coordination.model.template import ModelTemplate
@@ -111,6 +112,29 @@ class BrainModel(ModelTemplate):
                     normalization_method=config_bundle.observation_normalization,
                 )
 
+        if config_bundle.include_vocalic:
+            if "speech_vocalics" in self.metadata:
+                metadata: SerialMetadata = self.metadata["speech_vocalics"]
+                metadata.num_subjects = config_bundle.num_subjects
+                metadata.time_steps_in_coordination_scale = (
+                    config_bundle.vocalic_time_steps_in_coordination_scale
+                )
+                metadata.subject_indices = config_bundle.vocalic_subject_indices
+                metadata.prev_time_same_subject = config_bundle.vocalic_prev_time_same_subject
+                metadata.prev_time_diff_subject = config_bundle.vocalic_prev_time_diff_subject
+                metadata.observed_values = config_bundle.vocalic_observed_values
+                metadata.normalization_method = config_bundle.observation_normalization
+            else:
+                self.metadata["speech_vocalics"] = SerialMetadata(
+                    num_subjects=config_bundle.num_subjects,
+                    time_steps_in_coordination_scale=config_bundle.vocalic_time_steps_in_coordination_scale,
+                    subject_indices=config_bundle.vocalic_subject_indices,
+                    prev_time_same_subject=config_bundle.vocalic_prev_time_same_subject,
+                    prev_time_diff_subject=config_bundle.vocalic_prev_time_diff_subject,
+                    observed_values=config_bundle.vocalic_observed_values,
+                    normalization_method=config_bundle.observation_normalization,
+                )
+
     def _create_model_from_config_bundle(self):
         """
         Creates internal modules of the model using the most up-to-date information in the config
@@ -157,9 +181,14 @@ class BrainModel(ModelTemplate):
         if bundle.include_gsr:
             groups.append(self._create_gsr_group(bundle))
 
+        if bundle.include_vocalic:
+            groups.append(self._create_vocalic_group(bundle))
+
         name = "brain_fnirs"
         if bundle.include_gsr:
             name += "_gsr"
+        if bundle.include_vocalic:
+            name += "_vocalic"
 
         self._model = Model(
             name=f"{name}_model",
@@ -370,6 +399,70 @@ class BrainModel(ModelTemplate):
 
         return group
 
+    def _create_vocalic_group(self, bundle: BrainBundle) -> ComponentGroup:
+        """
+        Creates component groups for the vocalic component.
+
+        @param bundle: config bundle holding information on how to parameterize the modules.
+        @return: a list of component groups to be added to the model.
+        """
+        vocalic_metadata: SerialMetadata = self.metadata["speech_vocalics"]
+        state_space = SerialGaussianLatentComponent(
+            uuid="vocalic_state_space",
+            pymc_model=self.pymc_model,
+            num_subjects=bundle.num_subjects,
+            dimension_size=bundle.num_vocalic_features,
+            self_dependent=bundle.self_dependent_latent_states,
+            mean_mean_a0=bundle.vocalic_mean_mean_a0,
+            sd_mean_a0=bundle.vocalic_sd_mean_a0,
+            sd_sd_a=bundle.vocalic_sd_sd_a,
+            share_mean_a0_across_subjects=bundle.vocalic_share_mean_a0_across_subjects,
+            share_sd_a_across_subjects=bundle.vocalic_share_sd_a_across_subjects,
+            share_mean_a0_across_dimensions=bundle.vocalic_share_mean_a0_across_dimensions,
+            share_sd_a_across_dimensions=bundle.vocalic_share_sd_a_across_dimensions,
+            dimension_names=bundle.vocalic_state_space_dimension_names,
+            sampling_time_scale_density=bundle.vocalic_sampling_time_scale_density,
+            allow_sampled_subject_repetition=bundle.vocalic_allow_sampled_subject_repetition,
+            fix_sampled_subject_sequence=bundle.vocalic_fix_sampled_subject_sequence,
+            time_steps_in_coordination_scale=(
+                vocalic_metadata.time_steps_in_coordination_scale
+            ),
+            prev_time_same_subject=vocalic_metadata.prev_time_same_subject,
+            prev_time_diff_subject=vocalic_metadata.prev_time_diff_subject,
+            subject_indices=vocalic_metadata.subject_indices,
+            mean_a0=bundle.vocalic_mean_a0,
+            sd_a=bundle.vocalic_sd_a,
+            initial_samples=bundle.vocalic_initial_state_space_samples,
+            asymmetric_coordination=bundle.asymmetric_coordination
+        )
+
+        observation = SerialGaussianObservation(
+            uuid="speech_vocalics",
+            pymc_model=self.pymc_model,
+            num_subjects=bundle.num_subjects,
+            dimension_size=bundle.num_vocalic_features,
+            sd_sd_o=bundle.vocalic_sd_sd_o,
+            share_sd_o_across_subjects=bundle.vocalic_share_sd_o_across_subjects,
+            share_sd_o_across_dimensions=bundle.vocalic_share_sd_o_across_dimensions,
+            dimension_names=bundle.vocalic_feature_names,
+            observed_values=vocalic_metadata.normalized_observations,
+            time_steps_in_coordination_scale=(
+                vocalic_metadata.time_steps_in_coordination_scale
+            ),
+            subject_indices=vocalic_metadata.subject_indices,
+            sd_o=bundle.sd_o,
+        )
+
+        group = ComponentGroup(
+            uuid="vocalic_group",
+            pymc_model=self.pymc_model,
+            latent_component=state_space,
+            observations=[observation],
+            transformations=None,
+        )
+
+        return group
+
     def new_config_bundle_from_posterior_samples(
             self,
             config_bundle: BrainBundle,
@@ -422,17 +515,29 @@ class BrainModel(ModelTemplate):
             ))
 
         new_bundle.gsr_mean_a0 = idata.get_posterior_samples(
-                f"gsr_state_space_mean_a0", samples_idx
-            )
+            f"gsr_state_space_mean_a0", samples_idx
+        )
         new_bundle.gsr_sd_a = idata.get_posterior_samples(
-                f"gsr_state_space_sd_a", samples_idx
-            )
+            f"gsr_state_space_sd_a", samples_idx
+        )
         new_bundle.gsr_sd_o = idata.get_posterior_samples(
-                f"gsr_sd_o", samples_idx
-            )
+            f"gsr_sd_o", samples_idx
+        )
         new_bundle.initial_gsr_state_space_samples = idata.get_posterior_samples(
-                f"gsr_state_space", samples_idx
-            )
+            f"gsr_state_space", samples_idx
+        )
+
+        new_bundle.vocalic_mean_a0 = idata.get_posterior_samples(
+            "vocalic_state_space_mean_a0", samples_idx
+        )
+        new_bundle.vocalic_sd_a = idata.get_posterior_samples(
+            "vocalic_state_space_sd_a", samples_idx)
+        new_bundle.vocalic_sd_o = idata.get_posterior_samples(
+            "vocalic_speech_vocalics_sd_o", samples_idx
+        )
+        new_bundle.vocalic_initial_state_space_samples = idata.get_posterior_samples(
+            "vocalic_state_space", samples_idx
+        )
 
         if config_bundle.constant_coordination:
             new_bundle.initial_coordination_samples = idata.get_posterior_samples(
