@@ -34,6 +34,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             uuid: str,
             pymc_model: pm.Model,
             num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            self_dependent: bool = True,
             mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
             sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
             sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
@@ -61,6 +62,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
+        @param self_dependent: whether a state at time t depends on itself at time t-1 or it
+            depends on a fixed value given by mean_a0.
         @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
             latent component).
         @param sd_sd_a: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
@@ -106,7 +109,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             pymc_model=pymc_model,
             num_subjects=num_subjects,
             dimension_size=2,  # position and speed
-            self_dependent=True,
+            self_dependent=self_dependent,
             mean_mean_a0=mean_mean_a0,
             sd_mean_a0=sd_mean_a0,
             sd_sd_a=sd_sd_a,
@@ -189,7 +192,11 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 prev_others = np.einsum(
                     "ij,kjl->kil", sum_matrix_others, values[..., t - 1]
                 ) * c_mask
-                prev_same = values[..., t - 1]  # n x s x d
+
+                if self.self_dependent:
+                    prev_same = values[..., t - 1]  # n x s x d
+                else:
+                    prev_same = mean_a0  # n x s x d
 
                 # The matrix F multiplied by the state of a component "a" at time t - 1
                 # ([P(t-1), S(t-1)]) gives us:
@@ -270,6 +277,7 @@ def log_prob(
 
     S = sample.shape[0]
     D = sample.shape[1]  # This should be 2: position and speed
+    T = sample.shape[2]
 
     # log-probability at the initial time step
     total_logp = pm.logp(
@@ -282,7 +290,15 @@ def log_prob(
     prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[
                   ..., :-1
                   ] * symmetry_mask  # S x 2 x T-1
-    prev_same = sample[..., :-1]  # S x 2 x T-1
+
+    if self_dependent.eval():
+        # The component's value for a subject depends on its previous value for the same subject.
+        prev_same = sample[..., :-1]  # S x 2 x T-1
+    else:
+        # The component's value for a subject does not depend on its previous value for the same
+        # subject. At every time step, the value from others is blended with a fixed value given
+        # by the component's initial mean.
+        prev_same = initial_mean[:, :, None].repeat(T - 1, axis=-1)
 
     # Coordination does not affect the component in the first time step because the subjects have
     # no previous dependencies at that time.
@@ -369,7 +385,12 @@ def random(
     sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
     for t in np.arange(1, T):
         prev_others = np.dot(sum_matrix_others, sample[..., t - 1]) * symmetry_mask  # S x D
-        prev_same = sample[..., t - 1]  # S x D
+        if self_dependent:
+            # Previous sample from the same subject
+            prev_same = sample[..., t - 1]
+        else:
+            # No dependency on the same subject. Sample from prior.
+            prev_same = initial_mean
 
         c = coordination[t]
         dt_diff = 1

@@ -36,6 +36,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             uuid: str,
             pymc_model: pm.Model,
             num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            self_dependent: bool = True,
             mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
             sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
             sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
@@ -67,6 +68,8 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
+        @param self_dependent: whether a state at time t depends on itself at time t-1 or it
+            depends on a fixed value given by mean_a0.
         @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
             latent component).
         @param sd_sd_a: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
@@ -129,7 +132,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             pymc_model=pymc_model,
             num_subjects=num_subjects,
             dimension_size=2,  # position and speed
-            self_dependent=True,
+            self_dependent=self_dependent,
             mean_mean_a0=mean_mean_a0,
             sd_mean_a0=sd_mean_a0,
             sd_sd_a=sd_sd_a,
@@ -223,7 +226,14 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
                 c = coordination_sampled_series[time_steps_in_coordination_scale[t]]
                 c_mask = -1 if self.asymmetric_coordination else 1
 
-                prev_same = values[..., prev_time_same_subject[t]]
+                if self.self_dependent:
+                    # When there's self dependency, the component either depends on the previous
+                    # value of another subject or the previous value of the same subject.
+                    prev_same = values[..., prev_time_same_subject[t]]
+                else:
+                    # When there's no self dependency, the component either depends on the previous
+                    # value of another subject or a fixed value (the subject's prior).
+                    prev_same = mean_a0[subject_idx_mean_a0]
 
                 prev_other = values[..., prev_time_diff_subject[t]] * c_mask
 
@@ -328,7 +338,15 @@ def log_prob(
     prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape) * symmetry_mask  # D x T
 
     # The component's value for a subject depends on its previous value for the same subject.
-    prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # D x T
+    if self_dependent.eval():
+        # The component's value for a subject depends on previous value of the same subject.
+        prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # (D x T)
+    else:
+        # The component's value for a subject doesn't depend on previous value of the same subject.
+        # At every time step, the value from other subjects is blended with a fixed value given
+        # by the component's initial means associated with the subjects over time.
+        # (D x T)
+        prev_same = initial_mean
 
     # We use this binary mask to zero out entries with no previous observations from the subjects.
     # We use this to determine the time steps that belong to the initial values of the component.
@@ -339,6 +357,7 @@ def log_prob(
     prev_same = prev_same * mask_same + (1 - mask_same) * initial_mean
 
     c = coordination * prev_diff_subject_mask
+
     F = (
             ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]])
             - ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
@@ -424,7 +443,7 @@ def random(
         prev_other = sample[..., prev_time_diff_subject[t]] * symmetry_mask  # D
 
         # Previous sample from the same individual
-        if prev_same_subject_mask[t] == 1:
+        if self_dependent and prev_same_subject_mask[t] == 1:
             prev_same = sample[..., prev_time_same_subject[t]]
         else:
             if initial_mean.shape[1] == 1:
