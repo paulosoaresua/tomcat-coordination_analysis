@@ -138,6 +138,7 @@ class BrainBundle(ModelConfigBundle):
     vocalic_share_sd_a_across_subjects: bool = True
     vocalic_share_sd_a_across_dimensions: bool = True
     vocalic_share_sd_o_across_subjects: bool = True
+    vocalic_share_sd_o_across_dimensions: bool = True
 
     # Metadata parameters. These must be filled before inference.
     fnirs_time_steps_in_coordination_scale: np.ndarray = None

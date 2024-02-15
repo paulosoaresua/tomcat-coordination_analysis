@@ -20,8 +20,12 @@ from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
 from coordination.module.latent_component.non_serial_2d_gaussian_latent_component import \
     NonSerial2DGaussianLatentComponent
+from coordination.module.latent_component.serial_gaussian_latent_component import \
+    SerialGaussianLatentComponent
 from coordination.module.observation.non_serial_gaussian_observation import \
     NonSerialGaussianObservation
+from coordination.module.observation.serial_gaussian_observation import \
+    SerialGaussianObservation
 from coordination.module.transformation.dimension_reduction import \
     DimensionReduction
 from coordination.module.transformation.mlp import MLP
@@ -420,7 +424,7 @@ class BrainModel(ModelTemplate):
             share_sd_a_across_subjects=bundle.vocalic_share_sd_a_across_subjects,
             share_mean_a0_across_dimensions=bundle.vocalic_share_mean_a0_across_dimensions,
             share_sd_a_across_dimensions=bundle.vocalic_share_sd_a_across_dimensions,
-            dimension_names=bundle.vocalic_state_space_dimension_names,
+            dimension_names=bundle.vocalic_feature_names,
             sampling_time_scale_density=bundle.vocalic_sampling_time_scale_density,
             allow_sampled_subject_repetition=bundle.vocalic_allow_sampled_subject_repetition,
             fix_sampled_subject_sequence=bundle.vocalic_fix_sampled_subject_sequence,
@@ -432,7 +436,7 @@ class BrainModel(ModelTemplate):
             subject_indices=vocalic_metadata.subject_indices,
             mean_a0=bundle.vocalic_mean_a0,
             sd_a=bundle.vocalic_sd_a,
-            initial_samples=bundle.vocalic_initial_state_space_samples,
+            initial_samples=bundle.initial_vocalic_state_space_samples,
             asymmetric_coordination=bundle.asymmetric_coordination
         )
 
@@ -450,7 +454,7 @@ class BrainModel(ModelTemplate):
                 vocalic_metadata.time_steps_in_coordination_scale
             ),
             subject_indices=vocalic_metadata.subject_indices,
-            sd_o=bundle.sd_o,
+            sd_o=bundle.vocalic_sd_o,
         )
 
         group = ComponentGroup(
