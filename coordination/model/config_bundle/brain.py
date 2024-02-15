@@ -29,6 +29,7 @@ class BrainBundle(ModelConfigBundle):
     initial_coordination_samples: np.ndarray = None
     initial_fnirs_state_space_samples: np.ndarray = None
     initial_gsr_state_space_samples: np.ndarray = None
+    initial_vocalic_state_space_samples: np.ndarray = None
 
     # Whether to use a constant model of coordination
     constant_coordination: bool = False
@@ -51,6 +52,11 @@ class BrainBundle(ModelConfigBundle):
     gsr_sd_sd_a: float = 1.0
     gsr_sd_sd_o: float = 1.0
 
+    vocalic_mean_mean_a0: float = 0.0
+    vocalic_sd_mean_a0: float = 1.0
+    vocalic_sd_sd_a: float = 1.0
+    vocalic_sd_sd_o: float = 1.0
+
     # Given parameter values. Required for sampling, not for inference.
     mean_uc0: float = None
     sd_uc: float = None
@@ -62,8 +68,15 @@ class BrainBundle(ModelConfigBundle):
     gsr_sd_a: float = None
     gsr_sd_o: float = None
 
+    vocalic_mean_a0: float = None
+    vocalic_sd_a: float = None
+    vocalic_sd_o: float = None
+
     # Sampling settings
     sampling_relative_frequency: float = 1.0
+    vocalic_sampling_time_scale_density: float = 1.0
+    vocalic_allow_sampled_subject_repetition: bool = False
+    vocalic_fix_sampled_subject_sequence: bool = True
 
     # Inference settings
     observation_normalization: str = NORMALIZATION_PER_FEATURE
@@ -101,6 +114,11 @@ class BrainBundle(ModelConfigBundle):
         ]
     )
 
+    num_vocalic_features: int = 4
+    vocalic_feature_names: List[str] = field(
+        default_factory=lambda: ["pitch", "intensity", "jitter", "shimmer"]
+    )
+
     fnirs_share_mean_a0_across_subjects: bool = True
     fnirs_share_mean_a0_across_dimensions: bool = True
     fnirs_share_sd_a_across_subjects: bool = True
@@ -114,12 +132,24 @@ class BrainBundle(ModelConfigBundle):
     gsr_share_sd_a_across_dimensions: bool = True
     gsr_share_sd_o_across_subjects: bool = True
 
+    vocalic_share_mean_a0_across_subjects: bool = True
+    vocalic_share_mean_a0_across_dimensions: bool = True
+    vocalic_share_sd_a_across_subjects: bool = True
+    vocalic_share_sd_a_across_dimensions: bool = True
+    vocalic_share_sd_o_across_subjects: bool = True
+
     # Metadata parameters. These must be filled before inference.
     fnirs_time_steps_in_coordination_scale: np.ndarray = None
     fnirs_observed_values: np.ndarray = None
 
     gsr_time_steps_in_coordination_scale: np.ndarray = None
     gsr_observed_values: np.ndarray = None
+
+    vocalic_time_steps_in_coordination_scale: np.ndarray = None
+    vocalic_subject_indices: np.ndarray = None
+    vocalic_prev_time_same_subject: np.ndarray = None
+    vocalic_prev_time_diff_subject: np.ndarray = None
+    vocalic_observed_values: np.ndarray = None
 
     # To allow splitting features into different groups
     # If provided, it must be list of a dictionaries in the following format:
