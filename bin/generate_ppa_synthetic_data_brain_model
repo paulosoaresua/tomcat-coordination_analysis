@@ -20,7 +20,7 @@ OBSERVATION_NOISE = 1.0
 # Position and speed for each subject start with different values
 INITIAL_STATE = np.array([[0, 0], [25, 25], [50, 50]])
 
-ROOT_DIR = "data/brain/synthetic"
+ROOT_DIR = "../data/brain/synthetic"
 
 
 def get_x_model() -> BrainModel:
@@ -70,16 +70,41 @@ def get_c_model(coordination: float) -> BrainModel:
         return BrainModel(bundle)
 
 
+def get_c_model_shift(initial_coordination: float, final_coordination: float) -> BrainModel:
+    """
+    Gets a c-model with varying coordination.
+
+    @param initial_coordination: value of coordination to fix in the first part.
+    @param final_coordination: value of coordination to fix in the second part.
+    @return: c-model.
+    """
+    with open(f"{ROOT_DIR}/config/params/brain_params_dict.json",
+              "r") as f:
+        bundle = BrainBundle(**json.load(f))
+        # bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.fnirs_sd_a = PROCESS_NOISE
+        bundle.fnirs_sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.ones((N, T)) * initial_coordination
+        # Coordination is different in the last 10 time steps
+        bundle.initial_coordination_samples[-10:] = final_coordination
+        bundle.num_time_steps_in_coordination_scale = T
+
+        bundle.fnirs_mean_a0 = INITIAL_STATE
+
+        return BrainModel(bundle)
+
+
 x_model = get_x_model()
 c_model_low = get_c_model(0.2)
-c_model_med = get_c_model(0.5)
-c_model_high = get_c_model(1.0)
+c_model_shift = get_c_model_shift(0.2, 0.4)
 
 models = [
     ("x_data", x_model),
     ("c_data_low", c_model_low),
-    ("c_data_med", c_model_med),
-    ("c_data_high", c_model_high),
+    ("c_model_shift", c_model_shift)
 ]
 
 np.random.seed(0)
