@@ -338,6 +338,10 @@ class ModelTemplate:
                     # Serial feature
                     mse_train = mse_train.mean(axis=-1)
 
+                print(o.uuid)
+                print(mse_test.shape)
+                print(mse_train.shape)
+
                 for d in range(mse_test.shape[0]):
                     results.append(
                         {
