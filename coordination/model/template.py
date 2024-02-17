@@ -297,9 +297,7 @@ class ModelTemplate:
         ub = min(ub, self.config_bundle.num_time_steps_in_coordination_scale)
 
         self.config_bundle.num_time_steps_to_fit = ub
-        print("Before")
         samples = self.draw_samples(num_series=num_samples)
-        print("After")
         results = []
 
         mse_train_global = []

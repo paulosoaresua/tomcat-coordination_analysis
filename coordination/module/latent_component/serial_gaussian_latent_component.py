@@ -442,9 +442,6 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         if init_values is not None:
             values[..., :t0] = init_values
 
-        print(t0)
-        print(num_time_steps)
-
         for t in range(t0, num_time_steps):
             # The way we index subjects change depending on the sharing options. If shared, the
             # parameters will have a single dimension across subjects, so we can index by 0,
