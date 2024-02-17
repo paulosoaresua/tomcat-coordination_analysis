@@ -537,7 +537,7 @@ class BrainModel(ModelTemplate):
         new_bundle.vocalic_sd_a = idata.get_posterior_samples(
             "vocalic_state_space_sd_a", samples_idx)
         new_bundle.vocalic_sd_o = idata.get_posterior_samples(
-            "vocalic_speech_vocalics_sd_o", samples_idx
+            "speech_vocalics_sd_o", samples_idx
         )
         new_bundle.vocalic_initial_state_space_samples = idata.get_posterior_samples(
             "vocalic_state_space", samples_idx
