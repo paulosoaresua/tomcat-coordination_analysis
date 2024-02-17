@@ -329,10 +329,14 @@ class ModelTemplate:
                 # Compute the mse across all the dimensions but the last 2 ones: feature and
                 # time.
                 if mse_test.ndim > 2:
+                    # Nonserial feature
                     mse_train = mse_train.mean(axis=tuple(list(range(mse_train.ndim))[:-2]))
                     # For the train, we compute the mean over all time steps
                     mse_train = mse_train.mean(axis=-1)
                     mse_test = mse_test.mean(axis=tuple(list(range(mse_test.ndim))[:-2]))
+                else:
+                    # Serial feature
+                    mse_train = mse_train.mean(axis=-1)
 
                 for d in range(mse_test.shape[0]):
                     results.append(
