@@ -297,7 +297,9 @@ class ModelTemplate:
         ub = min(ub, self.config_bundle.num_time_steps_in_coordination_scale)
 
         self.config_bundle.num_time_steps_to_fit = ub
+        print("Before")
         samples = self.draw_samples(num_series=num_samples)
+        print("After")
         results = []
 
         mse_train_global = []
@@ -337,10 +339,6 @@ class ModelTemplate:
                 else:
                     # Serial feature
                     mse_train = mse_train.mean(axis=-1)
-
-                print(o.uuid)
-                print(mse_test.shape)
-                print(mse_train.shape)
 
                 for d in range(mse_test.shape[0]):
                     results.append(
