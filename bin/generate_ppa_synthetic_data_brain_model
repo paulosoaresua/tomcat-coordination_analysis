@@ -89,7 +89,7 @@ def get_c_model_shift(initial_coordination: float, final_coordination: float) ->
         bundle.constant_coordination = True
         bundle.initial_coordination_samples = np.ones((N, T)) * initial_coordination
         # Coordination is different in the last 10 time steps
-        bundle.initial_coordination_samples[-10:] = final_coordination
+        bundle.initial_coordination_samples[5:] = final_coordination
         bundle.num_time_steps_in_coordination_scale = T
 
         bundle.fnirs_mean_a0 = INITIAL_STATE
@@ -99,7 +99,7 @@ def get_c_model_shift(initial_coordination: float, final_coordination: float) ->
 
 x_model = get_x_model()
 c_model_low = get_c_model(0.2)
-c_model_shift = get_c_model_shift(0.2, 0.4)
+c_model_shift = get_c_model_shift(0.2, 0.8)
 
 models = [
     ("x_data", x_model),
