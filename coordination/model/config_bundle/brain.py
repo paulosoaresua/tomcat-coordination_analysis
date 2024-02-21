@@ -88,6 +88,7 @@ class BrainBundle(ModelConfigBundle):
     asymmetric_coordination: bool = False
     gsr_asymmetric_coordination: bool = False
     self_dependent_latent_states: bool = True
+    use_1d_state_space: bool = False
 
     num_fnirs_channels: int = 20
     fnirs_channel_names: List[str] = field(

@@ -20,6 +20,8 @@ from coordination.module.coordination.sigmoid_gaussian_coordination import \
     SigmoidGaussianCoordination
 from coordination.module.latent_component.non_serial_2d_gaussian_latent_component import \
     NonSerial2DGaussianLatentComponent
+from coordination.module.latent_component.non_serial_gaussian_latent_component import \
+    NonSerialGaussianLatentComponent
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponent
 from coordination.module.observation.non_serial_gaussian_observation import \
@@ -248,47 +250,73 @@ class BrainModel(ModelTemplate):
             else:
                 initial_state_space_samples = bundle.initial_fnirs_state_space_samples
 
-            state_space = NonSerial2DGaussianLatentComponent(
-                uuid=f"fnirs_state_space{suffix}",
-                pymc_model=self.pymc_model,
-                num_subjects=bundle.num_subjects,
-                self_dependent=bundle.self_dependent_latent_states,
-                mean_mean_a0=bundle.fnirs_mean_mean_a0,
-                sd_mean_a0=bundle.fnirs_sd_mean_a0,
-                sd_sd_a=bundle.fnirs_sd_sd_a,
-                share_mean_a0_across_subjects=bundle.fnirs_share_mean_a0_across_subjects,
-                share_sd_a_across_subjects=bundle.fnirs_share_sd_a_across_subjects,
-                share_mean_a0_across_dimensions=bundle.fnirs_share_mean_a0_across_dimensions,
-                share_sd_a_across_dimensions=bundle.fnirs_share_sd_a_across_dimensions,
-                time_steps_in_coordination_scale=(
-                    fnirs_metadata.time_steps_in_coordination_scale
-                ),
-                mean_a0=mean_a0,
-                sd_a=sd_a,
-                sampling_relative_frequency=bundle.sampling_relative_frequency,
-                initial_samples=initial_state_space_samples,
-                asymmetric_coordination=fnirs_group.get("asymmetric_coordination", False)
-            )
-            # We assume data is normalized and add a transformation with fixed unitary weights that
-            # bring the position in the state space to a collection of channels in the
-            # observations.
-            transformation = Sequential(
-                child_transformations=[
-                    DimensionReduction(keep_dimensions=[0], axis=1),  # position,
-                    MLP(
-                        uuid=f"fnirs_state_space_to_speech_vocalics_mlp{suffix}",
-                        pymc_model=self.pymc_model,
-                        output_dimension_size=len(fnirs_group["features"]),
-                        mean_w0=0,
-                        sd_w0=1,
-                        num_hidden_layers=0,
-                        hidden_dimension_size=0,
-                        activation="linear",
-                        axis=1,  # fnirs channel axis
-                        weights=[np.ones((1, len(fnirs_group["features"])))],
+            if bundle.use_1d_state_space:
+                state_space = NonSerialGaussianLatentComponent(
+                    uuid=f"fnirs_state_space{suffix}",
+                    pymc_model=self.pymc_model,
+                    num_subjects=bundle.num_subjects,
+                    dimension_size=len(fnirs_group["features"]),
+                    dimension_names=[f"latent_{f}" for f in fnirs_group["features"]],
+                    self_dependent=bundle.self_dependent_latent_states,
+                    mean_mean_a0=bundle.fnirs_mean_mean_a0,
+                    sd_mean_a0=bundle.fnirs_sd_mean_a0,
+                    sd_sd_a=bundle.fnirs_sd_sd_a,
+                    share_mean_a0_across_subjects=bundle.fnirs_share_mean_a0_across_subjects,
+                    share_sd_a_across_subjects=bundle.fnirs_share_sd_a_across_subjects,
+                    share_mean_a0_across_dimensions=bundle.fnirs_share_mean_a0_across_dimensions,
+                    share_sd_a_across_dimensions=bundle.fnirs_share_sd_a_across_dimensions,
+                    time_steps_in_coordination_scale=(
+                        fnirs_metadata.time_steps_in_coordination_scale
                     ),
-                ]
-            )
+                    mean_a0=mean_a0,
+                    sd_a=sd_a,
+                    sampling_relative_frequency=bundle.sampling_relative_frequency,
+                    initial_samples=initial_state_space_samples,
+                    asymmetric_coordination=fnirs_group.get("asymmetric_coordination", False)
+                )
+                transformation = None
+            else:
+                state_space = NonSerial2DGaussianLatentComponent(
+                    uuid=f"fnirs_state_space{suffix}",
+                    pymc_model=self.pymc_model,
+                    num_subjects=bundle.num_subjects,
+                    self_dependent=bundle.self_dependent_latent_states,
+                    mean_mean_a0=bundle.fnirs_mean_mean_a0,
+                    sd_mean_a0=bundle.fnirs_sd_mean_a0,
+                    sd_sd_a=bundle.fnirs_sd_sd_a,
+                    share_mean_a0_across_subjects=bundle.fnirs_share_mean_a0_across_subjects,
+                    share_sd_a_across_subjects=bundle.fnirs_share_sd_a_across_subjects,
+                    share_mean_a0_across_dimensions=bundle.fnirs_share_mean_a0_across_dimensions,
+                    share_sd_a_across_dimensions=bundle.fnirs_share_sd_a_across_dimensions,
+                    time_steps_in_coordination_scale=(
+                        fnirs_metadata.time_steps_in_coordination_scale
+                    ),
+                    mean_a0=mean_a0,
+                    sd_a=sd_a,
+                    sampling_relative_frequency=bundle.sampling_relative_frequency,
+                    initial_samples=initial_state_space_samples,
+                    asymmetric_coordination=fnirs_group.get("asymmetric_coordination", False)
+                )
+                # We assume data is normalized and add a transformation with fixed unitary weights that
+                # bring the position in the state space to a collection of channels in the
+                # observations.
+                transformation = Sequential(
+                    child_transformations=[
+                        DimensionReduction(keep_dimensions=[0], axis=1),  # position,
+                        MLP(
+                            uuid=f"fnirs_state_space_to_speech_vocalics_mlp{suffix}",
+                            pymc_model=self.pymc_model,
+                            output_dimension_size=len(fnirs_group["features"]),
+                            mean_w0=0,
+                            sd_w0=1,
+                            num_hidden_layers=0,
+                            hidden_dimension_size=0,
+                            activation="linear",
+                            axis=1,  # fnirs channel axis
+                            weights=[np.ones((1, len(fnirs_group["features"])))],
+                        ),
+                    ]
+                )
 
             if isinstance(bundle.fnirs_sd_o, list):
                 sd_o = bundle.fnirs_sd_o[i]
@@ -316,7 +344,7 @@ class BrainModel(ModelTemplate):
                 pymc_model=self.pymc_model,
                 latent_component=state_space,
                 observations=[observation],
-                transformations=[transformation],
+                transformations=None if transformation is None else [transformation],
             )
             groups.append(group)
 
