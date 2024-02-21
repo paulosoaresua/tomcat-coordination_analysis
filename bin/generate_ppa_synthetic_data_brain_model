@@ -16,7 +16,7 @@ from coordination.model.real.brain import BrainModel
 T = 50
 N = 10
 PROCESS_NOISE = 0.01
-OBSERVATION_NOISE = 30#1.0
+OBSERVATION_NOISE = 100#1.0
 # Position and speed for each subject start with different values
 INITIAL_STATE = np.array([[0, 0], [25, 25], [50, 50]])
 INITIAL_STATE_GSR = np.array([[50, 5], [10, 1], [20, 2]])
