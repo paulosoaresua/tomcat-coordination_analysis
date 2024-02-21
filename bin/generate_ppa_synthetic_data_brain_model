@@ -129,12 +129,14 @@ x_model = get_x_model()
 c_model_low = get_c_model(0.2)
 c_model_shift = get_c_model_shift(0.2, 0.8)
 c_model_gsr = get_c_model_plus_gsr(0.2)
+c_model_high = get_c_model(0.6)
 
 models = [
     ("x_data", x_model),
     ("c_data_low", c_model_low),
     ("c_model_shift", c_model_shift),
-    ("c_model_gsr", c_model_gsr)
+    ("c_model_gsr", c_model_gsr),
+    ("c_model_high", c_model_high)
 ]
 
 np.random.seed(0)
@@ -144,16 +146,16 @@ for data_name, model in models:
     data = []
     for n in range(N):
         entry = {
-                "experiment_id": f"exp{n}",
-                "fnirs_time_steps_in_coordination_scale":
-                    samples.component_group_samples[
-                        "fnirs_state_space"].time_steps_in_coordination_scale[n].tolist(),
-                "s1_d1":
-                    samples.component_group_samples["fnirs"].values[n][:, 0].tolist(),
-                "s1_d2":
-                    samples.component_group_samples["fnirs"].values[n][:, 1].tolist(),
-                "num_time_steps_in_coordination_scale": T
-            }
+            "experiment_id": f"exp{n}",
+            "fnirs_time_steps_in_coordination_scale":
+                samples.component_group_samples[
+                    "fnirs_state_space"].time_steps_in_coordination_scale[n].tolist(),
+            "s1_d1":
+                samples.component_group_samples["fnirs"].values[n][:, 0].tolist(),
+            "s1_d2":
+                samples.component_group_samples["fnirs"].values[n][:, 1].tolist(),
+            "num_time_steps_in_coordination_scale": T
+        }
         if "gsr" in data_name:
             entry.update({
                 "gsr_time_steps_in_coordination_scale":
