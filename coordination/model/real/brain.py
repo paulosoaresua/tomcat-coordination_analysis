@@ -267,7 +267,7 @@ class BrainModel(ModelTemplate):
                 sd_a=sd_a,
                 sampling_relative_frequency=bundle.sampling_relative_frequency,
                 initial_samples=initial_state_space_samples,
-                asymmetric_coordination=fnirs_group["asymmetric_coordination"]
+                asymmetric_coordination=fnirs_group.get("asymmetric_coordination", False)
             )
             # We assume data is normalized and add a transformation with fixed unitary weights that
             # bring the position in the state space to a collection of channels in the
