@@ -7,8 +7,16 @@ from coordination.model.real.brain import BrainModel
 from coordination.model.real.vocalic import VocalicModel
 from coordination.model.template import ModelTemplate
 
-MODELS = {"vocalic", "vocalic_semantic", "vocalic_2d", "vocalic_2d_semantic", "brain", "brain_gsr",
-          "brain_vocalic", "brain_gsr_vocalic"}
+MODELS = {
+    "vocalic",
+    "vocalic_semantic",
+    "vocalic_2d",
+    "vocalic_2d_semantic",
+    "brain",
+    "brain_gsr",
+    "brain_vocalic",
+    "brain_gsr_vocalic",
+}
 
 
 class ModelBuilder:

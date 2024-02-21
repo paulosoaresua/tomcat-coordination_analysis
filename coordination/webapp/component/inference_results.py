@@ -1,16 +1,18 @@
+from ast import literal_eval
+
+import numpy as np
 import pandas as pd
 import streamlit as st
-from ast import literal_eval
-import numpy as np
 
 from coordination.inference.inference_run import InferenceRun
 from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.component.inference_stats import InferenceStats
 from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
-from coordination.webapp.constants import DATA_DIR_STATE_KEY, DEFAULT_PLOT_MARGINS
-from coordination.webapp.widget.drop_down import DropDown
+from coordination.webapp.constants import (DATA_DIR_STATE_KEY,
+                                           DEFAULT_PLOT_MARGINS)
 from coordination.webapp.utils import plot_series
+from coordination.webapp.widget.drop_down import DropDown
 
 
 class InferenceResults:
@@ -20,12 +22,12 @@ class InferenceResults:
     """
 
     def __init__(
-            self,
-            component_key: str,
-            inference_run: InferenceRun,
-            experiment_id: str,
-            model_variable_info: ModelVariableInfo,
-            model_variable_dimension: str,
+        self,
+        component_key: str,
+        inference_run: InferenceRun,
+        experiment_id: str,
+        model_variable_info: ModelVariableInfo,
+        model_variable_dimension: str,
     ):
         """
         Creates the component.
@@ -114,11 +116,7 @@ class InferenceResults:
             else:
                 curve = np.array(literal_eval(data[self.model_variable_dimension]))
                 time_steps = np.arange(len(curve))
-                fig = plot_series(
-                    x=time_steps,
-                    y=curve,
-                    marker=True
-                )
+                fig = plot_series(x=time_steps, y=curve, marker=True)
                 fig.update_layout(
                     xaxis_title="Time Step",
                     yaxis_title=self.model_variable_dimension,
@@ -141,7 +139,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -161,7 +159,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a

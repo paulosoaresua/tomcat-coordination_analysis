@@ -17,14 +17,14 @@ class InferenceProgress:
     """
 
     def __init__(
-            self,
-            component_key: str,
-            inference_dir: str,
-            refresh_rate: int,
-            preferred_run_ids: Optional[List[str]] = None,
-            display_experiment_progress: bool = True,
-            display_sub_experiment_progress: bool = True,
-            hide_completed_experiment: bool = True
+        self,
+        component_key: str,
+        inference_dir: str,
+        refresh_rate: int,
+        preferred_run_ids: Optional[List[str]] = None,
+        display_experiment_progress: bool = True,
+        display_sub_experiment_progress: bool = True,
+        hide_completed_experiment: bool = True,
     ):
         """
         Creates the component.
@@ -100,7 +100,7 @@ class InferenceProgress:
                                 inference_run,
                                 self.display_experiment_progress,
                                 self.display_sub_experiment_progress,
-                                self.hide_completed_experiment
+                                self.hide_completed_experiment,
                             )
                             inference_progress_component.create_component()
 

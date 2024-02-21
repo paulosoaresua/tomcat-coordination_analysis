@@ -23,7 +23,7 @@ class SubExperimentProgress:
         experiment_id: str,
         sub_experiment_id: Optional[str] = None,
         display_sub_experiment_progress: bool = True,
-            hide_completed_experiment: bool = True
+        hide_completed_experiment: bool = True,
     ):
         """
         Creates the component.

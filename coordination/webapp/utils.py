@@ -76,7 +76,7 @@ class DropDownOption:
 
 
 def create_dropdown_with_default_selection(
-        label: str, key: str, options: List[DropDownOption]
+    label: str, key: str, options: List[DropDownOption]
 ) -> Optional[str]:
     """
     Creates a dropdown with an extra value for default selection.
@@ -191,10 +191,10 @@ def get_model_variables(run_id: str) -> Dict[str, List[str]]:
 
 
 def plot_curve(
-        variable_name: str,
-        inference_data: InferenceData,
-        inference_mode: str,
-        dimension: Union[int, str] = 0,
+    variable_name: str,
+    inference_data: InferenceData,
+    inference_mode: str,
+    dimension: Union[int, str] = 0,
 ) -> go.Figure:
     """
     Plots the time series of samples drawn from the posterior distribution.
@@ -282,14 +282,14 @@ def plot_curve(
 
 
 def plot_series(
-        x: Union[np.ndarray, xarray.DataArray],
-        y: Union[np.ndarray, xarray.DataArray],
-        y_std: Union[np.ndarray, xarray.DataArray] = None,
-        label: Optional[str] = None,
-        value_bounds: Optional[Tuple[float, float]] = None,
-        figure: Optional[go.Figure] = None,
-        color: Optional[str] = None,
-        marker: Optional[bool] = False
+    x: Union[np.ndarray, xarray.DataArray],
+    y: Union[np.ndarray, xarray.DataArray],
+    y_std: Union[np.ndarray, xarray.DataArray] = None,
+    label: Optional[str] = None,
+    value_bounds: Optional[Tuple[float, float]] = None,
+    figure: Optional[go.Figure] = None,
+    color: Optional[str] = None,
+    marker: Optional[bool] = False,
 ) -> go.Figure:
     """
     Plots a time series with optional error bands.
@@ -309,9 +309,9 @@ def plot_series(
 
     if not figure:
         if (
-                value_bounds is not None
-                and value_bounds[0] is not None
-                and value_bounds[1] is not None
+            value_bounds is not None
+            and value_bounds[0] is not None
+            and value_bounds[1] is not None
         ):
             figure = go.Figure(layout_yaxis_range=value_bounds)
         else:
@@ -324,7 +324,7 @@ def plot_series(
             mode="lines+markers" if marker else "lines",
             line=dict(color=color),
             name=label,
-            showlegend=label is not None
+            showlegend=label is not None,
         )
     )
 

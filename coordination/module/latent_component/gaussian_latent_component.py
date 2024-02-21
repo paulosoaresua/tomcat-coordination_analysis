@@ -24,30 +24,30 @@ class GaussianLatentComponent(LatentComponent, ABC):
     """
 
     def __init__(
-            self,
-            pymc_model: pm.Model,
-            uuid: str,
-            num_subjects: int,
-            dimension_size: int,
-            self_dependent: bool,
-            mean_mean_a0: np.ndarray,
-            sd_mean_a0: np.ndarray,
-            sd_sd_a: np.ndarray,
-            share_mean_a0_across_subjects: bool,
-            share_mean_a0_across_dimensions: bool,
-            share_sd_a_across_subjects: bool,
-            share_sd_a_across_dimensions: bool,
-            dimension_names: Optional[List[str]] = None,
-            coordination_samples: Optional[ModuleSamples] = None,
-            coordination_random_variable: Optional[pm.Distribution] = None,
-            latent_component_random_variable: Optional[pm.Distribution] = None,
-            mean_a0_random_variable: Optional[pm.Distribution] = None,
-            sd_a_random_variable: Optional[pm.Distribution] = None,
-            time_steps_in_coordination_scale: Optional[np.array] = None,
-            observed_values: Optional[TensorTypes] = None,
-            mean_a0: Optional[Union[float, np.ndarray]] = None,
-            sd_a: Optional[Union[float, np.ndarray]] = None,
-            asymmetric_coordination: bool = False
+        self,
+        pymc_model: pm.Model,
+        uuid: str,
+        num_subjects: int,
+        dimension_size: int,
+        self_dependent: bool,
+        mean_mean_a0: np.ndarray,
+        sd_mean_a0: np.ndarray,
+        sd_sd_a: np.ndarray,
+        share_mean_a0_across_subjects: bool,
+        share_mean_a0_across_dimensions: bool,
+        share_sd_a_across_subjects: bool,
+        share_sd_a_across_dimensions: bool,
+        dimension_names: Optional[List[str]] = None,
+        coordination_samples: Optional[ModuleSamples] = None,
+        coordination_random_variable: Optional[pm.Distribution] = None,
+        latent_component_random_variable: Optional[pm.Distribution] = None,
+        mean_a0_random_variable: Optional[pm.Distribution] = None,
+        sd_a_random_variable: Optional[pm.Distribution] = None,
+        time_steps_in_coordination_scale: Optional[np.array] = None,
+        observed_values: Optional[TensorTypes] = None,
+        mean_a0: Optional[Union[float, np.ndarray]] = None,
+        sd_a: Optional[Union[float, np.ndarray]] = None,
+        asymmetric_coordination: bool = False,
     ):
         """
         Creates a latent component module.
@@ -233,11 +233,11 @@ class GaussianLatentComponentParameters(ModuleParameters):
     """
 
     def __init__(
-            self,
-            module_uuid: str,
-            mean_mean_a0: np.ndarray,
-            sd_mean_a0: np.ndarray,
-            sd_sd_a: np.ndarray,
+        self,
+        module_uuid: str,
+        mean_mean_a0: np.ndarray,
+        sd_mean_a0: np.ndarray,
+        sd_sd_a: np.ndarray,
     ):
         """
         Creates an object to store latent component parameter info.

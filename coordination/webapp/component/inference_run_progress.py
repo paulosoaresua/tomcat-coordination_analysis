@@ -17,7 +17,7 @@ class InferenceRunProgress:
         inference_run: InferenceRun,
         display_experiment_progress: bool = True,
         display_sub_experiment_progress: bool = True,
-            hide_completed_experiment: bool = True
+        hide_completed_experiment: bool = True,
     ):
         """
         Creates the component.
@@ -58,7 +58,7 @@ class InferenceRunProgress:
                 experiment_id=experiment_id,
                 display_experiment_progress=self.display_experiment_progress,
                 display_sub_experiment_progress=self.display_sub_experiment_progress,
-                hide_completed_experiment=self.hide_completed_experiment
+                hide_completed_experiment=self.hide_completed_experiment,
             )
             experiment_progress_component.create_component()
             num_experiments_succeeded += experiment_progress_component.succeeded

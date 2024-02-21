@@ -63,7 +63,7 @@ class Progress:
                     refresh_rate=REFRESH_RATE,
                     display_experiment_progress=display_experiment_progress,
                     display_sub_experiment_progress=display_sub_experiment_progress,
-                    hide_completed_experiment=hide_completed_experiment
+                    hide_completed_experiment=hide_completed_experiment,
                 )
                 if run_id_multi_selection_component.selected_run_ids_:
                     inference_progress_component.preferred_run_ids = (

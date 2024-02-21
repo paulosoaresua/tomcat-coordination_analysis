@@ -263,7 +263,7 @@ class VocalicModel(ModelTemplate):
                     "name": None,
                     "features": bundle.vocalic_feature_names,
                     "weights": bundle.weights,
-                    "asymmetric_coordination": bundle.asymmetric_coordination
+                    "asymmetric_coordination": bundle.asymmetric_coordination,
                 }
             ]
 
@@ -314,7 +314,7 @@ class VocalicModel(ModelTemplate):
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
                 initial_samples=bundle.initial_state_space_samples,
-                asymmetric_coordination=vocalic_group["asymmetric_coordination"]
+                asymmetric_coordination=vocalic_group["asymmetric_coordination"],
             )
 
             transformation = Sequential(
@@ -399,7 +399,7 @@ class VocalicModel(ModelTemplate):
             mean_a0=bundle.mean_a0,
             sd_a=bundle.sd_a,
             initial_samples=bundle.initial_state_space_samples,
-            asymmetric_coordination=bundle.asymmetric_coordination
+            asymmetric_coordination=bundle.asymmetric_coordination,
         )
 
         observation = SerialGaussianObservation(

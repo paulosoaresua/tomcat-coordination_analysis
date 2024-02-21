@@ -41,7 +41,7 @@ class BrainModel(ModelTemplate):
     """
 
     def __init__(
-            self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
+        self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a brain model.
@@ -59,7 +59,9 @@ class BrainModel(ModelTemplate):
         informed in the original config bundle.
         """
         if config_bundle.fnirs_groups is None:
-            fnirs_groups = [{"name": None, "features": config_bundle.fnirs_channel_names}]
+            fnirs_groups = [
+                {"name": None, "features": config_bundle.fnirs_channel_names}
+            ]
         else:
             fnirs_groups = config_bundle.fnirs_groups
 
@@ -126,14 +128,20 @@ class BrainModel(ModelTemplate):
                     config_bundle.vocalic_time_steps_in_coordination_scale
                 )
                 metadata.subject_indices = config_bundle.vocalic_subject_indices
-                metadata.prev_time_same_subject = config_bundle.vocalic_prev_time_same_subject
-                metadata.prev_time_diff_subject = config_bundle.vocalic_prev_time_diff_subject
+                metadata.prev_time_same_subject = (
+                    config_bundle.vocalic_prev_time_same_subject
+                )
+                metadata.prev_time_diff_subject = (
+                    config_bundle.vocalic_prev_time_diff_subject
+                )
                 metadata.observed_values = config_bundle.vocalic_observed_values
                 metadata.normalization_method = config_bundle.observation_normalization
             else:
                 self.metadata["speech_vocalics"] = SerialMetadata(
                     num_subjects=config_bundle.num_subjects,
-                    time_steps_in_coordination_scale=config_bundle.vocalic_time_steps_in_coordination_scale,
+                    time_steps_in_coordination_scale=(
+                        config_bundle.vocalic_time_steps_in_coordination_scale
+                    ),
                     subject_indices=config_bundle.vocalic_subject_indices,
                     prev_time_same_subject=config_bundle.vocalic_prev_time_same_subject,
                     prev_time_diff_subject=config_bundle.vocalic_prev_time_diff_subject,
@@ -222,8 +230,13 @@ class BrainModel(ModelTemplate):
         # own dynamics if different features of a modality have different movement dynamics.
         fnirs_groups = bundle.fnirs_groups
         if fnirs_groups is None:
-            fnirs_groups = [{"name": None, "features": bundle.fnirs_channel_names,
-                             "asymmetric_coordination": bundle.asymmetric_coordination}]
+            fnirs_groups = [
+                {
+                    "name": None,
+                    "features": bundle.fnirs_channel_names,
+                    "asymmetric_coordination": bundle.asymmetric_coordination,
+                }
+            ]
 
         groups = []
         for i, fnirs_group in enumerate(fnirs_groups):
@@ -246,7 +259,9 @@ class BrainModel(ModelTemplate):
                 sd_a = bundle.fnirs_sd_a
 
             if isinstance(bundle.initial_fnirs_state_space_samples, list):
-                initial_state_space_samples = bundle.initial_fnirs_state_space_samples[i]
+                initial_state_space_samples = bundle.initial_fnirs_state_space_samples[
+                    i
+                ]
             else:
                 initial_state_space_samples = bundle.initial_fnirs_state_space_samples
 
@@ -272,7 +287,9 @@ class BrainModel(ModelTemplate):
                     sd_a=sd_a,
                     sampling_relative_frequency=bundle.sampling_relative_frequency,
                     initial_samples=initial_state_space_samples,
-                    asymmetric_coordination=fnirs_group.get("asymmetric_coordination", False)
+                    asymmetric_coordination=fnirs_group.get(
+                        "asymmetric_coordination", False
+                    ),
                 )
                 transformation = None
             else:
@@ -295,10 +312,12 @@ class BrainModel(ModelTemplate):
                     sd_a=sd_a,
                     sampling_relative_frequency=bundle.sampling_relative_frequency,
                     initial_samples=initial_state_space_samples,
-                    asymmetric_coordination=fnirs_group.get("asymmetric_coordination", False)
+                    asymmetric_coordination=fnirs_group.get(
+                        "asymmetric_coordination", False
+                    ),
                 )
-                # We assume data is normalized and add a transformation with fixed unitary weights that
-                # bring the position in the state space to a collection of channels in the
+                # We assume data is normalized and add a transformation with fixed unitary weights
+                # that bring the position in the state space to a collection of channels in the
                 # observations.
                 transformation = Sequential(
                     child_transformations=[
@@ -364,7 +383,7 @@ class BrainModel(ModelTemplate):
         # One value for each group can be given in form of a list. This also happens when
         # filling these parameters from the posterior samples from different groups.
         state_space = NonSerial2DGaussianLatentComponent(
-            uuid=f"gsr_state_space",
+            uuid="gsr_state_space",
             pymc_model=self.pymc_model,
             num_subjects=bundle.num_subjects,
             self_dependent=bundle.self_dependent_latent_states,
@@ -382,7 +401,7 @@ class BrainModel(ModelTemplate):
             sd_a=bundle.gsr_sd_a,
             sampling_relative_frequency=bundle.sampling_relative_frequency,
             initial_samples=bundle.initial_gsr_state_space_samples,
-            asymmetric_coordination=bundle.gsr_asymmetric_coordination
+            asymmetric_coordination=bundle.gsr_asymmetric_coordination,
         )
         # We assume data is normalized and add a transformation with fixed unitary weights that
         # bring the position in the state space to a collection of channels in the
@@ -422,7 +441,7 @@ class BrainModel(ModelTemplate):
         )
 
         group = ComponentGroup(
-            uuid=f"gsr_group",
+            uuid="gsr_group",
             pymc_model=self.pymc_model,
             latent_component=state_space,
             observations=[observation],
@@ -465,7 +484,7 @@ class BrainModel(ModelTemplate):
             mean_a0=bundle.vocalic_mean_a0,
             sd_a=bundle.vocalic_sd_a,
             initial_samples=bundle.initial_vocalic_state_space_samples,
-            asymmetric_coordination=bundle.asymmetric_coordination
+            asymmetric_coordination=bundle.asymmetric_coordination,
         )
 
         observation = SerialGaussianObservation(
@@ -496,11 +515,11 @@ class BrainModel(ModelTemplate):
         return group
 
     def new_config_bundle_from_posterior_samples(
-            self,
-            config_bundle: BrainBundle,
-            idata: InferenceData,
-            num_samples: int,
-            seed: int = DEFAULT_SEED,
+        self,
+        config_bundle: BrainBundle,
+        idata: InferenceData,
+        num_samples: int,
+        seed: int = DEFAULT_SEED,
     ) -> BrainBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the
@@ -533,37 +552,40 @@ class BrainModel(ModelTemplate):
             group_name = fnirs_group["name"]
             suffix = "" if new_bundle.fnirs_groups is None else f"_{group_name}"
 
-            new_bundle.fnirs_mean_a0.append(idata.get_posterior_samples(
-                f"fnirs_state_space{suffix}_mean_a0", samples_idx
-            ))
-            new_bundle.fnirs_sd_a.append(idata.get_posterior_samples(
-                f"fnirs_state_space{suffix}_sd_a", samples_idx
-            ))
-            new_bundle.fnirs_sd_o.append(idata.get_posterior_samples(
-                f"fnirs{suffix}_sd_o", samples_idx
-            ))
-            new_bundle.initial_fnirs_state_space_samples.append(idata.get_posterior_samples(
-                f"fnirs_state_space{suffix}", samples_idx
-            ))
+            new_bundle.fnirs_mean_a0.append(
+                idata.get_posterior_samples(
+                    f"fnirs_state_space{suffix}_mean_a0", samples_idx
+                )
+            )
+            new_bundle.fnirs_sd_a.append(
+                idata.get_posterior_samples(
+                    f"fnirs_state_space{suffix}_sd_a", samples_idx
+                )
+            )
+            new_bundle.fnirs_sd_o.append(
+                idata.get_posterior_samples(f"fnirs{suffix}_sd_o", samples_idx)
+            )
+            new_bundle.initial_fnirs_state_space_samples.append(
+                idata.get_posterior_samples(f"fnirs_state_space{suffix}", samples_idx)
+            )
 
         new_bundle.gsr_mean_a0 = idata.get_posterior_samples(
-            f"gsr_state_space_mean_a0", samples_idx
+            "gsr_state_space_mean_a0", samples_idx
         )
         new_bundle.gsr_sd_a = idata.get_posterior_samples(
-            f"gsr_state_space_sd_a", samples_idx
+            "gsr_state_space_sd_a", samples_idx
         )
-        new_bundle.gsr_sd_o = idata.get_posterior_samples(
-            f"gsr_sd_o", samples_idx
-        )
+        new_bundle.gsr_sd_o = idata.get_posterior_samples("gsr_sd_o", samples_idx)
         new_bundle.initial_gsr_state_space_samples = idata.get_posterior_samples(
-            f"gsr_state_space", samples_idx
+            "gsr_state_space", samples_idx
         )
 
         new_bundle.vocalic_mean_a0 = idata.get_posterior_samples(
             "vocalic_state_space_mean_a0", samples_idx
         )
         new_bundle.vocalic_sd_a = idata.get_posterior_samples(
-            "vocalic_state_space_sd_a", samples_idx)
+            "vocalic_state_space_sd_a", samples_idx
+        )
         new_bundle.vocalic_sd_o = idata.get_posterior_samples(
             "speech_vocalics_sd_o", samples_idx
         )
