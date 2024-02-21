@@ -19,6 +19,7 @@ PROCESS_NOISE = 0.01
 OBSERVATION_NOISE = 1.0
 # Position and speed for each subject start with different values
 INITIAL_STATE = np.array([[0, 0], [25, 25], [50, 50]])
+INITIAL_STATE_GSR = np.array([[50, 5], [10, 1], [20, 2]])
 
 ROOT_DIR = "../data/brain/synthetic"
 
@@ -97,14 +98,43 @@ def get_c_model_shift(initial_coordination: float, final_coordination: float) ->
         return BrainModel(bundle)
 
 
+def get_c_model_plus_gsr(coordination: float) -> BrainModel:
+    """
+    Gets a c-model with 2 modalities: fnirs and gsr.
+
+    @param coordination: value of coordination to fix.
+    @return: c-model.
+    """
+    with open(f"{ROOT_DIR}/config/params/brain_gsr_params_dict.json",
+              "r") as f:
+        bundle = BrainBundle(**json.load(f))
+        # bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.fnirs_sd_a = PROCESS_NOISE
+        bundle.fnirs_sd_o = OBSERVATION_NOISE
+        bundle.gsr_sd_a = PROCESS_NOISE
+        bundle.gsr_sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.ones((N, T)) * coordination
+        bundle.num_time_steps_in_coordination_scale = T
+
+        bundle.fnirs_mean_a0 = INITIAL_STATE
+        bundle.gsr_mean_a0 = INITIAL_STATE_GSR
+
+        return BrainModel(bundle)
+
+
 x_model = get_x_model()
 c_model_low = get_c_model(0.2)
 c_model_shift = get_c_model_shift(0.2, 0.8)
+c_model_gsr = get_c_model_plus_gsr(0.2)
 
 models = [
     ("x_data", x_model),
     ("c_data_low", c_model_low),
-    ("c_model_shift", c_model_shift)
+    ("c_model_shift", c_model_shift),
+    ("c_model_gsr", c_model_gsr)
 ]
 
 np.random.seed(0)
@@ -113,8 +143,7 @@ for data_name, model in models:
 
     data = []
     for n in range(N):
-        data.append(
-            {
+        entry = {
                 "experiment_id": f"exp{n}",
                 "fnirs_time_steps_in_coordination_scale":
                     samples.component_group_samples[
@@ -125,7 +154,16 @@ for data_name, model in models:
                     samples.component_group_samples["fnirs"].values[n][:, 1].tolist(),
                 "num_time_steps_in_coordination_scale": T
             }
-        )
+        if "gsr" in data_name:
+            entry.update({
+                "gsr_time_steps_in_coordination_scale":
+                    samples.component_group_samples[
+                        "gsr_state_space"].time_steps_in_coordination_scale[n].tolist(),
+                "gsr":
+                    samples.component_group_samples["gsr"].values[n][:, 0].tolist()
+            })
+
+        data.append(entry)
 
     pd.DataFrame(data).to_csv(f"{ROOT_DIR}/{data_name}.csv", index_label="number")
 
