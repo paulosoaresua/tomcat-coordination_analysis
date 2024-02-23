@@ -22,12 +22,12 @@ class InferenceResults:
     """
 
     def __init__(
-        self,
-        component_key: str,
-        inference_run: InferenceRun,
-        experiment_id: str,
-        model_variable_info: ModelVariableInfo,
-        model_variable_dimension: str,
+            self,
+            component_key: str,
+            inference_run: InferenceRun,
+            experiment_id: str,
+            model_variable_info: ModelVariableInfo,
+            model_variable_dimension: str,
     ):
         """
         Creates the component.
@@ -142,7 +142,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -162,7 +162,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -187,6 +187,7 @@ class InferenceResults:
         row_df = data[data["experiment_id"] == experiment_id].iloc[0]
         # Populate config bundle with the data
         inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
+        w = inference_run.execution_params["ppa_window"]
 
         if sub_experiment_id is None:
             all_summaries = []
@@ -199,20 +200,20 @@ class InferenceResults:
                 all_summaries.append(
                     model.get_ppa_summary(
                         idata=idata,
-                        window_size=inference_run.execution_params["ppa_window"],
+                        window_size=w,
                         num_samples=100,
                         seed=0,
                     )
                 )
 
             df_concat = pd.concat(all_summaries)
-            by_row_index = df_concat.groupby(df_concat.index)
-            summary_df = by_row_index.mean()
+            summary_df = df_concat.groupby(df_concat.columns[:-w].tolist(),
+                                           axis=0).mean().reset_index()
         else:
             idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
             summary_df = model.get_ppa_summary(
                 idata=idata,
-                window_size=inference_run.execution_params["ppa_window"],
+                window_size=w,
                 num_samples=100,
                 seed=0,
             )
