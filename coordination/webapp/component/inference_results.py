@@ -205,8 +205,8 @@ class InferenceResults:
                     )
                 )
 
-            summary_df = pd.concat(all_summaries)
-            by_row_index = df_concat.groupby(summary_df.index)
+            df_concat = pd.concat(all_summaries)
+            by_row_index = df_concat.groupby(df_concat.index)
             summary_df = by_row_index.mean()
         else:
             idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
