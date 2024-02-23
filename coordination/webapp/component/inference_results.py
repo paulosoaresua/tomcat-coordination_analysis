@@ -58,6 +58,7 @@ class InferenceResults:
         st.write(f"### {self.experiment_id}")
 
         sub_experiment_id = None
+        idata = None
         if self.inference_run.ppa:
             sub_experiment_id = DropDown(
                 label="Sub-experiment ID",
@@ -68,12 +69,10 @@ class InferenceResults:
                 idata = self.inference_run.get_inference_data(
                     self.experiment_id, sub_experiment_id
                 )
-            else:
-                return
         else:
             idata = self.inference_run.get_inference_data(self.experiment_id)
 
-        if not idata:
+        if not idata and self.model_variable_info.inference_mode != "ppa":
             st.write(":red[No inference data found.]")
             return
 
@@ -105,7 +104,11 @@ class InferenceResults:
                     self.experiment_id,
                     sub_experiment_id,
                 )
-                st.write(ppa_results)
+
+                if ppa_results is None:
+                    st.write(":red[Some sub-experiments are still running.]")
+                else:
+                    st.write(ppa_results)
             else:
                 st.write(":red[PPA not performed in this inference run.]")
         elif self.model_variable_info.inference_mode == "dataset":
@@ -180,18 +183,38 @@ class InferenceResults:
         if model is None:
             return ":red[**Could not construct the model.**]"
 
-        idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
         data = inference_run.data
         row_df = data[data["experiment_id"] == experiment_id].iloc[0]
-
         # Populate config bundle with the data
         inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
 
-        summary_df = model.get_ppa_summary(
-            idata=idata,
-            window_size=inference_run.execution_params["ppa_window"],
-            num_samples=100,
-            seed=0,
-        )
+        if sub_experiment_id is None:
+            all_summaries = []
+            # Aggregate results for all sub_experiment_ids available.
+            for sub_experiment_id in inference_run.get_sub_experiment_ids(experiment_id):
+                idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
+                if idata is None:
+                    return None
+
+                all_summaries.append(
+                    model.get_ppa_summary(
+                        idata=idata,
+                        window_size=inference_run.execution_params["ppa_window"],
+                        num_samples=100,
+                        seed=0,
+                    )
+                )
+
+            summary_df = pd.concat(all_summaries)
+            w = inference_run.execution_params["ppa_window"]
+            summary_df.groupby(summary_df.columns[:-w]).mean()
+        else:
+            idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
+            summary_df = model.get_ppa_summary(
+                idata=idata,
+                window_size=inference_run.execution_params["ppa_window"],
+                num_samples=100,
+                seed=0,
+            )
 
         return summary_df
