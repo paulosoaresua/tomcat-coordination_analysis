@@ -206,8 +206,8 @@ class InferenceResults:
                 )
 
             summary_df = pd.concat(all_summaries)
-            w = inference_run.execution_params["ppa_window"]
-            summary_df.groupby(summary_df.columns[:-w]).mean()
+            by_row_index = df_concat.groupby(summary_df.index)
+            summary_df = by_row_index.mean()
         else:
             idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
             summary_df = model.get_ppa_summary(
