@@ -483,6 +483,7 @@ class VocalicModel(ModelTemplate):
         )
 
         if config_bundle.include_semantic:
+            print("Yes")
             new_bundle.sd_s = idata.get_posterior_samples(
                 "sd_s", samples_idx
             )
