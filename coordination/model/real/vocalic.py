@@ -482,14 +482,11 @@ class VocalicModel(ModelTemplate):
             "state_space", samples_idx
         )
 
-        print("Hello")
         if config_bundle.include_semantic:
-            print("Yes")
             new_bundle.sd_s = idata.get_posterior_samples(
                 "sd_s", samples_idx
             )
             if new_bundle.sd_s is None:
-                print("Yes2")
                 # Retrocompatibility
                 new_bundle.sd_s = idata.get_posterior_samples(
                     "semantic_link_p", samples_idx
