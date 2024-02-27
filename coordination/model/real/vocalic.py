@@ -295,6 +295,7 @@ class VocalicModel(ModelTemplate):
                 uuid=f"state_space{suffix}",
                 pymc_model=self.pymc_model,
                 num_subjects=bundle.num_subjects,
+                self_dependent=bundle.self_dependent_latent_states,
                 mean_mean_a0=bundle.mean_mean_a0,
                 sd_mean_a0=bundle.sd_mean_a0,
                 sd_sd_a=bundle.sd_sd_a,
@@ -314,7 +315,7 @@ class VocalicModel(ModelTemplate):
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
                 initial_samples=bundle.initial_state_space_samples,
-                asymmetric_coordination=vocalic_group["asymmetric_coordination"],
+                asymmetric_coordination=vocalic_group["asymmetric_coordination"]
             )
 
             transformation = Sequential(
@@ -378,7 +379,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=self.pymc_model,
             num_subjects=bundle.num_subjects,
             dimension_size=bundle.state_space_dimension_size,
-            self_dependent=True,
+            self_dependent=bundle.self_dependent_latent_states,
             mean_mean_a0=bundle.mean_mean_a0,
             sd_mean_a0=bundle.sd_mean_a0,
             sd_sd_a=bundle.sd_sd_a,
