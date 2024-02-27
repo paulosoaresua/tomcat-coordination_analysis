@@ -79,7 +79,7 @@ class ModelBuilder:
                 bundle.include_gsr = True
             if "vocalic" in model_name:
                 bundle.include_vocalic = True
-            print("Brain")
+
             return BrainModel(bundle)
         else:
             if "vocalic" in model_name:
@@ -89,7 +89,6 @@ class ModelBuilder:
                 if "vocalic_2d" in model_name:
                     bundle.state_space_2d = True
                 if "semantic" in model_name:
-                    print("Here")
                     bundle.include_semantic = True
-                print("Vocalic")
+
                 return VocalicModel(bundle)
