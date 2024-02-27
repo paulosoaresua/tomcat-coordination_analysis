@@ -486,5 +486,10 @@ class VocalicModel(ModelTemplate):
             new_bundle.sd_s = idata.get_posterior_samples(
                 "sd_s", samples_idx
             )
+            if new_bundle.sd_s:
+                # Retrocompatibility
+                new_bundle.sd_s = idata.get_posterior_samples(
+                    "semantic_link_p", samples_idx
+                )
 
         return new_bundle
