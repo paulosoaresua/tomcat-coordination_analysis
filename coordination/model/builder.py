@@ -79,7 +79,7 @@ class ModelBuilder:
                 bundle.include_gsr = True
             if "vocalic" in model_name:
                 bundle.include_vocalic = True
-
+            print("Brain")
             return BrainModel(bundle)
         else:
             if "vocalic" in model_name:
