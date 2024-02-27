@@ -89,5 +89,7 @@ class ModelBuilder:
                 if "vocalic_2d" in model_name:
                     bundle.state_space_2d = True
                 if "semantic" in model_name:
+                    print("Here")
                     bundle.include_semantic = True
+                print("Vocalic")
                 return VocalicModel(bundle)
