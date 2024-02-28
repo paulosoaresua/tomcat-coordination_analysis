@@ -440,7 +440,6 @@ class ModelTemplate:
         @param window_size: size of the analysis window.
         @return: smallest time step in coordination scale to execute PPA on a given window.
         """
-        print(self.metadata)
         T = None
         for g in self._model.component_groups:
             for o in g.observations:
