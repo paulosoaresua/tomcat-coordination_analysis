@@ -440,6 +440,7 @@ class ModelTemplate:
         @param window_size: size of the analysis window.
         @return: smallest time step in coordination scale to execute PPA on a given window.
         """
+        print(self.metadata)
         T = None
         for g in self._model.component_groups:
             for o in g.observations:
@@ -478,7 +479,7 @@ class ModelTemplate:
                 # In any other situation, we can just reserve double the window size for testing.
                 # Do 5 windows so we can have enough observations from multiple people for
                 # normalization purposes in the prediction window.
-                print(o.uuid)
+
                 if T is None:
                     T = self.metadata[o.uuid].time_steps_in_coordination_scale[
                         -2 * window_size
