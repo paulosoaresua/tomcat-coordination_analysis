@@ -328,7 +328,7 @@ class ModelTemplate:
                 # Compute the mse across all the dimensions but the last 2 ones: feature and
                 # time.
                 if mse_test.ndim > 2:
-                    # Nonserial feature
+                    # Non-serial feature
                     mse_train = mse_train.mean(
                         axis=tuple(list(range(mse_train.ndim))[:-2])
                     )
@@ -476,7 +476,7 @@ class ModelTemplate:
                         )
 
                 # In any other situation, we can just reserve double the window size for testing.
-                # Do 5 windows so we can have enough observations from multiple people for
+                # Do 5 windows, so we can have enough observations from multiple people for
                 # normalization purposes in the prediction window.
 
                 if T is None:
