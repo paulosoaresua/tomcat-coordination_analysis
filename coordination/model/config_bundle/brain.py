@@ -57,6 +57,8 @@ class BrainBundle(ModelConfigBundle):
     vocalic_sd_sd_a: float = 1.0
     vocalic_sd_sd_o: float = 1.0
 
+    semantic_link_sd_sd_s: float = 1.0
+
     # Given parameter values. Required for sampling, not for inference.
     mean_uc0: float = None
     sd_uc: float = None
@@ -71,6 +73,8 @@ class BrainBundle(ModelConfigBundle):
     vocalic_mean_a0: float = None
     vocalic_sd_a: float = None
     vocalic_sd_o: float = None
+
+    semantic_link_sd_s: float = None
 
     # Sampling settings
     sampling_relative_frequency: float = 1.0
@@ -89,6 +93,7 @@ class BrainBundle(ModelConfigBundle):
     gsr_asymmetric_coordination: bool = False
     self_dependent_latent_states: bool = True
     use_1d_state_space: bool = False
+    include_semantic: bool = False
 
     num_fnirs_channels: int = 20
     fnirs_channel_names: List[str] = field(
@@ -153,6 +158,8 @@ class BrainBundle(ModelConfigBundle):
     vocalic_prev_time_same_subject: np.ndarray = None
     vocalic_prev_time_diff_subject: np.ndarray = None
     vocalic_observed_values: np.ndarray = None
+
+    semantic_link_time_steps_in_coordination_scale: np.ndarray = None
 
     # To allow splitting features into different groups
     # If provided, it must be list of a dictionaries in the following format:

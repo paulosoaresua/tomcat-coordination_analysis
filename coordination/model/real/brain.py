@@ -22,12 +22,15 @@ from coordination.module.latent_component.non_serial_2d_gaussian_latent_componen
     NonSerial2DGaussianLatentComponent
 from coordination.module.latent_component.non_serial_gaussian_latent_component import \
     NonSerialGaussianLatentComponent
+from coordination.module.latent_component.null_latent_component import \
+    NullLatentComponent
 from coordination.module.latent_component.serial_gaussian_latent_component import \
     SerialGaussianLatentComponent
 from coordination.module.observation.non_serial_gaussian_observation import \
     NonSerialGaussianObservation
 from coordination.module.observation.serial_gaussian_observation import \
     SerialGaussianObservation
+from coordination.module.observation.spike_observation import SpikeObservation
 from coordination.module.transformation.dimension_reduction import \
     DimensionReduction
 from coordination.module.transformation.mlp import MLP
@@ -149,6 +152,36 @@ class BrainModel(ModelTemplate):
                     normalization_method=config_bundle.observation_normalization,
                 )
 
+        if config_bundle.include_semantic:
+            if "semantic_link" in self.metadata:
+                metadata: NonSerialMetadata = self.metadata["semantic_link"]
+                metadata.time_steps_in_coordination_scale = (
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                )
+                if (
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                    is not None
+                ):
+                    metadata.observed_values = np.ones_like(
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                    )
+            else:
+                obs = None
+                if (
+                    config_bundle.semantic_link_time_steps_in_coordination_scale
+                    is not None
+                ):
+                    obs = np.ones_like(
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                    )
+                self.metadata["semantic_link"] = NonSerialMetadata(
+                    time_steps_in_coordination_scale=(
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                    ),
+                    observed_values=obs,
+                    normalization_method=None,
+                )
+
     def _create_model_from_config_bundle(self):
         """
         Creates internal modules of the model using the most up-to-date information in the config
@@ -198,11 +231,18 @@ class BrainModel(ModelTemplate):
         if bundle.include_vocalic:
             groups.append(self._create_vocalic_group(bundle))
 
+        if bundle.include_semantic:
+            semantic_link_group = self._create_semantic_group(bundle)
+            if semantic_link_group is not None:
+                groups.append(semantic_link_group)
+
         name = "brain_fnirs"
         if bundle.include_gsr:
             name += "_gsr"
         if bundle.include_vocalic:
             name += "_vocalic"
+        if bundle.include_semantic:
+            name += "_semantic"
 
         self._model = Model(
             name=f"{name}_model",
@@ -455,7 +495,7 @@ class BrainModel(ModelTemplate):
         Creates component groups for the vocalic component.
 
         @param bundle: config bundle holding information on how to parameterize the modules.
-        @return: a list of component groups to be added to the model.
+        @return: a group to be added to the model.
         """
         vocalic_metadata: SerialMetadata = self.metadata["speech_vocalics"]
         state_space = SerialGaussianLatentComponent(
@@ -513,6 +553,46 @@ class BrainModel(ModelTemplate):
         )
 
         return group
+
+    def _create_semantic_group(self, bundle: BrainBundle) -> ComponentGroup:
+        """
+        Creates component groups for the semantic link component.
+
+        @param bundle: config bundle holding information on how to parameterize the modules.
+        @return: a group to be added to the model.
+        """
+        semantic_link_metadata: NonSerialMetadata = self.metadata.get(
+            "semantic_link", None
+        )
+        if (
+            semantic_link_metadata.time_steps_in_coordination_scale is not None
+            and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0
+        ):
+            # We only add the semantic link module if there's evidence.
+            observed_semantic_links = SpikeObservation(
+                uuid="semantic_link",
+                pymc_model=self.pymc_model,
+                num_subjects=bundle.num_subjects,
+                sd_sd_s=bundle.semantic_link_sd_sd_s,
+                dimension_name="linked",
+                sampling_time_scale_density=bundle.vocalic_sampling_time_scale_density,
+                time_steps_in_coordination_scale=(
+                    semantic_link_metadata.time_steps_in_coordination_scale
+                ),
+                sd_s=bundle.semantic_link_sd_s,
+                observed_values=semantic_link_metadata.observed_values,
+            )
+
+            semantic_link_group = ComponentGroup(
+                uuid="semantic_link_group",
+                pymc_model=self.pymc_model,
+                latent_component=NullLatentComponent(),
+                observations=[observed_semantic_links],
+            )
+
+            return semantic_link_group
+
+        return None
 
     def new_config_bundle_from_posterior_samples(
         self,
@@ -606,6 +686,11 @@ class BrainModel(ModelTemplate):
             )
             new_bundle.initial_coordination_samples = idata.get_posterior_samples(
                 "coordination", samples_idx
+            )
+
+        if config_bundle.include_semantic:
+            new_bundle.semantic_link_sd_s = idata.get_posterior_samples(
+                "semantic_link_sd_s", samples_idx
             )
 
         return new_bundle

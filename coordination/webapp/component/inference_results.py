@@ -22,12 +22,12 @@ class InferenceResults:
     """
 
     def __init__(
-            self,
-            component_key: str,
-            inference_run: InferenceRun,
-            experiment_id: str,
-            model_variable_info: ModelVariableInfo,
-            model_variable_dimension: str,
+        self,
+        component_key: str,
+        inference_run: InferenceRun,
+        experiment_id: str,
+        model_variable_info: ModelVariableInfo,
+        model_variable_dimension: str,
     ):
         """
         Creates the component.
@@ -142,7 +142,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _read_convergence_report(
-            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -162,7 +162,7 @@ class InferenceResults:
     @staticmethod
     @st.cache_data
     def _get_ppa_results(
-            inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
+        inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
     ) -> pd.DataFrame:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
@@ -192,8 +192,12 @@ class InferenceResults:
         if sub_experiment_id is None:
             all_summaries = []
             # Aggregate results for all sub_experiment_ids available.
-            for sub_experiment_id in inference_run.get_sub_experiment_ids(experiment_id):
-                idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
+            for sub_experiment_id in inference_run.get_sub_experiment_ids(
+                experiment_id
+            ):
+                idata = inference_run.get_inference_data(
+                    experiment_id, sub_experiment_id
+                )
                 if idata is None:
                     return None
 
@@ -207,8 +211,11 @@ class InferenceResults:
                 )
 
             df_concat = pd.concat(all_summaries)
-            summary_df = df_concat.groupby(df_concat.columns[:-w].tolist(),
-                                           axis=0).mean().reset_index()
+            summary_df = (
+                df_concat.groupby(df_concat.columns[:-w].tolist(), axis=0)
+                .mean()
+                .reset_index()
+            )
         else:
             idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
             summary_df = model.get_ppa_summary(

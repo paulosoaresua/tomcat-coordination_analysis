@@ -315,7 +315,7 @@ class VocalicModel(ModelTemplate):
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
                 initial_samples=bundle.initial_state_space_samples,
-                asymmetric_coordination=vocalic_group["asymmetric_coordination"]
+                asymmetric_coordination=vocalic_group["asymmetric_coordination"],
             )
 
             transformation = Sequential(
@@ -483,11 +483,9 @@ class VocalicModel(ModelTemplate):
         )
 
         if config_bundle.include_semantic:
-            new_bundle.sd_s = idata.get_posterior_samples(
-                "sd_s", samples_idx
-            )
+            new_bundle.sd_s = idata.get_posterior_samples("sd_s", samples_idx)
             if new_bundle.sd_s is None:
-                # Retrocompatibility
+                # Retro-compatibility
                 new_bundle.sd_s = idata.get_posterior_samples(
                     "semantic_link_p", samples_idx
                 )
