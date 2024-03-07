@@ -44,7 +44,7 @@ class BrainModel(ModelTemplate):
     """
 
     def __init__(
-        self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
+            self, config_bundle: BrainBundle, pymc_model: Optional[pm.Model] = None
     ):
         """
         Creates a brain model.
@@ -159,8 +159,8 @@ class BrainModel(ModelTemplate):
                     config_bundle.semantic_link_time_steps_in_coordination_scale
                 )
                 if (
-                    config_bundle.semantic_link_time_steps_in_coordination_scale
-                    is not None
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                        is not None
                 ):
                     metadata.observed_values = np.ones_like(
                         config_bundle.semantic_link_time_steps_in_coordination_scale
@@ -168,8 +168,8 @@ class BrainModel(ModelTemplate):
             else:
                 obs = None
                 if (
-                    config_bundle.semantic_link_time_steps_in_coordination_scale
-                    is not None
+                        config_bundle.semantic_link_time_steps_in_coordination_scale
+                        is not None
                 ):
                     obs = np.ones_like(
                         config_bundle.semantic_link_time_steps_in_coordination_scale
@@ -191,14 +191,17 @@ class BrainModel(ModelTemplate):
 
         bundle = self._get_adjusted_bundle()
 
-        if bundle.constant_coordination:
+        if bundle.constant_coordination or bundle.fnirs_share_fnirs_latent_state_across_subjects:
+            given_coordination = (
+                0 if bundle.fnirs_share_fnirs_latent_state_across_subjects else
+                bundle.observed_coordination_for_inference)
             coordination = ConstantCoordination(
                 pymc_model=self.pymc_model,
                 num_time_steps=bundle.num_time_steps_to_fit,
                 alpha_c=bundle.alpha_c,
                 beta_c=bundle.beta_c,
                 initial_samples=bundle.initial_coordination_samples,
-                observed_value=bundle.observed_coordination_for_inference,
+                observed_value=given_coordination,
             )
         else:
             given_coordination = None
@@ -355,6 +358,7 @@ class BrainModel(ModelTemplate):
                     asymmetric_coordination=fnirs_group.get(
                         "asymmetric_coordination", False
                     ),
+                    single_chain=bundle.fnirs_share_fnirs_latent_state_across_subjects
                 )
                 # We assume data is normalized and add a transformation with fixed unitary weights
                 # that bring the position in the state space to a collection of channels in the
@@ -565,8 +569,8 @@ class BrainModel(ModelTemplate):
             "semantic_link", None
         )
         if (
-            semantic_link_metadata.time_steps_in_coordination_scale is not None
-            and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0
+                semantic_link_metadata.time_steps_in_coordination_scale is not None
+                and len(semantic_link_metadata.time_steps_in_coordination_scale) > 0
         ):
             # We only add the semantic link module if there's evidence.
             observed_semantic_links = SpikeObservation(
@@ -595,11 +599,11 @@ class BrainModel(ModelTemplate):
         return None
 
     def new_config_bundle_from_posterior_samples(
-        self,
-        config_bundle: BrainBundle,
-        idata: InferenceData,
-        num_samples: int,
-        seed: int = DEFAULT_SEED,
+            self,
+            config_bundle: BrainBundle,
+            idata: InferenceData,
+            num_samples: int,
+            seed: int = DEFAULT_SEED,
     ) -> BrainBundle:
         """
         Uses samples from posterior to update a config bundle. Here we set the samples from the

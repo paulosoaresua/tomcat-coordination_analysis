@@ -132,6 +132,7 @@ class BrainBundle(ModelConfigBundle):
     fnirs_share_sd_a_across_dimensions: bool = True
     fnirs_share_sd_o_across_subjects: bool = True
     fnirs_share_sd_o_across_dimensions: bool = True
+    fnirs_share_fnirs_latent_state_across_subjects: bool = False
 
     gsr_share_mean_a0_across_subjects: bool = True
     gsr_share_mean_a0_across_dimensions: bool = True
