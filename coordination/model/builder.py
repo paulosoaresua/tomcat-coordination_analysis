@@ -16,6 +16,7 @@ MODELS = {
     "brain_gsr",
     "brain_vocalic",
     "brain_gsr_vocalic",
+    "brain_gsr_vocalic_semantic",
 }
 
 
@@ -45,6 +46,9 @@ class ModelBuilder:
 
             if "vocalic" in model_name:
                 bundle.include_vocalic = True
+
+            if "semantic" in model_name:
+                bundle.include_semantic = True
 
             return bundle
         else:
@@ -79,6 +83,8 @@ class ModelBuilder:
                 bundle.include_gsr = True
             if "vocalic" in model_name:
                 bundle.include_vocalic = True
+            if "semantic" in model_name:
+                bundle.include_semantic = True
 
             return BrainModel(bundle)
         else:
