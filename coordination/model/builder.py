@@ -12,6 +12,7 @@ MODELS = {
     "vocalic_semantic",
     "vocalic_2d",
     "vocalic_2d_semantic",
+    "semantic",
     "brain",
     "brain_gsr",
     "brain_vocalic",
@@ -52,10 +53,13 @@ class ModelBuilder:
 
             return bundle
         else:
-            if "vocalic" in model_name:
+            if "vocalic" in model_name or "semantic" in model_name:
                 bundle = VocalicConfigBundle()
                 bundle.state_space_2d = False
                 bundle.include_semantic = False
+                bundle.include_vocalic = False
+                if "vocalic" in model_name:
+                    bundle.include_vocalic = True
                 if "vocalic_2d" in model_name:
                     bundle.state_space_2d = True
                 if "semantic" in model_name:
@@ -88,10 +92,13 @@ class ModelBuilder:
 
             return BrainModel(bundle)
         else:
-            if "vocalic" in model_name:
+            if "vocalic" in model_name or "semantic" in model_name:
                 bundle = deepcopy(config_bundle)
                 bundle.state_space_2d = False
                 bundle.include_semantic = False
+                bundle.include_vocalic = False
+                if "vocalic" in model_name:
+                    bundle.include_vocalic = True
                 if "vocalic_2d" in model_name:
                     bundle.state_space_2d = True
                 if "semantic" in model_name:

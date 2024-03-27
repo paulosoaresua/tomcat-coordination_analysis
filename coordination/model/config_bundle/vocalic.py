@@ -67,6 +67,7 @@ class VocalicConfigBundle(ModelConfigBundle):
     # Modules settings
     state_space_2d: bool = False
     include_semantic: bool = False
+    include_vocalic: bool = True
     asymmetric_coordination: bool = False
     self_dependent_latent_states: bool = True
 
