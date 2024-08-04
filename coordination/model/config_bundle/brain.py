@@ -182,3 +182,4 @@ class BrainBundle(ModelConfigBundle):
     #     }
     # ]
     fnirs_groups: List[Dict[str, Any]] = None
+    common_cause: bool = False
