@@ -187,8 +187,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             values[..., :t0] = init_values
 
         # ------------ INIT X values, All zeros ------------
-        X = np.zeros((num_series, num_time_steps))
-        X[:, 0] = norm(loc=mean_a0[0], scale=sd_a[0]).rvs(size=num_series)
+        X = np.zeros((num_series, 1, self.dimension_size, num_time_steps))
+        X[:, 0] = norm(loc=mean_a0, scale=sd_a).rvs(size=(num_series, 1, self.dimension_size))
         # --------------------------------------------------
         for t in range(t0, num_time_steps):
             if t == 0:
@@ -210,9 +210,9 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
                     # ----Ming: Start using common cause----
                     if self.common_cause:
-                        X[:, t] = norm(loc=X[:, t - 1], scale=sd_a[0]).rvs(size=num_series)
+                        X[..., t] = norm(loc=X[..., t - 1], scale=sd_a).rvs()
                         # define X using X_{t} = N(X_{t-1})
-                        blended_mean = (1 - c) * prev_same + c[:, None, None] * X[:, None, t][:, None]
+                        blended_mean = (1 - c) * prev_same + c[:, None, None] * X[...,t]
                     else:
                     # if no common_cause, just skip that.
                     # ---------------- END -----------------

@@ -358,7 +358,8 @@ class BrainModel(ModelTemplate):
                     asymmetric_coordination=fnirs_group.get(
                         "asymmetric_coordination", False
                     ),
-                    single_chain=bundle.fnirs_share_fnirs_latent_state_across_subjects
+                    single_chain=bundle.fnirs_share_fnirs_latent_state_across_subjects,
+                    common_cause=bundle.common_cause
                 )
                 # We assume data is normalized and add a transformation with fixed unitary weights
                 # that bring the position in the state space to a collection of channels in the
