@@ -188,10 +188,18 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
         # ------------ INIT X values, All zeros ------------
         X = np.zeros((num_series, 1, self.dimension_size, num_time_steps))
-        X[:, 0] = norm(loc=mean_a0, scale=sd_a).rvs(size=(num_series, 1, self.dimension_size))
+        # For now, let's reuse the mean of one of the subjects. Latter, we want a separate mean
+        # For the common cause, or better yet, we use the subject's mean for the common cause as
+        # well and replicate it to all the subjects since they are supposed to copy from the
+        # common cause.
+        cc_mean_a0 = mean_a0[:, 0, np.newaxis, :]
+        cc_sd_a = sd_a[:, 0, np.newaxis, :]
+        X[..., 0] = norm(loc=cc_mean_a0, scale=cc_sd_a).rvs(size=(num_series, 1, self.dimension_size))
         # --------------------------------------------------
         for t in range(t0, num_time_steps):
             if t == 0:
+                # TODO: adjust this later to sample from the common cause.
+                #  the common cause affects samples in t=0 as well.
                 values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
                     size=(num_series,
                           1 if self.single_chain else self.num_subjects, self.dimension_size)
@@ -210,7 +218,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
                     # ----Ming: Start using common cause----
                     if self.common_cause:
-                        X[..., t] = norm(loc=X[..., t - 1], scale=sd_a).rvs()
+                        X[..., t] = norm(loc=X[..., t - 1], scale=cc_sd_a).rvs()
                         # define X using X_{t} = N(X_{t-1})
                         blended_mean = (1 - c) * prev_same + c[:, None, None] * X[...,t]
                     else:
