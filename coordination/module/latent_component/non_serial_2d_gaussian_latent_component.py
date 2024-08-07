@@ -204,6 +204,15 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     size=(num_series,
                           1 if self.single_chain else self.num_subjects, self.dimension_size)
                 )
+                # --------------------------------------------------
+                # adjust this later to sample from the common cause.
+                # the common cause affects samples in t=0 as well.
+                if self.common_cause:
+                    values[..., 0] = norm(loc=cc_mean_a0, scale=cc_sd_a).rvs(
+                        size=(num_series,
+                          1 if self.single_chain else self.num_subjects, self.dimension_size)
+                    )
+                # --------------------------------------------------
             else:
                 if self.self_dependent:
                     prev_same = values[..., t - 1]  # n x s x d
@@ -216,14 +225,13 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
                     c_mask = -1 if self.asymmetric_coordination else 1
 
-                    # ----Ming: Start using common cause----
+                    # --------Ming: Start using common cause--------
                     if self.common_cause:
                         X[..., t] = norm(loc=X[..., t - 1], scale=cc_sd_a).rvs()
                         # define X using X_{t} = N(X_{t-1})
                         blended_mean = (1 - c) * prev_same + c[:, None, None] * X[...,t]
                     else:
-                    # if no common_cause, just skip that.
-                    # ---------------- END -----------------
+                    # -------------------- END ---------------------
                         # n x s x d
                         prev_others = (
                                 np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
@@ -337,12 +345,12 @@ def log_prob(
         for t in range(1, T):
             X = ptt.set_subtensor(X[t], ptt.random.normal(loc=X[t-1], scale=sigma[0, 0]))
 
-        # Log-probability for X, adding into total_logp
+        # Log probability for X, adding into total_logp
         total_logp += pm.logp(
             pm.Normal.dist(mu=X[:-1], sigma=sigma[0, 0], shape=(T - 1)), X[1:]
         ).sum()
 
-        # Compute blended mean with X
+        # Compute blended_mean with X
         c = coordination[1:]  # T-1
         blended_mean_A = (1 - c) * prev_same[0] + c * X[1:]
         blended_mean_B = (1 - c) * prev_same[1] + c * X[1:]
