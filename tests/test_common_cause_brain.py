@@ -26,13 +26,3 @@ def test_brain_model_common_cause():
 
 if __name__ == "__main__":
     test_brain_model_common_cause()
-"""
-File "/Users/mlyang721/miniconda3/envs/coordination/lib/python3.11/site-packages/scipy/stats/_distn_infrastructure.py", line 1028, in rvs
-    args, loc, scale, size = self._parse_args_rvs(*args, **kwds)
-                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<string>", line 6, in _parse_args_rvs
-  File "/Users/mlyang721/miniconda3/envs/coordination/lib/python3.11/site-packages/scipy/stats/_distn_infrastructure.py", line 909, in _argcheck_rvs
-    raise ValueError("size does not match the broadcast shape of "
-ValueError: size does not match the broadcast shape of the parameters. (1, 1, 2), (1, 1, 2), (1, 3, 1)
-"""
-
