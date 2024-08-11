@@ -289,8 +289,6 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
-'''
-I plan to rebuild this function. -- Ming
 
 def log_prob(
         sample: ptt.TensorVariable,
@@ -414,110 +412,110 @@ def log_prob(
     ).sum()
 
     return total_logp
-'''
 
 
 
 
-def log_prob(
-        sample: ptt.TensorVariable,
-        initial_mean: ptt.TensorVariable,
-        sigma: ptt.TensorVariable,
-        coordination: ptt.TensorVariable,
-        self_dependent: ptt.TensorConstant,
-        symmetry_mask: int,
-        common_cause: bool,
-) -> float:
-    """
-    Computes the log-probability function of a sample.
+
+# def log_prob(
+#         sample: ptt.TensorVariable,
+#         initial_mean: ptt.TensorVariable,
+#         sigma: ptt.TensorVariable,
+#         coordination: ptt.TensorVariable,
+#         self_dependent: ptt.TensorConstant,
+#         symmetry_mask: int,
+#         common_cause: bool,
+# ) -> float:
+#     """
+#     Computes the log-probability function of a sample.
     
-    @param sample: (subject x dimension x time) a series of samples for each subject.
-    @param initial_mean: (subject x dimension) mean at t0 for each subject.
-    @param sigma: (subject x dimension) a series of standard deviations for each time point and each dimension.
-    @param coordination: (time) a series of coordination values indicating the strength of interaction.
-    @param self_dependent: a boolean indicating whether subjects depend on their previous values.
-    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
-    @param common_cause: a boolean indicating whether we are modeling the common cause effect across subjects.
-    @return: log-probability of the sample.
-    """
-    S = sample.shape[0]  # Number of subjects
-    D = sample.shape[1]  # Number of dimensions (e.g., position and speed)
-    T = sample.shape[2]  # Number of time steps
+#     @param sample: (subject x dimension x time) a series of samples for each subject.
+#     @param initial_mean: (subject x dimension) mean at t0 for each subject.
+#     @param sigma: (subject x dimension) a series of standard deviations for each time point and each dimension.
+#     @param coordination: (time) a series of coordination values indicating the strength of interaction.
+#     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+#     @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
+#     @param common_cause: a boolean indicating whether we are modeling the common cause effect across subjects.
+#     @return: log-probability of the sample.
+#     """
+#     S = sample.shape[0]  # Number of subjects
+#     D = sample.shape[1]  # Number of dimensions (e.g., position and speed)
+#     T = sample.shape[2]  # Number of time steps
 
-    # Initial log-probability calculation using initial conditions
-    total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]).sum()
+#     # Initial log-probability calculation using initial conditions
+#     total_logp = pm.logp(pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]).sum()
 
-    # Initialize X
-    if common_cause:
-        X = ptt.zeros((T, D))  # Initialize X dimensions
-        X[0] = initial_mean[0]  # Start from the initial_mean[0]?
+#     # Initialize X
+#     if common_cause:
+#         X = ptt.zeros((T, D))  # Initialize X dimensions
+#         X[0] = initial_mean[0]  # Start from the initial_mean[0]?
 
-    for t in range(1, T):
-        if common_cause:
-            # X_t = X_{t-1}
-            X[t] = ptt.random.normal(loc=X[t - 1], scale=sigma[0])
+#     for t in range(1, T):
+#         if common_cause:
+#             # X_t = X_{t-1}
+#             X[t] = ptt.random.normal(loc=X[t - 1], scale=sigma[0])
 
-        if self_dependent.eval():
-            prev_same = sample[..., t - 1]
-        else:
-            prev_same = initial_mean[:, :, None].repeat(T - 1, axis=-1)
+#         if self_dependent.eval():
+#             prev_same = sample[..., t - 1]
+#         else:
+#             prev_same = initial_mean[:, :, None].repeat(T - 1, axis=-1)
 
-        c = coordination[t]
+#         c = coordination[t]
 
-        if common_cause:
-            # S_t = (1-c)S_{t-1} + cX_t
-            # [ S == one of the subjects ]
-            blended_mean = (1 - c) * prev_same + c * X[t]
-        else:
-            # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
-            # We discard the last value as that is not a previous value of any other.
-            sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
-            prev_others = (
-                    ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
-            )  # S x 2 x T-1
+#         if common_cause:
+#             # S_t = (1-c)S_{t-1} + cX_t
+#             # [ S == one of the subjects ]
+#             blended_mean = (1 - c) * prev_same + c * X[t]
+#         else:
+#             # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
+#             # We discard the last value as that is not a previous value of any other.
+#             sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
+#             prev_others = (
+#                     ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
+#             )  # S x 2 x T-1
 
-            # Coordination does not affect the component in the first time step because the subjects have
-            # no previous dependencies at that time.
-            # c = coordination[None, None, 1:]  # 1 x 1 x T-1
-            c = coordination[1:]  # 1 x 1 x T-1
+#             # Coordination does not affect the component in the first time step because the subjects have
+#             # no previous dependencies at that time.
+#             # c = coordination[None, None, 1:]  # 1 x 1 x T-1
+#             c = coordination[1:]  # 1 x 1 x T-1
 
-            # The dimensions of F and U are: T-1 x 2 x 2
-            T = c.shape[0]
-            F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
-            F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
+#             # The dimensions of F and U are: T-1 x 2 x 2
+#             T = c.shape[0]
+#             F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
+#             F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
 
-            U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
-            U = ptt.set_subtensor(U[:, 1, 1], c)
+#             U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
+#             U = ptt.set_subtensor(U[:, 1, 1], c)
 
-            # We transform the sample using the fundamental matrix so that we learn to generate samples
-            # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
-            # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
-            # we can add that to the log-probability such that the samples are effectively coming from the
-            # component's posterior.
-            #
-            # prev_same.T has dimensions T-1 x 2 x S. The first dimension of both F and prev_same.T is T-1
-            # and used as the batch dimension. The result of batched_tensordot will have dimensions
-            # T-1 x 2 x S. Transposing that results in S x 2 x T-1 as desired.
-            prev_same_transformed = ptt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
-            prev_other_transformed = ptt.batched_tensordot(
-                U, prev_others.T, axes=[(2,), (1,)]
-            ).T
+#             # We transform the sample using the fundamental matrix so that we learn to generate samples
+#             # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
+#             # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
+#             # we can add that to the log-probability such that the samples are effectively coming from the
+#             # component's posterior.
+#             #
+#             # prev_same.T has dimensions T-1 x 2 x S. The first dimension of both F and prev_same.T is T-1
+#             # and used as the batch dimension. The result of batched_tensordot will have dimensions
+#             # T-1 x 2 x S. Transposing that results in S x 2 x T-1 as desired.
+#             prev_same_transformed = ptt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
+#             prev_other_transformed = ptt.batched_tensordot(
+#                 U, prev_others.T, axes=[(2,), (1,)]
+#             ).T
 
-            blended_mean = prev_other_transformed + prev_same_transformed
+#             blended_mean = prev_other_transformed + prev_same_transformed
 
 
-    # Match the dimensions of the standard deviation with that of the blended mean by adding
-    # another dimension for time.
-    sd = sigma[:, :, None]
+#     # Match the dimensions of the standard deviation with that of the blended mean by adding
+#     # another dimension for time.
+#     sd = sigma[:, :, None]
 
-    # Index samples starting from the second index (i = 1) so that we can effectively compare
-    # current values against previous ones (prev_others and prev_same).
-    total_logp += pm.logp(
-        pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
-        sample[..., 1:],
-    ).sum()
+#     # Index samples starting from the second index (i = 1) so that we can effectively compare
+#     # current values against previous ones (prev_others and prev_same).
+#     total_logp += pm.logp(
+#         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
+#         sample[..., 1:],
+#     ).sum()
 
-    return total_logp
+#     return total_logp
 
 
 
