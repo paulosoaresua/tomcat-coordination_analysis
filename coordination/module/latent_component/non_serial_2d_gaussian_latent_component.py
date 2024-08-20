@@ -325,10 +325,14 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 ###################################################################################################
 
 
+import numpy as np
+import pytensor as pt
+import pymc as pm
+
 def common_cause_log_prob(
         sample: pt.TensorVariable,
         initial_mean: pt.TensorVariable,
-        X: pt.TensorVariable,  # Replacing sigma with X
+        X: pt.TensorVariable,  # Common cause values
         coordination: pt.TensorVariable,
         self_dependent: pt.TensorConstant,
         symmetry_mask: int
@@ -338,19 +342,18 @@ def common_cause_log_prob(
 
     @param sample: (subject x 2 x time) a single samples series.
     @param initial_mean: (subject x 2) mean at t0 for each subject.
-    @param X: (subject x 2) common cause values. Replaces sigma in computations.
+    @param X: (2 x time) common cause values.
     @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
     @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @return: log-probability of the sample.
     """
-    
+
     S = sample.shape[0]
     D = sample.shape[1]  # This should be 2D: position and speed
     T = sample.shape[2]
 
-    # Adjust X to match the shape of sigma
-    X_expanded = X[None, :].repeat(3, axis=0)  # (3, subject, 2) 
+    X_expanded = X[None, :].repeat(3, axis=0)  # Shape (3, 2, T)
 
     # Log-probability at the initial time step
     total_logp = pm.logp(
@@ -370,24 +373,27 @@ def common_cause_log_prob(
                 pt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
         )  # S x 2 x T-1
 
+        # Coordination does not affect the component in the first time step
         c = coordination[1:]  # 1 x 1 x T-1
-        T = c.shape[0]
-        F = pt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
+
+        # Define the fundamental matrices F and U with dimensions T-1 x 2 x 2
+        T_minus_1 = c.shape[0]
+        F = pt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T_minus_1, axis=0)
         F = pt.set_subtensor(F[:, 1, 1], 1 - c)
 
-        U = pt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
+        U = pt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T_minus_1, axis=0)
         U = pt.set_subtensor(U[:, 1, 1], c)
 
-        common_cause_transformed = pt.dot(F, X[:, None])[:, 0, :]
+        # Transforming the sample with common cause
+        common_cause_transformed = pt.dot(F, X_expanded[1, :, :])  # Using X_expanded[1, :, :] as X at time t=1
+
         prev_same_transformed = pt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
-        prev_other_transformed = pt.batched_tensordot(
-            U, prev_others.T, axes=[(2,), (1,)]
-        ).T
+        prev_other_transformed = pt.batched_tensordot(U, prev_others.T, axes=[(2,), (1,)]).T
 
         blended_mean = prev_other_transformed + prev_same_transformed + common_cause_transformed
 
     # Match the dimensions of the standard deviation with that of the blended mean
-    sd = X_expanded[:, :, None]  # Adjusting sigma dimensions to match the blended_mean
+    sd = X_expanded[0]  # Using X_expanded[0] for standard deviation
 
     # Index samples starting from the second index (i = 1) so that we can effectively compare
     # current values against previous ones (prev_others and prev_same).
@@ -397,6 +403,7 @@ def common_cause_log_prob(
     ).sum()
 
     return total_logp
+
 
 def log_prob(
         sample: ptt.TensorVariable,
