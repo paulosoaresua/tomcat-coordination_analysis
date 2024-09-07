@@ -187,7 +187,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             values[..., :t0] = init_values
 
         # ------------ INIT X values, All zeros ------------
-        X = np.zeros((num_series, 1, self.dimension_size, num_time_steps))
+        X = self.random_x(size=(num_series, 1, self.dimension_size, num_time_steps))
         # For now, let's reuse the mean of one of the subjects. Latter, we want a separate mean
         # For the common cause, or better yet, we use the subject's mean for the common cause as
         # well and replicate it to all the subjects since they are supposed to copy from the
@@ -195,24 +195,25 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         cc_mean_a0 = mean_a0[:, 0, np.newaxis, :]
         cc_sd_a = sd_a[:, 0, np.newaxis, :]
         X[..., 0] = norm(loc=cc_mean_a0, scale=cc_sd_a).rvs(size=(num_series, 1, self.dimension_size))
-        # --------------------------------------------------
+
+        # ------------------------END-----------------------
         for t in range(t0, num_time_steps):
             if t == 0:
-                # TODO: adjust this later to sample from the common cause.
+                # ----------------------Ming0907------------------------
+                # TODO-Finished : adjust this later to sample from the common cause.
                 #  the common cause affects samples in t=0 as well.
-                values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
-                    size=(num_series,
-                          1 if self.single_chain else self.num_subjects, self.dimension_size)
-                )
-                # --------------------------------------------------
-                # adjust this later to sample from the common cause.
-                # the common cause affects samples in t=0 as well.
+                # Common cause affects the initialization at t=0
                 if self.common_cause:
+                    # For common cause, initialize using X and the common cause mean
                     values[..., 0] = norm(loc=cc_mean_a0, scale=cc_sd_a).rvs(
-                        size=(num_series,
-                          1 if self.single_chain else self.num_subjects, self.dimension_size)
+                        size=(num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size)
                     )
-                # --------------------------------------------------
+                else:
+                    # Normal initialization without common cause
+                    values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
+                        size=(num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size)
+                    )
+                # -------------------------END-------------------------
             else:
                 if self.self_dependent:
                     prev_same = values[..., t - 1]  # n x s x d
@@ -317,7 +318,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         # TODO :This function will be implemented later.
         pass
-
+        X = self.random_x(size=(num_series, 1, self.dimension_size, num_time_steps))
 
 
 ###################################################################################################
@@ -356,7 +357,7 @@ def common_cause_log_prob(
     X_expanded = X[None, :].repeat(3, axis=0)  # Shape (3, 2, T)
 
     # Log-probability at the initial time step
-    total_logp = pm.logp(
+    common_cause_total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=X_expanded[0], shape=(S, D)), sample[..., 0]
     ).sum()
 
@@ -397,12 +398,12 @@ def common_cause_log_prob(
 
     # Index samples starting from the second index (i = 1) so that we can effectively compare
     # current values against previous ones (prev_others and prev_same).
-    total_logp += pm.logp(
+    common_cause_total_logp += pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
         sample[..., 1:],
     ).sum()
 
-    return total_logp
+    return common_cause_total_logp
 
 
 def log_prob(
