@@ -57,6 +57,11 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             asymmetric_coordination: bool = False,
             single_chain: bool = False,
             common_cause: bool = False,
+            mean_mean_cc0:np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_cc0:np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_cc:np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            mean_cc0_random_variable: Optional[pm.Distribution] = None,
+            sd_cc_random_variable: Optional[pm.Distribution] = None
     ):
         """
         Creates a non-serial 2D Gaussian latent component.
@@ -139,6 +144,12 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         self.subject_names = subject_names
         self.sampling_relative_frequency = sampling_relative_frequency
         self.common_cause = common_cause
+        self.mean_mean_cc0 = mean_mean_cc0,
+        self.sd_mean_cc0 = sd_mean_cc0,
+        self.sd_sd_cc = sd_sd_cc,
+        self.mean_cc0_random_variable = mean_cc0_random_variable,
+        self.sd_cc_random_variable = sd_cc_random_variable
+
 
     def _draw_from_system_dynamics(
             self,
@@ -187,14 +198,17 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             values[..., :t0] = init_values
 
         # ------------ INIT X values, All zeros ------------
-        X = self.random_x(size=(num_series, 1, self.dimension_size, num_time_steps))
+        mean_cc0 = self.parameters.mean_cc0.value
+        sd_cc = self.parameters.sd_cc.value
+        # init X
+        X = np.zeros((num_series, 1, self.dimension_size, num_time_steps))
         # For now, let's reuse the mean of one of the subjects. Latter, we want a separate mean
         # For the common cause, or better yet, we use the subject's mean for the common cause as
         # well and replicate it to all the subjects since they are supposed to copy from the
         # common cause.
         cc_mean_a0 = mean_a0[:, 0, np.newaxis, :]
         cc_sd_a = sd_a[:, 0, np.newaxis, :]
-        X[..., 0] = norm(loc=cc_mean_a0, scale=cc_sd_a).rvs(size=(num_series, 1, self.dimension_size))
+        X[..., 0] = norm(loc=mean_cc0, scale=sd_cc).rvs(size=(num_series, 1, self.dimension_size))
 
         # ------------------------END-----------------------
         for t in range(t0, num_time_steps):
@@ -204,10 +218,10 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 #  the common cause affects samples in t=0 as well.
                 # Common cause affects the initialization at t=0
                 if self.common_cause:
-                    # For common cause, initialize using X and the common cause mean
-                    values[..., 0] = norm(loc=cc_mean_a0, scale=cc_sd_a).rvs(
-                        size=(num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size)
-                    )
+                    # For common cause, 
+                    c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
+                    blended_mean = (1 - c) * mean_a0 + c[:, None, None] * X[..., t]
+                    values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
                 else:
                     # Normal initialization without common cause
                     values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
@@ -228,7 +242,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
                     # --------Ming: Start using common cause--------
                     if self.common_cause:
-                        X[..., t] = norm(loc=X[..., t - 1], scale=cc_sd_a).rvs()
+                        X[..., t] = norm(loc=X[..., t - 1], scale=sd_cc).rvs()
                         # define X using X_{t} = N(X_{t-1})
                         blended_mean = (1 - c) * prev_same + c[:, None, None] * X[...,t]
                     else:
@@ -274,10 +288,10 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         super().create_random_variables()
         self.X = pm.DensityDist(
             self.uuid + "X",
-            self.mean_a0_random_variable,
-            self.sd_a_random_variable,
+            self.mean_cc0_random_variable,
+            self.sd_cc_random_variable,
             logp   = log_prob_x,
-            random = random_x,
+            # random = random_x,
             dims   = [
                 self.dimension_axis_name,
                 self.time_axis_name,
@@ -303,22 +317,22 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         return random
     
-    def log_prob_x(X):
-        """
-        Gets the log probability for the random variable X.
-        """
-        cov_matrix = np.array([[1, 1], [0, 1]])
-        mean = ptt.zeros_like(X[..., 1:])
-        logp = norm.logpdf(X[..., 1:], mean, cov_matrix)
-        return logp
+    # def log_prob_x(X):
+    #     """
+    #     Gets the log probability for the random variable X.
+    #     """
+    #     cov_matrix = np.array([[1, 1], [0, 1]])
+    #     mean = ptt.zeros_like(X[..., 1:])
+    #     logp = norm.logpdf(X[..., 1:], mean, cov_matrix)
+    #     return logp
 
-    def random_x():
-        """
-        A function for random sampling. 
-        """
-        # TODO :This function will be implemented later.
-        pass
-        X = self.random_x(size=(num_series, 1, self.dimension_size, num_time_steps))
+    # def random_x():
+    #     """
+    #     A function for random sampling. 
+    #     """
+    #     # TODO :This function will be implemented later.
+    #     pass
+    #     X = self.random_x(size=(num_series, 1, self.dimension_size, num_time_steps))
 
 
 ###################################################################################################
@@ -333,10 +347,12 @@ import pymc as pm
 def common_cause_log_prob(
         sample: pt.TensorVariable,
         initial_mean: pt.TensorVariable,
+        sigma: ptt.TensorVariable,
         X: pt.TensorVariable,  # Common cause values
         coordination: pt.TensorVariable,
         self_dependent: pt.TensorConstant,
-        symmetry_mask: int
+        symmetry_mask: int,
+
 ) -> float:
     """
     Computes the log-probability function of a sample with or without common cause.
@@ -357,8 +373,12 @@ def common_cause_log_prob(
     X_expanded = X[None, :].repeat(3, axis=0)  # Shape (3, 2, T)
 
     # Log-probability at the initial time step
+    c0 = coordination[0]
+    # when time = 0, any participant is a mix between the value of cc and initial value of their brain signal
+    blended_mean = (1 - c0) * initial_mean + c0 * X_expanded[..., 0]
+
     common_cause_total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=X_expanded[0], shape=(S, D)), sample[..., 0]
+        pm.Normal.dist(mu=blended_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
     ).sum()
 
     if self_dependent.eval():
@@ -366,35 +386,12 @@ def common_cause_log_prob(
     else:
         prev_same = initial_mean[:, :, None].repeat(T - 1, axis=-1)
 
-    if S.eval() == 1:
-        blended_mean = prev_same
-    else:
-        sum_matrix_others = (pt.ones((S, S)) - pt.eye(S)) / (S - 1)
-        prev_others = (
-                pt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
-        )  # S x 2 x T-1
-
-        # Coordination does not affect the component in the first time step
-        c = coordination[1:]  # 1 x 1 x T-1
-
-        # Define the fundamental matrices F and U with dimensions T-1 x 2 x 2
-        T_minus_1 = c.shape[0]
-        F = pt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T_minus_1, axis=0)
-        F = pt.set_subtensor(F[:, 1, 1], 1 - c)
-
-        U = pt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T_minus_1, axis=0)
-        U = pt.set_subtensor(U[:, 1, 1], c)
-
-        # Transforming the sample with common cause
-        common_cause_transformed = pt.dot(F, X_expanded[1, :, :])  # Using X_expanded[1, :, :] as X at time t=1
-
-        prev_same_transformed = pt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
-        prev_other_transformed = pt.batched_tensordot(U, prev_others.T, axes=[(2,), (1,)]).T
-
-        blended_mean = prev_other_transformed + prev_same_transformed + common_cause_transformed
+    # Coordination does not affect the component in the first time step
+    c = coordination[1:]  # 1 x 1 x T-1
+    blended_mean = (1 - c) * X[:,:,1:] + c * prev_same
 
     # Match the dimensions of the standard deviation with that of the blended mean
-    sd = X_expanded[0]  # Using X_expanded[0] for standard deviation
+    sd = sigma[:, :, None] # Using X_expanded[0] for standard deviation
 
     # Index samples starting from the second index (i = 1) so that we can effectively compare
     # current values against previous ones (prev_others and prev_same).
@@ -580,3 +577,58 @@ def random(
         sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
 
     return sample
+
+
+def log_prob_x(
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+) -> float:
+    """
+    Gets the log probability for the random variable X.
+    """
+    S = sample.shape[0]
+    D = sample.shape[1]  # This should be 2: position and speed
+    T = sample.shape[2]
+
+    # log-probability at the initial time step
+    total_logp = pm.logp(
+        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
+    ).sum()
+
+    prev_same = sample[..., :-1]  # S x 2 x T-1
+
+
+    # The dimensions of F and U are: T-1 x 2 x 2
+    F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
+
+    U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
+
+    # We transform the sample using the fundamental matrix so that we learn to generate samples
+    # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
+    # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
+    # we can add that to the log-probability such that the samples are effectively coming from the
+    # component's posterior.
+    #
+    # prev_same.T has dimensions T-1 x 2 x S. The first dimension of both F and prev_same.T is T-1
+    # and used as the batch dimension. The result of batched_tensordot will have dimensions
+    # T-1 x 2 x S. Transposing that results in S x 2 x T-1 as desired.
+    prev_same_transformed = ptt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
+    prev_other_transformed = ptt.batched_tensordot(
+        U, prev_others.T, axes=[(2,), (1,)]
+    ).T
+
+    blended_mean = prev_other_transformed + prev_same_transformed
+
+    # Match the dimensions of the standard deviation with that of the blended mean by adding
+    # another dimension for time.
+    sd = sigma[:, :, None]
+
+    # Index samples starting from the second index (i = 1) so that we can effectively compare
+    # current values against previous ones (prev_others and prev_same).
+    total_logp += pm.logp(
+        pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
+        sample[..., 1:],
+    ).sum()
+
+    return total_logp
