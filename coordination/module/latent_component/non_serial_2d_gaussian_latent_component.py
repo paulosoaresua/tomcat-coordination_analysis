@@ -6,6 +6,7 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as ptt
 from scipy.stats import norm
+import pytensor as pt
 
 from coordination.common.types import TensorTypes
 from coordination.module.constants import (DEFAULT_LATENT_MEAN_PARAM,
@@ -339,10 +340,6 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
-
-import numpy as np
-import pytensor as pt
-import pymc as pm
 
 def common_cause_log_prob(
         sample: pt.TensorVariable,
