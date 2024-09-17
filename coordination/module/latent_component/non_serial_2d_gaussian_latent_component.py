@@ -17,6 +17,7 @@ from coordination.module.constants import (DEFAULT_LATENT_MEAN_PARAM,
                                            DEFAULT_SHARING_ACROSS_SUBJECTS)
 from coordination.module.latent_component.non_serial_gaussian_latent_component import \
     NonSerialGaussianLatentComponent
+from coordination.module.common_cause.common_cause_gaussian_2d import CommonCauseGaussian2D
 from coordination.module.module import ModuleSamples
 
 
@@ -57,12 +58,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             initial_samples: Optional[np.ndarray] = None,
             asymmetric_coordination: bool = False,
             single_chain: bool = False,
-            common_cause: bool = False,
-            mean_mean_cc0:np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-            sd_mean_cc0:np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            sd_sd_cc:np.ndarray = DEFAULT_LATENT_SD_PARAM,
-            mean_cc0_random_variable: Optional[pm.Distribution] = None,
-            sd_cc_random_variable: Optional[pm.Distribution] = None
+            common_cause: CommonCauseGaussian2D = None,
     ):
         """
         Creates a non-serial 2D Gaussian latent component.
@@ -112,7 +108,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             the value of a component for one subject depends on the negative of the combination of
             the others.
         @param single_chain: whether to fit a single chain for all subjects.
-        @param common_cause: a boolean indicating whether we are modeling the common cause.
+        @param common_cause: an optional common cause component. If this is provided, the latent
+            component from each subject is updated from the common cause values.
         """
         super().__init__(
             uuid=uuid,
@@ -145,12 +142,6 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         self.subject_names = subject_names
         self.sampling_relative_frequency = sampling_relative_frequency
         self.common_cause = common_cause
-        self.mean_mean_cc0 = mean_mean_cc0,
-        self.sd_mean_cc0 = sd_mean_cc0,
-        self.sd_sd_cc = sd_sd_cc,
-        self.mean_cc0_random_variable = mean_cc0_random_variable,
-        self.sd_cc_random_variable = sd_cc_random_variable
-
 
     def _draw_from_system_dynamics(
             self,
@@ -164,13 +155,20 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         Draws values with the following updating equations for the state of the component at time
         t:
 
-        P_a(t) = P_a(t-1) + V_a(t-1)dt
-        S_a(t) = (1 - C(t))*S_a(t-1) + c(t)*S_b(t-1)
+        S_a(t) = S_a(t-1) + V_a(t-1)dt
+        V_a(t) = (1 - C(t))*V_a(t-1) + C(t)*V_b(t-1),
 
-        Where, "P" is position, "S" speed, "S_a" is the previous positions of the subject and S_b
-        the scaled sum of the previous positions of other subjects: (S1 + S2 + ... Sn-1) / (n - 1).
-        We set dt to be 1, meaning it jumps one time step in the component's scale instead of "n"
+        where, "S" is position, "V" speed, "V_a" is the previous velocities of the subject and V_b
+        the scaled sum of the previous velocities of other subjects: (V1 + V2 + ... Vn-1) /
+        (n - 1). We set dt to be 1, meaning it jumps one time step in the component's scale instead of "n"
         time steps in the coordination scale when there are gaps.
+
+        If we are modeling a common-cause phenomenon, then the equations are as follows:
+
+        S_a(t) = S_a(t-1) + V_a(t-1)dt
+        V_a(t) = (1 - C(t))*V_a(t-1) + C(t)*V_c(t),
+
+        where V_c is the velocity of the common cause variable.
 
         @param sampled_coordination: sampled values of coordination (all series included).
         @param time_steps_in_coordination_scale: an array of indices representing time steps in the
@@ -180,13 +178,9 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
         @return: sampled values.
         """
-
-        # Axes legend:
-        # n: number of series (first dimension of coordination)
-        # s: number of subjects
-        # d: dimension size
-        N = self.num_subjects
-        sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
+        zero_valued_diag_matrix = np.ones((self.num_subjects, self.num_subjects)) - np.eye(
+            self.num_subjects)
+        sum_matrix_others = zero_valued_diag_matrix / (self.num_subjects - 1)
 
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
@@ -194,13 +188,15 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             (num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size,
              num_time_steps)
         )
+
+        # This function can be called to continue sampling from a specific time step. In that case,
+        # the initial time step is not t = 0.
         t0 = 0 if init_values is None else init_values.shape[-1]
         if init_values is not None:
             values[..., :t0] = init_values
 
         # ------------ INIT X values, All zeros ------------
-        mean_cc0 = self.parameters.mean_cc0.value
-        sd_cc = self.parameters.sd_cc.value
+
         # init X
         X = np.zeros((num_series, 1, self.dimension_size, num_time_steps))
         # For now, let's reuse the mean of one of the subjects. Latter, we want a separate mean
@@ -226,7 +222,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 else:
                     # Normal initialization without common cause
                     values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
-                        size=(num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size)
+                        size=(num_series, 1 if self.single_chain else self.num_subjects,
+                              self.dimension_size)
                     )
                 # -------------------------END-------------------------
             else:
@@ -245,9 +242,9 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     if self.common_cause:
                         X[..., t] = norm(loc=X[..., t - 1], scale=sd_cc).rvs()
                         # define X using X_{t} = N(X_{t-1})
-                        blended_mean = (1 - c) * prev_same + c[:, None, None] * X[...,t]
+                        blended_mean = (1 - c) * prev_same + c[:, None, None] * X[..., t]
                     else:
-                    # -------------------- END ---------------------
+                        # -------------------- END ---------------------
                         # n x s x d
                         prev_others = (
                                 np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
@@ -291,14 +288,13 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             self.uuid + "X",
             self.mean_cc0_random_variable,
             self.sd_cc_random_variable,
-            logp   = log_prob_x,
+            logp=log_prob_x,
             # random = random_x,
-            dims   = [
+            dims=[
                 self.dimension_axis_name,
                 self.time_axis_name,
             ]
         )
-
 
     def _get_extra_logp_params(self) -> Tuple[Union[TensorTypes, pm.Distribution], ...]:
         """
@@ -317,7 +313,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         Gets a reference to a random function for prior predictive checks.
         """
         return random
-    
+
     # def log_prob_x(X):
     #     """
     #     Gets the log probability for the random variable X.
@@ -385,10 +381,10 @@ def common_cause_log_prob(
 
     # Coordination does not affect the component in the first time step
     c = coordination[1:]  # 1 x 1 x T-1
-    blended_mean = (1 - c) * X[:,:,1:] + c * prev_same
+    blended_mean = (1 - c) * X[:, :, 1:] + c * prev_same
 
     # Match the dimensions of the standard deviation with that of the blended mean
-    sd = sigma[:, :, None] # Using X_expanded[0] for standard deviation
+    sd = sigma[:, :, None]  # Using X_expanded[0] for standard deviation
 
     # Index samples starting from the second index (i = 1) so that we can effectively compare
     # current values against previous ones (prev_others and prev_same).
@@ -594,7 +590,6 @@ def log_prob_x(
     ).sum()
 
     prev_same = sample[..., :-1]  # S x 2 x T-1
-
 
     # The dimensions of F and U are: T-1 x 2 x 2
     F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
