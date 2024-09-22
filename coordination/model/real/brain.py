@@ -35,6 +35,7 @@ from coordination.module.transformation.dimension_reduction import \
     DimensionReduction
 from coordination.module.transformation.mlp import MLP
 from coordination.module.transformation.sequential import Sequential
+from coordination.module.common_cause.common_cause_gaussian_2d import CommonCauseGaussian2D
 
 
 class BrainModel(ModelTemplate):
@@ -269,6 +270,25 @@ class BrainModel(ModelTemplate):
         @param bundle: config bundle holding information on how to parameterize the modules.
         @return: a list of component groups to be added to the model.
         """
+        if bundle.common_cause:
+            common_cause = CommonCauseGaussian2D(
+                uuid="common_cause",
+                pymc_model=self.pymc_model,
+                mean_mean_cc0=bundle.mean_mean_cc0,
+                sd_mean_cc0=bundle.sd_mean_cc0,
+                sd_sd_cc=bundle.sd_sd_cc,
+                share_mean_cc0_across_dimensions=bundle.share_mean_cc0_across_dimensions,
+                share_sd_cc_across_dimensions=bundle.share_sd_cc_across_dimensions,
+                time_steps_in_coordination_scale=(
+                    np.arange(bundle.num_time_steps_in_coordination_scale)
+                ),
+                mean_cc0=bundle.mean_cc0,
+                sd_cc=bundle.sd_cc,
+                initial_samples=bundle.initial_common_cause_samples,
+            )
+        else:
+            common_cause = None
+
         # In the 2D case, it may be interesting having multiple state space chains with their
         # own dynamics if different features of a modality have different movement dynamics.
         fnirs_groups = bundle.fnirs_groups
@@ -359,7 +379,7 @@ class BrainModel(ModelTemplate):
                         "asymmetric_coordination", False
                     ),
                     single_chain=bundle.fnirs_share_fnirs_latent_state_across_subjects,
-                    common_cause=bundle.common_cause
+                    common_cause=common_cause
                 )
                 # We assume data is normalized and add a transformation with fixed unitary weights
                 # that bring the position in the state space to a collection of channels in the

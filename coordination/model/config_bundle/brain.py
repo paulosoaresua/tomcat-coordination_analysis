@@ -182,4 +182,14 @@ class BrainBundle(ModelConfigBundle):
     #     }
     # ]
     fnirs_groups: List[Dict[str, Any]] = None
+
+    # Common cause parameters
     common_cause: bool = False
+    mean_mean_cc0: float = 0.0
+    sd_mean_cc0: float = 1.0
+    sd_sd_cc: float = 1.0
+    mean_cc0: float = None  # mean_cc0 ~ N(mean_mean_cc0, sd_mean_cc0^2)
+    sd_cc: float = None  # sd_cc ~ HN(sd_sd_cc)
+    share_mean_cc0_across_dimensions: bool = True
+    share_sd_cc_across_dimensions: bool = True
+    initial_common_cause_samples: np.ndarray = None

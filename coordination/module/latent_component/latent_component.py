@@ -31,6 +31,7 @@ class LatentComponent(ABC, Module):
         latent_component_random_variable: Optional[pm.Distribution] = None,
         time_steps_in_coordination_scale: Optional[np.array] = None,
         observed_values: Optional[TensorTypes] = None,
+        common_cause_samples: Optional[ModuleSamples] = None,
     ):
         """
         Creates an abstract latent component module.
@@ -56,6 +57,8 @@ class LatentComponent(ABC, Module):
             each index in the latent component scale.
         @param observed_values: observations for the latent component random variable. If a value
             is set, the variable is not latent anymore.
+        @param common_cause_samples: optional common cause samples to be used in a call to
+            draw_samples. This variable must be set before such a call if common cause is used.
         @raise ValueError: if the number of elements in dimension_names do not match the
             dimension_size.
         """
@@ -81,6 +84,7 @@ class LatentComponent(ABC, Module):
         self.coordination_random_variable = coordination_random_variable
         self.latent_component_random_variable = latent_component_random_variable
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.common_cause_samples = common_cause_samples
 
     @property
     def dimension_coordinates(self) -> Union[List[str], np.ndarray]:

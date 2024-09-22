@@ -30,7 +30,6 @@ class CommonCauseGaussian2D(NonSerialGaussianLatentComponent):
             self,
             uuid: str,
             pymc_model: pm.Model,
-            num_subjects: int = DEFAULT_NUM_SUBJECTS,
             mean_mean_cc0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
             sd_mean_cc0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
             sd_sd_cc: np.ndarray = DEFAULT_LATENT_SD_PARAM,
@@ -50,7 +49,6 @@ class CommonCauseGaussian2D(NonSerialGaussianLatentComponent):
 
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
-        @param num_subjects: the number of subjects that possess the component.
         @param mean_mean_cc0: mean of the hyper-prior of mu_cc0 (mean of the initial value of the
             common cause).
         @param sd_sd_cc: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
@@ -79,7 +77,7 @@ class CommonCauseGaussian2D(NonSerialGaussianLatentComponent):
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
-            num_subjects=1,  # the common cause it self
+            num_subjects=1,  # the common cause itself
             dimension_size=2,  # position and velocity
             self_dependent=True,
             mean_mean_a0=mean_mean_cc0,
@@ -107,8 +105,8 @@ class CommonCauseGaussian2D(NonSerialGaussianLatentComponent):
             self,
             sampled_coordination: np.ndarray,
             time_steps_in_coordination_scale: np.ndarray,
-            mean_a0: np.ndarray,
-            sd_a: np.ndarray,
+            mean_a0: np.ndarray,  # mean_a0 = mean_cc0
+            sd_a: np.ndarray,  # sd_a = sd_cc
             init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
@@ -129,6 +127,8 @@ class CommonCauseGaussian2D(NonSerialGaussianLatentComponent):
         """
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
+
+        # shape = (N, 1 subject = common cause itself, position and velocity, T)
         values = np.zeros((num_series, 1, self.dimension_size, num_time_steps))
 
         # This function can be called to continue sampling from a specific time step. In that case,
@@ -177,10 +177,10 @@ def log_prob(
         sample: ptt.TensorVariable,
         initial_mean: ptt.TensorVariable,
         sigma: ptt.TensorVariable,
-        coordination: ptt.TensorVariable,
-        self_dependent: ptt.TensorConstant,
-        symmetry_mask: int,
-) -> float:
+        coordination: ptt.TensorVariable = None,
+        self_dependent: ptt.TensorConstant = None,
+        symmetry_mask: int = 1,
+) -> ptt.TensorVariable:
     """
     Computes the log-probability function of a common cause sample.
 
@@ -212,7 +212,7 @@ def log_prob(
     ).sum()
 
     previous = sample[..., :-1]  # 1 x 2 x T-1
-    upd_matrix = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
+    upd_matrix = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
     mean_next_state = ptt.batched_tensordot(upd_matrix, previous.T, axes=[(2,), (1,)]).T
 
     # Match the dimensions of the standard deviation with that of the next state mean by adding

@@ -251,6 +251,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             mean_a0=mean_a0,
             sd_a=sd_a,
             init_values=None if self.initial_samples is None else self.initial_samples,
+            sampled_common_cause=self.common_cause_samples.values,
         )
 
         return LatentComponentSamples(
@@ -267,6 +268,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             mean_a0: np.ndarray,
             sd_a: np.ndarray,
             init_values: Optional[np.ndarray] = None,
+            sampled_common_cause: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default non serial component generates samples
@@ -280,6 +282,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         @param mean_a0: initial mean of the latent component.
         @param sd_a: standard deviation of the Gaussian transition distribution.
         @param init_values: initial values if the series was pre-sampled up to some time step.
+        @param sampled_common_cause: optional sampled values of common cause (all series included).
 
         @return: sampled values.
         """
@@ -288,6 +291,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         # n: number of series (first dimension of coordination)
         # s: number of subjects
         # d: dimension size
+
+        # TODO: implement the common cause influence in the equations below for the Non-2D case.
+        #  Implement this in the future.
 
         N = self.num_subjects
         sum_matrix_others = (np.ones((N, N)) - np.eye(N)) / (N - 1)
