@@ -7,6 +7,10 @@ from coordination.module.common_cause.common_cause_gaussian_2d import CommonCaus
 from coordination.module.common_cause.common_cause_gaussian_2d import log_prob
 from coordination.module.latent_component.non_serial_2d_gaussian_latent_component import common_cause_log_prob
 
+from scipy.stats import norm
+lp_t0 = norm.logpdf(0.1, loc=0.3, scale=0.01) + norm.logpdf(0.5, loc=0.4, scale=0.02)
+
+
 
 class Test2DCommonCause(TestCase):
     def test_non_serial_log_prob(self):
@@ -91,5 +95,15 @@ class Test2DCommonCause(TestCase):
             self_dependent=ptt.constant(True),
             symmetry_mask=1
         )
-        # real_lp = -7810.782735499971
+        real_lp = -7810.782735499971
         # self.assertAlmostEqual(lp.eval(), real_lp)
+
+        lp_t0 = norm.logpdf(0.1, loc=0.3, scale=0.01) + norm.logpdf(0.5, loc=0.4, scale=0.02)
+        lp_t1 = norm.logpdf(-0.4, loc=0.6, scale=0.01) + norm.logpdf(0.2, loc=0.5, scale=0.02)
+        lp_t2 = norm.logpdf(0.5, loc=-0.2, scale=0.01) + norm.logpdf(0.1, loc=0.2, scale=0.02)
+        lp_t3 = norm.logpdf(0.6, loc=0.6, scale=0.01) + norm.logpdf(0.3, loc=0.1, scale=0.02)
+
+
+        total_lp = lp_t0 + lp_t1 + lp_t2 + lp_t3
+
+        self.assertAlmostEqual(total_lp, real_lp)
