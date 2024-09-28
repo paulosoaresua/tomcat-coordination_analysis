@@ -199,11 +199,15 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         for t in range(t0, num_time_steps):
             if t == 0:
                 if sampled_common_cause:
+
+                    # =============================================
                     # TODO: [Ming] update the values[..., t] below such that it uses samples from
                     #   the common cause sampled_common_cause.
-                    # c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
-                    # blended_mean = (1 - c) * mean_a0 + c[:, None, None] * X[..., t]
-                    # values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
+                    c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
+                    blended_mean = (1 - c) * mean_a0 + c[:, None, None] * sampled_common_cause[..., t]
+                    values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
+                    # =============================================
+
                 else:
                     values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
                         size=(num_series, 1 if self.single_chain else self.num_subjects,
@@ -222,11 +226,16 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     c_mask = -1 if self.asymmetric_coordination else 1
 
                     if self.common_cause:
+
+                        # =============================================
                         # TODO: [Ming] update the blended_mean[..., t] below such that it uses
                         #  samples from the common cause sampled_common_cause.
-                        # X[..., t] = norm(loc=X[..., t - 1], scale=sd_cc).rvs()
-                        # # define X using X_{t} = N(X_{t-1})
-                        # blended_mean = (1 - c) * prev_same + c[:, None, None] * X[..., t]
+                        sampled_common_cause[..., t] = norm(loc=sampled_common_cause[..., t - 1], scale=sd_a).rvs()
+                        # define X using X_{t} = N(X_{t-1})
+                        blended_mean = (1 - c) * prev_same + c[:, None, None] * sampled_common_cause[..., t]
+                        # =============================================
+
+
                     else:
                         # -------------------- END ---------------------
                         # n x s x d
@@ -320,7 +329,7 @@ def common_cause_log_prob(
     #   Do not use loops.
     #   Key idea: The change will be basically on the U matrix since we don't need the values of
     #   others influencing ourselves but the value of common cause instead.
-    #  To test this, create a test case for this function in test_common_cause_brain and
+    #   To test this, create a test case for this function in test_common_cause_brain and
     #   manually compute the log prob when the common cause is in the equations.
 
     S = sample.shape[0]
