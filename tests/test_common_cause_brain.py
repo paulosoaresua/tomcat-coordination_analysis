@@ -90,7 +90,7 @@ class Test2DCommonCause(TestCase):
         #    p(X_2 | C_2, CC_2, X_1) p(Y_2 | C_2, CC_2, Y_1) p(Z_2 | C_2, CC_2, Z_1)
         #
         # The following applies to X, Y and Z
-        # p(X_0 | C_0, CC_0) = N(X_0 | (1 - C_0)Mu_x + CC_0C_0)
+        # p(X_0 | C_0, CC_0) = N(X_0 | [(1 - C_0)]Mu_x + CC_0C_0)
         # p(X_1 | C_1, CC_1, X_0) = N(X_1 | (1 - C_1)X_0 + CC_1C_1)
         #
         # So,
@@ -116,12 +116,12 @@ class Test2DCommonCause(TestCase):
         # norm(0.1*np.array([0.1, 0.5]) + (1 - 0.1)*np.array([0.5, 0.6]), [0.03, 0.04]).logpdf([0.5, 0.9]).sum() + \
         # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.1, 0.2]), [0.01, 0.02]).logpdf([0.2, 0.3]).sum() + \
         # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.3, 0.4]), [0.02, 0.03]).logpdf([0.4, 0.5]).sum() + \
-        # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.5, 0.9]), [0.03, 0.04]).logpdf([0.6, 0.1]).sum() + \
+        # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.5, 0.9]), [0.03, 0.04]).logpdf([0.6, 1.0]).sum() + \
         # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.2, 0.3]), [0.01, 0.02]).logpdf([0.3, 0.4]).sum() + \
         # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.4, 0.5]), [0.02, 0.03]).logpdf([0.5, 0.6]).sum() + \
-        # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.6, 0.1]), [0.03, 0.04]).logpdf([0.7, 1.1]).sum()
+        # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.6, 1.0]), [0.03, 0.04]).logpdf([0.7, 1.1]).sum()
 
-        real_lp = -1394.8697701486262
+        real_lp = -1170.1510201486265
 
         lp = common_cause_log_prob(
             sample=sample,
@@ -133,4 +133,4 @@ class Test2DCommonCause(TestCase):
             symmetry_mask=1
         )
 
-        self.assertAlmostEqual(lp, real_lp)
+        self.assertAlmostEqual(lp.eval(), real_lp)

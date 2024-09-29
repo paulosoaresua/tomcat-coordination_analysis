@@ -204,7 +204,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     # TODO: [Ming] update the values[..., t] below such that it uses samples from
                     #   the common cause sampled_common_cause.
                     c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
-                    blended_mean = (1 - c) * mean_a0 + c[:, None, None] * sampled_common_cause[..., t]
+                    blended_mean = (1 - c) * mean_a0 + c[:, None, None] * sampled_common_cause[
+                        ..., t]
                     values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
                     # =============================================
 
@@ -230,9 +231,11 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                         # =============================================
                         # TODO: [Ming] update the blended_mean[..., t] below such that it uses
                         #  samples from the common cause sampled_common_cause.
-                        sampled_common_cause[..., t] = norm(loc=sampled_common_cause[..., t - 1], scale=sd_a).rvs()
+                        sampled_common_cause[..., t] = norm(loc=sampled_common_cause[..., t - 1],
+                                                            scale=sd_a).rvs()
                         # define X using X_{t} = N(X_{t-1})
-                        blended_mean = (1 - c) * prev_same + c[:, None, None] * sampled_common_cause[..., t]
+                        blended_mean = (1 - c) * prev_same + c[:, None, None] * \
+                                       sampled_common_cause[..., t]
                         # =============================================
 
 
@@ -300,7 +303,7 @@ def common_cause_log_prob(
         initial_mean: ptt.TensorVariable,
         sigma: ptt.TensorVariable,
         coordination: ptt.TensorVariable,
-        self_dependent: ptt.TensorConstant ,
+        self_dependent: ptt.TensorConstant,
         symmetry_mask: int,
         common_cause: ptt.TensorConstant,
 ) -> ptt.TensorVariable:
@@ -324,50 +327,41 @@ def common_cause_log_prob(
     @param common_cause: (subject x 2 x time) a series of common cause values.
     @return: log-probability of the sample.
     """
-
-    # TODO: [Ming] Include the common cause in the equations below to compute the blended mean.
-    #   Do not use loops.
-    #   Key idea: The change will be basically on the U matrix since we don't need the values of
-    #   others influencing ourselves but the value of common cause instead.
-    #   To test this, create a test case for this function in test_common_cause_brain and
-    #   manually compute the log prob when the common cause is in the equations.
-
-    S = sample.shape[0]
-    D = sample.shape[1]
-    T = sample.shape[2]
-
     total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
     ).sum()
 
-    sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
-    prev_others = (
-        ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
-    )  # S x 2 x T-1
+    previous_values = sample[..., :-1]
 
-    c = coordination[1:]  # 1 x 1 x T-1
-    T = c.shape[0]
-    F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
+    # The dimensions of F and U are: T x 2 x 2
+    c = coordination[1:][None, None, :]
+    T = sample.shape[2]
+    F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
     F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
 
-    U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
+    U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
     U = ptt.set_subtensor(U[:, 1, 1], c)
 
-    # A_{t} ~ (1 - coordination) * A_{t-1} + coordination * common_cause
-    prev_same = sample[..., :-1]  # previous (t-1)
-    common_cause_values = common_cause[..., 1:]  # Current common_cause value
-    
-    # blended_mean = (1 - coordination) * A_{t-1} + coordination * common_cause
-    blended_mean = prev_same + common_cause_values
+    cc = common_cause[1:][None, None, :]
+    prev_same_transformed = ptt.batched_tensordot(F, previous_values.T, axes=[(2,), (1,)]).T
+    common_cause_transformed = ptt.batched_tensordot(
+        U, cc.T, axes=[(2,), (1,)]
+    ).T
 
+    blended_mean = common_cause_transformed + prev_same_transformed
 
+    # Match the dimensions of the standard deviation with that of the blended mean by adding
+    # another dimension for time.
     sd = sigma[:, :, None]
+
+    # Index samples starting from the second index (i = 1) so that we can effectively compare
+    # current values against previous ones (prev_others and prev_same).
     total_logp += pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
-        sample[..., 1:],
-    ).sum()
+        sample[..., 1:]).sum()
 
     return total_logp
+
 
 def log_prob(
         sample: ptt.TensorVariable,
@@ -427,7 +421,7 @@ def log_prob(
         # Coordination does not affect the component in the first time step because the subjects have
         # no previous dependencies at that time.
         # c = coordination[None, None, 1:]  # 1 x 1 x T-1
-        c = coordination[1:]  # 1 x 1 x T-1
+        c = coordination[1:]
 
         # The dimensions of F and U are: T-1 x 2 x 2
         T = c.shape[0]
