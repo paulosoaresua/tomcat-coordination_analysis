@@ -100,16 +100,14 @@ class Test2DCommonCause(TestCase):
         for i in range(3):  # 3 subjects
             for j in range(2):  # position and speed
                 logp_t0 += norm.logpdf(sample_val[i, j, 0], loc=initial_mean_val[i, j], scale=sigma_val[i, j])
-
-        # Function to compute blended mean for time t > 0
         def compute_blended_mean(subject_idx, time_idx):
-            previous_values = sample_val[subject_idx, :, time_idx-1]  # Previous values at t-1
-            cc_val = common_cause.eval()[0, :, time_idx-1]  # Common cause for all subjects
+            previous_values = sample_val[subject_idx, :, time_idx-1]  # values at t-1
+            cc_val = common_cause.eval()[0, :, time_idx-1]  # Common cause
 
-            # Calculate F and U based on coordination values
+            # use F and U
             c = coordination.eval()[time_idx]
-            F = np.array([[1.0, 1.0], [0.0, 1 - c]])  # F matrix
-            U = np.array([[0.0, 0.0], [0.0, c]])  # U matrix
+            F = np.array([[1.0, 1.0], [0.0, 1 - c]]) 
+            U = np.array([[0.0, 0.0], [0.0, c]])
 
             prev_same_transformed = np.dot(F, previous_values)
             common_cause_transformed = np.dot(U, cc_val)
@@ -117,15 +115,14 @@ class Test2DCommonCause(TestCase):
             blended_mean = prev_same_transformed + common_cause_transformed
             return blended_mean
 
-        # Calculate log-prob for t = 1, 2
         logp_t1_t2 = 0
-        for t in range(1, 3):  # For t=1 and t=2
-            for i in range(3):  # 3 subjects
+        for t in range(1, 3):
+            for i in range(3):
                 blended_mean = compute_blended_mean(i, t)
-                for j in range(2):  # position and speed
+                for j in range(2):
+                    print(norm.logpdf(sample_val[i, j, t], loc=blended_mean[j], scale=sigma_val[i, j]))
                     logp_t1_t2 += norm.logpdf(sample_val[i, j, t], loc=blended_mean[j], scale=sigma_val[i, j])
 
-        # Total log-prob
         total_logp = logp_t0 + logp_t1_t2
         print(total_logp)
         # total_logp = -1856.4044923708486 
