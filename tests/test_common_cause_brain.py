@@ -48,19 +48,20 @@ class Test2DCommonCause(TestCase):
     def test_common_cause_2d_latent_component_log_prob(self):
         # TODO: [Ming] Find the real value of log prob and implement the common_cause_log_prob.
         # 3 subjects, 2 features and 3 time steps
-        sample = ptt.constant(
+        sample = ptt.constant(  # A sample from the system latent component
             np.array(
                 [
-                    # Subject 1
+                    # Subject 1 (X)
                     [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]],  # position  # speed
-                    # Subject 2
+                    # Subject 2 (Y)
                     [[0.3, 0.4, 0.5], [0.4, 0.5, 0.6]],
-                    # Subject 3
+                    # Subject 3 (Z)
                     [[0.5, 0.6, 0.7], [0.9, 1.0, 1.1]],
                 ]
             )
         )
-        initial_mean = ptt.constant(
+        # Mu
+        initial_mean = ptt.constant( # The value of the system latent component at time t = 0
             np.array(
                 [
                     [0.3, 0.4],  # subject 1
@@ -80,11 +81,47 @@ class Test2DCommonCause(TestCase):
         )
         coordination = ptt.constant(np.array([0.1, 0.3, 0.7]))
         common_cause = ptt.constant(np.array([
-            [
-                [0.1, -0.4, 0.5],
-                [0.5, 0.2, 0.1]
-            ]
+            [[0.1, -0.4, 0.5], [0.5, 0.2, 0.1]]
         ]))
+
+        # p(X, Y, Z) =
+        #    p(X_0 | C_0, CC_0) p(Y_0 | C_0, CC_0) p(Z_0 | C_0, CC_0)
+        #    p(X_1 | C_1, CC_1, X_0) p(Y_1 | C_1, CC_1, Y_0) p(Z_1 | C_1, CC_1, Z_0)
+        #    p(X_2 | C_2, CC_2, X_1) p(Y_2 | C_2, CC_2, Y_1) p(Z_2 | C_2, CC_2, Z_1)
+        #
+        # The following applies to X, Y and Z
+        # p(X_0 | C_0, CC_0) = N(X_0 | (1 - C_0)Mu_x + CC_0C_0)
+        # p(X_1 | C_1, CC_1, X_0) = N(X_1 | (1 - C_1)X_0 + CC_1C_1)
+        #
+        # So,
+        #
+        # logp(X_0 | C_0, CC_0) + logp(Y_0 | C_0, CC_0) + logp(Z_0 | C_0, CC_0) =
+        # norm(0.1*[0.1, 0.5] + (1 - 0.1)*[0.3, 0.4], [0.01, 0.02]).logpdf([0.1, 0.2]).sum() \
+        # norm(0.1*[0.1, 0.5] + (1 - 0.1)*[0.4, 0.5], [0.02, 0.03]).logpdf([0.3, 0.4]).sum() \
+        # norm(0.1*[0.1, 0.5] + (1 - 0.1)*[0.5, 0.6], [0.03, 0.04]).logpdf([0.5, 0.9]).sum()
+        #
+        # logp(X_1 | C_1, CC_1, X_0) + logp(Y_1 | C_1, CC_1, Y_0) + logp(Z_1 | C_1, CC_1, Z_0) =
+        # norm(0.3*[-0.4, 0.2] + (1 - 0.3)*[0.1, 0.2], [0.01, 0.02]).logpdf([0.2, 0.3]).sum() \
+        # norm(0.3*[-0.4, 0.2] + (1 - 0.3)*[0.3, 0.4], [0.02, 0.03]).logpdf([0.4, 0.5]).sum() \
+        # norm(0.3*[-0.4, 0.2] + (1 - 0.3)*[0.5, 0.9], [0.03, 0.04]).logpdf([0.6, 0.1]).sum()
+        #
+        # logp(X_2 | C_2, CC_2, X_1) + logp(Y_2 | C_2, CC_2, Y_1) + logp(Z_2 | C_2, CC_2, Z_1) =
+        # norm(0.7*[0.5, 0.1] + (1 - 0.7)*[0.2, 0.3], [0.01, 0.02]).logpdf([0.3, 0.4]).sum() \
+        # norm(0.7*[0.5, 0.1] + (1 - 0.7)*[0.4, 0.5], [0.02, 0.03]).logpdf([0.5, 0.6]).sum() \
+        # norm(0.7*[0.5, 0.1] + (1 - 0.7)*[0.6, 0.1], [0.03, 0.04]).logpdf([0.7, 1.1]).sum()
+        #
+        # All together:
+        # norm(0.1*np.array([0.1, 0.5]) + (1 - 0.1)*np.array([0.3, 0.4]), [0.01, 0.02]).logpdf([0.1, 0.2]).sum() + \
+        # norm(0.1*np.array([0.1, 0.5]) + (1 - 0.1)*np.array([0.4, 0.5]), [0.02, 0.03]).logpdf([0.3, 0.4]).sum() + \
+        # norm(0.1*np.array([0.1, 0.5]) + (1 - 0.1)*np.array([0.5, 0.6]), [0.03, 0.04]).logpdf([0.5, 0.9]).sum() + \
+        # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.1, 0.2]), [0.01, 0.02]).logpdf([0.2, 0.3]).sum() + \
+        # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.3, 0.4]), [0.02, 0.03]).logpdf([0.4, 0.5]).sum() + \
+        # norm(0.3*np.array([-0.4, 0.2]) + (1 - 0.3)*np.array([0.5, 0.9]), [0.03, 0.04]).logpdf([0.6, 0.1]).sum() + \
+        # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.2, 0.3]), [0.01, 0.02]).logpdf([0.3, 0.4]).sum() + \
+        # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.4, 0.5]), [0.02, 0.03]).logpdf([0.5, 0.6]).sum() + \
+        # norm(0.7*np.array([0.5, 0.1]) + (1 - 0.7)*np.array([0.6, 0.1]), [0.03, 0.04]).logpdf([0.7, 1.1]).sum()
+
+        real_lp = -1394.8697701486262
 
         lp = common_cause_log_prob(
             sample=sample,
@@ -95,15 +132,5 @@ class Test2DCommonCause(TestCase):
             self_dependent=ptt.constant(True),
             symmetry_mask=1
         )
-        real_lp = -7810.782735499971
-        # self.assertAlmostEqual(lp.eval(), real_lp)
 
-        lp_t0 = norm.logpdf(0.1, loc=0.3, scale=0.01) + norm.logpdf(0.5, loc=0.4, scale=0.02)
-        lp_t1 = norm.logpdf(-0.4, loc=0.6, scale=0.01) + norm.logpdf(0.2, loc=0.5, scale=0.02)
-        lp_t2 = norm.logpdf(0.5, loc=-0.2, scale=0.01) + norm.logpdf(0.1, loc=0.2, scale=0.02)
-        lp_t3 = norm.logpdf(0.6, loc=0.6, scale=0.01) + norm.logpdf(0.3, loc=0.1, scale=0.02)
-
-
-        total_lp = lp_t0 + lp_t1 + lp_t2 + lp_t3
-
-        self.assertAlmostEqual(total_lp, real_lp)
+        self.assertAlmostEqual(lp, real_lp)
