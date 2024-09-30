@@ -115,9 +115,10 @@ norm.logpdf(0.6, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.5, scale = 0.03) + \
 norm.logpdf(1.0, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.9, scale = 0.04) + \
 norm.logpdf(0.7, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.6, scale = 0.03) + \
 norm.logpdf(1.1, loc = 0.7 * 0.1  + (1.0 - 0.7) * 1.0, scale = 0.04)
+-1271.526
 
 # by time series
-total_logp = norm.logpdf(0.1, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.3, scale = 0.01) + \
+norm.logpdf(0.1, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.3, scale = 0.01) + \
 norm.logpdf(0.2, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
 norm.logpdf(0.3, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
 norm.logpdf(0.4, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.5, scale = 0.03) + \
@@ -135,6 +136,7 @@ norm.logpdf(0.5, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.4, scale = 0.02) + \
 norm.logpdf(0.6, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.5, scale = 0.03) + \
 norm.logpdf(0.7, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.6, scale = 0.03) + \
 norm.logpdf(1.1, loc = 0.7 * 0.1  + (1.0 - 0.7) * 1.0, scale = 0.04)
+-1170.151
         '''
 
         sample_val = sample.eval()
