@@ -54,9 +54,25 @@ class Test2DCommonCause(TestCase):
         coordination: (3) - Coordination values across 3 time steps.
         common_cause: (1,2,3) - Needs to be expanded to match subjects. => (3,2,3)
         '''
+
+        '''
+        # Time t=0 
+        mu_t0 = coordination[0] * common_cause[:, 0] + (1 - coordination[0]) * mu_0[0]
+        log_prob_x0_p = norm.logpdf(x[0, 0, 0], loc=mu_t0[0], scale=sigma[0, 0])
+        log_prob_x0_v = norm.logpdf(x[0, 1, 0], loc=mu_t0[1], scale=sigma[0, 1])
+
+        # Time t=1 
+        mu_t1 = coordination[1] * common_cause[:, 1] + (1 - coordination[1]) * x[0, :, 0]
+        log_prob_x1_p = norm.logpdf(x[0, 0, 1], loc=mu_t1[0], scale=sigma[0, 0])
+        log_prob_x1_v = norm.logpdf(x[0, 1, 1], loc=mu_t1[1], scale=sigma[0, 1])
+
+        # Time t=2 
+        mu_t2 = coordination[2] * common_cause[:, 2] + (1 - coordination[2]) * x[0, :, 1]
+        log_prob_x2_p = norm.logpdf(x[0, 0, 2], loc=mu_t2[0], scale=sigma[0, 0])
+        log_prob_x2_v = norm.logpdf(x[0, 1, 2], loc=mu_t2[1], scale=sigma[0, 1])
+        '''
         sample = ptt.constant(  # A sample from the system latent component
-            np.array(
-                [
+            np.array([
                     # Subject 1 (X)
                     [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]],  # position  # speed
                     # Subject 2 (Y)
@@ -68,63 +84,63 @@ class Test2DCommonCause(TestCase):
         )
         # Mu
         initial_mean = ptt.constant( # The value of the system latent component at time t = 0
-            np.array(
-                [
-                    [0.3, 0.4],  # subject 1
+            np.array([[0.3, 0.4],  # subject 1
                     [0.4, 0.5],  # subject 2
                     [0.5, 0.6],  # subject 3
-                ]
-            )
-        )
+                    ]))
         sigma = ptt.constant(
-            np.array(
-                [
-                    [0.01, 0.02],  # subject 1
+            np.array([[0.01, 0.02],  # subject 1
                     [0.02, 0.03],  # subject 2
                     [0.03, 0.04],  # subject 2
-                ]
-            )
-        )
+                ]))
         coordination = ptt.constant(np.array([0.1, 0.3, 0.7]))
-        common_cause = ptt.constant(np.array([
-            [[0.1, -0.4, 0.5], [0.5, 0.2, 0.1]]
-        ]))
+        common_cause = ptt.constant(np.array([[[0.1, -0.4, 0.5], [0.5, 0.2, 0.1]]]))
+        '''
+# # Alice (6 rows) + Bob + C
+norm.logpdf(0.1, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.3, scale = 0.01) + \
+norm.logpdf(0.2, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
+norm.logpdf(0.2, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.1, scale = 0.01) + \
+norm.logpdf(0.3, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.2, scale = 0.02) + \
+norm.logpdf(0.2, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.2, scale = 0.01) + \
+norm.logpdf(0.3, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.3, scale = 0.02) + \
+norm.logpdf(0.3, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.3, scale = 0.02) + \
+norm.logpdf(0.4, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.4, scale = 0.03) + \
+norm.logpdf(0.4, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.3, scale = 0.02) + \
+norm.logpdf(0.5, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.4, scale = 0.03) + \
+norm.logpdf(0.5, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.4, scale = 0.02) + \
+norm.logpdf(0.6, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.5, scale = 0.03) + \
+norm.logpdf(0.5, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.5, scale = 0.03) + \
+norm.logpdf(0.9, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.6, scale = 0.04) + \
+norm.logpdf(0.6, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.5, scale = 0.03) + \
+norm.logpdf(1.0, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.9, scale = 0.04) + \
+norm.logpdf(0.7, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.6, scale = 0.03) + \
+norm.logpdf(1.1, loc = 0.7 * 0.1  + (1.0 - 0.7) * 1.0, scale = 0.04)
 
-
+# by time series
+total_logp = norm.logpdf(0.1, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.3, scale = 0.01) + \
+norm.logpdf(0.2, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
+norm.logpdf(0.3, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
+norm.logpdf(0.4, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.5, scale = 0.03) + \
+norm.logpdf(0.5, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.5, scale = 0.03) + \
+norm.logpdf(0.9, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.6, scale = 0.04) + \
+norm.logpdf(0.2, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.1, scale = 0.01) + \
+norm.logpdf(0.3, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.2, scale = 0.02) + \
+norm.logpdf(0.4, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.3, scale = 0.02) + \
+norm.logpdf(0.5, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.4, scale = 0.03) + \
+norm.logpdf(0.6, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.5, scale = 0.03) + \
+norm.logpdf(1.0, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.9, scale = 0.04) + \
+norm.logpdf(0.3, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.2, scale = 0.01) + \
+norm.logpdf(0.4, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.3, scale = 0.02) + \
+norm.logpdf(0.5, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.4, scale = 0.02) + \
+norm.logpdf(0.6, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.5, scale = 0.03) + \
+norm.logpdf(0.7, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.6, scale = 0.03) + \
+norm.logpdf(1.1, loc = 0.7 * 0.1  + (1.0 - 0.7) * 1.0, scale = 0.04)
+        '''
 
         sample_val = sample.eval()
         initial_mean_val = initial_mean.eval()
         sigma_val = sigma.eval()
-        
-        logp_t0 = 0
-        for i in range(3):  # 3 subjects
-            for j in range(2):  # position and speed
-                logp_t0 += norm.logpdf(sample_val[i, j, 0], loc=initial_mean_val[i, j], scale=sigma_val[i, j])
-        def compute_blended_mean(subject_idx, time_idx):
-            previous_values = sample_val[subject_idx, :, time_idx-1]  # values at t-1
-            cc_val = common_cause.eval()[0, :, time_idx-1]  # Common cause
-
-            # use F and U
-            c = coordination.eval()[time_idx]
-            F = np.array([[1.0, 1.0], [0.0, 1 - c]]) 
-            U = np.array([[0.0, 0.0], [0.0, c]])
-
-            prev_same_transformed = np.dot(F, previous_values)
-            common_cause_transformed = np.dot(U, cc_val)
-
-            blended_mean = prev_same_transformed + common_cause_transformed
-            return blended_mean
-
-        logp_t1_t2 = 0
-        for t in range(1, 3):
-            for i in range(3):
-                blended_mean = compute_blended_mean(i, t)
-                for j in range(2):
-                    print(norm.logpdf(sample_val[i, j, t], loc=blended_mean[j], scale=sigma_val[i, j]))
-                    logp_t1_t2 += norm.logpdf(sample_val[i, j, t], loc=blended_mean[j], scale=sigma_val[i, j])
-
-        total_logp = logp_t0 + logp_t1_t2
-        print(total_logp)
+        # total = -1271.5260201486262
         # total_logp = -1856.4044923708486 
 
         lp = common_cause_log_prob(
@@ -138,6 +154,9 @@ class Test2DCommonCause(TestCase):
         )
 
         self.assertAlmostEqual(lp.eval(), total_logp)
+
+
+
 
 
 unittest.main()
