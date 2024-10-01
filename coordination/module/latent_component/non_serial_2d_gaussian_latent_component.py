@@ -298,6 +298,128 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 # AUXILIARY FUNCTIONS
 ###################################################################################################
 
+# def common_cause_log_prob(
+#         sample: ptt.TensorVariable,
+#         initial_mean: ptt.TensorVariable,
+#         sigma: ptt.TensorVariable,
+#         coordination: ptt.TensorVariable,
+#         self_dependent: ptt.TensorConstant,
+#         symmetry_mask: int,
+#         common_cause: ptt.TensorConstant,
+# ) -> ptt.TensorVariable:
+#     """
+#     Computes the log-probability function of a sample.
+
+#     This does not support a single chain or non self-dependency of the latent component.
+
+#     Legend:
+#     D: number of dimensions
+#     S: number of subjects
+#     T: number of time steps
+
+#     @param sample: (subject x 2 x time) a single samples series.
+#     @param initial_mean: (subject x 2) mean at t0 for each subject.
+#     @param sigma: (subject x 2) a series of standard deviations. At each time the standard
+#         deviation is associated with the subject at that time.
+#     @param coordination: (time) a series of coordination values.
+#     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+#     @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
+#     @param common_cause: (subject x 2 x time) a series of common cause values.
+#     @return: log-probability of the sample.
+#     """
+#     S = sample.shape[0]
+#     D = sample.shape[1]
+#     T = sample.shape[2]
+    
+#     if not isinstance(T, int):
+#         try:
+#             T = T.eval()  # Evaluate to get the integer value if it's symbolic
+#         except AttributeError:
+#             raise ValueError(f"Time dimension (T) should be an integer, got {type(T)} instead")
+
+#     print("Time steps (T):", T)
+
+#     total_logp = pm.logp(
+#         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
+#     ).sum()
+
+#     previous_values = sample[..., :-1]
+
+#     if isinstance(coordination, ptt.TensorVariable):
+#         coordination = coordination.eval()
+
+#     # The dimensions of F and U are: T x 2 x 2
+#     c = coordination[1:][None, None, :]
+#     T = sample.shape[2]
+#     T = int(T)
+
+#     # --------- Change F same size as c <Ming> ---------
+#     # F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
+#     # F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
+#     base_F = np.array([[1.0, 1.0], [0.0, 1.0]], dtype=np.float64)
+#     F_values = np.tile(base_F, (T-1, 1, 1))
+#     F = ptt.as_tensor(F_values)
+#     F = ptt.set_subtensor(F[:, 1, 1], 1 - c[1:])
+#     # --------------------------------------------------
+
+
+#     # --------- Change F same size as c <Ming> ---------
+#     # U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
+#     # U = ptt.set_subtensor(U[:, 1, 1], c)
+#     base_U = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float64)
+#     U_values = np.tile(base_U, (T-1, 1, 1))
+#     U = ptt.as_tensor(U_values)
+#     U = ptt.set_subtensor(U[:, 1, 1], c[1:])
+#     # --------------------------------------------------
+
+
+#     # --------- Change common cause <Ming> ---------
+#     # cc = common_cause[1:][None, None, :]
+#     cc = ptt.repeat(common_cause, S, axis=0)  # shape (S, 2, T-1)
+#     print("Common cause shape after:", cc.shape)
+#     # ----------------------------------------------
+ 
+#     # === Ming - DUBUG ===
+#     print("previous_values.T shape:", previous_values.T.shape)
+#     print("cc.T shape:", cc.T.shape)
+#     print("U shape:", U.shape)
+#     print("F shape:", F.shape)
+#     # ====================
+
+    
+#     #  both of them should be shape == (S, D, T-1)
+#     prev_same_transformed = ptt.batched_tensordot(F, previous_values.T, axes=[(2,), (1,)]).T
+#     # common_cause_transformed should be (3,2,T-1)
+#     common_cause_transformed = ptt.batched_tensordot(U, cc.T, axes=[(2,), (1,)]).T
+    
+    
+#     # === Ming - DUBUG ===
+#     print("prev_same_transformed shape:", prev_same_transformed.shape)
+#     print("common_cause_transformed shape:", common_cause_transformed.shape)
+#     # ====================
+
+
+
+#     blended_mean = common_cause_transformed + prev_same_transformed
+#     print("Blended mean shape after:", blended_mean.shape)
+
+#     # --------- Change shape of sigma to broadcast it as blended_mean <Ming> ---------
+#     # Match the dimensions of the standard deviation with that of the blended mean by adding
+#     # another dimension for time.
+#     sd = sigma[:, :, None]  # shape (S, D, 1)
+#     sd = ptt.repeat(sd, T-1, axis=2)  # shape (S, D, T-1)
+#     print("Sigma shape after:", sd.shape)
+#     # --------------------------------------------------------------------------------
+
+#     # Index samples starting from the second index (i = 1) so that we can effectively compare
+#     # current values against previous ones (prev_others and prev_same).
+#     total_logp += pm.logp(
+#         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
+#         sample[..., 1:]).sum()
+
+#     return total_logp
+
+
 def common_cause_log_prob(
         sample: ptt.TensorVariable,
         initial_mean: ptt.TensorVariable,
@@ -331,94 +453,50 @@ def common_cause_log_prob(
     D = sample.shape[1]
     T = sample.shape[2]
     
-    if not isinstance(T, int):
-        try:
-            T = T.eval()  # Evaluate to get the integer value if it's symbolic
-        except AttributeError:
-            raise ValueError(f"Time dimension (T) should be an integer, got {type(T)} instead")
-
-    print("Time steps (T):", T)
-
+    # t0
     total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
     ).sum()
 
-    previous_values = sample[..., :-1]
+    # t>0
+    # (S, D, T-1)
+    previous_values = sample[:, :, :-1]
+    # (S, D, T-1)
+    current_values = sample[:, :, 1:]
+    # t=1 to T-1, shape: (T-1)
+    c = coordination[1:]
+    c = c.reshape((1, 1, T-1))
 
-    if isinstance(coordination, ptt.TensorVariable):
-        coordination = coordination.eval()
+    # F: shape (T-1, D(2), D(2))
+    F = np.repeat(np.array([[[1.0, 1.0], [0.0, 1.0]]]), T-1, axis=0)
+    F[:, 1, 1] = 1 - c.flatten()
 
-    # The dimensions of F and U are: T x 2 x 2
-    c = coordination[1:][None, None, :]
-    T = sample.shape[2]
-    T = int(T)
+    # U: shape (T-1, D)2_, D(2))
+    U = np.repeat(np.array([[[0.0, 0.0], [0.0, 1.0]]]), T-1, axis=0)
+    U[:, 1, 1] = c.flatten()
 
-    # --------- Change F same size as c <Ming> ---------
-    # F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
-    # F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
-    base_F = np.array([[1.0, 1.0], [0.0, 1.0]], dtype=np.float64)
-    F_values = np.tile(base_F, (T-1, 1, 1))
-    F = ptt.as_tensor(F_values)
-    F = ptt.set_subtensor(F[:, 1, 1], 1 - c[1:])
-    # --------------------------------------------------
+    # Transpose arrays -> (T-1, 1, D)
+    prev_vals = previous_values.transpose(2, 0, 1)
+    cc_vals = common_cause[:, :, 1:].transpose(2, 0, 1)
 
+    # F @ previous_values -> (T-1, S, D)
+    F_prev = np.einsum('tij,taj->tai', F, prev_vals) 
 
-    # --------- Change F same size as c <Ming> ---------
-    # U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
-    # U = ptt.set_subtensor(U[:, 1, 1], c)
-    base_U = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float64)
-    U_values = np.tile(base_U, (T-1, 1, 1))
-    U = ptt.as_tensor(U_values)
-    U = ptt.set_subtensor(U[:, 1, 1], c[1:])
-    # --------------------------------------------------
+    # U @ common_cause -> (T-1, 1, D)
+    U_cc = np.einsum('tij,taj->tai', U, cc_vals[:, :, 1:])
 
+    blended_mean = F_prev + U_cc
 
-    # --------- Change common cause <Ming> ---------
-    # cc = common_cause[1:][None, None, :]
-    cc = ptt.repeat(common_cause, S, axis=0)  # shape (S, 2, T-1)
-    print("Common cause shape after:", cc.shape)
-    # ----------------------------------------------
- 
-    # === Ming - DUBUG ===
-    print("previous_values.T shape:", previous_values.T.shape)
-    print("cc.T shape:", cc.T.shape)
-    print("U shape:", U.shape)
-    print("F shape:", F.shape)
-    # ====================
+    # blended_mean -> (S, D, T-1)
+    blended_mean = blended_mean.transpose(1, 2, 0) 
 
-    
-    #  both of them should be shape == (S, D, T-1)
-    prev_same_transformed = ptt.batched_tensordot(F, previous_values.T, axes=[(2,), (1,)]).T
-    # common_cause_transformed should be (3,2,T-1)
-    common_cause_transformed = ptt.batched_tensordot(U, cc.T, axes=[(2,), (1,)]).T
-    
-    
-    # === Ming - DUBUG ===
-    print("prev_same_transformed shape:", prev_same_transformed.shape)
-    print("common_cause_transformed shape:", common_cause_transformed.shape)
-    # ====================
+    # sigma -> (S, D, 1)
+    sigma_expanded = sigma[:, :, np.newaxis]
 
-
-
-    blended_mean = common_cause_transformed + prev_same_transformed
-    print("Blended mean shape after:", blended_mean.shape)
-
-    # --------- Change shape of sigma to broadcast it as blended_mean <Ming> ---------
-    # Match the dimensions of the standard deviation with that of the blended mean by adding
-    # another dimension for time.
-    sd = sigma[:, :, None]  # shape (S, D, 1)
-    sd = ptt.repeat(sd, T-1, axis=2)  # shape (S, D, T-1)
-    print("Sigma shape after:", sd.shape)
-    # --------------------------------------------------------------------------------
-
-    # Index samples starting from the second index (i = 1) so that we can effectively compare
-    # current values against previous ones (prev_others and prev_same).
-    total_logp += pm.logp(
-        pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
-        sample[..., 1:]).sum()
+    logp = norm.logpdf(current_values, loc=blended_mean, scale=sigma_expanded).sum()
+    total_logp += logp
 
     return total_logp
-
 
 def log_prob(
         sample: ptt.TensorVariable,

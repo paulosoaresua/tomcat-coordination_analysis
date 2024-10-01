@@ -96,34 +96,11 @@ class Test2DCommonCause(TestCase):
         coordination = ptt.constant(np.array([0.1, 0.3, 0.7]))
         common_cause = ptt.constant(np.array([[[0.1, -0.4, 0.5], [0.5, 0.2, 0.1]]]))
         '''
-# by time series
-norm.logpdf(0.1, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.3, scale = 0.01) + \
-norm.logpdf(0.2, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
-norm.logpdf(0.3, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.4, scale = 0.02) + \
-norm.logpdf(0.4, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.5, scale = 0.03) + \
-norm.logpdf(0.5, loc = 0.1 * 0.1  + (1.0 - 0.1) * 0.5, scale = 0.03) + \
-norm.logpdf(0.9, loc = 0.1 * 0.5  + (1.0 - 0.1) * 0.6, scale = 0.04) + \
-
-norm.logpdf(0.2, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.1, scale = 0.01) + \
-norm.logpdf(0.3, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.2, scale = 0.02) + \
-norm.logpdf(0.4, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.3, scale = 0.02) + \
-norm.logpdf(0.5, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.4, scale = 0.03) + \
-norm.logpdf(0.6, loc = 0.3 * -0.4 + (1.0 - 0.3) * 0.5, scale = 0.03) + \
-norm.logpdf(1.0, loc = 0.3 * 0.2  + (1.0 - 0.3) * 0.9, scale = 0.04) + \
-
-norm.logpdf(0.3, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.2, scale = 0.01) + \
-norm.logpdf(0.4, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.3, scale = 0.02) + \
-norm.logpdf(0.5, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.4, scale = 0.02) + \
-norm.logpdf(0.6, loc = 0.7 * 0.1  + (1.0 - 0.7) * 0.5, scale = 0.03) + \
-norm.logpdf(0.7, loc = 0.7 * 0.5  + (1.0 - 0.7) * 0.6, scale = 0.03) + \
-norm.logpdf(1.1, loc = 0.7 * 0.1  + (1.0 - 0.7) * 1.0, scale = 0.04)
--1170.151
-
 # Using Matries
 # t0
-total_logp = np.sum(norm.logpdf(np.array([0.1, 0.2]), loc=np.dot(np.array([[1, 0], [0, 1-0.1]]), np.array([0.3, 0.4])) + np.dot(np.array([[0, 0], [0, 0.1]]), np.array([0.1, 0.5])), scale=np.array([0.01, 0.02])))
-total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 0], [0, 1-0.1]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.1]]), np.array([0.1, 0.5])), scale=np.array([0.02, 0.03])))
-total_logp += np.sum(norm.logpdf(np.array([0.5, 0.9]), loc=np.dot(np.array([[1, 0], [0, 1-0.1]]), np.array([0.5, 0.6])) + np.dot(np.array([[0, 0], [0, 0.1]]), np.array([0.1, 0.5])), scale=np.array([0.03, 0.04])))
+total_logp = np.sum(norm.logpdf(np.array([0.1, 0.2]), loc=np.array([0.3, 0.4]), scale=np.array([0.01, 0.02])))
+total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.array([.4, 0.5]), scale=np.array([0.02, 0.03])))
+total_logp += np.sum(norm.logpdf(np.array([0.5, 0.9]), loc=np.array([0.5, 0.6]), scale=np.array([0.03, 0.04])))
 
 # t1
 total_logp += np.sum(norm.logpdf(np.array([0.2, 0.3]), loc=np.dot(np.array([[1, 0], [0, 1-0.3]]), np.array([0.1, 0.2])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.01, 0.02])))
@@ -134,13 +111,9 @@ total_logp += np.sum(norm.logpdf(np.array([0.6, 1.0]), loc=np.dot(np.array([[1, 
 total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 0], [0, 1-0.7]]), np.array([0.2, 0.3])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.01, 0.02])))
 total_logp += np.sum(norm.logpdf(np.array([0.5, 0.6]), loc=np.dot(np.array([[1, 0], [0, 1-0.7]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.02, 0.03])))
 total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 0], [0, 1-0.7]]), np.array([0.6, 1.0])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.03, 0.04])))
-        '''
 
-        sample_val = sample.eval()
-        initial_mean_val = initial_mean.eval()
-        sigma_val = sigma.eval()
-        # total = -1271.5260201486262
-        # total_logp = -1856.4044923708486 
+-756.3558812597375
+        '''
 
         lp = common_cause_log_prob(
             sample=sample,
@@ -151,6 +124,7 @@ total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 
             self_dependent=ptt.constant(True),
             symmetry_mask=1
         )
+        total_logp = -756.3558812597375
 
         self.assertAlmostEqual(lp.eval(), total_logp)
 
