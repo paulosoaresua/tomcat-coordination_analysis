@@ -455,48 +455,40 @@ def common_cause_log_prob(
     
     # t0
     total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
+        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
+        sample[..., 0]
     ).sum()
-
-    # t>0
+    
+    # t > 0
     # (S, D, T-1)
     previous_values = sample[:, :, :-1]
     # (S, D, T-1)
     current_values = sample[:, :, 1:]
-    # t=1 to T-1, shape: (T-1)
+    # (T-1,)
     c = coordination[1:]
-    c = c.reshape((1, 1, T-1))
 
-    # F: shape (T-1, D(2), D(2))
-    F = np.repeat(np.array([[[1.0, 1.0], [0.0, 1.0]]]), T-1, axis=0)
-    F[:, 1, 1] = 1 - c.flatten()
+    # (1, T-1)
+    c = c.dimshuffle('x', 0)
+    one_minus_c = 1 - c
 
-    # U: shape (T-1, D)2_, D(2))
-    U = np.repeat(np.array([[[0.0, 0.0], [0.0, 1.0]]]), T-1, axis=0)
-    U[:, 1, 1] = c.flatten()
+    # (S, T-1)
+    blended_mean_0 = previous_values[:, 0, :] + previous_values[:, 1, :]
+    # (S, T-1)
+    blended_mean_1 = one_minus_c * previous_values[:, 1, :] + c * common_cause[:, 1, 1:]
 
-    # Transpose arrays -> (T-1, 1, D)
-    prev_vals = previous_values.transpose(2, 0, 1)
-    cc_vals = common_cause[:, :, 1:].transpose(2, 0, 1)
+    # (S, D, T-1)
+    blended_mean = ptt.stack([blended_mean_0, blended_mean_1], axis=1)
 
-    # F @ previous_values -> (T-1, S, D)
-    F_prev = np.einsum('tij,taj->tai', F, prev_vals) 
+    sigma = sigma[:, :, None]
 
-    # U @ common_cause -> (T-1, 1, D)
-    U_cc = np.einsum('tij,taj->tai', U, cc_vals[:, :, 1:])
-
-    blended_mean = F_prev + U_cc
-
-    # blended_mean -> (S, D, T-1)
-    blended_mean = blended_mean.transpose(1, 2, 0) 
-
-    # sigma -> (S, D, 1)
-    sigma_expanded = sigma[:, :, np.newaxis]
-
-    logp = norm.logpdf(current_values, loc=blended_mean, scale=sigma_expanded).sum()
+    logp = pm.logp(
+        pm.Normal.dist(mu=blended_mean, sigma=sigma),
+        current_values
+    ).sum()
     total_logp += logp
 
     return total_logp
+
 
 def log_prob(
         sample: ptt.TensorVariable,
