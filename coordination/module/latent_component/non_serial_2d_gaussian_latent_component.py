@@ -57,7 +57,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             sd_a: Optional[Union[float, np.ndarray]] = None,
             initial_samples: Optional[np.ndarray] = None,
             asymmetric_coordination: bool = False,
-            single_chain: bool = False
+            single_chain: bool = False,
+            common_cause_random_variable: Optional[pm.Distribution] = None,
     ):
         """
         Creates a non-serial 2D Gaussian latent component.
@@ -135,7 +136,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             sd_a=sd_a,
             initial_samples=initial_samples,
             asymmetric_coordination=asymmetric_coordination,
-            single_chain=single_chain
+            single_chain=single_chain,
+            common_cause_random_variable=common_cause_random_variable,
         )
 
         self.subject_names = subject_names
@@ -279,7 +281,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         Gets extra parameters to be passed to the log_prob and random functions.
         """
-        return ()
+        return self.common_cause_random_variable if self.common_cause_random_variable is not None else ()
 
     def _get_log_prob_fn(self) -> Callable:
         """
@@ -297,127 +299,6 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 ###################################################################################################
 # AUXILIARY FUNCTIONS
 ###################################################################################################
-
-# def common_cause_log_prob(
-#         sample: ptt.TensorVariable,
-#         initial_mean: ptt.TensorVariable,
-#         sigma: ptt.TensorVariable,
-#         coordination: ptt.TensorVariable,
-#         self_dependent: ptt.TensorConstant,
-#         symmetry_mask: int,
-#         common_cause: ptt.TensorConstant,
-# ) -> ptt.TensorVariable:
-#     """
-#     Computes the log-probability function of a sample.
-
-#     This does not support a single chain or non self-dependency of the latent component.
-
-#     Legend:
-#     D: number of dimensions
-#     S: number of subjects
-#     T: number of time steps
-
-#     @param sample: (subject x 2 x time) a single samples series.
-#     @param initial_mean: (subject x 2) mean at t0 for each subject.
-#     @param sigma: (subject x 2) a series of standard deviations. At each time the standard
-#         deviation is associated with the subject at that time.
-#     @param coordination: (time) a series of coordination values.
-#     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
-#     @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
-#     @param common_cause: (subject x 2 x time) a series of common cause values.
-#     @return: log-probability of the sample.
-#     """
-#     S = sample.shape[0]
-#     D = sample.shape[1]
-#     T = sample.shape[2]
-    
-#     if not isinstance(T, int):
-#         try:
-#             T = T.eval()  # Evaluate to get the integer value if it's symbolic
-#         except AttributeError:
-#             raise ValueError(f"Time dimension (T) should be an integer, got {type(T)} instead")
-
-#     print("Time steps (T):", T)
-
-#     total_logp = pm.logp(
-#         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
-#     ).sum()
-
-#     previous_values = sample[..., :-1]
-
-#     if isinstance(coordination, ptt.TensorVariable):
-#         coordination = coordination.eval()
-
-#     # The dimensions of F and U are: T x 2 x 2
-#     c = coordination[1:][None, None, :]
-#     T = sample.shape[2]
-#     T = int(T)
-
-#     # --------- Change F same size as c <Ming> ---------
-#     # F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
-#     # F = ptt.set_subtensor(F[:, 1, 1], 1 - c)
-#     base_F = np.array([[1.0, 1.0], [0.0, 1.0]], dtype=np.float64)
-#     F_values = np.tile(base_F, (T-1, 1, 1))
-#     F = ptt.as_tensor(F_values)
-#     F = ptt.set_subtensor(F[:, 1, 1], 1 - c[1:])
-#     # --------------------------------------------------
-
-
-#     # --------- Change F same size as c <Ming> ---------
-#     # U = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T-1, axis=0)
-#     # U = ptt.set_subtensor(U[:, 1, 1], c)
-#     base_U = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float64)
-#     U_values = np.tile(base_U, (T-1, 1, 1))
-#     U = ptt.as_tensor(U_values)
-#     U = ptt.set_subtensor(U[:, 1, 1], c[1:])
-#     # --------------------------------------------------
-
-
-#     # --------- Change common cause <Ming> ---------
-#     # cc = common_cause[1:][None, None, :]
-#     cc = ptt.repeat(common_cause, S, axis=0)  # shape (S, 2, T-1)
-#     print("Common cause shape after:", cc.shape)
-#     # ----------------------------------------------
- 
-#     # === Ming - DUBUG ===
-#     print("previous_values.T shape:", previous_values.T.shape)
-#     print("cc.T shape:", cc.T.shape)
-#     print("U shape:", U.shape)
-#     print("F shape:", F.shape)
-#     # ====================
-
-    
-#     #  both of them should be shape == (S, D, T-1)
-#     prev_same_transformed = ptt.batched_tensordot(F, previous_values.T, axes=[(2,), (1,)]).T
-#     # common_cause_transformed should be (3,2,T-1)
-#     common_cause_transformed = ptt.batched_tensordot(U, cc.T, axes=[(2,), (1,)]).T
-    
-    
-#     # === Ming - DUBUG ===
-#     print("prev_same_transformed shape:", prev_same_transformed.shape)
-#     print("common_cause_transformed shape:", common_cause_transformed.shape)
-#     # ====================
-
-
-
-#     blended_mean = common_cause_transformed + prev_same_transformed
-#     print("Blended mean shape after:", blended_mean.shape)
-
-#     # --------- Change shape of sigma to broadcast it as blended_mean <Ming> ---------
-#     # Match the dimensions of the standard deviation with that of the blended mean by adding
-#     # another dimension for time.
-#     sd = sigma[:, :, None]  # shape (S, D, 1)
-#     sd = ptt.repeat(sd, T-1, axis=2)  # shape (S, D, T-1)
-#     print("Sigma shape after:", sd.shape)
-#     # --------------------------------------------------------------------------------
-
-#     # Index samples starting from the second index (i = 1) so that we can effectively compare
-#     # current values against previous ones (prev_others and prev_same).
-#     total_logp += pm.logp(
-#         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
-#         sample[..., 1:]).sum()
-
-#     return total_logp
 
 
 def common_cause_log_prob(
@@ -457,35 +338,37 @@ def common_cause_log_prob(
     total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
         sample[..., 0]
-    ).sum()
-    
+    )
+    print(total_logp.eval())
+    total_logp = total_logp.sum()
     # t > 0
     # (S, D, T-1)
     previous_values = sample[:, :, :-1]
     # (S, D, T-1)
     current_values = sample[:, :, 1:]
+    print(current_values)
     # (T-1,)
     c = coordination[1:]
 
     # (1, T-1)
     c = c.dimshuffle('x', 0)
     one_minus_c = 1 - c
-
     # (S, T-1)
     blended_mean_0 = previous_values[:, 0, :] + previous_values[:, 1, :]
     # (S, T-1)
     blended_mean_1 = one_minus_c * previous_values[:, 1, :] + c * common_cause[:, 1, 1:]
-
     # (S, D, T-1)
     blended_mean = ptt.stack([blended_mean_0, blended_mean_1], axis=1)
+    print(blended_mean.eval())
+    print(blended_mean[0, :, 0].eval())
 
     sigma = sigma[:, :, None]
-
     logp = pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sigma),
         current_values
-    ).sum()
-    total_logp += logp
+    )
+    print(logp.eval())
+    total_logp += logp.sum()
 
     return total_logp
 
@@ -619,6 +502,83 @@ def random(
 
     # TODO: Unify this with the class sampling method.
 
+    T = coordination.shape[-1]
+    S = initial_mean.shape[0]
+
+    sample = np.zeros(size)
+
+    # Sample from prior in the initial time step
+    sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=size[:-1])
+
+    for t in np.arange(1, T):
+        if self_dependent:
+            # Previous sample from the same subject
+            prev_same = sample[..., t - 1]
+        else:
+            # No dependency on the same subject. Sample from prior.
+            prev_same = initial_mean
+
+        if S == 1:
+            # Single chain
+            blended_mean = prev_same
+        else:
+            sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
+            prev_others = (
+                    np.dot(sum_matrix_others, sample[..., t - 1]) * symmetry_mask
+            )  # S x D
+
+            c = coordination[t]
+            dt_diff = 1
+            F = np.array([[1, dt_diff], [0, 1 - c]])
+            U = np.array(
+                [
+                    [0, 0],  # position of "b" does not influence position of "a"
+                    [
+                        0,
+                        c,
+                    ],  # speed of "b" influences the speed of "a" when there's coordination.
+                ]
+            )
+
+            blended_mean = np.einsum("ij,lj->li", F, prev_same) + np.einsum(
+                "ij,lj->li", U, prev_others
+            )
+
+        sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
+
+    return sample
+
+
+def common_cause_random(
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        self_dependent: bool,
+        symmetry_mask: int,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
+) -> np.ndarray:
+    """
+    Generates samples from of a non-serial latent component for prior predictive checks.
+
+    Legend:
+    D: number of dimensions
+    S: number of subjects
+    T: number of time steps
+
+    @param initial_mean: (subject x dimension) mean at t0 for each subject.
+    @param sigma: (subject x dimension) a series of standard deviations. At each time the standard
+        deviation is associated with the subject at that time.
+    @param coordination: (time) a series of coordination values.
+    @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
+    @param rng: random number generator.
+    @param size: size of the sample.
+
+    @return: a serial latent component sample.
+    """
+
+    # TODO: Unify this with the class sampling method.
     T = coordination.shape[-1]
     S = initial_mean.shape[0]
 

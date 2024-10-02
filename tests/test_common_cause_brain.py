@@ -103,16 +103,29 @@ total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.array([.4, 0.5]), 
 total_logp += np.sum(norm.logpdf(np.array([0.5, 0.9]), loc=np.array([0.5, 0.6]), scale=np.array([0.03, 0.04])))
 
 # t1
-total_logp += np.sum(norm.logpdf(np.array([0.2, 0.3]), loc=np.dot(np.array([[1, 0], [0, 1-0.3]]), np.array([0.1, 0.2])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.01, 0.02])))
-total_logp += np.sum(norm.logpdf(np.array([0.4, 0.5]), loc=np.dot(np.array([[1, 0], [0, 1-0.3]]), np.array([0.3, 0.4])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.02, 0.03])))
-total_logp += np.sum(norm.logpdf(np.array([0.6, 1.0]), loc=np.dot(np.array([[1, 0], [0, 1-0.3]]), np.array([0.5, 0.9])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.03, 0.04])))
+total_logp += np.sum(norm.logpdf(np.array([0.2, 0.3]), loc=np.dot(np.array([[1, 1], [0, 1-0.3]]), np.array([0.1, 0.2])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.01, 0.02])))
+total_logp += np.sum(norm.logpdf(np.array([0.4, 0.5]), loc=np.dot(np.array([[1, 1], [0, 1-0.3]]), np.array([0.3, 0.4])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.02, 0.03])))
+total_logp += np.sum(norm.logpdf(np.array([0.6, 1.0]), loc=np.dot(np.array([[1, 1], [0, 1-0.3]]), np.array([0.5, 0.9])) + np.dot(np.array([[0, 0], [0, 0.3]]), np.array([-0.4, 0.2])), scale=np.array([0.03, 0.04])))
 
 # t2
-total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 0], [0, 1-0.7]]), np.array([0.2, 0.3])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.01, 0.02])))
-total_logp += np.sum(norm.logpdf(np.array([0.5, 0.6]), loc=np.dot(np.array([[1, 0], [0, 1-0.7]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.02, 0.03])))
-total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 0], [0, 1-0.7]]), np.array([0.6, 1.0])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.03, 0.04])))
+total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 1], [0, 1-0.7]]), np.array([0.2, 0.3])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.01, 0.02])))
+total_logp += np.sum(norm.logpdf(np.array([0.5, 0.6]), loc=np.dot(np.array([[1, 1], [0, 1-0.7]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.02, 0.03])))
+total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 1], [0, 1-0.7]]), np.array([0.6, 1.0])) + np.dot(np.array([[0, 0], [0, 0.7]]), np.array([0.5, 0.1])), scale=np.array([0.03, 0.04])))
 
--756.3558812597375
+[[-196.31376835  -47.00691553]
+ [  -9.50691553   -2.96793619]
+ [   2.58761936  -25.82506271]]
+ 
+[[[ -46.31376835 -196.31376835]
+  [  -9.50691553  -69.00691553]]
+
+ [[-109.50691553 -197.00691553]
+  [ -11.63460286  -77.63460286]]
+  
+
+ [[-352.96793619 -447.41238064]
+  [ -27.73131271 -164.23131271]]]
+-1988.3003257041823
         '''
 
         lp = common_cause_log_prob(
@@ -124,7 +137,7 @@ total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 
             self_dependent=ptt.constant(True),
             symmetry_mask=1
         )
-        total_logp = -756.3558812597375
+        total_logp = -1988.3003257041823
 
         self.assertAlmostEqual(lp.eval(), total_logp)
 

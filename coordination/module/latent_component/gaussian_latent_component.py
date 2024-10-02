@@ -48,6 +48,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
         asymmetric_coordination: bool = False,
+        common_cause_random_variable: Optional[pm.Distribution] = None,
     ):
         """
         Creates a latent component module.
@@ -114,6 +115,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
             latent_component_random_variable=latent_component_random_variable,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             observed_values=observed_values,
+            common_cause_random_variable = common_cause_random_variable,
         )
         self.parameters.mean_a0.value = mean_a0
         self.parameters.sd_a.value = sd_a
