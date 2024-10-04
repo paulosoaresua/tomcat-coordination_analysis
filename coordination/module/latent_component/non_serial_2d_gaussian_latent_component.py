@@ -339,14 +339,12 @@ def common_cause_log_prob(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
         sample[..., 0]
     )
-    print(total_logp.eval())
     total_logp = total_logp.sum()
     # t > 0
     # (S, D, T-1)
     previous_values = sample[:, :, :-1]
     # (S, D, T-1)
     current_values = sample[:, :, 1:]
-    print(current_values)
     # (T-1,)
     c = coordination[1:]
 
@@ -359,15 +357,12 @@ def common_cause_log_prob(
     blended_mean_1 = one_minus_c * previous_values[:, 1, :] + c * common_cause[:, 1, 1:]
     # (S, D, T-1)
     blended_mean = ptt.stack([blended_mean_0, blended_mean_1], axis=1)
-    print(blended_mean.eval())
-    print(blended_mean[0, :, 0].eval())
 
     sigma = sigma[:, :, None]
     logp = pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sigma),
         current_values
     )
-    print(logp.eval())
     total_logp += logp.sum()
 
     return total_logp
@@ -610,10 +605,7 @@ def common_cause_random(
             U = np.array(
                 [
                     [0, 0],  # position of "b" does not influence position of "a"
-                    [
-                        0,
-                        c,
-                    ],  # speed of "b" influences the speed of "a" when there's coordination.
+                    [0, c],  # speed of "b" influences the speed of "a" when there's coordination.
                 ]
             )
 
