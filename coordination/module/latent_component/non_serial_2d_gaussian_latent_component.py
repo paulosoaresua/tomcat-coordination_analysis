@@ -294,7 +294,12 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         Gets a reference to a random function for prior predictive checks.
         """
         return random
-
+    
+    def _get_common_cause_random_fn(self) -> Callable:
+        """
+        Gets a reference to a random function for prior predictive checks (common cause).
+        """
+        return common_cause_random
 
 ###################################################################################################
 # AUXILIARY FUNCTIONS
@@ -545,9 +550,9 @@ def random(
 
 
 def common_cause_random(
-        initial_mean: np.ndarray,
-        sigma: np.ndarray,
-        coordination: np.ndarray,
+        initial_mean: np.ndarray,# (S, D)
+        sigma: np.ndarray,# (S, D)
+        coordination: np.ndarray,# (T)
         self_dependent: bool,
         symmetry_mask: int,
         rng: Optional[np.random.Generator] = None,
@@ -572,47 +577,48 @@ def common_cause_random(
 
     @return: a serial latent component sample.
     """
-
-    # TODO: Unify this with the class sampling method.
+    if rng is None:
+        rng = np.random.default_rng()
     T = coordination.shape[-1]
-    S = initial_mean.shape[0]
-
+    S, D = initial_mean.shape
+    if size is None:
+        size = (S, D, T)
+    # (S, D, T)
     sample = np.zeros(size)
+    # (D, T)
+    common_cause = np.zeros((D, T))
+    # D
+    initial_mean_common_cause = initial_mean.mean(axis=0)
+    # D
+    sigma_c = sigma.mean(axis=0)
+    # common cause at t=0
+    common_cause[:, 0] = rng.normal(loc=initial_mean_common_cause, scale=sigma_c)
+    # At t=0, sample blended_mean
+    c = coordination[0]
+    # (S, D)
+    blended_mean = (1 - c) * initial_mean + c * common_cause[:, 0][None, :]
+    sample[:, :, 0] = rng.normal(loc=blended_mean, scale=sigma)
 
-    # Sample from prior in the initial time step
-    sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=size[:-1])
+    # For t > 0
+    for t in range(1, T):
+        # common cause here
+        common_cause[:, t] = rng.normal(loc=common_cause[:, t - 1], scale=sigma_c)
 
-    for t in np.arange(1, T):
+        # ------------------------------------------
         if self_dependent:
-            # Previous sample from the same subject
-            prev_same = sample[..., t - 1]
+            prev_same = sample[:, :, t - 1]  # (S, D)
         else:
-            # No dependency on the same subject. Sample from prior.
-            prev_same = initial_mean
+            prev_same = initial_mean  # (S, D)
+        # prev_same = initial_mean  # (S, D)
+        # ------------------------------------------
 
-        if S == 1:
-            # Single chain
-            blended_mean = prev_same
-        else:
-            sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
-            prev_others = (
-                    np.dot(sum_matrix_others, sample[..., t - 1]) * symmetry_mask
-            )  # S x D
+        c = coordination[t]
+        dt = 1
+        F = np.array([[1, dt], [0, 1 - c]])
+        U = np.array([[0, 0], [0, c]])
 
-            c = coordination[t]
-            dt_diff = 1
-            F = np.array([[1, dt_diff], [0, 1 - c]])
-            U = np.array(
-                [
-                    [0, 0],  # position of "b" does not influence position of "a"
-                    [0, c],  # speed of "b" influences the speed of "a" when there's coordination.
-                ]
-            )
+        blended_mean = (F @ prev_same.T).T + (U @ common_cause[:, t]) [None, :]  # (S, D)
 
-            blended_mean = np.einsum("ij,lj->li", F, prev_same) + np.einsum(
-                "ij,lj->li", U, prev_others
-            )
-
-        sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
+        sample[:, :, t] = rng.normal(loc=blended_mean, scale=sigma)
 
     return sample
