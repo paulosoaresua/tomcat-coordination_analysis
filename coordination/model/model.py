@@ -76,6 +76,9 @@ class Model(Module):
             component_group_samples[
                 g.latent_component.uuid
             ] = group_samples.latent_component_samples
+            component_group_samples[
+                f"common_cause_{g.latent_component.uuid}"
+            ] = group_samples.common_cause_samples
             for obs_uuid, obs_samples in group_samples.observation_samples.items():
                 component_group_samples[obs_uuid] = obs_samples
 

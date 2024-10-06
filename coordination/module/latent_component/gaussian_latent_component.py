@@ -48,6 +48,8 @@ class GaussianLatentComponent(LatentComponent, ABC):
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
         asymmetric_coordination: bool = False,
+        common_cause: bool = False,
+        common_cause_samples: Optional[ModuleSamples] = None,
         common_cause_random_variable: Optional[pm.Distribution] = None,
     ):
         """
@@ -95,6 +97,10 @@ class GaussianLatentComponent(LatentComponent, ABC):
         @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
             the value of a component for one subject depends on the negative of the combination of
             the others.
+        @param common_cause: whether to use a common cause chain or not.
+        @param common_cause_samples: optional common cause samples to be used in a call to
+            draw_samples. This variable must be set before such a call if common cause is used.
+        @param common_cause_random_variable: an optional common cause random variable.
         """
 
         super().__init__(
@@ -115,7 +121,9 @@ class GaussianLatentComponent(LatentComponent, ABC):
             latent_component_random_variable=latent_component_random_variable,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale,
             observed_values=observed_values,
-            common_cause_random_variable = common_cause_random_variable,
+            common_cause=common_cause,
+            common_cause_samples=common_cause_samples,
+            common_cause_random_variable=common_cause_random_variable,
         )
         self.parameters.mean_a0.value = mean_a0
         self.parameters.sd_a.value = sd_a

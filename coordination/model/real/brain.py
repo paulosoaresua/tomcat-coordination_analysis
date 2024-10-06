@@ -271,7 +271,7 @@ class BrainModel(ModelTemplate):
         @return: a list of component groups to be added to the model.
         """
         if bundle.common_cause:
-            common_cause = CommonCauseGaussian2D(
+            common_cause_component = CommonCauseGaussian2D(
                 uuid="common_cause",
                 pymc_model=self.pymc_model,
                 mean_mean_cc0=bundle.mean_mean_cc0,
@@ -287,7 +287,7 @@ class BrainModel(ModelTemplate):
                 initial_samples=bundle.initial_common_cause_samples,
             )
         else:
-            common_cause = None
+            common_cause_component = None
 
         # In the 2D case, it may be interesting having multiple state space chains with their
         # own dynamics if different features of a modality have different movement dynamics.
@@ -379,7 +379,7 @@ class BrainModel(ModelTemplate):
                         "asymmetric_coordination", False
                     ),
                     single_chain=bundle.fnirs_share_fnirs_latent_state_across_subjects,
-                    common_cause=common_cause
+                    common_cause=bundle.common_cause
                 )
                 # We assume data is normalized and add a transformation with fixed unitary weights
                 # that bring the position in the state space to a collection of channels in the
@@ -429,6 +429,7 @@ class BrainModel(ModelTemplate):
                 latent_component=state_space,
                 observations=[observation],
                 transformations=None if transformation is None else [transformation],
+                common_cause=common_cause_component
             )
             groups.append(group)
 

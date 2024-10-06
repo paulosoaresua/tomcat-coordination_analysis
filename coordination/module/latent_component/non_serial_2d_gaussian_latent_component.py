@@ -58,6 +58,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             initial_samples: Optional[np.ndarray] = None,
             asymmetric_coordination: bool = False,
             single_chain: bool = False,
+            common_cause: bool = False,
+            common_cause_samples: Optional[ModuleSamples] = None,
             common_cause_random_variable: Optional[pm.Distribution] = None,
     ):
         """
@@ -108,8 +110,10 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             the value of a component for one subject depends on the negative of the combination of
             the others.
         @param single_chain: whether to fit a single chain for all subjects.
-        @param common_cause: an optional common cause component. If this is provided, the latent
-            component from each subject is updated from the common cause values.
+        @param common_cause: whether to use a common cause chain or not.
+        @param common_cause_samples: optional common cause samples to be used in a call to
+            draw_samples. This variable must be set before such a call if common cause is used.
+        @param common_cause_random_variable: an optional common cause random variable.
         """
         super().__init__(
             uuid=uuid,
@@ -137,6 +141,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             initial_samples=initial_samples,
             asymmetric_coordination=asymmetric_coordination,
             single_chain=single_chain,
+            common_cause=common_cause,
+            common_cause_samples=common_cause_samples,
             common_cause_random_variable=common_cause_random_variable,
         )
 
@@ -200,17 +206,11 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
         for t in range(t0, num_time_steps):
             if t == 0:
-                if sampled_common_cause:
-
-                    # =============================================
-                    # TODO: [Ming] update the values[..., t] below such that it uses samples from
-                    #   the common cause sampled_common_cause.
+                if self.common_cause:
                     c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
                     blended_mean = (1 - c) * mean_a0 + c[:, None, None] * sampled_common_cause[
                         ..., t]
                     values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
-                    # =============================================
-
                 else:
                     values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
                         size=(num_series, 1 if self.single_chain else self.num_subjects,
@@ -229,46 +229,35 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     c_mask = -1 if self.asymmetric_coordination else 1
 
                     if self.common_cause:
-
-                        # =============================================
-                        # TODO: [Ming] update the blended_mean[..., t] below such that it uses
-                        #  samples from the common cause sampled_common_cause.
-                        sampled_common_cause[..., t] = norm(loc=sampled_common_cause[..., t - 1],
-                                                            scale=sd_a).rvs()
-                        # define X using X_{t} = N(X_{t-1})
-                        blended_mean = (1 - c) * prev_same + c[:, None, None] * \
-                                       sampled_common_cause[..., t]
-                        # =============================================
-
-
+                        prev_others = sampled_common_cause[..., t]
                     else:
-                        # -------------------- END ---------------------
                         # n x s x d
                         prev_others = (
                                 np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
                                 * c_mask
                         )
 
-                        # The matrix F multiplied by the state of a component "a" at time t - 1
-                        # ([P(t-1), S(t-1)]) gives us:
-                        #
-                        # P_a(t) = P_a(t-1) + S_a(t-1)dt
-                        # S_a(t) = (1 - C(t))*S_a(t-1)
-                        #
-                        # Then we just need to sum with [0, c(t)*S_b(t-1)] to obtain the updated state of
-                        # the component. Which can be accomplished with U*[P_b(t-1), S_b(t-1)]
-                        dt_diff = 1
-                        F = np.array([[1.0, dt_diff], [0.0, 0.0]])[None, :].repeat(
-                            num_series, axis=0
-                        )
-                        F[:, 1, 1] = 1 - c
+                    # The matrix F multiplied by the state of a component "a" at time t - 1
+                    # ([P(t-1), S(t-1)]) gives us:
+                    #
+                    # P_a(t) = P_a(t-1) + S_a(t-1)dt
+                    # S_a(t) = (1 - C(t))*S_a(t-1)
+                    #
+                    # Then we just need to sum with [0, c(t)*S_b(t-1)] to obtain the updated
+                    # state of the component. Which can be accomplished with
+                    # U*[P_b(t-1), S_b(t-1)]
+                    dt_diff = 1
+                    F = np.array([[1.0, dt_diff], [0.0, 0.0]])[None, :].repeat(
+                        num_series, axis=0
+                    )
+                    F[:, 1, 1] = 1 - c
 
-                        U = np.zeros((num_series, 2, 2))
-                        U[:, 1, 1] = c
+                    U = np.zeros((num_series, 2, 2))
+                    U[:, 1, 1] = c
 
-                        blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
-                            "kij,klj->kli", U, prev_others
-                        )
+                    blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
+                        "kij,klj->kli", U, prev_others
+                    )
 
                 values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
 
@@ -281,7 +270,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         Gets extra parameters to be passed to the log_prob and random functions.
         """
-        return self.common_cause_random_variable if self.common_cause_random_variable is not None else ()
+        return self.common_cause_random_variable if self.common_cause else ()
 
     def _get_log_prob_fn(self) -> Callable:
         """
@@ -293,13 +282,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         Gets a reference to a random function for prior predictive checks.
         """
-        return random
-    
-    def _get_common_cause_random_fn(self) -> Callable:
-        """
-        Gets a reference to a random function for prior predictive checks (common cause).
-        """
-        return common_cause_random
+        return common_cause_random if self.common_cause else random
+
 
 ###################################################################################################
 # AUXILIARY FUNCTIONS
@@ -338,7 +322,7 @@ def common_cause_log_prob(
     S = sample.shape[0]
     D = sample.shape[1]
     T = sample.shape[2]
-    
+
     # t0
     total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
@@ -550,9 +534,9 @@ def random(
 
 
 def common_cause_random(
-        initial_mean: np.ndarray,# (S, D)
-        sigma: np.ndarray,# (S, D)
-        coordination: np.ndarray,# (T)
+        initial_mean: np.ndarray,  # (S, D)
+        sigma: np.ndarray,  # (S, D)
+        coordination: np.ndarray,  # (T)
         self_dependent: bool,
         symmetry_mask: int,
         rng: Optional[np.random.Generator] = None,
@@ -617,7 +601,7 @@ def common_cause_random(
         F = np.array([[1, dt], [0, 1 - c]])
         U = np.array([[0, 0], [0, c]])
 
-        blended_mean = (F @ prev_same.T).T + (U @ common_cause[:, t]) [None, :]  # (S, D)
+        blended_mean = (F @ prev_same.T).T + (U @ common_cause[:, t])[None, :]  # (S, D)
 
         sample[:, :, t] = rng.normal(loc=blended_mean, scale=sigma)
 

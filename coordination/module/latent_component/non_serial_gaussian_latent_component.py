@@ -60,6 +60,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             initial_samples: Optional[np.ndarray] = None,
             asymmetric_coordination: bool = False,
             single_chain: bool = False,
+            common_cause: bool = False,
+            common_cause_samples: Optional[ModuleSamples] = None,
+            common_cause_random_variable: Optional[pm.Distribution] = None,
     ):
         """
         Creates a non-serial latent component.
@@ -114,6 +117,11 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             the value of a component for one subject depends on the negative of the combination of
             the others.
         @param single_chain: whether to fit a single chain for all subjects.
+        @param common_cause: whether to use a common cause chain or not.
+        @param common_cause_samples: optional common cause samples to be used in a call to
+            draw_samples. This variable must be set before such a call if common cause is used.
+        @param common_cause_random_variable: an optional common cause random variable.
+
         """
         super().__init__(
             uuid=uuid,
@@ -139,6 +147,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             mean_a0=mean_a0,
             sd_a=sd_a,
             asymmetric_coordination=asymmetric_coordination,
+            common_cause=common_cause,
+            common_cause_samples=common_cause_samples,
+            common_cause_random_variable=common_cause_random_variable,
         )
 
         self.subject_names = subject_names
@@ -251,7 +262,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             mean_a0=mean_a0,
             sd_a=sd_a,
             init_values=None if self.initial_samples is None else self.initial_samples,
-            sampled_common_cause=self.common_cause_samples.values,
+            sampled_common_cause=self.common_cause_samples.values if self.common_cause else None,
         )
 
         return LatentComponentSamples(

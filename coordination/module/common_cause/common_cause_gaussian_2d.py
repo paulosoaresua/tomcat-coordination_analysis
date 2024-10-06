@@ -108,6 +108,7 @@ class CommonCauseGaussian2D(NonSerialGaussianLatentComponent):
             mean_a0: np.ndarray,  # mean_a0 = mean_cc0
             sd_a: np.ndarray,  # sd_a = sd_cc
             init_values: Optional[np.ndarray] = None,
+            sampled_common_cause: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values with the following updating equations for the state of the common cause:
