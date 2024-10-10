@@ -270,7 +270,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         """
         Gets extra parameters to be passed to the log_prob and random functions.
         """
-        return self.common_cause_random_variable if self.common_cause else ()
+        return (self.common_cause_random_variable,) if self.common_cause else ()
 
     def _get_log_prob_fn(self) -> Callable:
         """

@@ -92,6 +92,10 @@ class Model(Module):
 
         self.coordination.create_random_variables()
         for g in self.component_groups:
+            if g.common_cause:
+                g.common_cause.coordination_random_variable = (
+                    self.coordination.coordination_random_variable
+                )
             g.latent_component.coordination_random_variable = (
                 self.coordination.coordination_random_variable
             )

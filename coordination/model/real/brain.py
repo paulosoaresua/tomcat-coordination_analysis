@@ -270,25 +270,6 @@ class BrainModel(ModelTemplate):
         @param bundle: config bundle holding information on how to parameterize the modules.
         @return: a list of component groups to be added to the model.
         """
-        if bundle.common_cause:
-            common_cause_component = CommonCauseGaussian2D(
-                uuid="common_cause",
-                pymc_model=self.pymc_model,
-                mean_mean_cc0=bundle.mean_mean_cc0,
-                sd_mean_cc0=bundle.sd_mean_cc0,
-                sd_sd_cc=bundle.sd_sd_cc,
-                share_mean_cc0_across_dimensions=bundle.share_mean_cc0_across_dimensions,
-                share_sd_cc_across_dimensions=bundle.share_sd_cc_across_dimensions,
-                time_steps_in_coordination_scale=(
-                    np.arange(bundle.num_time_steps_in_coordination_scale)
-                ),
-                mean_cc0=bundle.mean_cc0,
-                sd_cc=bundle.sd_cc,
-                initial_samples=bundle.initial_common_cause_samples,
-            )
-        else:
-            common_cause_component = None
-
         # In the 2D case, it may be interesting having multiple state space chains with their
         # own dynamics if different features of a modality have different movement dynamics.
         fnirs_groups = bundle.fnirs_groups
@@ -401,6 +382,25 @@ class BrainModel(ModelTemplate):
                         ),
                     ]
                 )
+
+            if bundle.common_cause:
+                common_cause_component = CommonCauseGaussian2D(
+                    uuid=f"common_cause{suffix}",
+                    pymc_model=self.pymc_model,
+                    mean_mean_cc0=bundle.mean_mean_cc0,
+                    sd_mean_cc0=bundle.sd_mean_cc0,
+                    sd_sd_cc=bundle.sd_sd_cc,
+                    share_mean_cc0_across_dimensions=bundle.share_mean_cc0_across_dimensions,
+                    share_sd_cc_across_dimensions=bundle.share_sd_cc_across_dimensions,
+                    time_steps_in_coordination_scale=(
+                        fnirs_metadata.time_steps_in_coordination_scale
+                    ),
+                    mean_cc0=bundle.mean_cc0,
+                    sd_cc=bundle.sd_cc,
+                    initial_samples=bundle.initial_common_cause_samples,
+                )
+            else:
+                common_cause_component = None
 
             if isinstance(bundle.fnirs_sd_o, list):
                 sd_o = bundle.fnirs_sd_o[i]
