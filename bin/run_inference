@@ -451,7 +451,7 @@ if __name__ == "__main__":
           model_params_dict_filepath=args.model_params_dict_filepath,
           data_mapping_filepath=args.data_mapping_filepath,
           model_name=args.model_name,
-          do_prior=False,#args.do_prior,
+          do_prior=args.do_prior,
           do_posterior=args.do_posterior,
           do_posterior_predictive=args.do_posterior_predictive,
           seed=args.seed,
