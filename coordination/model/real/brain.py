@@ -675,6 +675,12 @@ class BrainModel(ModelTemplate):
                 idata.get_posterior_samples(f"fnirs_state_space{suffix}", samples_idx)
             )
 
+        if new_bundle.common_cause:
+            new_bundle.mean_cc0 = idata.get_posterior_samples(f"mean_cc0", samples_idx)
+            new_bundle.sd_cc = idata.get_posterior_samples(f"sd_cc", samples_idx)
+            new_bundle.initial_common_cause_samples = idata.get_posterior_samples(
+                f"common_cause", samples_idx)
+
         new_bundle.gsr_mean_a0 = idata.get_posterior_samples(
             "gsr_state_space_mean_a0", samples_idx
         )
