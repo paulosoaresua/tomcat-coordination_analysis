@@ -1,0 +1,82 @@
+{
+  "mappings": [
+    {
+      "bundle_param_name": "fnirs_time_steps_in_coordination_scale",
+      "data_column_names": [
+        "fnirs_time_steps_in_coordination_scale"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "fnirs_observed_values",
+      "data_column_names": [
+        "s1_d1",
+        "s1_d2",
+        "s2_d1",
+        "s2_d3",
+        "s3_d1",
+        "s3_d3",
+        "s3_d4",
+        "s4_d2",
+        "s4_d4",
+        "s4_d5",
+        "s5_d3",
+        "s5_d4",
+        "s5_d6",
+        "s6_d4",
+        "s6_d6",
+        "s6_d7",
+        "s7_d5",
+        "s7_d7",
+        "s8_d6",
+        "s8_d7"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "num_time_steps_in_coordination_scale",
+      "data_column_names": [
+        "num_time_steps_in_coordination_scale"
+      ],
+      "data_type": "int"
+    },
+    {
+      "bundle_param_name": "vocalic_subject_indices",
+      "data_column_names": [
+        "vocalic_subjects"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "vocalic_prev_time_same_subject",
+      "data_column_names": [
+        "vocalic_previous_time_same_subject"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "vocalic_prev_time_diff_subject",
+      "data_column_names": [
+        "vocalic_previous_time_diff_subject"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "vocalic_observed_values",
+      "data_column_names": [
+        "pitch",
+        "intensity",
+        "jitter",
+        "shimmer"
+      ],
+      "data_type": "array"
+    },
+    {
+      "bundle_param_name": "vocalic_time_steps_in_coordination_scale",
+      "data_column_names": [
+        "vocalic_time_steps_in_coordination_scale"
+      ],
+      "data_type": "array"
+    }
+  ]
+}   

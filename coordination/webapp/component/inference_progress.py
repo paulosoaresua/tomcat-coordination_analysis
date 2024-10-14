@@ -6,6 +6,7 @@ import streamlit as st
 from coordination.inference.inference_run import InferenceRun
 from coordination.webapp.component.inference_run_progress import \
     InferenceRunProgress
+from coordination.webapp.constants import DATA_DIR_STATE_KEY
 from coordination.webapp.utils import get_inference_run_ids
 
 
@@ -23,6 +24,7 @@ class InferenceProgress:
         preferred_run_ids: Optional[List[str]] = None,
         display_experiment_progress: bool = True,
         display_sub_experiment_progress: bool = True,
+        hide_completed_experiment: bool = True,
     ):
         """
         Creates the component.
@@ -36,6 +38,8 @@ class InferenceProgress:
             in the inference run.
         @param display_sub_experiment_progress: whether to display the progress of all the
             sub-experiments of all the experiments in the inference run.
+        @param hide_completed_experiment: whether to hide successfully completed experiments from
+            the list.
         """
         self.component_key = component_key
         self.inference_dir = inference_dir
@@ -43,6 +47,7 @@ class InferenceProgress:
         self.refresh_rate = refresh_rate
         self.display_experiment_progress = display_experiment_progress
         self.display_sub_experiment_progress = display_sub_experiment_progress
+        self.hide_completed_experiment = hide_completed_experiment
 
     def create_component(self):
         """
@@ -81,7 +86,9 @@ class InferenceProgress:
 
                     for i, run_id in enumerate(run_ids):
                         inference_run = InferenceRun(
-                            inference_dir=self.inference_dir, run_id=run_id
+                            inference_dir=self.inference_dir,
+                            run_id=run_id,
+                            data_dir=st.session_state[DATA_DIR_STATE_KEY],
                         )
 
                         if not inference_run.execution_params:
@@ -93,6 +100,7 @@ class InferenceProgress:
                                 inference_run,
                                 self.display_experiment_progress,
                                 self.display_sub_experiment_progress,
+                                self.hide_completed_experiment,
                             )
                             inference_progress_component.create_component()
 

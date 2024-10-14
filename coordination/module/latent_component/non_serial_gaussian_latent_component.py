@@ -32,32 +32,34 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
     """
 
     def __init__(
-        self,
-        uuid: str,
-        pymc_model: pm.Model,
-        num_subjects: int = DEFAULT_NUM_SUBJECTS,
-        dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
-        self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
-        mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
-        sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
-        share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
-        share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
-        dimension_names: Optional[List[str]] = None,
-        subject_names: Optional[List[str]] = None,
-        coordination_samples: Optional[ModuleSamples] = None,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        latent_component_random_variable: Optional[pm.Distribution] = None,
-        mean_a0_random_variable: Optional[pm.Distribution] = None,
-        sd_a_random_variable: Optional[pm.Distribution] = None,
-        sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
-        time_steps_in_coordination_scale: Optional[np.array] = None,
-        observed_values: Optional[TensorTypes] = None,
-        mean_a0: Optional[Union[float, np.ndarray]] = None,
-        sd_a: Optional[Union[float, np.ndarray]] = None,
-        initial_samples: Optional[np.ndarray] = None,
+            self,
+            uuid: str,
+            pymc_model: pm.Model,
+            num_subjects: int = DEFAULT_NUM_SUBJECTS,
+            dimension_size: int = DEFAULT_LATENT_DIMENSION_SIZE,
+            self_dependent: bool = DEFAULT_SELF_DEPENDENCY,
+            mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
+            sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
+            share_mean_a0_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_mean_a0_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
+            share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
+            dimension_names: Optional[List[str]] = None,
+            subject_names: Optional[List[str]] = None,
+            coordination_samples: Optional[ModuleSamples] = None,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            latent_component_random_variable: Optional[pm.Distribution] = None,
+            mean_a0_random_variable: Optional[pm.Distribution] = None,
+            sd_a_random_variable: Optional[pm.Distribution] = None,
+            sampling_relative_frequency: float = DEFAULT_SAMPLING_RELATIVE_FREQUENCY,
+            time_steps_in_coordination_scale: Optional[np.array] = None,
+            observed_values: Optional[TensorTypes] = None,
+            mean_a0: Optional[Union[float, np.ndarray]] = None,
+            sd_a: Optional[Union[float, np.ndarray]] = None,
+            initial_samples: Optional[np.ndarray] = None,
+            asymmetric_coordination: bool = False,
+            single_chain: bool = False,
     ):
         """
         Creates a non-serial latent component.
@@ -108,6 +110,10 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             provided now, it can be set later via the module parameters variable.
         @param initial_samples: samples to use during a call to draw_samples. We complete with
             ancestral sampling up to the desired number of time steps.
+        @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
+            the value of a component for one subject depends on the negative of the combination of
+            the others.
+        @param single_chain: whether to fit a single chain for all subjects.
         """
         super().__init__(
             uuid=uuid,
@@ -118,9 +124,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             mean_mean_a0=mean_mean_a0,
             sd_mean_a0=sd_mean_a0,
             sd_sd_a=sd_sd_a,
-            share_mean_a0_across_subjects=share_mean_a0_across_subjects,
+            share_mean_a0_across_subjects=share_mean_a0_across_subjects or single_chain,
             share_mean_a0_across_dimensions=share_mean_a0_across_dimensions,
-            share_sd_a_across_subjects=share_sd_a_across_subjects,
+            share_sd_a_across_subjects=share_sd_a_across_subjects or single_chain,
             share_sd_a_across_dimensions=share_sd_a_across_dimensions,
             dimension_names=dimension_names,
             coordination_samples=coordination_samples,
@@ -132,11 +138,13 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             observed_values=observed_values,
             mean_a0=mean_a0,
             sd_a=sd_a,
+            asymmetric_coordination=asymmetric_coordination,
         )
 
         self.subject_names = subject_names
         self.sampling_relative_frequency = sampling_relative_frequency
         self.initial_samples = initial_samples
+        self.single_chain = single_chain
 
     @property
     def subject_coordinates(self) -> Union[List[str], np.ndarray]:
@@ -145,6 +153,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         @return: a list of dimension names.
         """
+        if self.single_chain:
+            return np.zeros(1)
+
         return (
             np.arange(self.num_subjects)
             if self.subject_names is None
@@ -152,7 +163,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         )
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> LatentComponentSamples:
         """
         Draws latent component samples using ancestral sampling and pairwise blending with
@@ -181,22 +192,39 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             1 if self.share_sd_a_across_dimensions else self.dimension_size
         )
 
-        # Adjust dimensions according to parameter sharing specification
-        mean_a0 = adjust_dimensions(
-            self.parameters.mean_a0.value,
-            num_rows=dim_mean_a_subjects,
-            num_cols=dim_mean_a_dimensions,
-        )
-        if self.share_mean_a0_across_subjects:
-            mean_a0 = mean_a0.repeat(self.num_subjects, axis=0)
+        if (
+                isinstance(self.parameters.mean_a0.value, np.ndarray)
+                and self.parameters.mean_a0.value.ndim == 3
+        ):
+            # A different value per series. We expect it's already in the correct dimensions.
+            mean_a0 = self.parameters.mean_a0.value
+        else:
+            mean_a0 = adjust_dimensions(
+                self.parameters.mean_a0.value,
+                num_rows=dim_mean_a_subjects,
+                num_cols=dim_mean_a_dimensions,
+            )
+            if self.share_mean_a0_across_subjects:
+                mean_a0 = mean_a0.repeat(self.num_subjects, axis=0)
 
-        sd_a = adjust_dimensions(
-            self.parameters.sd_a.value,
-            num_rows=dim_sd_a_subjects,
-            num_cols=dim_sd_a_dimensions,
-        )
-        if self.share_sd_a_across_subjects:
-            sd_a = sd_a.repeat(self.num_subjects, axis=0)
+            mean_a0 = mean_a0[None, :].repeat(num_series, axis=0)
+
+        if (
+                isinstance(self.parameters.sd_a.value, np.ndarray)
+                and self.parameters.sd_a.value.ndim == 3
+        ):
+            # A different value per series. We expect it's already in the correct dimensions.
+            sd_a = self.parameters.sd_a.value
+        else:
+            sd_a = adjust_dimensions(
+                self.parameters.sd_a.value,
+                num_rows=dim_sd_a_subjects,
+                num_cols=dim_sd_a_dimensions,
+            )
+            if self.share_sd_a_across_subjects:
+                sd_a = sd_a.repeat(self.num_subjects, axis=0)
+
+            sd_a = sd_a[None, :].repeat(num_series, axis=0)
 
         if self.initial_samples is None:
             num_time_steps_in_cpn_scale = int(
@@ -205,13 +233,13 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             )
 
             time_steps_in_coordination_scale = (
-                np.arange(num_time_steps_in_cpn_scale)
-                * self.sampling_relative_frequency
+                    np.arange(num_time_steps_in_cpn_scale)
+                    * self.sampling_relative_frequency
             ).astype(int)
         else:
-            time_steps_in_coordination_scale = [
+            time_steps_in_coordination_scale = np.array(
                 self.time_steps_in_coordination_scale
-            ] * num_series
+            )
 
         # Draw values from the system dynamics. The default model generates samples by following a
         # Gaussian random walk with blended values from different subjects according to the
@@ -228,17 +256,17 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         return LatentComponentSamples(
             values=sampled_values,
             time_steps_in_coordination_scale=time_steps_in_coordination_scale[
-                None, :
-            ].repeat(num_series, axis=0),
+                                             None, :
+                                             ].repeat(num_series, axis=0),
         )
 
     def _draw_from_system_dynamics(
-        self,
-        sampled_coordination: np.ndarray,
-        time_steps_in_coordination_scale: np.ndarray,
-        mean_a0: np.ndarray,
-        sd_a: np.ndarray,
-        init_values: Optional[np.ndarray] = None,
+            self,
+            sampled_coordination: np.ndarray,
+            time_steps_in_coordination_scale: np.ndarray,
+            mean_a0: np.ndarray,
+            sd_a: np.ndarray,
+            init_values: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Draws values from the system dynamics. The default non serial component generates samples
@@ -267,7 +295,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         num_series = sampled_coordination.shape[0]
         num_time_steps = len(time_steps_in_coordination_scale)
         values = np.zeros(
-            (num_series, self.num_subjects, self.dimension_size, num_time_steps)
+            (num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size, num_time_steps)
         )
         t0 = 0 if init_values is None else init_values.shape[-1]
         if init_values is not None:
@@ -275,28 +303,36 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
         for t in range(t0, num_time_steps):
             if t == 0:
-                values[..., 0] = norm(loc=mean_a0[None, :], scale=sd_a[None, :]).rvs(
-                    size=(num_series, self.num_subjects, self.dimension_size)
+                values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
+                    size=(num_series, 1 if self.single_chain else self.num_subjects, self.dimension_size)
                 )
             else:
-                # n x 1 x 1
-                c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
-                    :, None, None
-                ]
-
-                # n x s x d
-                prev_others = np.einsum(
-                    "ij,kjl->kil", sum_matrix_others, values[..., t - 1]
-                )
-
                 if self.self_dependent:
                     prev_same = values[..., t - 1]  # n x s x d
                 else:
-                    prev_same = mean_a0[None, :]  # n x s x d
+                    prev_same = mean_a0  # n x s x d
 
-                blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
+                if self.single_chain:
+                    blended_mean = prev_same
+                else:
+                    # n x 1 x 1
+                    c = sampled_coordination[:, time_steps_in_coordination_scale[t]][
+                        :, None, None
+                        ]
+                    c_mask = -1 if self.asymmetric_coordination else 1
 
-                values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
+                    # n x s x d
+                    prev_others = (
+                            np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
+                            * c_mask
+                    )
+
+                    blended_mean = (prev_others - prev_same) * c + prev_same  # n x s x d
+
+                values[..., t] = norm(loc=blended_mean, scale=sd_a).rvs()
+
+        if self.single_chain:
+            return values.repeat(self.num_subjects, axis=1)
 
         return values
 
@@ -311,9 +347,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         # be entries for all the subjects at every time step.
         if self.share_mean_a0_across_subjects:
             # subject x dimension
-            mean_a0 = self.mean_a0_random_variable.mean_a0.repeat(
-                self.num_subjects, axis=0
-            )
+            mean_a0 = self.mean_a0_random_variable.repeat(self.num_subjects, axis=0)
         else:
             mean_a0 = self.mean_a0_random_variable
 
@@ -336,6 +370,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
             sd_a,
             self.coordination_random_variable[self.time_steps_in_coordination_scale],
             np.array(self.self_dependent),
+            -1 if self.asymmetric_coordination else 1,
             *self._get_extra_logp_params(),
         )
 
@@ -352,6 +387,9 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
                 ],
                 observed=self.observed_values,
             )
+            if self.single_chain:
+                self.latent_component_random_variable = self.latent_component_random_variable.repeat(
+                    self.num_subjects, axis=0)
 
     def _add_coordinates(self):
         """
@@ -391,11 +429,12 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
 
 
 def log_prob(
-    sample: ptt.TensorVariable,
-    initial_mean: ptt.TensorVariable,
-    sigma: ptt.TensorVariable,
-    coordination: ptt.TensorVariable,
-    self_dependent: ptt.TensorConstant,
+        sample: ptt.TensorVariable,
+        initial_mean: ptt.TensorVariable,
+        sigma: ptt.TensorVariable,
+        coordination: ptt.TensorVariable,
+        self_dependent: ptt.TensorConstant,
+        symmetry_mask: ptt.TensorConstant
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -411,6 +450,7 @@ def log_prob(
         deviation is associated with the subject at that time.
     @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @return: log-probability of the sample.
     """
 
@@ -422,11 +462,6 @@ def log_prob(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)), sample[..., 0]
     ).sum()
 
-    # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
-    # We discard the last value as that is not a previous value of any other.
-    sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
-    prev_others = ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1]
-
     if self_dependent.eval():
         # The component's value for a subject depends on its previous value for the same subject.
         prev_same = sample[..., :-1]
@@ -436,11 +471,22 @@ def log_prob(
         # by the component's initial mean.
         prev_same = initial_mean[:, :, None]
 
-    # Coordination does not affect the component in the first time step because the subjects have
-    # no previous dependencies at that time.
-    c = coordination[None, None, 1:]  # 1 x 1 x T-1
+    # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
+    # We discard the last value as that is not a previous value of any other.
+    if S.eval() == 1:
+        # Single chain for all the subjects. No coordination involved.
+        blended_mean = prev_same
+    else:
+        sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
+        prev_others = (
+                ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
+        )
 
-    blended_mean = (prev_others - prev_same) * c + prev_same
+        # Coordination does not affect the component in the first time step because the subjects
+        # have no previous dependencies at that time.
+        c = coordination[None, None, 1:]  # 1 x 1 x T-1
+
+        blended_mean = (prev_others - prev_same) * c + prev_same
 
     # Match the dimensions of the standard deviation with that of the blended mean
     sd = sigma[:, :, None]
@@ -456,12 +502,13 @@ def log_prob(
 
 
 def random(
-    initial_mean: np.ndarray,
-    sigma: np.ndarray,
-    coordination: np.ndarray,
-    self_dependent: bool,
-    rng: Optional[np.random.Generator] = None,
-    size: Optional[Tuple[int]] = None,
+        initial_mean: np.ndarray,
+        sigma: np.ndarray,
+        coordination: np.ndarray,
+        self_dependent: bool,
+        symmetry_mask: int,
+        rng: Optional[np.random.Generator] = None,
+        size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
     """
     Generates samples from of a non-serial latent component for prior predictive checks.
@@ -476,6 +523,7 @@ def random(
         deviation is associated with the subject at that time.
     @param coordination: (time) a series of coordination values.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @param rng: random number generator.
     @param size: size of the sample.
 
@@ -492,10 +540,7 @@ def random(
     # Sample from prior in the initial time step
     sample[..., 0] = rng.normal(loc=initial_mean, scale=sigma, size=size[:-1])
 
-    sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
     for t in np.arange(1, T):
-        prev_others = np.dot(sum_matrix_others, sample[..., t - 1])  # S x D
-
         if self_dependent:
             # Previous sample from the same subject
             prev_same = sample[..., t - 1]
@@ -503,7 +548,16 @@ def random(
             # No dependency on the same subject. Sample from prior.
             prev_same = initial_mean
 
-        blended_mean = (prev_others - prev_same) * coordination[t] + prev_same
+        if S == 1:
+            # Single chain
+            blended_mean = prev_same
+        else:
+            sum_matrix_others = (np.ones((S, S)) - np.eye(S)) / (S - 1)
+            prev_others = (
+                    np.dot(sum_matrix_others, sample[..., t - 1]) * symmetry_mask
+            )  # S x D
+
+            blended_mean = (prev_others - prev_same) * coordination[t] + prev_same
 
         sample[..., t] = rng.normal(loc=blended_mean, scale=sigma)
 

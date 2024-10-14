@@ -55,7 +55,7 @@ class SingleRun:
 
         with col_right:
             model_variable_component_right = ModelVariableSelection(
-                component_key=f"{self.page_key}_right_model_variable_selector",
+                component_key=f"{self.page_key}_right_col_model_variable_selector",
                 inference_run=inference_run_component.selected_inference_run_,
             )
             model_variable_component_right.create_component()
@@ -78,7 +78,7 @@ class SingleRun:
 
             with col_right:
                 inference_results_component = InferenceResults(
-                    component_key=f"{self.page_key}_left_col_{experiment_id}_inference_results",
+                    component_key=f"{self.page_key}_right_col_{experiment_id}_inference_results",
                     inference_run=inference_run_component.selected_inference_run_,
                     experiment_id=experiment_id,
                     model_variable_info=model_variable_component_right.selected_model_variable_,

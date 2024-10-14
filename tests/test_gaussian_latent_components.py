@@ -32,6 +32,7 @@ class TestGaussianLatentComponents(TestCase):
             prev_same_subject_mask=prev_time_same_subject_mask,
             prev_diff_subject_mask=prev_time_diff_subject_mask,
             self_dependent=ptt.constant(np.array(True)),
+            symmetry_mask=1,
         )
 
         real_logp = -4.303952366775294e02
@@ -57,6 +58,7 @@ class TestGaussianLatentComponents(TestCase):
             prev_same_subject_mask=ptt.constant([]),
             prev_diff_subject_mask=prev_time_diff_subject_mask,
             self_dependent=ptt.constant(np.array(False)),
+            symmetry_mask=1,
         )
         real_logp = -3.522702366775295e02
         self.assertAlmostEqual(estimated_logp.eval(), real_logp)
@@ -82,6 +84,7 @@ class TestGaussianLatentComponents(TestCase):
             sigma=sigma,
             coordination=coordination,
             self_dependent=ptt.constant(np.array(True)),
+            symmetry_mask=1,
         )
         real_logp = -5.973064092657509e02
 
@@ -108,6 +111,7 @@ class TestGaussianLatentComponents(TestCase):
             sigma=sigma,
             coordination=coordination,
             self_dependent=ptt.constant(np.array(False)),
+            symmetry_mask=1,
         )
         real_logp = -4.673480759324176e02
 

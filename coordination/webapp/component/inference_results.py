@@ -1,3 +1,6 @@
+from ast import literal_eval
+
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -6,6 +9,9 @@ from coordination.inference.model_variable import ModelVariableInfo
 from coordination.webapp.component.inference_stats import InferenceStats
 from coordination.webapp.component.model_variable_inference_results import \
     ModelVariableInferenceResults
+from coordination.webapp.constants import (DATA_DIR_STATE_KEY,
+                                           DEFAULT_PLOT_MARGINS)
+from coordination.webapp.utils import plot_series
 from coordination.webapp.widget.drop_down import DropDown
 
 
@@ -52,6 +58,7 @@ class InferenceResults:
         st.write(f"### {self.experiment_id}")
 
         sub_experiment_id = None
+        idata = None
         if self.inference_run.ppa:
             sub_experiment_id = DropDown(
                 label="Sub-experiment ID",
@@ -62,12 +69,10 @@ class InferenceResults:
                 idata = self.inference_run.get_inference_data(
                     self.experiment_id, sub_experiment_id
                 )
-            else:
-                return
         else:
             idata = self.inference_run.get_inference_data(self.experiment_id)
 
-        if not idata:
+        if not idata and self.model_variable_info.inference_mode != "ppa":
             st.write(":red[No inference data found.]")
             return
 
@@ -99,9 +104,32 @@ class InferenceResults:
                     self.experiment_id,
                     sub_experiment_id,
                 )
-                st.write(ppa_results)
+
+                if ppa_results is None:
+                    st.write(":red[Some sub-experiments are still running.]")
+                else:
+                    st.write(ppa_results)
             else:
                 st.write(":red[PPA not performed in this inference run.]")
+        elif self.model_variable_info.inference_mode == "dataset":
+            data = self.inference_run.data
+            data = data[data["experiment_id"] == self.experiment_id].iloc[0]
+            if pd.api.types.is_numeric_dtype(data[self.model_variable_dimension]):
+                st.write(data[self.model_variable_dimension])
+            else:
+                curve = np.array(literal_eval(data[self.model_variable_dimension]))
+                time_steps = np.arange(len(curve))
+                fig = plot_series(x=time_steps, y=curve, marker=True)
+                fig.update_layout(
+                    xaxis_title="Time Step",
+                    yaxis_title=self.model_variable_dimension,
+                    # Preserve legend order
+                    legend={"traceorder": "normal"},
+                    margin=DEFAULT_PLOT_MARGINS,
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
         else:
             model_variable_inference_results_component = ModelVariableInferenceResults(
                 component_key=f"{self.component_key}_model_variable_inference_results",
@@ -125,7 +153,9 @@ class InferenceResults:
         @param sub_experiment_id: ID of a sub experiment.
         @return: convergence report.
         """
-        inference_run = InferenceRun(inference_dir, run_id)
+        inference_run = InferenceRun(
+            inference_dir, run_id, data_dir=st.session_state[DATA_DIR_STATE_KEY]
+        )
         idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
         return idata.generate_convergence_summary()
 
@@ -143,7 +173,9 @@ class InferenceResults:
         @param sub_experiment_id: ID of a sub experiment.
         @return: convergence report.
         """
-        inference_run = InferenceRun(inference_dir, run_id)
+        inference_run = InferenceRun(
+            inference_dir, run_id, data_dir=st.session_state[DATA_DIR_STATE_KEY]
+        )
         if not inference_run.ppa:
             return None
 
@@ -151,18 +183,46 @@ class InferenceResults:
         if model is None:
             return ":red[**Could not construct the model.**]"
 
-        idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
         data = inference_run.data
         row_df = data[data["experiment_id"] == experiment_id].iloc[0]
-
         # Populate config bundle with the data
         inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
+        w = inference_run.execution_params["ppa_window"]
 
-        summary_df = model.get_ppa_summary(
-            idata=idata,
-            window_size=inference_run.execution_params["ppa_window"],
-            num_samples=100,
-            seed=0,
-        )
+        if sub_experiment_id is None:
+            all_summaries = []
+            # Aggregate results for all sub_experiment_ids available.
+            for sub_experiment_id in inference_run.get_sub_experiment_ids(
+                experiment_id
+            ):
+                idata = inference_run.get_inference_data(
+                    experiment_id, sub_experiment_id
+                )
+                if idata is None:
+                    return None
+
+                all_summaries.append(
+                    model.get_ppa_summary(
+                        idata=idata,
+                        window_size=w,
+                        num_samples=100,
+                        seed=0,
+                    )
+                )
+
+            df_concat = pd.concat(all_summaries)
+            summary_df = (
+                df_concat.groupby(df_concat.columns[:-w].tolist(), axis=0)
+                .mean()
+                .reset_index()
+            )
+        else:
+            idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
+            summary_df = model.get_ppa_summary(
+                idata=idata,
+                window_size=w,
+                num_samples=100,
+                seed=0,
+            )
 
         return summary_df

@@ -48,6 +48,7 @@ def infer(
         model_name: str,
         do_prior: bool,
         do_posterior: bool,
+do_posterior_predictive: bool,
         seed: Optional[int],
         burn_in: int,
         num_samples: int,
@@ -72,7 +73,8 @@ def infer(
         attributes and columns in the evidence dataframe.
     @param model_name: name of the model. One of ["vocalic, "vocalic_semantic"].
     @param do_prior: whether to perform prior predictive checks.
-    @param do_posterior: whether to fit the model and perform posterior predictive checks.
+    @param do_posterior: whether to fit the model.
+    @param do_posterior_predictive: whether to perform posterior predictive checks.
     @param seed: random seed for reproducibility.
     @param burn_in: number of samples in the warm-up phase.
     @param num_samples: number of samples from the posterior distribution.
@@ -209,6 +211,7 @@ def infer(
                             logger=logger,
                             do_prior=do_prior,
                             do_posterior=do_posterior,
+                            do_posterior_predictive=do_posterior_predictive,
                             seed=seed,
                             burn_in=burn_in,
                             num_samples=num_samples,
@@ -249,6 +252,7 @@ def fit(model: ModelTemplate,
         logger: Any,
         do_prior: bool,
         do_posterior: bool,
+do_posterior_predictive: bool,
         seed: int,
         burn_in: int,
         num_samples: int,
@@ -264,7 +268,8 @@ def fit(model: ModelTemplate,
     @param model: model.
     @param logger: logger to log messages.
     @param do_prior: whether to run predictive prior.
-    @param do_posterior: whether to fit the model to estimate its posterior distribution.
+    @param do_posterior: whether to fit the model.
+    @param do_posterior_predictive: whether to perform posterior predictive checks.
     @param seed: random seed for reproducibility.
     @param burn_in: number of samples in the warm-up phase.
     @param num_samples: number of samples from the posterior distribution.
@@ -319,15 +324,16 @@ def fit(model: ModelTemplate,
         else:
             idata.add(idata_posterior)
 
-        start_time = time.time()
-        idata_posterior_predictive = model.posterior_predictive(
-            posterior_trace=idata.trace,
-            seed=seed)
-        duration = (time.time() - start_time)
-        logger.info(
-            f"Time to run posterior predictive check: "
-            f"{str(datetime.timedelta(seconds=duration))}.")
-        idata.add(idata_posterior_predictive)
+        if do_posterior_predictive:
+            start_time = time.time()
+            idata_posterior_predictive = model.posterior_predictive(
+                posterior_trace=idata.trace,
+                seed=seed)
+            duration = (time.time() - start_time)
+            logger.info(
+                f"Time to run posterior predictive check: "
+                f"{str(datetime.timedelta(seconds=duration))}.")
+            idata.add(idata_posterior_predictive)
 
         # Log the percentage of divergences
         perc_divergences = 100.0 * idata.num_divergences / idata.num_posterior_samples
@@ -407,6 +413,15 @@ if __name__ == "__main__":
         required=False,
         default=1,
         help="Whether to perform posterior inference. Use the value 0 to deactivate.",
+    )
+    parser.add_argument(
+        "--do_posterior_predictive",
+        type=int,
+        required=False,
+        default=1,
+        help="Whether to perform posterior predictive check of the observations used to fit the "
+             "model. This is different than PPA, which predicts in held out data (future time "
+             "steps) not used to fit the model. Use the value 0 to deactivate.",
     )
     parser.add_argument(
         "--seed",
@@ -518,6 +533,7 @@ if __name__ == "__main__":
           model_name=args.model_name,
           do_prior=args.do_prior,
           do_posterior=args.do_posterior,
+          do_posterior_predictive=args.do_posterior_predictive,
           seed=args.seed,
           burn_in=args.burn_in,
           num_samples=args.num_samples,

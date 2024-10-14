@@ -1,3 +1,7 @@
+from ast import literal_eval
+
+import numpy as np
+import pandas as pd
 import streamlit as st
 
 from coordination.inference.inference_run import InferenceRun
@@ -74,6 +78,32 @@ class ModelVariableSelection:
                 ),
             )
         )
+
+        data = self.inference_run.data
+        if data is not None:
+            # Only add columns with one numerical entry or an array of numbers
+            dimensions = []
+            for col in data.columns:
+                if pd.api.types.is_numeric_dtype(data[col]):
+                    dimensions.append(col)
+                else:
+                    try:
+                        if np.stack(data[col].apply(literal_eval)).ndim == 2:
+                            dimensions.append(col)
+                    except Exception:
+                        pass
+
+            options.append(
+                ModelVariableDropDownOption(
+                    prefix="[EXTRA]",
+                    model_variable_info=ModelVariableInfo(
+                        variable_name="Dataset - Outcome Measure",
+                        inference_mode="dataset",
+                        dimension_names=dimensions,
+                    ),
+                )
+            )
+
         options.sort(key=lambda x: (x.prefix, x.name))
 
         selected_option = DropDown(

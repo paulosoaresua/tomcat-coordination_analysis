@@ -36,6 +36,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         uuid: str,
         pymc_model: pm.Model,
         num_subjects: int = DEFAULT_NUM_SUBJECTS,
+        self_dependent: bool = True,
         mean_mean_a0: np.ndarray = DEFAULT_LATENT_MEAN_PARAM,
         sd_mean_a0: np.ndarray = DEFAULT_LATENT_SD_PARAM,
         sd_sd_a: np.ndarray = DEFAULT_LATENT_SD_PARAM,
@@ -59,6 +60,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
         initial_samples: Optional[np.ndarray] = None,
+        asymmetric_coordination: bool = False,
     ):
         """
         Creates a serial 2D Gaussian latent component.
@@ -66,6 +68,8 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
         @param uuid: String uniquely identifying the latent component in the model.
         @param pymc_model: a PyMC model instance where modules are to be created at.
         @param num_subjects: the number of subjects that possess the component.
+        @param self_dependent: whether a state at time t depends on itself at time t-1 or it
+            depends on a fixed value given by mean_a0.
         @param mean_mean_a0: mean of the hyper-prior of mu_a0 (mean of the initial value of the
             latent component).
         @param sd_sd_a: std of the hyper-prior of sigma_a (std of the Gaussian random walk of
@@ -119,13 +123,16 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             provided now, it can be set later via the module parameters variable.
         @param initial_samples: samples from the posterior to use during a call to draw_samples.
             This is useful to do predictive checks by sampling data in the future.
+        @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
+            the value of a component for one subject depends on the negative of the combination of
+            the others.
         """
         super().__init__(
             uuid=uuid,
             pymc_model=pymc_model,
             num_subjects=num_subjects,
             dimension_size=2,  # position and speed
-            self_dependent=True,
+            self_dependent=self_dependent,
             mean_mean_a0=mean_mean_a0,
             sd_mean_a0=sd_mean_a0,
             sd_sd_a=sd_sd_a,
@@ -150,6 +157,7 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
             mean_a0=mean_a0,
             sd_a=sd_a,
             initial_samples=initial_samples,
+            asymmetric_coordination=asymmetric_coordination,
         )
 
     def _draw_from_system_dynamics(
@@ -216,10 +224,18 @@ class Serial2DGaussianLatentComponent(SerialGaussianLatentComponent):
                 values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dimension_size)
             else:
                 c = coordination_sampled_series[time_steps_in_coordination_scale[t]]
+                c_mask = -1 if self.asymmetric_coordination else 1
 
-                prev_same = values[..., prev_time_same_subject[t]]
+                if self.self_dependent:
+                    # When there's self dependency, the component either depends on the previous
+                    # value of another subject or the previous value of the same subject.
+                    prev_same = values[..., prev_time_same_subject[t]]
+                else:
+                    # When there's no self dependency, the component either depends on the previous
+                    # value of another subject or a fixed value (the subject's prior).
+                    prev_same = mean_a0[subject_idx_mean_a0]
 
-                prev_other = values[..., prev_time_diff_subject[t]]
+                prev_other = values[..., prev_time_diff_subject[t]] * c_mask
 
                 # The matrix F multiplied by the state of a component "a" at time t - 1
                 # ([P(t-1), S(t-1)]) gives us:
@@ -281,6 +297,7 @@ def log_prob(
     prev_same_subject_mask: ptt.TensorConstant,
     prev_diff_subject_mask: ptt.TensorConstant,
     self_dependent: ptt.TensorConstant,
+    symmetry_mask: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -311,16 +328,27 @@ def log_prob(
         is -1.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
         Not used by this implementation as self_dependency is fixed to True.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @return: log-probability of the sample.
     """
 
     # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
     # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
     # case the first dimension of the sample component is one.
-    prev_other = sample[..., prev_time_diff_subject].reshape(sample.shape)  # D x T
+    prev_other = (
+        sample[..., prev_time_diff_subject].reshape(sample.shape) * symmetry_mask
+    )  # D x T
 
     # The component's value for a subject depends on its previous value for the same subject.
-    prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # D x T
+    if self_dependent.eval():
+        # The component's value for a subject depends on previous value of the same subject.
+        prev_same = sample[..., prev_time_same_subject].reshape(sample.shape)  # (D x T)
+    else:
+        # The component's value for a subject doesn't depend on previous value of the same subject.
+        # At every time step, the value from other subjects is blended with a fixed value given
+        # by the component's initial means associated with the subjects over time.
+        # (D x T)
+        prev_same = initial_mean
 
     # We use this binary mask to zero out entries with no previous observations from the subjects.
     # We use this to determine the time steps that belong to the initial values of the component.
@@ -331,6 +359,7 @@ def log_prob(
     prev_same = prev_same * mask_same + (1 - mask_same) * initial_mean
 
     c = coordination * prev_diff_subject_mask
+
     F = (
         ptt.as_tensor([[1.0, 1.0], [0.0, 1.0]])
         - ptt.as_tensor([[0.0, 0.0], [0.0, 1.0]]) * c[:, None, None]
@@ -363,6 +392,7 @@ def random(
     prev_same_subject_mask: np.ndarray,
     prev_diff_subject_mask: np.ndarray,
     self_dependent: bool,
+    symmetry_mask: int,
     rng: Optional[np.random.Generator] = None,
     size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
@@ -393,6 +423,7 @@ def random(
     @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
         is -1.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @param rng: random number generator.
     @param size: size of the sample.
 
@@ -411,10 +442,10 @@ def random(
     sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
 
     for t in np.arange(1, T):
-        prev_other = sample[..., prev_time_diff_subject[t]]  # D
+        prev_other = sample[..., prev_time_diff_subject[t]] * symmetry_mask  # D
 
         # Previous sample from the same individual
-        if prev_same_subject_mask[t] == 1:
+        if self_dependent and prev_same_subject_mask[t] == 1:
             prev_same = sample[..., prev_time_same_subject[t]]
         else:
             if initial_mean.shape[1] == 1:

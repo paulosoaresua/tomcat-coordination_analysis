@@ -58,6 +58,7 @@ def infer(out_dir: str,
           model_name: str,
           do_prior: bool,
           do_posterior: bool,
+          do_posterior_predictive: bool,
           seed: Optional[int],
           burn_in: int,
           num_samples: int,
@@ -83,7 +84,8 @@ def infer(out_dir: str,
         attributes and columns in the evidence dataframe.
     @param model_name: name of the model. One of ["vocalic, "vocalic_semantic"].
     @param do_prior: whether to perform prior predictive checks.
-    @param do_posterior: whether to fit the model and perform posterior predictive checks.
+    @param do_posterior: whether to fit the model.
+    @param do_posterior_predictive: whether to perform posterior predictive checks.
     @param seed: random seed for reproducibility.
     @param burn_in: number of samples in the warm-up phase.
     @param num_samples: number of samples from the posterior distribution.
@@ -223,6 +225,7 @@ def infer(out_dir: str,
             f'--model_name="{model_name}" '
             f'--do_prior={do_prior} '
             f'--do_posterior={do_posterior} '
+            f'--do_posterior_predictive={do_posterior_predictive} '
             f'--seed={seed} '
             f'--burn_in={burn_in} '
             f'--num_samples={num_samples} '
@@ -238,6 +241,21 @@ def infer(out_dir: str,
         if run_id_params_dict_filepath:
             call_python_script_command += (
                 f' --model_params_dict_filepath="{run_id_params_dict_filepath}"')
+
+        # When executing multiple runs in parallel, multiple issues can happen with Pytensor due
+        # to compilation and locks. So, before calling the sequential runs, we change the
+        # compilation directory such that we have a different directory per run.
+        comp_format = f"compiledir_{run_id}_{i}"  # compilation directory name format
+        pytensor_flags = f"PYTENSOR_FLAGS='compiledir_format={comp_format}," \
+                         f"base_compiledir={settings.pytensor_comp_dir}'"
+        call_python_script_command = f"{pytensor_flags} {call_python_script_command}"
+
+        # The environment variables below will make sure each chain does not take all the
+        # resources, slowing down inference. This will prevent chains from spawning threads of
+        # their own.
+        blas_flags = f"MKL_NUM_THREADS={num_chains} OMP_NUM_THREADS={num_chains} " \
+                     f"OPENBLAS_NUM_THREADS={num_chains}"
+        call_python_script_command = f"{blas_flags} {call_python_script_command}"
 
         print(f"\nCalling the following command in the TMUX window {tmux_window_name}.")
         print(call_python_script_command)
@@ -319,6 +337,15 @@ if __name__ == "__main__":
         required=False,
         default=1,
         help="Whether to perform posterior inference. Use the value 0 to deactivate.",
+    )
+    parser.add_argument(
+        "--do_posterior_predictive",
+        type=int,
+        required=False,
+        default=1,
+        help="Whether to perform posterior predictive check of the observations used to fit the "
+             "model. This is different than PPA, which predicts in held out data (future time "
+             "steps) not used to fit the model. Use the value 0 to deactivate.",
     )
     parser.add_argument(
         "--seed",
@@ -426,6 +453,7 @@ if __name__ == "__main__":
           model_name=args.model_name,
           do_prior=args.do_prior,
           do_posterior=args.do_posterior,
+          do_posterior_predictive=args.do_posterior_predictive,
           seed=args.seed,
           burn_in=args.burn_in,
           num_samples=args.num_samples,

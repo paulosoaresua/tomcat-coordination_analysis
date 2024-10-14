@@ -48,6 +48,7 @@ class Test2DGaussianLatentComponents(TestCase):
             prev_same_subject_mask=prev_time_same_subject_mask,
             prev_diff_subject_mask=prev_time_diff_subject_mask,
             self_dependent=True,
+            symmetry_mask=1,
         )
         real_lp = -2415.8952366775293
         self.assertAlmostEqual(lp.eval(), real_lp)
@@ -115,6 +116,7 @@ class Test2DGaussianLatentComponents(TestCase):
             sigma=sigma,
             coordination=coordination,
             self_dependent=True,
+            symmetry_mask=1,
         )
         real_lp = -1782.8003257041821
         self.assertAlmostEqual(lp.eval(), real_lp)

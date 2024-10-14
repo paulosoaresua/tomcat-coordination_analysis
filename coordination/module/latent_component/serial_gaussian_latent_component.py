@@ -64,6 +64,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
         initial_samples: Optional[np.ndarray] = None,
+        asymmetric_coordination: bool = False,
     ):
         """
         Creates a serial latent component.
@@ -131,6 +132,9 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             provided now, it can be set later via the module parameters variable.
         @param initial_samples: samples to use during a call to draw_samples. We complete with
             ancestral sampling up to the desired number of time steps.
+        @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
+            the value of a component for one subject depends on the negative of the combination of
+            the others.
         """
         super().__init__(
             uuid=uuid,
@@ -155,6 +159,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             observed_values=observed_values,
             mean_a0=mean_a0,
             sd_a=sd_a,
+            asymmetric_coordination=asymmetric_coordination,
         )
 
         self.sampling_time_scale_density = sampling_time_scale_density
@@ -463,6 +468,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
                 values[:, t] = norm(loc=mean, scale=sd).rvs(size=self.dimension_size)
             else:
                 c = coordination_sampled_series[time_steps_in_coordination_scale[t]]
+                c_mask = -1 if self.asymmetric_coordination else 1
 
                 if self.self_dependent:
                     # When there's self dependency, the component either depends on the previous
@@ -474,7 +480,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
                     prev_same = mean_a0[subject_idx_mean_a0]
 
                 mask_other = (prev_time_diff_subject[t] != -1).astype(int)
-                prev_other = values[..., prev_time_diff_subject[t]]
+                prev_other = values[..., prev_time_diff_subject[t]] * c_mask
 
                 blended_mean = (prev_other - prev_same) * c * mask_other + prev_same
 
@@ -549,6 +555,7 @@ class SerialGaussianLatentComponent(GaussianLatentComponent):
             prev_same_subject_mask,
             prev_diff_subject_mask,
             np.array(self.self_dependent),
+            -1 if self.asymmetric_coordination else 1,
             *self._get_extra_logp_params(),
         )
 
@@ -671,6 +678,7 @@ def log_prob(
     prev_same_subject_mask: ptt.TensorConstant,
     prev_diff_subject_mask: ptt.TensorConstant,
     self_dependent: ptt.TensorConstant,
+    symmetry_mask: ptt.TensorConstant,
 ) -> float:
     """
     Computes the log-probability function of a sample.
@@ -700,14 +708,15 @@ def log_prob(
     @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
         is -1.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @return: log-probability of the sample.
     """
 
     # We use 'prev_time_diff_subject' as meta-data to get the values from partners of the subjects
     # in each time step. We reshape to guarantee we don't create dimensions with unknown size in
     # case the first dimension of the sample component is one.
-    prev_other = sample[..., prev_time_diff_subject].reshape(
-        sample.shape
+    prev_other = (
+        sample[..., prev_time_diff_subject].reshape(sample.shape) * symmetry_mask
     )  # (dimension x time)
 
     # We use this binary mask to zero out entries with no observations from partners. We create an
@@ -752,6 +761,7 @@ def random(
     prev_same_subject_mask: np.ndarray,
     prev_diff_subject_mask: np.ndarray,
     self_dependent: bool,
+    symmetry_mask: ptt.TensorConstant,
     rng: Optional[np.random.Generator] = None,
     size: Optional[Tuple[int]] = None,
 ) -> np.ndarray:
@@ -782,6 +792,7 @@ def random(
     @param prev_diff_subject_mask: (time) a binary mask with 0 whenever prev_time_diff_subject
         is -1.
     @param self_dependent: a boolean indicating whether subjects depend on their previous values.
+    @param symmetry_mask: -1 if coordination is asymmetric, 1 otherwise.
     @param rng: random number generator.
     @param size: size of the sample.
 
@@ -800,7 +811,7 @@ def random(
     sample[..., 0] = rng.normal(loc=mean_0, scale=sd_0)
 
     for t in np.arange(1, T):
-        prev_other = sample[..., prev_time_diff_subject[t]]  # D
+        prev_other = sample[..., prev_time_diff_subject[t]] * symmetry_mask  # D
 
         # Previous sample from the same individual
         if self_dependent and prev_same_subject_mask[t] == 1:

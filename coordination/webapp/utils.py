@@ -9,8 +9,23 @@ import streamlit as st
 import xarray
 
 from coordination.inference.inference_data import InferenceData
-from coordination.webapp.constants import (DEFAULT_COLOR_PALETTE,
-                                           INFERENCE_PARAMETERS_DIR)
+from coordination.webapp.constants import DEFAULT_COLOR_PALETTE
+
+
+def disable_sidebar():
+    """
+    Removes button to collapse/expand sidebar via CSS.
+    """
+    st.markdown(
+        """
+    <style>
+        [data-testid="collapsedControl"] {
+            display: none
+        }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def get_inference_run_ids(inference_dir: str) -> List[str]:
@@ -58,25 +73,6 @@ class DropDownOption:
             return f"{self.prefix} {self.name}"
         else:
             return self.name
-
-
-def get_saved_execution_parameter_files() -> List[str]:
-    """
-    Gets the list of files with saved execution parameters.
-
-    @return: list of files with saved execution parameters.
-    """
-    if os.path.exists(INFERENCE_PARAMETERS_DIR):
-        saved_params_list = sorted(
-            [
-                f
-                for f in os.listdir(INFERENCE_PARAMETERS_DIR)
-                if os.path.isfile(f"{INFERENCE_PARAMETERS_DIR}/{f}")
-            ]
-        )
-        return saved_params_list
-
-    return []
 
 
 def create_dropdown_with_default_selection(
@@ -293,6 +289,7 @@ def plot_series(
     value_bounds: Optional[Tuple[float, float]] = None,
     figure: Optional[go.Figure] = None,
     color: Optional[str] = None,
+    marker: Optional[bool] = False,
 ) -> go.Figure:
     """
     Plots a time series with optional error bands.
@@ -306,6 +303,7 @@ def plot_series(
     @param figure: an optional existing figure to add curves to. If not provided, a new figure
         will be created.
     @param color: an optional color for the line and error bands.
+    @param marker: whether to put marker on points.
     @return: a figure with new plots added to it.
     """
 
@@ -323,7 +321,7 @@ def plot_series(
         go.Scatter(
             x=x,
             y=y,
-            mode="lines",
+            mode="lines+markers" if marker else "lines",
             line=dict(color=color),
             name=label,
             showlegend=label is not None,

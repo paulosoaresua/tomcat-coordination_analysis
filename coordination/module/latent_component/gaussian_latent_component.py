@@ -47,6 +47,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
         observed_values: Optional[TensorTypes] = None,
         mean_a0: Optional[Union[float, np.ndarray]] = None,
         sd_a: Optional[Union[float, np.ndarray]] = None,
+        asymmetric_coordination: bool = False,
     ):
         """
         Creates a latent component module.
@@ -90,6 +91,9 @@ class GaussianLatentComponent(LatentComponent, ABC):
         @param sd_a: standard deviation of the latent component Gaussian random walk. It needs to
             be given for sampling but not for inference if it needs to be inferred. If not
             provided now, it can be set later via the module parameters variable.
+        @param asymmetric_coordination: whether coordination is asymmetric or not. If asymmetric,
+            the value of a component for one subject depends on the negative of the combination of
+            the others.
         """
 
         super().__init__(
@@ -128,6 +132,7 @@ class GaussianLatentComponent(LatentComponent, ABC):
         self.mean_a0_random_variable = mean_a0_random_variable
         self.sd_a_random_variable = sd_a_random_variable
         self.time_steps_in_coordination_scale = time_steps_in_coordination_scale
+        self.asymmetric_coordination = asymmetric_coordination
 
     @property
     def dimension_coordinates(self) -> Union[List[str], np.ndarray]:

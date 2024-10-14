@@ -57,27 +57,29 @@ class VocalicModel(ModelTemplate):
         allow adjustment of time steps later if we want to fit/sample less time steps than the
         informed in the original config bundle.
         """
-        if "speech_vocalics" in self.metadata:
-            metadata: SerialMetadata = self.metadata["speech_vocalics"]
-            metadata.num_subjects = config_bundle.num_subjects
-            metadata.time_steps_in_coordination_scale = (
-                config_bundle.time_steps_in_coordination_scale
-            )
-            metadata.subject_indices = config_bundle.subject_indices
-            metadata.prev_time_same_subject = config_bundle.prev_time_same_subject
-            metadata.prev_time_diff_subject = config_bundle.prev_time_diff_subject
-            metadata.observed_values = config_bundle.observed_values
-            metadata.normalization_method = config_bundle.observation_normalization
-        else:
-            self.metadata["speech_vocalics"] = SerialMetadata(
-                num_subjects=config_bundle.num_subjects,
-                time_steps_in_coordination_scale=config_bundle.time_steps_in_coordination_scale,
-                subject_indices=config_bundle.subject_indices,
-                prev_time_same_subject=config_bundle.prev_time_same_subject,
-                prev_time_diff_subject=config_bundle.prev_time_diff_subject,
-                observed_values=config_bundle.observed_values,
-                normalization_method=config_bundle.observation_normalization,
-            )
+        if config_bundle.include_vocalic:
+            if "speech_vocalics" in self.metadata:
+                metadata: SerialMetadata = self.metadata["speech_vocalics"]
+                metadata.num_subjects = config_bundle.num_subjects
+                metadata.time_steps_in_coordination_scale = (
+                    config_bundle.time_steps_in_coordination_scale
+                )
+                metadata.subject_indices = config_bundle.subject_indices
+                metadata.prev_time_same_subject = config_bundle.prev_time_same_subject
+                metadata.prev_time_diff_subject = config_bundle.prev_time_diff_subject
+                metadata.observed_values = config_bundle.observed_values
+                metadata.normalization_method = config_bundle.observation_normalization
+            else:
+                self.metadata["speech_vocalics"] = SerialMetadata(
+                    num_subjects=config_bundle.num_subjects,
+                    time_steps_in_coordination_scale=config_bundle.time_steps_in_coordination_scale,
+                    subject_indices=config_bundle.subject_indices,
+                    prev_time_same_subject=config_bundle.prev_time_same_subject,
+                    prev_time_diff_subject=config_bundle.prev_time_diff_subject,
+                    observed_values=config_bundle.observed_values,
+                    normalization_method=config_bundle.observation_normalization,
+                )
+
         if config_bundle.include_semantic:
             if "semantic_link" in self.metadata:
                 metadata: NonSerialMetadata = self.metadata["semantic_link"]
@@ -149,10 +151,12 @@ class VocalicModel(ModelTemplate):
                 unbounded_coordination_observed_values=given_coordination,
             )
 
-        if bundle.state_space_2d:
-            groups = self._create_vocalic_2d_groups(bundle)
-        else:
-            groups = self._create_vocalic_groups(bundle)
+        groups = []
+        if bundle.include_vocalic:
+            if bundle.state_space_2d:
+                groups = self._create_vocalic_2d_groups(bundle)
+            else:
+                groups = self._create_vocalic_groups(bundle)
 
         if bundle.include_semantic:
             semantic_link_metadata: NonSerialMetadata = self.metadata.get(
@@ -186,7 +190,11 @@ class VocalicModel(ModelTemplate):
                 )
                 groups.append(semantic_link_group)
 
-        name = "vocalic"
+        if bundle.include_vocalic:
+            name = "vocalic"
+        else:
+            name = "no_vocalic"
+
         if bundle.state_space_2d:
             name += "_2d"
         if bundle.include_semantic:
@@ -263,6 +271,7 @@ class VocalicModel(ModelTemplate):
                     "name": None,
                     "features": bundle.vocalic_feature_names,
                     "weights": bundle.weights,
+                    "asymmetric_coordination": bundle.asymmetric_coordination,
                 }
             ]
 
@@ -294,6 +303,7 @@ class VocalicModel(ModelTemplate):
                 uuid=f"state_space{suffix}",
                 pymc_model=self.pymc_model,
                 num_subjects=bundle.num_subjects,
+                self_dependent=bundle.self_dependent_latent_states,
                 mean_mean_a0=bundle.mean_mean_a0,
                 sd_mean_a0=bundle.sd_mean_a0,
                 sd_sd_a=bundle.sd_sd_a,
@@ -313,6 +323,7 @@ class VocalicModel(ModelTemplate):
                 mean_a0=bundle.mean_a0,
                 sd_a=bundle.sd_a,
                 initial_samples=bundle.initial_state_space_samples,
+                asymmetric_coordination=vocalic_group["asymmetric_coordination"],
             )
 
             transformation = Sequential(
@@ -376,7 +387,7 @@ class VocalicModel(ModelTemplate):
             pymc_model=self.pymc_model,
             num_subjects=bundle.num_subjects,
             dimension_size=bundle.state_space_dimension_size,
-            self_dependent=True,
+            self_dependent=bundle.self_dependent_latent_states,
             mean_mean_a0=bundle.mean_mean_a0,
             sd_mean_a0=bundle.sd_mean_a0,
             sd_sd_a=bundle.sd_sd_a,
@@ -397,6 +408,7 @@ class VocalicModel(ModelTemplate):
             mean_a0=bundle.mean_a0,
             sd_a=bundle.sd_a,
             initial_samples=bundle.initial_state_space_samples,
+            asymmetric_coordination=bundle.asymmetric_coordination,
         )
 
         observation = SerialGaussianObservation(
@@ -451,13 +463,18 @@ class VocalicModel(ModelTemplate):
             idata.num_posterior_samples, num_samples, replace=False
         )
 
-        new_bundle.mean_a0 = idata.get_posterior_samples(
-            "state_space_mean_a0", samples_idx
-        )
-        new_bundle.sd_a = idata.get_posterior_samples("state_space_sd_a", samples_idx)
-        new_bundle.sd_o = idata.get_posterior_samples(
-            "speech_vocalics_sd_o", samples_idx
-        )
+        if config_bundle.include_vocalic:
+            new_bundle.mean_a0 = idata.get_posterior_samples(
+                "state_space_mean_a0", samples_idx
+            )
+            new_bundle.sd_a = idata.get_posterior_samples("state_space_sd_a", samples_idx)
+            new_bundle.sd_o = idata.get_posterior_samples(
+                "speech_vocalics_sd_o", samples_idx
+            )
+
+            new_bundle.initial_state_space_samples = idata.get_posterior_samples(
+                "state_space", samples_idx
+            )
 
         if config_bundle.constant_coordination:
             new_bundle.initial_coordination_samples = idata.get_posterior_samples(
@@ -474,13 +491,12 @@ class VocalicModel(ModelTemplate):
                 "coordination", samples_idx
             )
 
-        new_bundle.initial_state_space_samples = idata.get_posterior_samples(
-            "state_space", samples_idx
-        )
-
         if config_bundle.include_semantic:
-            new_bundle.sd_s = idata.get_posterior_samples(
-                "semantic_link_sd_s", samples_idx
-            )
+            new_bundle.sd_s = idata.get_posterior_samples("sd_s", samples_idx)
+            if new_bundle.sd_s is None:
+                # Retro-compatibility
+                new_bundle.sd_s = idata.get_posterior_samples(
+                    "semantic_link_p", samples_idx
+                )
 
         return new_bundle

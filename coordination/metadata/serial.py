@@ -140,8 +140,9 @@ class SerialMetadata(Metadata):
             obs = observations
             sub_idx = self.subject_indices
         else:
-            obs = observations[..., time_interval[0] : time_interval[1]]
-            sub_idx = self.subject_indices[..., time_interval[0] : time_interval[1]]
+            lb, ub = time_interval
+            obs = observations[..., lb:ub]
+            sub_idx = self.subject_indices[..., lb:ub]
 
         s_scaler: SerialScaler = self.scaler
         s_scaler.fit(obs, subject_indices=sub_idx, num_subjects=self.num_subjects)
@@ -161,8 +162,9 @@ class SerialMetadata(Metadata):
             obs = observations
             sub_idx = self.subject_indices
         else:
-            obs = observations[..., time_interval[0] : time_interval[1]]
-            sub_idx = self.subject_indices[..., time_interval[0] : time_interval[1]]
+            lb, ub = time_interval
+            obs = observations[..., lb:ub]
+            sub_idx = self.subject_indices[..., lb:ub]
 
         s_scaler: SerialScaler = self.scaler
         return s_scaler.transform(obs, subject_indices=sub_idx)

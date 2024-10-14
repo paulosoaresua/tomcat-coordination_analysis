@@ -180,8 +180,6 @@ class InferenceData:
             entry = [var, "yes" if mean < 1.1 or np.isnan(mean) else "no", mean, std]
             data.append(entry)
 
-        print(data)
-
         return pd.DataFrame(data, columns=header)
 
     def add(self, inference_data: InferenceData):
