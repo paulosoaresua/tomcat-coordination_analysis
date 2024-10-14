@@ -676,8 +676,8 @@ class BrainModel(ModelTemplate):
             )
 
         if new_bundle.common_cause:
-            new_bundle.mean_cc0 = idata.get_posterior_samples(f"mean_cc0", samples_idx)
-            new_bundle.sd_cc = idata.get_posterior_samples(f"sd_cc", samples_idx)
+            new_bundle.mean_cc0 = idata.get_posterior_samples(f"common_cause_mean_a0", samples_idx)
+            new_bundle.sd_cc = idata.get_posterior_samples(f"common_cause_sd_a", samples_idx)
             new_bundle.initial_common_cause_samples = idata.get_posterior_samples(
                 f"common_cause", samples_idx)
 
