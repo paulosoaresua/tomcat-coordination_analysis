@@ -30,12 +30,12 @@ This module represents a coordination variable that remains constant over time.
 
 This module models coordination as a variable that undergoes Gaussian transitions followed by a sigmoid transformation, ensuring the coordination values stay within the range $[0,1]$. The model equations are:
 
-$$
+```math
 \begin{align}
-u_t &\sim \mathcal{N}(u_{t-1},\sigma^2_c)\\
-C_t &= \text{sigmoid}(u_t),
+u_t \sim \mathcal{N}(u_{t-1},\sigma^2_c)\\
+C_t = \text{sigmoid}(u_t),
 \end{align}
-$$
+```
 
 where $u_t$ is an auxiliary variable representing an unbounded coordination value.
 
@@ -48,27 +48,27 @@ For clarity, we denote $c = C_{f^{n,p}(t)}$ in the subsequent formulas.
 #### SerialGaussianLatentComponent
 
 This component models pairwise interaction dynamics using a Gaussian random walk, ideal for data that occurs in a serial, turn-taking manner, such as conversational dynamics.
-$$
+```math
 A^{n,p}_t \sim \mathcal{N}((1-c)A^{n,p}_{t-1} + cA^{n,p'}_{t-1}, \sigma^{2}_{A^{n,p}}), ~\text{for}~ p \neq p'.
-$$
+```
 
 #### Serial2DGaussianLatentComponent
 
 A specific instance of the `SerialGaussianLatentComponent`, fixed to two dimensions—position and velocity—this component follows Newtonian dynamics moderated by coordination:
-$$
+```math
 \begin{align}
 S_t &= A^{n,p}_{t-1}[0] + A^{n,p}_{t-1}[1] \\
 V_t &= (1-c)A^{n,p}_{t-1}[1] + cA^{n,p'}_{t-1}[1]\\             
 A^{n,p}_t &\sim \mathcal{N}\left(\left[\begin{matrix}S_t\\V_t\end{matrix}\right], \sigma^{2}_{A^{n,p}}\right), ~\text{for}~ p \neq p
 \end{align}
-$$
+```
 
 #### NonSerialGaussianLatentComponent
 
 Designed for multi-party interactions, this component's dynamics are defined by a Gaussian random walk suitable for regularly intervalled data such as neural or physiological measures:
-$$
+```math
 A^{n,p}_t \sim \mathcal{N}((1-c)A^{n,p}_{t-1} + \frac{c}{|P|-1}\sum_{p' \in P-\{p\}}A^{n,p'}_{t-1}, \sigma^{2}_{A^{n,p}}),
-$$
+```
 where $P$ represents the group of individuals.
 
 #### NonSerial2DGaussianLatentComponent
@@ -86,9 +86,9 @@ Observation modules reside within the `coordination/module/observation` director
 #### SerialObservation
 
 Observations derived from a Gaussian distribution centered on the serial latent component.
-$$
+```math
 O^{n,p}_t \sim \mathcal{N}(A^{n,p}_t,\sigma^2_{O^{n,p}})
-$$
+```
 
 #### NonSerialObservation
 
@@ -97,9 +97,9 @@ Adaptation of `SerialObservation` for non-serial contexts.
 #### SpikeObservation
 
 Designed for sparse binary observations (e.g., semantic links), this module samples from a normal distribution centered at coordination values.
-$$
+```math
 O^{n,p}_t \sim \mathcal{N}(C_t,\sigma^2_{O^{n,p}})
-$$
+```
 This must be paired with the `NullLatentComponent` for correct use.
 
 ### Transformations
