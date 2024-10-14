@@ -158,6 +158,8 @@ vocalic_semantic_tomcat:
 #################################  BRAIN #############################################
 ######################################################################################
 
+# TODO: add make commands here.
+
 # Generate x-data dn c-data with x-model and c-models
 generate_ppa_synthetic_data_brain_model:
 	PYTHONPATH="." ./bin/generate_ppa_synthetic_data_brain_model
