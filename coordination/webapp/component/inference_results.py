@@ -1,3 +1,4 @@
+from typing import Optional, Union
 from ast import literal_eval
 
 import numpy as np
@@ -163,7 +164,7 @@ class InferenceResults:
     @st.cache_data
     def _get_ppa_results(
         inference_dir: str, run_id: str, experiment_id: str, sub_experiment_id: str
-    ) -> pd.DataFrame:
+    ) -> Optional[Union[str, pd.DataFrame]]:
         """
         Helper function to cache a convergence report. Generating a convergence report takes a
         while and we don't want to do it every time the page loads if we already loaded one before.
@@ -179,50 +180,5 @@ class InferenceResults:
         if not inference_run.ppa:
             return None
 
-        model = inference_run.model
-        if model is None:
-            return ":red[**Could not construct the model.**]"
-
-        data = inference_run.data
-        row_df = data[data["experiment_id"] == experiment_id].iloc[0]
-        # Populate config bundle with the data
-        inference_run.data_mapper.update_config_bundle(model.config_bundle, row_df)
-        w = inference_run.execution_params["ppa_window"]
-
-        if sub_experiment_id is None:
-            all_summaries = []
-            # Aggregate results for all sub_experiment_ids available.
-            for sub_experiment_id in inference_run.get_sub_experiment_ids(
-                experiment_id
-            ):
-                idata = inference_run.get_inference_data(
-                    experiment_id, sub_experiment_id
-                )
-                if idata is None:
-                    return None
-
-                all_summaries.append(
-                    model.get_ppa_summary(
-                        idata=idata,
-                        window_size=w,
-                        num_samples=100,
-                        seed=0,
-                    )
-                )
-
-            df_concat = pd.concat(all_summaries)
-            summary_df = (
-                df_concat.groupby(df_concat.columns[:-w].tolist(), axis=0)
-                .mean()
-                .reset_index()
-            )
-        else:
-            idata = inference_run.get_inference_data(experiment_id, sub_experiment_id)
-            summary_df = model.get_ppa_summary(
-                idata=idata,
-                window_size=w,
-                num_samples=100,
-                seed=0,
-            )
-
-        return summary_df
+        df = inference_run.get_ppa_results(experiment_id, sub_experiment_id)
+        return ":red[**Could not construct the model.**]" if df is None else df

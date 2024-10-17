@@ -6,6 +6,7 @@ import subprocess
 from typing import Dict, List, Optional
 
 import pandas as pd
+import numpy as np
 
 from coordination.common.config import settings
 from coordination.inference.inference_data import InferenceData
@@ -22,7 +23,7 @@ class InferenceRun:
     """
 
     def __init__(
-        self, inference_dir: str, run_id: str, data_dir: str = settings.data_dir
+            self, inference_dir: str, run_id: str, data_dir: str = settings.data_dir
     ):
         """
         Creates an inference run object.
@@ -162,7 +163,7 @@ class InferenceRun:
         return None
 
     def get_inference_data(
-        self, experiment_id: str, sub_experiment_id: Optional[str] = None
+            self, experiment_id: str, sub_experiment_id: Optional[str] = None
     ) -> InferenceData:
         """
         Gets inference data of an experiment.
@@ -265,3 +266,60 @@ class InferenceRun:
         return sorted(
             [d for d in os.listdir(exp_dir) if os.path.isdir(f"{exp_dir}/{d}")]
         )
+
+    def get_ppa_results(
+            self,
+            experiment_id: str,
+            sub_experiment_id: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """
+        Computes PPA results for an experiment.
+
+        @param experiment_id: experiment ID.
+        @param sub_experiment_id: an optional sub-experiment ID. If provided, PPA will be computed
+            for the sub-experiment only. Otherwise, it will be aggregated across all
+            sub-experiments of an experiment.
+        @return:
+        """
+        if self.model is None:
+            return None
+
+        row_df = self.data[self.data["experiment_id"] == experiment_id].iloc[0]
+
+        # Populate config bundle with the data
+        model = self.model
+        self.data_mapper.update_config_bundle(model.config_bundle, row_df)
+        w = self.execution_params["ppa_window"]
+
+        if sub_experiment_id is None:
+            all_summaries = []
+            # Aggregate results for all sub_experiment_ids available.
+            for sub_experiment_id in self.get_sub_experiment_ids(experiment_id):
+                idata = self.get_inference_data(experiment_id, sub_experiment_id)
+                if idata is None:
+                    return None
+
+                all_summaries.append(
+                    model.get_ppa_summary(
+                        idata=idata,
+                        window_size=w,
+                        num_samples=100,
+                        seed=0,
+                    )
+                )
+
+            summary_df = pd.concat(all_summaries)
+        else:
+            idata = self.get_inference_data(experiment_id, sub_experiment_id)
+            summary_df = model.get_ppa_summary(
+                idata=idata,
+                window_size=w,
+                num_samples=100,
+                seed=0,
+            )
+
+        # RMSE across the sub-experiments selected
+        non_window_cols = summary_df.columns[:-w].tolist()
+        summary_df = (np.sqrt(summary_df.groupby(non_window_cols, axis=0)
+                              .mean()).reset_index())
+
+        return summary_df
