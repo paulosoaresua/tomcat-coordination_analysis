@@ -208,8 +208,8 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             if t == 0:
                 if self.common_cause:
                     c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
-                    blended_mean = (1 - c) * mean_a0 + c[:, None, None] * sampled_common_cause[
-                        ..., t]
+                    blended_mean = (1 - c)[:, None, None] * mean_a0 + c[:, None, None] * sampled_common_cause[
+                        ..., t].repeat(mean_a0.shape[1], axis=1)
                     values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
                 else:
                     values[..., 0] = norm(loc=mean_a0, scale=sd_a).rvs(
@@ -229,7 +229,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     c_mask = -1 if self.asymmetric_coordination else 1
 
                     if self.common_cause:
-                        prev_others = sampled_common_cause[..., t]
+                        prev_others = sampled_common_cause[..., t].repeat(mean_a0.shape[1], axis=1)
                     else:
                         # n x s x d
                         prev_others = (
