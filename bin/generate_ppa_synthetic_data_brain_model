@@ -192,8 +192,8 @@ models = [
     # ("c_model_shift", c_model_shift),
     # ("c_model_gsr", c_model_gsr),
     # ("c_model_high", c_model_high)
-    ("c_cc_model_low", c_cc_model_low),
-    ("cc_model", cc_model)
+    ("c_cc_data_low", c_cc_model_low),
+    ("cc_data", cc_model)
 ]
 
 for data_name, model in models:
