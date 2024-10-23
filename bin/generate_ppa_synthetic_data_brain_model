@@ -184,7 +184,7 @@ c_model_shift = get_c_model_shift(0.2, 0.8)
 c_model_gsr = get_c_model_plus_gsr(0.2)
 c_model_high = get_c_model(0.6)
 c_cc_model_low = get_c_plus_cc_model(0.2)
-c_cc_model = get_cc_model()
+cc_model = get_cc_model()
 
 models = [
     # ("x_data", x_model),
@@ -193,7 +193,7 @@ models = [
     # ("c_model_gsr", c_model_gsr),
     # ("c_model_high", c_model_high)
     ("c_cc_model_low", c_cc_model_low),
-    ("c_cc_model", c_cc_model)
+    ("cc_model", cc_model)
 ]
 
 for data_name, model in models:
