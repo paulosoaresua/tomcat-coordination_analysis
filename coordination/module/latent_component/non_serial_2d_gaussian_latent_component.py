@@ -368,7 +368,6 @@ def common_cause_log_prob(
     # (S, D, T-1)
     previous_values = sample[:, :, :-1]
     current_values = sample[:, :, 1:]
-
     # ====================================================================================
     # [TODO] Maybe not need, but I copy here for the sum_matrix_others
     if self_dependent.eval():
@@ -391,31 +390,28 @@ def common_cause_log_prob(
         )  # S x 2 x T-1
      # ====================================================================================
 
+    coordination=coordination/coordination.sum(axis=0)[None,:]
     # t0
     total_logp = pm.logp(
         pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
         sample[..., 0]
     )
     total_logp = total_logp.sum()
-
     # c1 for prev_others
-    c1 = coordination[0, 0, :-1]
+    c1 = coordination[0, :-1]
     # c2 for prev_same
-    c2 = coordination[0, 1, :-1]
-    c1 = coordination[0, 0, 1:]  
-    c2 = coordination[0, 1, 1:]
+    c2 = coordination[1, :-1]
+    c3 = coordination[2, 1: ]
     # 1 x 1 x T-1   
-    c1 = c1.dimshuffle('x', 'x', 0)  
+    c1 = c1.dimshuffle('x', 'x', 0)
+    print(c1.eval())
     # 1 x 1 x T-1
     c2 = c2.dimshuffle('x', 'x', 0)  
-    one_minus_c1c2 = 1 - c1 - c2
+    print(c2.eval())
+    c3 = c3.dimshuffle('x', 'x', 0)
 
-     # (S, T-1)
-    blended_mean_0 = previous_values[:, 0, :] + previous_values[:, 1, :]
-    # (S, T-1)
-    blended_mean_1 = c1 * prev_others + c2 * previous_values[:, 1, :] + one_minus_c1c2 * common_cause[:, 1, 1:]
-    # (S, D, T-1)
-    blended_mean = ptt.stack([blended_mean_0, blended_mean_1], axis=1)
+    blended_mean = c1 * prev_others[:, :, ] + c2 * prev_same + c3 * common_cause[:, :, 1:]
+
 
     sigma = sigma[:, :, None]
     logp = pm.logp(
@@ -423,7 +419,8 @@ def common_cause_log_prob(
         current_values
     )
     total_logp += logp.sum()
-
+    print(total_logp.eval())
+    print(426)
     return total_logp
 
 
