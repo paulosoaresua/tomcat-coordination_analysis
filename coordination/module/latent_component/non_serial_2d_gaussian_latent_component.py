@@ -224,7 +224,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     blended_mean = prev_same
                 else:
                     # ================= [TODO] SPLIT ====================
-                    # [TODO!!] c1 and c2 should be sum to 1, this is unnorm.
+                    # [TODO!!] c1 and c2 should be sum to 1, this is norm.
                     # c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
                     c1 = sampled_coordination[0, 0, time_steps_in_coordination_scale[t - 1]]
                     c2 = sampled_coordination[0, 1, time_steps_in_coordination_scale[t - 1]]
