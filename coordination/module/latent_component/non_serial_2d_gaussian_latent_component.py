@@ -45,6 +45,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
             share_sd_a_across_subjects: bool = DEFAULT_SHARING_ACROSS_SUBJECTS,
             share_sd_a_across_dimensions: bool = DEFAULT_SHARING_ACROSS_DIMENSIONS,
             subject_names: Optional[List[str]] = None,
+            # [TODO] Coodination Samples passed as a 1 x 2 x T [c1 is coordination, c2 is individual]
             coordination_samples: Optional[ModuleSamples] = None,
             coordination_random_variable: Optional[pm.Distribution] = None,
             latent_component_random_variable: Optional[pm.Distribution] = None,
@@ -166,6 +167,9 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
         S_a(t) = S_a(t-1) + V_a(t-1)dt
         V_a(t) = (1 - C(t))*V_a(t-1) + C(t)*V_b(t-1),
 
+
+        NEW: A(t) = c1(t-1) * A(t-1) + c2(t-1) * B(t-1) + (1 - c1(t-1) - c2(t-1)) * X_t
+
         where, "S" is position, "V" speed, "V_a" is the previous velocities of the subject and V_b
         the scaled sum of the previous velocities of other subjects: (V1 + V2 + ... Vn-1) /
         (n - 1). We set dt to be 1, meaning it jumps one time step in the component's scale instead of "n"
@@ -219,39 +223,84 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 if self.single_chain:
                     blended_mean = prev_same
                 else:
-                    c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
+                    # ================= [TODO] SPLIT ====================
+                    # [TODO!!] c1 and c2 should be sum to 1, this is unnorm.
+                    # c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
+                    c1 = sampled_coordination[0, 0, time_steps_in_coordination_scale[t - 1]]
+                    c2 = sampled_coordination[0, 1, time_steps_in_coordination_scale[t - 1]]
+
+                    c1 = np.array(c1)
+                    c2 = np.array(c2)
+
+                    c_sum = c1 + c2
+                    c1 = c1 / c_sum
+                    c2 = c2 / c_sum
+
+                    c1 = c1[:, None, None]  # n x 1 x 1
+                    c2 = c2[:, None, None]  # n x 1 x 1
+                    # ================= [END] SPLIT ====================
                     c_mask = -1 if self.asymmetric_coordination else 1
 
                     if self.common_cause:
-                        prev_others = sampled_common_cause[..., t].repeat(mean_a0.shape[1], axis=1)
+                        X_t_current = sampled_common_cause[..., t].repeat(mean_a0.shape[1], axis=1)
+                        # n x s x d
+                        prev_others = (
+                                np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
+                                * c_mask
+                        )
+                        dt_diff = 1
+                        F = np.array([[1.0, dt_diff], [0.0, 0.0]])[None, :].repeat(
+                            num_series, axis=0
+                        )
+                        F[:, 1, 1] = c2
+
+                        U1 = np.zeros((num_series, 2, 2))
+                        U1[:, 1, 1] = c1
+
+                        U2 = np.zeros((num_series, 2, 2))
+                        U2[:, 1, 1] = 1-c1-c2
+
+
+                        blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
+                            "kij,klj->kli", U1, prev_others) + np.einsum("kij,klj->kli", U2, X_t_current)
+
+
                     else:
+                    # [TODO] if we add a normalizer to c1, we need to normalize back.
+                            # Ensure c1 and c2 are numpy arrays
+
+                        epsilon = 1e-8
+                        denominator = 1 - c2 + epsilon
+                        c = c1 / denominator
+
+                        c = c[:, None, None]  # Shape: n x 1 x 1
                         # n x s x d
                         prev_others = (
                                 np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
                                 * c_mask
                         )
 
-                    # The matrix F multiplied by the state of a component "a" at time t - 1
-                    # ([P(t-1), S(t-1)]) gives us:
-                    #
-                    # P_a(t) = P_a(t-1) + S_a(t-1)dt
-                    # S_a(t) = (1 - C(t))*S_a(t-1)
-                    #
-                    # Then we just need to sum with [0, c(t)*S_b(t-1)] to obtain the updated
-                    # state of the component. Which can be accomplished with
-                    # U*[P_b(t-1), S_b(t-1)]
-                    dt_diff = 1
-                    F = np.array([[1.0, dt_diff], [0.0, 0.0]])[None, :].repeat(
-                        num_series, axis=0
-                    )
-                    F[:, 1, 1] = 1 - c
+                        # The matrix F multiplied by the state of a component "a" at time t - 1
+                        # ([P(t-1), S(t-1)]) gives us:
+                        #
+                        # P_a(t) = P_a(t-1) + S_a(t-1)dt
+                        # S_a(t) = (1 - C(t))*S_a(t-1)
+                        #
+                        # Then we just need to sum with [0, c(t)*S_b(t-1)] to obtain the updated
+                        # state of the component. Which can be accomplished with
+                        # U*[P_b(t-1), S_b(t-1)]
+                        dt_diff = 1
+                        F = np.array([[1.0, dt_diff], [0.0, 0.0]])[None, :].repeat(
+                            num_series, axis=0
+                        )
+                        F[:, 1, 1] = 1 - c
 
-                    U = np.zeros((num_series, 2, 2))
-                    U[:, 1, 1] = c
+                        U = np.zeros((num_series, 2, 2))
+                        U[:, 1, 1] = c
 
-                    blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
-                        "kij,klj->kli", U, prev_others
-                    )
+                        blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
+                            "kij,klj->kli", U, prev_others
+                        )
 
                 values[..., t] = norm(loc=blended_mean, scale=sd_a[None, :]).rvs()
 
@@ -316,6 +365,31 @@ def common_cause_log_prob(
     S = sample.shape[0]
     D = sample.shape[1]
     T = sample.shape[2]
+    # (S, D, T-1)
+    previous_values = sample[:, :, :-1]
+    current_values = sample[:, :, 1:]
+
+    # ====================================================================================
+    # [TODO] Maybe not need, but I copy here for the sum_matrix_others
+    if self_dependent.eval():
+        # The component's value for a subject depends on its previous value for the same subject.
+        prev_same = sample[..., :-1]  # S x 2 x T-1
+    else:
+        # The component's value for a subject does not depend on its previous value for the same
+        # subject. At every time step, the value from others is blended with a fixed value given
+        # by the component's initial mean.
+        prev_same = initial_mean[:, :, None].repeat(T - 1, axis=-1)
+    if S.eval() == 1:
+        # Single chain
+        blended_mean = prev_same
+    else:
+        # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
+        # We discard the last value as that is not a previous value of any other.
+        sum_matrix_others = (ptt.ones((S, S)) - ptt.eye(S)) / (S - 1)
+        prev_others = (
+                ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
+        )  # S x 2 x T-1
+     # ====================================================================================
 
     # t0
     total_logp = pm.logp(
@@ -323,21 +397,23 @@ def common_cause_log_prob(
         sample[..., 0]
     )
     total_logp = total_logp.sum()
-    # t > 0
-    # (S, D, T-1)
-    previous_values = sample[:, :, :-1]
-    # (S, D, T-1)
-    current_values = sample[:, :, 1:]
-    # (T-1,)
-    c = coordination[1:]
 
-    # (1, T-1)
-    c = c.dimshuffle('x', 0)
-    one_minus_c = 1 - c
-    # (S, T-1)
+    # c1 for prev_others
+    c1 = coordination[0, 0, :-1]
+    # c2 for prev_same
+    c2 = coordination[0, 1, :-1]
+    c1 = coordination[0, 0, 1:]  
+    c2 = coordination[0, 1, 1:]
+    # 1 x 1 x T-1   
+    c1 = c1.dimshuffle('x', 'x', 0)  
+    # 1 x 1 x T-1
+    c2 = c2.dimshuffle('x', 'x', 0)  
+    one_minus_c1c2 = 1 - c1 - c2
+
+     # (S, T-1)
     blended_mean_0 = previous_values[:, 0, :] + previous_values[:, 1, :]
     # (S, T-1)
-    blended_mean_1 = one_minus_c * previous_values[:, 1, :] + c * common_cause[:, 1, 1:]
+    blended_mean_1 = c1 * prev_others + c2 * previous_values[:, 1, :] + one_minus_c1c2 * common_cause[:, 1, 1:]
     # (S, D, T-1)
     blended_mean = ptt.stack([blended_mean_0, blended_mean_1], axis=1)
 
@@ -409,7 +485,10 @@ def log_prob(
         # Coordination does not affect the component in the first time step because the subjects have
         # no previous dependencies at that time.
         # c = coordination[None, None, 1:]  # 1 x 1 x T-1
-        c = coordination[1:]
+        # [TODO] coordination is 2d now, need another normalizer because we regardless of c2.
+        c1 = coordination[0,0,1:]
+        c2 = coordination[0,1,1:]
+        c = c1 / ( 1 - c2 )
 
         # The dimensions of F and U are: T-1 x 2 x 2
         T = c.shape[0]
