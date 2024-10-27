@@ -420,18 +420,19 @@ def common_cause_log_prob(
             U1, prev_others.T, axes=[(2,), (1,)]
         ).T
         common_cause_transformed = ptt.batched_tensordot(
-            U1, common_cause[..., 1:].T, axes=[(2,), (1,)]
+            U2, common_cause[..., 1:].T, axes=[(2,), (1,)]
         ).T
 
         blended_mean = prev_other_transformed + prev_same_transformed + common_cause_transformed
 
     sd = sigma[:, :, None]
 
-    total_logp += pm.logp(
+    logp = pm.logp(
         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
         sample[..., 1:],
-    ).sum()
-
+    )
+    print(logp.eval())
+    total_logp += logp.sum()
     return total_logp
 
 def log_prob(
