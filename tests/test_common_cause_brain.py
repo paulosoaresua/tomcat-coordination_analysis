@@ -106,13 +106,13 @@ total_logp = np.sum(norm.logpdf(np.array([0.1, 0.2]), loc=np.array([0.3, 0.4]), 
 total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.array([.4, 0.5]), scale=np.array([0.02, 0.03])))
 total_logp += np.sum(norm.logpdf(np.array([0.5, 0.9]), loc=np.array([0.5, 0.6]), scale=np.array([0.03, 0.04])))
 
-total_logp += np.sum(norm.logpdf(np.array([0.2, 0.3]), loc=np.dot(np.array([[1, 1], [0, 0.5/1.5]]), np.array([0.1, 0.2])) + np.dot(np.array([[0, 0], [0, 0.1/1.5]]), np.array([0.4, 0.65])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.01, 0.02])))
-total_logp += np.sum(norm.logpdf(np.array([0.4, 0.5]), loc=np.dot(np.array([[1, 1], [0, 0.5/1.5]]), np.array([0.3, 0.4])) + np.dot(np.array([[0, 0], [0, 0.1/1.5]]), np.array([0.3, 0.55])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.02, 0.03])))
-total_logp += np.sum(norm.logpdf(np.array([0.6, 1.0]), loc=np.dot(np.array([[1, 1], [0, 0.5/1.5]]), np.array([0.5, 0.9])) + np.dot(np.array([[0, 0], [0, 0.1/1.5]]), np.array([0.2, 0.30])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.03, 0.04])))
+total_logp += np.sum(norm.logpdf(np.array([0.2, 0.3]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.1, 0.2])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.4, 0.65])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.01, 0.02])))
+total_logp += np.sum(norm.logpdf(np.array([0.4, 0.5]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.3, 0.4])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.3, 0.55])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.02, 0.03])))
+total_logp += np.sum(norm.logpdf(np.array([0.6, 1.0]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.5, 0.9])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.2, 0.30])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.03, 0.04])))
 
-total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.2, 0.3])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.5, 0.75])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.01, 0.02])))
-total_logp += np.sum(norm.logpdf(np.array([0.5, 0.6]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.4, 0.65])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.02, 0.03])))
-total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.6, 1.0])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.3, 0.40])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.03, 0.04])))
+total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 1], [0, 0.3/2.1]]), np.array([0.2, 0.3])) + np.dot(np.array([[0, 0], [0, 0.7/2.1]]), np.array([0.5, 0.75])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.01, 0.02])))
+total_logp += np.sum(norm.logpdf(np.array([0.5, 0.6]), loc=np.dot(np.array([[1, 1], [0, 0.3/2.1]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.7/2.1]]), np.array([0.4, 0.65])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.02, 0.03])))
+total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 1], [0, 0.3/2.1]]), np.array([0.6, 1.0])) + np.dot(np.array([[0, 0], [0, 0.7/2.1]]), np.array([0.3, 0.40])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.03, 0.04])))
 
         [[-196.31376835  -47.00691553]0
         [  -9.50691553   -2.96793619]
@@ -139,7 +139,7 @@ total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 
             self_dependent=ptt.constant(True),
             symmetry_mask=1
         )
-        total_logp = -1975.2309040054615
+        total_logp = -1960.5098855569297
 
         self.assertAlmostEqual(lp.eval(), total_logp)
 

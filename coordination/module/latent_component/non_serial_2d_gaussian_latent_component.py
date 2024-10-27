@@ -398,16 +398,16 @@ def common_cause_log_prob(
     )
     total_logp = total_logp.sum()
     # c1 for prev_others
-    c1 = coordination[0, :-1]
+    c1 = coordination[0, 1:]
     # c2 for prev_same
-    c2 = coordination[1, :-1]
-    c3 = coordination[2, 1: ]
+    c2 = coordination[1, 1:]
+    c3 = coordination[2, 1:]
     # 1 x 1 x T-1   
     c1 = c1.dimshuffle('x', 'x', 0)
     print(c1.eval())
     # 1 x 1 x T-1
     c2 = c2.dimshuffle('x', 'x', 0)  
-    print(c2.eval())
+    # 1 x 1 x T-1
     c3 = c3.dimshuffle('x', 'x', 0)
 
     blended_mean = c1 * prev_others[:, :, ] + c2 * prev_same + c3 * common_cause[:, :, 1:]
