@@ -226,18 +226,19 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                     # ================= [TODO] SPLIT ====================
                     # [TODO!!] c1 and c2 should be sum to 1, this is norm.
                     # c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
-                    c1 = sampled_coordination[0, 0, time_steps_in_coordination_scale[t - 1]]
-                    c2 = sampled_coordination[0, 1, time_steps_in_coordination_scale[t - 1]]
+                    coordination = coordination / coordination.sum(axis=0)[None,:]
 
+                    # (T-1,). C1 is individual, C2 is coordination, C3 is common cause. I have shuffled them.
+                    c1 = coordination[0, 1:]  
+                    c2 = coordination[1, 1:]
+                    c3 = coordination[2, 1:]
                     c1 = np.array(c1)
                     c2 = np.array(c2)
-
-                    c_sum = c1 + c2
-                    c1 = c1 / c_sum
-                    c2 = c2 / c_sum
+                    c3 = np.array(c3)
 
                     c1 = c1[:, None, None]  # n x 1 x 1
                     c2 = c2[:, None, None]  # n x 1 x 1
+                    c3 = c2[:, None, None]  # n x 1 x 1
                     # ================= [END] SPLIT ====================
                     c_mask = -1 if self.asymmetric_coordination else 1
 
@@ -258,7 +259,7 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                         U1[:, 1, 1] = c1
 
                         U2 = np.zeros((num_series, 2, 2))
-                        U2[:, 1, 1] = 1-c1-c2
+                        U2[:, 1, 1] = c3
 
 
                         blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
@@ -266,13 +267,6 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
 
 
                     else:
-                    # [TODO] if we add a normalizer to c1, we need to normalize back.
-                            # Ensure c1 and c2 are numpy arrays
-
-                        epsilon = 1e-8
-                        denominator = 1 - c2 + epsilon
-                        c = c1 / denominator
-
                         c = c[:, None, None]  # Shape: n x 1 x 1
                         # n x s x d
                         prev_others = (
