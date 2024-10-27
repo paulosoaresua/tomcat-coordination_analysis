@@ -406,6 +406,9 @@ def common_cause_log_prob(
 
         U2 = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
         U2 = ptt.set_subtensor(U2[:, 1, 1], c3)
+        print("F",F.eval())
+        print("U1",U1.eval())
+        print("U2",U2.eval())
         # We transform the sample using the fundamental matrix so that we learn to generate samples
         # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
         # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
