@@ -385,12 +385,12 @@ def common_cause_log_prob(
         c1 = coordination[0, 1:]  
         c2 = coordination[1, 1:]
         c3 = coordination[2, 1:]
-        print(c1.eval(),"c1")
-        print(c2.eval(),"c2")
-        print(c3.eval(),"c3")
+        # print(c1.eval(),"c1")
+        # print(c2.eval(),"c2")
+        # print(c3.eval(),"c3")
 
         T = c1.shape[0]
-        print(T.eval())
+        # print(T.eval())
         # The dimensions of F and U are: T-1 x 2 x 2
         F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
         F = ptt.set_subtensor(F[:, 1, 1], c2)
@@ -400,9 +400,9 @@ def common_cause_log_prob(
 
         U2 = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
         U2 = ptt.set_subtensor(U2[:, 1, 1], c3)
-        print("F",F.eval())
-        print("U1",U1.eval())
-        print("U2",U2.eval())
+        # print("F",F.eval())
+        # print("U1",U1.eval())
+        # print("U2",U2.eval())
         # We transform the sample using the fundamental matrix so that we learn to generate samples
         # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
         # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
@@ -428,7 +428,7 @@ def common_cause_log_prob(
         pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
         sample[..., 1:],
     )
-    print(logp.eval())
+    # print(logp.eval())
     total_logp += logp.sum()
     return total_logp
 
