@@ -423,7 +423,7 @@ def common_cause_log_prob(
             U1, common_cause[..., 1:].T, axes=[(2,), (1,)]
         ).T
 
-        blended_mean = prev_other_transformed + prev_same_transformed
+        blended_mean = prev_other_transformed + prev_same_transformed + common_cause_transformed
 
     sd = sigma[:, :, None]
 
