@@ -365,21 +365,18 @@ def common_cause_log_prob(
     S = sample.shape[0]
     D = sample.shape[1]
     T = sample.shape[2]
-    # (S, D, T-1)
-    previous_values = sample[:, :, :-1]
-    current_values = sample[:, :, 1:]
-    # ====================================================================================
-    # [TODO] Maybe not need, but I copy here for the sum_matrix_others
+
+    total_logp = pm.logp(
+        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
+        sample[..., 0]
+    ).sum()
+    # S x D x T-1
     if self_dependent.eval():
-        # The component's value for a subject depends on its previous value for the same subject.
-        prev_same = sample[..., :-1]  # S x 2 x T-1
+        prev_same = sample[..., :-1]
     else:
-        # The component's value for a subject does not depend on its previous value for the same
-        # subject. At every time step, the value from others is blended with a fixed value given
-        # by the component's initial mean.
         prev_same = initial_mean[:, :, None].repeat(T - 1, axis=-1)
+
     if S.eval() == 1:
-        # Single chain
         blended_mean = prev_same
     else:
         # Contains the sum of previous values of other subjects for each subject scaled by 1/(S-1).
@@ -388,41 +385,54 @@ def common_cause_log_prob(
         prev_others = (
                 ptt.tensordot(sum_matrix_others, sample, axes=(1, 0))[..., :-1] * symmetry_mask
         )  # S x 2 x T-1
-     # ====================================================================================
+        coordination = coordination / coordination.sum(axis=0)[None,:]
 
-    coordination=coordination/coordination.sum(axis=0)[None,:]
-    # t0
-    total_logp = pm.logp(
-        pm.Normal.dist(mu=initial_mean, sigma=sigma, shape=(S, D)),
-        sample[..., 0]
-    )
-    total_logp = total_logp.sum()
-    # c1 for prev_others
-    c1 = coordination[0, 1:]
-    # c2 for prev_same
-    c2 = coordination[1, 1:]
-    c3 = coordination[2, 1:]
-    # 1 x 1 x T-1   
-    c1 = c1.dimshuffle('x', 'x', 0)
-    print(c1.eval())
-    # 1 x 1 x T-1
-    c2 = c2.dimshuffle('x', 'x', 0)  
-    # 1 x 1 x T-1
-    c3 = c3.dimshuffle('x', 'x', 0)
+        # (T-1,). C1 is individual, C2 is coordination, C3 is common cause. I have shuffled them.
+        c1 = coordination[0, 1:]  
+        c2 = coordination[1, 1:]
+        c3 = coordination[2, 1:]
+        print(c1.eval(),"c1")
+        print(c2.eval(),"c2")
+        print(c3.eval(),"c3")
 
-    blended_mean = c1 * prev_others[:, :, ] + c2 * prev_same + c3 * common_cause[:, :, 1:]
+        T = c1.shape[0]
+        print(T.eval())
+        # The dimensions of F and U are: T-1 x 2 x 2
+        F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
+        F = ptt.set_subtensor(F[:, 1, 1], c2)
 
+        U1 = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
+        U1 = ptt.set_subtensor(U1[:, 1, 1], c1)
 
-    sigma = sigma[:, :, None]
-    logp = pm.logp(
-        pm.Normal.dist(mu=blended_mean, sigma=sigma),
-        current_values
-    )
-    total_logp += logp.sum()
-    print(total_logp.eval())
-    print(426)
+        U2 = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
+        U2 = ptt.set_subtensor(U2[:, 1, 1], c3)
+        # We transform the sample using the fundamental matrix so that we learn to generate samples
+        # with the underlying system dynamics. If we just compare a sample with the blended_mean, we
+        # are assuming the samples follow a random gaussian walk. Since we know the system dynamics,
+        # we can add that to the log-probability such that the samples are effectively coming from the
+        # component's posterior.
+        #
+        # prev_same.T has dimensions T-1 x 2 x S. The first dimension of both F and prev_same.T is T-1
+        # and used as the batch dimension. The result of batched_tensordot will have dimensions
+        # T-1 x 2 x S. Transposing that results in S x 2 x T-1 as desired.
+        prev_same_transformed = ptt.batched_tensordot(F, prev_same.T, axes=[(2,), (1,)]).T
+        prev_other_transformed = ptt.batched_tensordot(
+            U1, prev_others.T, axes=[(2,), (1,)]
+        ).T
+        common_cause_transformed = ptt.batched_tensordot(
+            U1, common_cause[..., 1:].T, axes=[(2,), (1,)]
+        ).T
+
+        blended_mean = prev_other_transformed + prev_same_transformed
+
+    sd = sigma[:, :, None]
+
+    total_logp += pm.logp(
+        pm.Normal.dist(mu=blended_mean, sigma=sd, shape=blended_mean.shape),
+        sample[..., 1:],
+    ).sum()
+
     return total_logp
-
 
 def log_prob(
         sample: ptt.TensorVariable,
@@ -431,7 +441,7 @@ def log_prob(
         coordination: ptt.TensorVariable,
         self_dependent: ptt.TensorConstant,
         symmetry_mask: int,
-) -> ptt.TensorVariable:
+) -> float:
     """
     Computes the log-probability function of a sample.
 
@@ -482,10 +492,7 @@ def log_prob(
         # Coordination does not affect the component in the first time step because the subjects have
         # no previous dependencies at that time.
         # c = coordination[None, None, 1:]  # 1 x 1 x T-1
-        # [TODO] coordination is 2d now, need another normalizer because we regardless of c2.
-        c1 = coordination[0,0,1:]
-        c2 = coordination[0,1,1:]
-        c = c1 / ( 1 - c2 )
+        c = coordination[1:]  # 1 x 1 x T-1
 
         # The dimensions of F and U are: T-1 x 2 x 2
         T = c.shape[0]

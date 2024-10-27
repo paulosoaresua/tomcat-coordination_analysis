@@ -47,30 +47,6 @@ class Test2DCommonCause(TestCase):
     def test_common_cause_2d_latent_component_log_prob(self):
         # TODO: [Ming] Find the real value of log prob and implement the common_cause_log_prob.
         # 3 subjects, 2 features and 3 time steps
-        '''
-        sample: (3,2,3) - 3 subjects, 2 features, 3 time steps.
-        initial_mean: (3,2) - Initial mean for each subject.
-        sigma: (3,2) - Standard deviation for each subject.
-        coordination: (3) - Coordination values across 3 time steps.
-        common_cause: (1,2,3) - Needs to be expanded to match subjects. => (3,2,3)
-        '''
-
-        '''
-        # Time t=0 
-        mu_t0 = coordination[0] * common_cause[:, 0] + (1 - coordination[0]) * mu_0[0]
-        log_prob_x0_p = norm.logpdf(x[0, 0, 0], loc=mu_t0[0], scale=sigma[0, 0])
-        log_prob_x0_v = norm.logpdf(x[0, 1, 0], loc=mu_t0[1], scale=sigma[0, 1])
-
-        # Time t=1 
-        mu_t1 = coordination[1] * common_cause[:, 1] + (1 - coordination[1]) * x[0, :, 0]
-        log_prob_x1_p = norm.logpdf(x[0, 0, 1], loc=mu_t1[0], scale=sigma[0, 0])
-        log_prob_x1_v = norm.logpdf(x[0, 1, 1], loc=mu_t1[1], scale=sigma[0, 1])
-
-        # Time t=2 
-        mu_t2 = coordination[2] * common_cause[:, 2] + (1 - coordination[2]) * x[0, :, 1]
-        log_prob_x2_p = norm.logpdf(x[0, 0, 2], loc=mu_t2[0], scale=sigma[0, 0])
-        log_prob_x2_v = norm.logpdf(x[0, 1, 2], loc=mu_t2[1], scale=sigma[0, 1])
-        '''
         sample = ptt.constant(
             np.array([
                     # Subject 1 (X)
@@ -107,27 +83,29 @@ total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.array([.4, 0.5]), 
 total_logp += np.sum(norm.logpdf(np.array([0.5, 0.9]), loc=np.array([0.5, 0.6]), scale=np.array([0.03, 0.04])))
 
 total_logp += np.sum(norm.logpdf(np.array([0.2, 0.3]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.1, 0.2])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.4, 0.65])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.01, 0.02])))
-total_logp += np.sum(norm.logpdf(np.array([0.4, 0.5]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.3, 0.4])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.3, 0.55])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.02, 0.03])))
+total_logp += np.sum(norm.logpdf(np.array([0.4, 0.5]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), n[0.3, p.array(0.4])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.3, 0.55])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.02, 0.03])))
 total_logp += np.sum(norm.logpdf(np.array([0.6, 1.0]), loc=np.dot(np.array([[1, 1], [0, 0.6/1.8]]), np.array([0.5, 0.9])) + np.dot(np.array([[0, 0], [0, 0.2/1.8]]), np.array([0.2, 0.30])) + np.dot(np.array([[0, 0], [0, 1.0/1.8]]), np.array([-0.4, 0.2])), scale=np.array([0.03, 0.04])))
 
 total_logp += np.sum(norm.logpdf(np.array([0.3, 0.4]), loc=np.dot(np.array([[1, 1], [0, 0.3/2.1]]), np.array([0.2, 0.3])) + np.dot(np.array([[0, 0], [0, 0.7/2.1]]), np.array([0.5, 0.75])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.01, 0.02])))
 total_logp += np.sum(norm.logpdf(np.array([0.5, 0.6]), loc=np.dot(np.array([[1, 1], [0, 0.3/2.1]]), np.array([0.4, 0.5])) + np.dot(np.array([[0, 0], [0, 0.7/2.1]]), np.array([0.4, 0.65])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.02, 0.03])))
 total_logp += np.sum(norm.logpdf(np.array([0.7, 1.1]), loc=np.dot(np.array([[1, 1], [0, 0.3/2.1]]), np.array([0.6, 1.0])) + np.dot(np.array([[0, 0], [0, 0.7/2.1]]), np.array([0.3, 0.40])) + np.dot(np.array([[0, 0], [0, 1.1/2.1]]), np.array([0.5, 0.1])), scale=np.array([0.03, 0.04])))
 
-        [[-196.31376835  -47.00691553]0
-        [  -9.50691553   -2.96793619]
-        [   2.58761936  -25.82506271]]
-        
-        [[[ -46.31376835 -196.31376835]
-        [  -9.50691553  -69.00691553]]
+    [[[-5.89523645e+02 -4.63137683e+01]
+    [-1.31915528e-01 -2.16738656e+01]]
 
-        [[-109.50691553 -197.00691553]
-        [ -11.63460286  -77.63460286]]
-        
+    [[-2.95772348e+02  1.58617352e-01]
+    [-1.84171817e+01 -4.35228619e+01]]
 
-        [[-352.96793619 -447.41238064]
-        [ -27.73131271 -164.23131271]]]
-        
+    [[-2.20251887e+02 -1.85889994e+01]
+    [-9.41506800e+01 -1.32649042e+02]]]
+    -1759.8705557509334
+
+    array([-46.31376835,  -0.13191553])
+    array([-109.50691553,  -18.41718173])
+    array([-352.96793619,  -94.15067999])
+    array([-196.31376835,   -0.75549829])
+    array([-197.00691553,  -34.83049603])
+    array([-447.41238064, -183.66945046])
         '''
 
         lp = common_cause_log_prob(
