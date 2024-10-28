@@ -124,7 +124,7 @@ class SigmoidGaussianCoordination(Coordination):
                     f"steps ({self.num_time_steps})."
                 )
 
-            dt = self.num_time_steps - self.initial_samples.shape[1]
+            dt = self.num_time_steps
             uc0 = self.initial_samples[..., -1]
         else:
             dt = self.num_time_steps
@@ -173,7 +173,7 @@ class SigmoidGaussianCoordination(Coordination):
         """
 
         with self.pymc_model:
-            num_rows = 1 if not self.include_common_cause else 3
+            num_rows = 3 if  self.include_common_cause else 1
 
             if self.mean_uc0_random_variable is None:
                 self.mean_uc0_random_variable = pm.Normal(

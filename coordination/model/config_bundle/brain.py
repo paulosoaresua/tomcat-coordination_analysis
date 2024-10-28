@@ -12,7 +12,6 @@ class BrainBundle(ModelConfigBundle):
     """
     Container for the different parameters of the brain model.
     """
-
     num_subjects: int = 3
     num_time_steps_in_coordination_scale: int = 100
 
