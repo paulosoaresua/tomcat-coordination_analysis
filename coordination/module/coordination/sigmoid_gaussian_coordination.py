@@ -40,6 +40,7 @@ class SigmoidGaussianCoordination(Coordination):
         mean_uc0: Optional[float] = None,
         sd_uc: Optional[float] = None,
         initial_samples: Optional[np.ndarray] = None,
+        include_common_cause: bool = False,
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -67,6 +68,7 @@ class SigmoidGaussianCoordination(Coordination):
             not provided now, it can be set later via the module parameters variable.
         @param initial_samples: samples to use during a call to draw_samples. We complete with
             ancestral sampling up to the desired number of time steps.
+        @param include_common_cause: determine whether we want to use common cause model
         """
         super().__init__(
             pymc_model=pymc_model,
@@ -86,6 +88,7 @@ class SigmoidGaussianCoordination(Coordination):
         self.mean_uc0_random_variable = mean_uc0_random_variable
         self.sd_uc_random_variable = sd_uc_random_variable
         self.initial_samples = initial_samples
+        self.include_common_cause = include_common_cause
 
     def draw_samples(
         self, seed: Optional[int], num_series: int
@@ -133,12 +136,20 @@ class SigmoidGaussianCoordination(Coordination):
         )
 
         if dt > 0:
-            unbounded_coordination = (
-                norm(loc=0, scale=1).rvs(size=(num_series, dt))
-                * self.parameters.sd_uc.value
-            )
-            unbounded_coordination[:, 0] += uc0
-            unbounded_coordination = unbounded_coordination.cumsum(axis=1)
+            if self.include_common_cause:
+                unbounded_coordination = (
+                    norm(loc=0, scale=1).rvs(size=(num_series, 3, dt))
+                    * self.parameters.sd_uc.value
+                )
+                unbounded_coordination[:, :, 0] += uc0 
+                unbounded_coordination = np.cumsum(unbounded_coordination, axis=2)
+            else:
+                unbounded_coordination = (
+                    norm(loc=0, scale=1).rvs(size=(num_series, dt))
+                    * self.parameters.sd_uc.value
+                )
+                unbounded_coordination[:, 0] += uc0
+                unbounded_coordination = unbounded_coordination.cumsum(axis=1)
 
             if self.initial_samples is not None:
                 unbounded_coordination = np.concatenate(
@@ -162,26 +173,28 @@ class SigmoidGaussianCoordination(Coordination):
         """
 
         with self.pymc_model:
+            num_rows = 1 if not self.include_common_cause else 3
+
             if self.mean_uc0_random_variable is None:
                 self.mean_uc0_random_variable = pm.Normal(
                     name=self.parameters.mean_uc0.uuid,
                     mu=adjust_dimensions(
-                        self.parameters.mean_uc0.prior.mean, num_rows=1
+                        self.parameters.mean_uc0.prior.mean, num_rows=num_rows
                     ),
                     sigma=adjust_dimensions(
-                        self.parameters.mean_uc0.prior.sd, num_rows=1
+                        self.parameters.mean_uc0.prior.sd, num_rows=num_rows
                     ),
-                    size=1,
+                    size=num_rows,
                     observed=adjust_dimensions(
-                        self.parameters.mean_uc0.value, num_rows=1
+                        self.parameters.mean_uc0.value, num_rows=num_rows
                     ),
                 )
             if self.sd_uc_random_variable is None:
                 self.sd_uc_random_variable = pm.HalfNormal(
                     name=self.parameters.sd_uc.uuid,
-                    sigma=adjust_dimensions(self.parameters.sd_uc.prior.sd, num_rows=1),
-                    size=1,
-                    observed=adjust_dimensions(self.parameters.sd_uc.value, num_rows=1),
+                    sigma=adjust_dimensions(self.parameters.sd_uc.prior.sd, num_rows=num_rows),
+                    size=num_rows,
+                    observed=adjust_dimensions(self.parameters.sd_uc.value, num_rows=num_rows),
                 )
 
             if self.coordination_random_variable is None:
