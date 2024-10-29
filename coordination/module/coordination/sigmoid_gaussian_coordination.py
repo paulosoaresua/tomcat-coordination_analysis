@@ -6,6 +6,7 @@ from typing import Optional
 import numpy as np
 import pymc as pm
 from scipy.stats import norm
+import pytensor.tensor as ptt
 
 from coordination.common.functions import sigmoid
 from coordination.common.types import TensorTypes
@@ -27,20 +28,20 @@ class SigmoidGaussianCoordination(Coordination):
     """
 
     def __init__(
-        self,
-        pymc_model: pm.Model,
-        num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
-        mean_mean_uc0: float = DEFAULT_UNB_COORDINATION_MEAN_PARAM,
-        sd_mean_uc0: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
-        sd_sd_uc: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
-        coordination_random_variable: Optional[pm.Distribution] = None,
-        mean_uc0_random_variable: Optional[pm.Distribution] = None,
-        sd_uc_random_variable: Optional[pm.Distribution] = None,
-        unbounded_coordination_observed_values: Optional[TensorTypes] = None,
-        mean_uc0: Optional[float] = None,
-        sd_uc: Optional[float] = None,
-        initial_samples: Optional[np.ndarray] = None,
-        include_common_cause: bool = False,
+            self,
+            pymc_model: pm.Model,
+            num_time_steps: int = DEFAULT_NUM_TIME_STEPS,
+            mean_mean_uc0: float = DEFAULT_UNB_COORDINATION_MEAN_PARAM,
+            sd_mean_uc0: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
+            sd_sd_uc: float = DEFAULT_UNB_COORDINATION_SD_PARAM,
+            coordination_random_variable: Optional[pm.Distribution] = None,
+            mean_uc0_random_variable: Optional[pm.Distribution] = None,
+            sd_uc_random_variable: Optional[pm.Distribution] = None,
+            unbounded_coordination_observed_values: Optional[TensorTypes] = None,
+            mean_uc0: Optional[float] = None,
+            sd_uc: Optional[float] = None,
+            initial_samples: Optional[np.ndarray] = None,
+            include_common_cause: bool = False,
     ):
         """
         Creates a coordination module with an unbounded auxiliary variable.
@@ -91,7 +92,7 @@ class SigmoidGaussianCoordination(Coordination):
         self.include_common_cause = include_common_cause
 
     def draw_samples(
-        self, seed: Optional[int], num_series: int
+            self, seed: Optional[int], num_series: int
     ) -> SigmoidGaussianCoordinationSamples:
         """
         Draw coordination samples. A sample is a time series of coordination.
@@ -117,9 +118,9 @@ class SigmoidGaussianCoordination(Coordination):
                     f"coordination samples."
                 )
 
-            if self.initial_samples.shape[1] > self.num_time_steps:
+            if self.initial_samples.shape[-1] > self.num_time_steps:
                 raise ValueError(
-                    f"The number of time steps ({self.initial_samples.shape[1]}) in the provided "
+                    f"The number of time steps ({self.initial_samples.shape[-1]}) in the provided "
                     f"unbounded coordination samples is larger than the requested number of time "
                     f"steps ({self.num_time_steps})."
                 )
@@ -138,18 +139,16 @@ class SigmoidGaussianCoordination(Coordination):
         if dt > 0:
             if self.include_common_cause:
                 unbounded_coordination = (
-                    norm(loc=0, scale=1).rvs(size=(num_series, 3, dt))
-                    * self.parameters.sd_uc.value
+                        norm(loc=0, scale=1).rvs(size=(num_series, 3, dt))
+                        * self.parameters.sd_uc.value
                 )
-                unbounded_coordination[:, :, 0] += uc0 
-                unbounded_coordination = np.cumsum(unbounded_coordination, axis=2)
             else:
                 unbounded_coordination = (
-                    norm(loc=0, scale=1).rvs(size=(num_series, dt))
-                    * self.parameters.sd_uc.value
+                        norm(loc=0, scale=1).rvs(size=(num_series, dt))
+                        * self.parameters.sd_uc.value
                 )
-                unbounded_coordination[:, 0] += uc0
-                unbounded_coordination = unbounded_coordination.cumsum(axis=1)
+            unbounded_coordination[..., 0] += uc0
+            unbounded_coordination = unbounded_coordination.cumsum(axis=-1)
 
             if self.initial_samples is not None:
                 unbounded_coordination = np.concatenate(
@@ -173,7 +172,7 @@ class SigmoidGaussianCoordination(Coordination):
         """
 
         with self.pymc_model:
-            num_rows = 3 if  self.include_common_cause else 1
+            num_rows = 3 if self.include_common_cause else 1
 
             if self.mean_uc0_random_variable is None:
                 self.mean_uc0_random_variable = pm.Normal(
@@ -204,27 +203,58 @@ class SigmoidGaussianCoordination(Coordination):
                 )
 
                 # Add coordinates to the model
+                dims = []
                 if self.time_axis_name not in self.pymc_model.coords:
                     self.pymc_model.add_coord(
                         name=self.time_axis_name, values=np.arange(self.num_time_steps)
                     )
+                dims.append(self.time_axis_name)
+                if self.include_common_cause:
+                    if "coordination_facets" not in self.pymc_model.coords:
+                        self.pymc_model.add_coord(
+                            name="coordination_facets",
+                            values=["individualism, coordination, common_cause"]
+                        )
+                    dims.append("coordination_facets")
 
                 # Create variables
-                prior = pm.Normal.dist(
-                    mu=self.mean_uc0_random_variable, sigma=self.sd_uc_random_variable
-                )
-                unbounded_coordination = pm.GaussianRandomWalk(
-                    name="unbounded_coordination",
-                    init_dist=prior,
-                    sigma=self.sd_uc_random_variable,
-                    dims=[self.time_axis_name],
-                    observed=self.observed_values,
-                )
+                if self.include_common_cause:
+                    # Matrix with variances in the diagonal and zeros elsewhere
+                    cov = ptt.mul(self.sd_uc_random_variable, ptt.eye(3))
+                    prior = pm.MvNormal.dist(
+                        mu=self.mean_uc0_random_variable, cov=cov,
+                    )
+                    unbounded_coordination_untransposed = pm.MvGaussianRandomWalk(
+                        name="unbounded_coordination_untransposed",
+                        mu=0,
+                        init_dist=prior,
+                        cov=cov,
+                        dims=dims,
+                        observed=self.observed_values,
+                    )
+
+                    dims = [dims[1], dims[0]]
+                    unbounded_coordination = pm.Deterministic(
+                        name="unbounded_coordination",
+                        var=ptt.transpose(unbounded_coordination_untransposed),
+                        dims=dims,
+                    )
+                else:
+                    prior = pm.Normal.dist(
+                        mu=self.mean_uc0_random_variable, sigma=self.sd_uc_random_variable,
+                    )
+                    unbounded_coordination = pm.GaussianRandomWalk(
+                        name="unbounded_coordination",
+                        init_dist=prior,
+                        sigma=self.sd_uc_random_variable,
+                        dims=dims,
+                        observed=self.observed_values,
+                    )
 
                 self.coordination_random_variable = pm.Deterministic(
                     name=self.uuid,
                     var=pm.math.sigmoid(unbounded_coordination),
-                    dims=[self.time_axis_name],
+                    dims=dims,
                 )
 
 
@@ -239,11 +269,11 @@ class SigmoidGaussianCoordinationParameters(ModuleParameters):
     """
 
     def __init__(
-        self,
-        module_uuid: str,
-        mean_mean_uc0: float,
-        sd_mean_uc0: float,
-        sd_sd_uc: float,
+            self,
+            module_uuid: str,
+            mean_mean_uc0: float,
+            sd_mean_uc0: float,
+            sd_sd_uc: float,
     ):
         """
         Creates an object to store coordination parameter info.

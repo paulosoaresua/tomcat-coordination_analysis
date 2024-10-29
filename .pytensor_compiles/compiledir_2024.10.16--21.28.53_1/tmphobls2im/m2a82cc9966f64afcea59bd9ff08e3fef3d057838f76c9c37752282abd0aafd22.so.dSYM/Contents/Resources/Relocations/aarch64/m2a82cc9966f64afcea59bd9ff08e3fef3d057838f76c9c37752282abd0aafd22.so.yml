@@ -1,0 +1,24 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/paulosoares/personal/phd/code/tomcat-coordination/.pytensor_compiles/compiledir_2024.10.16--21.28.53_1/tmphobls2im/m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22.so'
+relocations:
+  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _PyInit_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22, symObjAddr: 0x0, symBinAddr: 0x2634, symSize: 0x224 }
+  - { offsetInCU: 0x53, offset: 0x53, size: 0x8, addend: 0x0, symName: __ZL11PyArray_API, symObjAddr: 0xFB68, symBinAddr: 0x8150, symSize: 0x0 }
+  - { offsetInCU: 0x73, offset: 0x73, size: 0x8, addend: 0x0, symName: __ZL9moduledef, symObjAddr: 0x1768, symBinAddr: 0x80A8, symSize: 0x0 }
+  - { offsetInCU: 0xC86, offset: 0xC86, size: 0x8, addend: 0x0, symName: __ZL9MyMethods, symObjAddr: 0x17D0, symBinAddr: 0x8110, symSize: 0x0 }
+  - { offsetInCU: 0x3C47, offset: 0x3C47, size: 0x8, addend: 0x0, symName: _PyInit_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22, symObjAddr: 0x0, symBinAddr: 0x2634, symSize: 0x224 }
+  - { offsetInCU: 0x3FBE, offset: 0x3FBE, size: 0x8, addend: 0x0, symName: __ZL11instantiateP7_objectS0_, symObjAddr: 0x224, symBinAddr: 0x2858, symSize: 0x2B8 }
+  - { offsetInCU: 0x437D, offset: 0x437D, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22D1Ev, symObjAddr: 0x4DC, symBinAddr: 0x2B10, symSize: 0xC8 }
+  - { offsetInCU: 0x43CF, offset: 0x43CF, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22D1Ev, symObjAddr: 0x4DC, symBinAddr: 0x2B10, symSize: 0xC8 }
+  - { offsetInCU: 0x4557, offset: 0x4557, size: 0x8, addend: 0x0, symName: __ZL11instantiateP7_objectS0_.cold.1, symObjAddr: 0xEC8, symBinAddr: 0x34FC, symSize: 0x28 }
+  - { offsetInCU: 0x456E, offset: 0x456E, size: 0x8, addend: 0x0, symName: __ZL11instantiateP7_objectS0_.cold.2, symObjAddr: 0xEF0, symBinAddr: 0x3524, symSize: 0x28 }
+  - { offsetInCU: 0x4585, offset: 0x4585, size: 0x8, addend: 0x0, symName: __ZL11instantiateP7_objectS0_.cold.3, symObjAddr: 0xF18, symBinAddr: 0x354C, symSize: 0x28 }
+  - { offsetInCU: 0x476F, offset: 0x476F, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E, symObjAddr: 0x5A4, symBinAddr: 0x2BD8, symSize: 0x900 }
+  - { offsetInCU: 0x4E28, offset: 0x4E28, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E.cold.2, symObjAddr: 0xF68, symBinAddr: 0x359C, symSize: 0x28 }
+  - { offsetInCU: 0x4E55, offset: 0x4E55, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E.cold.1, symObjAddr: 0xF40, symBinAddr: 0x3574, symSize: 0x28 }
+  - { offsetInCU: 0x4E82, offset: 0x4E82, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E.cold.3, symObjAddr: 0xF90, symBinAddr: 0x35C4, symSize: 0x28 }
+  - { offsetInCU: 0x4EAF, offset: 0x4EAF, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E.cold.4, symObjAddr: 0xFB8, symBinAddr: 0x35EC, symSize: 0x28 }
+  - { offsetInCU: 0x4EDC, offset: 0x4EDC, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E.cold.5, symObjAddr: 0xFE0, symBinAddr: 0x3614, symSize: 0x28 }
+  - { offsetInCU: 0x4F09, offset: 0x4F09, size: 0x8, addend: 0x0, symName: __ZL95__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_executorPN12_GLOBAL__N_186__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22E.cold.6, symObjAddr: 0x1008, symBinAddr: 0x363C, symSize: 0x28 }
+  - { offsetInCU: 0x4F36, offset: 0x4F36, size: 0x8, addend: 0x0, symName: __ZL97__struct_compiled_op_m2a82cc9966f64afcea59bd9ff08e3fef3d057838f76c9c37752282abd0aafd22_destructorP7_object, symObjAddr: 0xEA4, symBinAddr: 0x34D8, symSize: 0x24 }
+...

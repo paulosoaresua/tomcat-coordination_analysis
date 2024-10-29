@@ -111,10 +111,16 @@ def main():
             unbounded_coordination_rv = model.named_vars['unbounded_coordination']
             coordination_rv = coordination_module.coordination_random_variable
 
-            mean_uc0_samples = pm.draw(mean_uc0_rv, draws=100)
-            sd_uc_samples = pm.draw(sd_uc_rv, draws=100)
-            unbounded_coordination_samples = pm.draw(unbounded_coordination_rv, draws=100)
-            coordination_samples = pm.draw(coordination_rv, draws=100)
+            mean_uc0_samples = pm.draw(mean_uc0_rv, draws=3)
+            print(mean_uc0_samples)
+            sd_uc_samples = pm.draw(sd_uc_rv, draws=3)
+            print(sd_uc_samples)
+            unbounded_coordination_samples = pm.draw(unbounded_coordination_rv, draws=3)
+            print(unbounded_coordination_samples.shape)
+            print(unbounded_coordination_samples)
+            coordination_samples = pm.draw(coordination_rv, draws=3)
+            print(coordination_samples.shape)
+            print(coordination_samples)
 
 if __name__ == '__main__':
     main()

@@ -217,7 +217,7 @@ def infer(out_dir: str,
 
         # Call the actual inference script (bin/run_inference_sequentially)
         call_python_script_command = (
-            f'python3 {bin_dir}/run_inference_sequentially '
+            f'python {bin_dir}/run_inference_sequentially '
             f'--out_dir="{results_folder}" '
             f'--experiment_ids="{experiment_ids}" '
             f'--evidence_filepath="{evidence_filepath}" '
