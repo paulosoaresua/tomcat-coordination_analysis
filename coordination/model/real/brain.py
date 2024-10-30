@@ -225,6 +225,7 @@ class BrainModel(ModelTemplate):
                 sd_uc=bundle.sd_uc,
                 initial_samples=initial_samples,
                 unbounded_coordination_observed_values=given_coordination,
+                include_common_cause=bundle.common_cause
             )
 
         groups = self._create_fnirs_groups(bundle)
