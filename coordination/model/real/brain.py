@@ -269,7 +269,6 @@ class BrainModel(ModelTemplate):
                         sd_uc=bundle.sd_uc,
                         initial_samples=bundle.initial_coordination_samples,
                         unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
-                        # Ensure that you update the parameters according to the latest class definition
                     )
                 elif bundle.coordination_mode == "sigmoid":
                     coordination = SigmoidGaussianCoordination3D(
@@ -280,7 +279,6 @@ class BrainModel(ModelTemplate):
                         sd_uc=bundle.sd_uc,
                         initial_samples=bundle.initial_coordination_samples,
                         unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
-                        # Ensure that you update the parameters according to the latest class definition
                     )
             else:
                 # Use SigmoidGaussianCoordination if common cause is not enabled
