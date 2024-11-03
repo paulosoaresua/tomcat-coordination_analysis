@@ -78,7 +78,8 @@ if __name__ == '__main__':
 
 import numpy as np
 import pymc as pm
-from coordination.module.coordination.sigmoid_gaussian_coordination import SigmoidGaussianCoordination
+from coordination.module.coordination.sigmoid_gaussian_coordination_3d import SigmoidGaussianCoordination3D
+from coordination.module.coordination.dirichlet_gaussian_coordination_3d import DirichletGaussianCoordination3D
 
 def main():
     num_series = 3
@@ -90,15 +91,18 @@ def main():
     for include_common_cause in include_common_cause_options:
         print(f"\nTesting with include_common_cause set to {include_common_cause}:")
         with pm.Model() as model:
-            coordination_module = SigmoidGaussianCoordination(
+            coordination_module = DirichletGaussianCoordination3D(
                 pymc_model=model,
                 num_time_steps=num_time_steps,
-                mean_uc0=mean_uc0,
-                sd_uc=sd_uc,
-                include_common_cause=include_common_cause
+                mean_uc0_individualism=mean_uc0,
+                sd_uc_individualism=sd_uc,
+                mean_uc0_coordination=mean_uc0,
+                sd_uc_coordination=sd_uc,
+                mean_uc0_common_cause=mean_uc0,
+                sd_uc_common_cause=sd_uc
             )
             samples = coordination_module.draw_samples(seed=42, num_series=num_series)
-            expected_shape = (num_series, 3, num_time_steps) if include_common_cause else (num_series, num_time_steps)
+            expected_shape = (num_series, 3, num_time_steps)
             actual_shape = samples.unbounded_coordination.shape
             print(expected_shape)
             print(actual_shape)
@@ -106,14 +110,26 @@ def main():
 
             coordination_module.create_random_variables()
 
-            mean_uc0_rv = coordination_module.mean_uc0_random_variable
-            sd_uc_rv = coordination_module.sd_uc_random_variable
+            mean_uc0_i_rv = coordination_module.mean_uc0_individualism_random_variable
+            sd_uc_i_rv = coordination_module.sd_uc_individualism_random_variable
+            mean_uc0_c_rv = coordination_module.mean_uc0_coordination_random_variable
+            sd_uc_c_rv = coordination_module.sd_uc_coordination_random_variable
+            mean_uc0_cc_rv = coordination_module.mean_uc0_common_cause_random_variable
+            sd_uc_cc_rv = coordination_module.sd_uc_common_cause_random_variable
             unbounded_coordination_rv = model.named_vars['unbounded_coordination']
             coordination_rv = coordination_module.coordination_random_variable
 
-            mean_uc0_samples = pm.draw(mean_uc0_rv, draws=3)
+            mean_uc0_samples = pm.draw(mean_uc0_i_rv, draws=3)
             print(mean_uc0_samples)
-            sd_uc_samples = pm.draw(sd_uc_rv, draws=3)
+            sd_uc_samples = pm.draw(sd_uc_i_rv, draws=3)
+            print(sd_uc_samples)
+            mean_uc0_samples = pm.draw(mean_uc0_c_rv, draws=3)
+            print(mean_uc0_samples)
+            sd_uc_samples = pm.draw(sd_uc_c_rv, draws=3)
+            print(sd_uc_samples)
+            mean_uc0_samples = pm.draw(mean_uc0_cc_rv, draws=3)
+            print(mean_uc0_samples)
+            sd_uc_samples = pm.draw(sd_uc_cc_rv, draws=3)
             print(sd_uc_samples)
             unbounded_coordination_samples = pm.draw(unbounded_coordination_rv, draws=3)
             print(unbounded_coordination_samples.shape)

@@ -192,41 +192,7 @@ class BrainModel(ModelTemplate):
 
         bundle = self._get_adjusted_bundle()
 
-        if bundle.constant_coordination or bundle.fnirs_share_fnirs_latent_state_across_subjects:
-            given_coordination = (
-                0 if bundle.fnirs_share_fnirs_latent_state_across_subjects else
-                bundle.observed_coordination_for_inference)
-            coordination = ConstantCoordination(
-                pymc_model=self.pymc_model,
-                num_time_steps=bundle.num_time_steps_to_fit,
-                alpha_c=bundle.alpha_c,
-                beta_c=bundle.beta_c,
-                initial_samples=bundle.initial_coordination_samples,
-                observed_value=given_coordination,
-            )
-        else:
-            given_coordination = None
-            if bundle.observed_coordination_for_inference is not None:
-                given_coordination = adjust_dimensions(
-                    logit(bundle.observed_coordination_for_inference),
-                    bundle.num_time_steps_to_fit,
-                )
-
-            initial_samples = None
-            if bundle.initial_coordination_samples is not None:
-                initial_samples = logit(bundle.initial_coordination_samples)
-            coordination = SigmoidGaussianCoordination(
-                pymc_model=self.pymc_model,
-                num_time_steps=bundle.num_time_steps_to_fit,
-                mean_mean_uc0=bundle.mean_mean_uc0,
-                sd_mean_uc0=bundle.sd_mean_uc0,
-                sd_sd_uc=bundle.sd_sd_uc,
-                mean_uc0=bundle.mean_uc0,
-                sd_uc=bundle.sd_uc,
-                initial_samples=initial_samples,
-                unbounded_coordination_observed_values=given_coordination,
-                include_common_cause=bundle.common_cause
-            )
+        coordination = self._create_coordination(bundle)
 
         groups = self._create_fnirs_groups(bundle)
 
@@ -255,6 +221,52 @@ class BrainModel(ModelTemplate):
             coordination=coordination,
             component_groups=groups,
         )
+
+    def _create_coordination(self, bundle):
+        if bundle.constant_coordination or bundle.fnirs_share_fnirs_latent_state_across_subjects:
+            given_coordination = (
+                0 if bundle.fnirs_share_fnirs_latent_state_across_subjects else
+                bundle.observed_coordination_for_inference)
+            coordination = ConstantCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=bundle.num_time_steps_to_fit,
+                alpha_c=bundle.alpha_c,
+                beta_c=bundle.beta_c,
+                initial_samples=bundle.initial_coordination_samples,
+                observed_value=given_coordination,
+            )
+        else:
+            given_coordination = None
+            if bundle.observed_coordination_for_inference is not None:
+                given_coordination = adjust_dimensions(
+                    logit(bundle.observed_coordination_for_inference),
+                    bundle.num_time_steps_to_fit,
+                )
+
+            initial_samples = None
+            if bundle.initial_coordination_samples is not None:
+                initial_samples = logit(bundle.initial_coordination_samples)
+            
+            # TODO (Ming): Include more parameters in the config bundle to decide which
+            #  coordination model to use and parameters to set. For instance,
+            #  use_dirichlet_coordination to control if we want to use the dirichlet version of
+            #  coordination when common cause = True or the sigmoid + normalization version.
+            #  Also include parameters for us to able to set the values of individualism,
+            #  coordination and common cause independently when use the newly implemented 3d
+            #  coordination modules.
+            coordination = SigmoidGaussianCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=bundle.num_time_steps_to_fit,
+                mean_mean_uc0=bundle.mean_mean_uc0,
+                sd_mean_uc0=bundle.sd_mean_uc0,
+                sd_sd_uc=bundle.sd_sd_uc,
+                mean_uc0=bundle.mean_uc0,
+                sd_uc=bundle.sd_uc,
+                initial_samples=initial_samples,
+                unbounded_coordination_observed_values=given_coordination,
+                include_common_cause=bundle.common_cause
+            )
+        return coordination
 
     def _get_adjusted_bundle(self) -> BrainBundle:
         """
