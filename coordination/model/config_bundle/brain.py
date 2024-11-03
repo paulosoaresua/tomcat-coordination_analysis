@@ -192,3 +192,8 @@ class BrainBundle(ModelConfigBundle):
     share_mean_cc0_across_dimensions: bool = False
     share_sd_cc_across_dimensions: bool = False
     initial_common_cause_samples: np.ndarray = None
+
+    use_dirichlet_coordination: bool = False
+    coordination_mode: str = "sigmoid" # Or "dirichlet"
+    independent_individualism: bool = False
+    enable_common_cause: bool = False

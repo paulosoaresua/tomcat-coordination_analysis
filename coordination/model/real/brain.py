@@ -2,6 +2,8 @@ from copy import deepcopy
 from typing import List, Optional
 
 import numpy as np
+from coordination.module.coordination.dirichlet_gaussian_coordination_3d import DirichletGaussianCoordination3D
+from coordination.module.coordination.sigmoid_gaussian_coordination_3d import SigmoidGaussianCoordination3D
 import pymc as pm
 
 from coordination.common.constants import DEFAULT_SEED
@@ -254,18 +256,34 @@ class BrainModel(ModelTemplate):
             #  Also include parameters for us to able to set the values of individualism,
             #  coordination and common cause independently when use the newly implemented 3d
             #  coordination modules.
-            coordination = SigmoidGaussianCoordination(
-                pymc_model=self.pymc_model,
-                num_time_steps=bundle.num_time_steps_to_fit,
-                mean_mean_uc0=bundle.mean_mean_uc0,
-                sd_mean_uc0=bundle.sd_mean_uc0,
-                sd_sd_uc=bundle.sd_sd_uc,
-                mean_uc0=bundle.mean_uc0,
-                sd_uc=bundle.sd_uc,
-                initial_samples=initial_samples,
-                unbounded_coordination_observed_values=given_coordination,
-                include_common_cause=bundle.common_cause
-            )
+            if bundle.coordination_mode == "dirichlet":
+                coordination = DirichletGaussianCoordination3D(
+                    pymc_model=self.pymc_model,
+                    num_time_steps=bundle.num_time_steps_to_fit,
+                    mean_mean_uc0=bundle.mean_mean_uc0,
+                    sd_mean_uc0=bundle.sd_mean_uc0,
+                    sd_sd_uc=bundle.sd_sd_uc,
+                    mean_uc0=bundle.mean_uc0,
+                    sd_uc=bundle.sd_uc,
+                    initial_samples=bundle.initial_coordination_samples,
+                    unbounded_coordination_observed_values=given_coordination,
+                    include_common_cause=bundle.enable_common_cause
+                )
+            elif bundle.coordination_mode == "sigmoid":
+                coordination = SigmoidGaussianCoordination3D(
+                    pymc_model=self.pymc_model,
+                    num_time_steps=bundle.num_time_steps_to_fit,
+                    mean_mean_uc0=bundle.mean_mean_uc0,
+                    sd_mean_uc0=bundle.sd_mean_uc0,
+                    sd_sd_uc=bundle.sd_sd_uc,
+                    mean_uc0=bundle.mean_uc0,
+                    sd_uc=bundle.sd_uc,
+                    initial_samples=bundle.initial_coordination_samples,
+                    unbounded_coordination_observed_values=given_coordination,
+                    include_common_cause=bundle.enable_common_cause
+                )
+            else:
+                raise ValueError("Unknown coordination mode: " + str(bundle.coordination_mode))
         return coordination
 
     def _get_adjusted_bundle(self) -> BrainBundle:
