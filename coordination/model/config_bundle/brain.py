@@ -6,6 +6,8 @@ import numpy as np
 from coordination.common.scaler import NORMALIZATION_PER_FEATURE
 from coordination.model.config_bundle.bundle import ModelConfigBundle
 
+from typing import Callable, List, Optional, Tuple, Union
+
 
 @dataclass
 class BrainBundle(ModelConfigBundle):
@@ -182,7 +184,7 @@ class BrainBundle(ModelConfigBundle):
     # ]
     fnirs_groups: List[Dict[str, Any]] = None
 
-    # Common cause parameters
+    # 1103
     common_cause: bool = False
     mean_mean_cc0: float = 0.0
     sd_mean_cc0: float = 1.0
@@ -193,7 +195,21 @@ class BrainBundle(ModelConfigBundle):
     share_sd_cc_across_dimensions: bool = False
     initial_common_cause_samples: np.ndarray = None
 
-    use_dirichlet_coordination: bool = False
+    
     coordination_mode: str = "sigmoid" # Or "dirichlet"
-    independent_individualism: bool = False
-    enable_common_cause: bool = False
+    
+
+    observed_individualism_for_inference: Optional[float] = None
+    observed_common_cause_for_inference: Optional[float] = None
+    constant_individualism: bool = False
+    constant_common_cause: bool = False
+
+    # For independent model
+    observed_common_cause_for_inference = 0
+    observed_coordination_for_inference = 0
+    constant_coordination = True
+    constant_common_cause = True
+
+    # Coordination Model:
+    observed_common_cause_for_inference = 0
+    constant_common_cause = True
