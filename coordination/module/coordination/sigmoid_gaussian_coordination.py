@@ -213,7 +213,7 @@ class SigmoidGaussianCoordination(Coordination):
                     if "coordination_facets" not in self.pymc_model.coords:
                         self.pymc_model.add_coord(
                             name="coordination_facets",
-                            values=["individualism, coordination, common_cause"]
+                            values=["individualism", "coordination", "common_cause"]
                         )
                     dims.append("coordination_facets")
 

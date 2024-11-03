@@ -385,7 +385,7 @@ class NonSerialGaussianLatentComponent(GaussianLatentComponent):
         log_prob_params = (
             mean_a0,
             sd_a,
-            self.coordination_random_variable[self.time_steps_in_coordination_scale],
+            self.coordination_random_variable[...,self.time_steps_in_coordination_scale],
             np.array(self.self_dependent),
             -1 if self.asymmetric_coordination else 1,
             *self._get_extra_logp_params(),

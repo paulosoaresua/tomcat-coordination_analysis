@@ -133,3 +133,6 @@ run/
 notebooks/formatting.py
 scripts/formatting.py
 notebooks/Images
+
+.pytensor_compiles/
+*.pkl
