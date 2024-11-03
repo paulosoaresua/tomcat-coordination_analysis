@@ -204,12 +204,12 @@ class BrainBundle(ModelConfigBundle):
     constant_individualism: bool = False
     constant_common_cause: bool = False
 
-    # For independent model
-    observed_common_cause_for_inference = 0
-    observed_coordination_for_inference = 0
-    constant_coordination = True
-    constant_common_cause = True
+    # # For independent model
+    # observed_common_cause_for_inference = 0
+    # observed_coordination_for_inference = 0
+    # constant_coordination = True
+    # constant_common_cause = True
 
-    # Coordination Model:
-    observed_common_cause_for_inference = 0
-    constant_common_cause = True
+    # # Coordination Model:
+    # observed_common_cause_for_inference = 0
+    # constant_common_cause = True
