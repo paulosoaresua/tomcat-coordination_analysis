@@ -213,3 +213,11 @@ class BrainBundle(ModelConfigBundle):
     # # Coordination Model:
     # observed_common_cause_for_inference = 0
     # constant_common_cause = True
+
+
+    mean_uc0_individualism: Optional[float] = None
+    sd_uc_individualism: Optional[float] = None
+    mean_uc0_coordination: Optional[float] = None
+    sd_uc_coordination: Optional[float] = None
+    mean_uc0_common_cause: Optional[float] = None
+    sd_uc_common_cause: Optional[float] = None

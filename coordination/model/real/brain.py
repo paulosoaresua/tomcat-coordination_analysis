@@ -266,9 +266,15 @@ class BrainModel(ModelTemplate):
                         num_time_steps=bundle.num_time_steps_to_fit,
                         mean_mean_uc0=bundle.mean_mean_uc0,
                         sd_mean_uc0=bundle.sd_mean_uc0,
-                        sd_uc=bundle.sd_uc,
                         initial_samples=bundle.initial_coordination_samples,
                         unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
+                        # new variables for 3D
+                        mean_uc0_individualism=bundle.mean_uc0_individualism,
+                        sd_uc_individualism=bundle.sd_uc_individualism,
+                        mean_uc0_coordination=bundle.mean_uc0_coordination,
+                        sd_uc_coordination=bundle.sd_uc_coordination,
+                        mean_uc0_common_cause=bundle.mean_uc0_common_cause,
+                        sd_uc_common_cause=bundle.sd_uc_common_cause,
                     )
                 elif bundle.coordination_mode == "sigmoid":
                     coordination = SigmoidGaussianCoordination3D(
@@ -276,21 +282,34 @@ class BrainModel(ModelTemplate):
                         num_time_steps=bundle.num_time_steps_to_fit,
                         mean_mean_uc0=bundle.mean_mean_uc0,
                         sd_mean_uc0=bundle.sd_mean_uc0,
-                        sd_uc=bundle.sd_uc,
                         initial_samples=bundle.initial_coordination_samples,
                         unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
+                        # new variables for 3D
+                        mean_uc0_individualism=bundle.mean_uc0_individualism,
+                        sd_uc_individualism=bundle.sd_uc_individualism,
+                        mean_uc0_coordination=bundle.mean_uc0_coordination,
+                        sd_uc_coordination=bundle.sd_uc_coordination,
+                        mean_uc0_common_cause=bundle.mean_uc0_common_cause,
+                        sd_uc_common_cause=bundle.sd_uc_common_cause,
                     )
             else:
-                # Use SigmoidGaussianCoordination if common cause is not enabled
+                # Instantiate SigmoidGaussianCoordination when common cause is False
                 coordination = SigmoidGaussianCoordination(
                     pymc_model=self.pymc_model,
                     num_time_steps=bundle.num_time_steps_to_fit,
                     mean_mean_uc0=bundle.mean_mean_uc0,
                     sd_mean_uc0=bundle.sd_mean_uc0,
+                    sd_sd_uc=bundle.sd_sd_uc,
+                    # new variables 
+                    mean_uc0=bundle.mean_uc0,
                     sd_uc=bundle.sd_uc,
                     initial_samples=bundle.initial_coordination_samples,
-                    observed_value=bundle.observed_coordination_for_inference
+                    unbounded_coordination_observed_values=given_coordination,
+                    observed_value=bundle.observed_coordination_for_inference,
+                    include_common_cause=bundle.include_common_cause,
                 )
+
+
         # ================================================================================================================
         return coordination
 
