@@ -259,6 +259,7 @@ class BrainModel(ModelTemplate):
             # ==========================================================================================
             # If common cause is true, we use the dirichlet version of coordination. Otherwise,
             #  we use the sigmoid + normalization version.
+<<<<<<< HEAD
 
             if bundle.observed_coordination_for_inference is not None:
                 if bundle.coordination_mode == "sigmoid":
@@ -270,6 +271,18 @@ class BrainModel(ModelTemplate):
                     given_coordination = adjust_dimensions(
                         np.log(bundle.observed_coordination_for_inference + 1e-9),
                         bundle.num_time_steps_to_fit,
+=======
+            if bundle.common_cause:
+                if bundle.coordination_mode == "dirichlet":
+                    coordination = DirichletGaussianCoordination3D(
+                        pymc_model=self.pymc_model,
+                        num_time_steps=bundle.num_time_steps_to_fit,
+                        mean_mean_uc0=bundle.mean_mean_uc0,
+                        sd_mean_uc0=bundle.sd_mean_uc0,
+                        sd_uc=bundle.sd_uc,
+                        initial_samples=bundle.initial_coordination_samples,
+                        unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
+>>>>>>> parent of 8440b5c... Refactoring 3D class constructor: Replace 'sd_uc' with 'sd_uc_coordination', update config with options for 'sd_uc_individualism' and 'sd_uc_common_cause', and apply similar changes for 'mean_uc0'. And also add these into config bundle
                     )
                 given_individualism = None
                 given_common_cause = None
@@ -321,6 +334,7 @@ class BrainModel(ModelTemplate):
                         num_time_steps=bundle.num_time_steps_to_fit,
                         mean_mean_uc0=bundle.mean_mean_uc0,
                         sd_mean_uc0=bundle.sd_mean_uc0,
+<<<<<<< HEAD
                         sd_sd_uc=bundle.sd_sd_uc,
                         mean_uc0=bundle.mean_uc0,
                         sd_uc=bundle.sd_uc,
@@ -331,6 +345,23 @@ class BrainModel(ModelTemplate):
                     )
 
 
+=======
+                        sd_uc=bundle.sd_uc,
+                        initial_samples=bundle.initial_coordination_samples,
+                        unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
+                    )
+            else:
+                # Use SigmoidGaussianCoordination if common cause is not enabled
+                coordination = SigmoidGaussianCoordination(
+                    pymc_model=self.pymc_model,
+                    num_time_steps=bundle.num_time_steps_to_fit,
+                    mean_mean_uc0=bundle.mean_mean_uc0,
+                    sd_mean_uc0=bundle.sd_mean_uc0,
+                    sd_uc=bundle.sd_uc,
+                    initial_samples=bundle.initial_coordination_samples,
+                    observed_value=bundle.observed_coordination_for_inference
+                )
+>>>>>>> parent of 8440b5c... Refactoring 3D class constructor: Replace 'sd_uc' with 'sd_uc_coordination', update config with options for 'sd_uc_individualism' and 'sd_uc_common_cause', and apply similar changes for 'mean_uc0'. And also add these into config bundle
         # ================================================================================================================
         return coordination
 
