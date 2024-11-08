@@ -2,8 +2,10 @@ from copy import deepcopy
 from typing import List, Optional
 
 import numpy as np
-from coordination.module.coordination.dirichlet_gaussian_coordination_3d import DirichletGaussianCoordination3D
-from coordination.module.coordination.sigmoid_gaussian_coordination_3d import SigmoidGaussianCoordination3D
+from coordination.module.coordination.dirichlet_gaussian_coordination_3d import \
+    DirichletGaussianCoordination3D
+from coordination.module.coordination.sigmoid_gaussian_coordination_3d import \
+    SigmoidGaussianCoordination3D
 import pymc as pm
 
 from coordination.common.constants import DEFAULT_SEED
@@ -194,7 +196,8 @@ class BrainModel(ModelTemplate):
 
         bundle = self._get_adjusted_bundle()
 
-        coordination = self._create_coordination(bundle)
+        coordination = self._create_coordination_common_cause(
+            bundle) if bundle.common_cause else self._create_coordination_non_common_cause(bundle)
 
         groups = self._create_fnirs_groups(bundle)
 
@@ -224,9 +227,79 @@ class BrainModel(ModelTemplate):
             component_groups=groups,
         )
 
-    def _create_coordination(self, bundle):
+    def _create_coordination_common_cause(self, bundle):
+        inv_function = np.exp
+
+        fixed_unbounded_coordination_value = None
+        if bundle.observed_coordination_for_inference is not None:
+            fixed_unbounded_coordination_value = adjust_dimensions(
+                inv_function(bundle.observed_coordination_for_inference),
+                bundle.num_time_steps_to_fit,
+            )
+
+        fixed_unbounded_individualism_value = None
+        if bundle.observed_individualism_for_inference is not None:
+            fixed_unbounded_individualism_value = adjust_dimensions(
+                logit(bundle.observed_individualism_for_inference),
+                bundle.num_time_steps_to_fit,
+            )
+
+        fixed_unbounded_common_cause_value = None
+        if bundle.observed_common_cause_for_inference is not None:
+            fixed_unbounded_common_cause_value = adjust_dimensions(
+                logit(bundle.observed_common_cause_for_inference),
+                bundle.num_time_steps_to_fit,
+            )
+
+        initial_samples_3d = None
+        if bundle.initial_coordination_samples is not None:
+            # The initial samples will already contain coordination, individualism and common
+            # cause. Shape (3, T)
+            initial_samples_3d = inv_function(bundle.initial_coordination_samples)
+
+        if fixed_unbounded_coordination_value is not None and bundle.mean_uc0_coordination is None:
+            mean_uc0_coordination = fixed_unbounded_coordination_value
+            sd_uc_coordination = 1e-9  # instead of 0 for numerical stability
+        else:
+            mean_uc0_coordination = bundle.mean_uc0
+            sd_uc_coordination = bundle.sd_uc0
+
+        if fixed_unbounded_individualism_value is not None and bundle.mean_uc0_individualism is None:
+            mean_uc0_individualism = fixed_unbounded_individualism_value
+            sd_uc_individualism = 1e-9
+        else:
+            mean_uc0_individualism = bundle.mean_uc0_individualism
+            sd_uc_individualism = bundle.sd_uc0_individualism
+
+        if fixed_unbounded_common_cause_value is not None and bundle.mean_uc0_common_cause is None:
+            mean_uc0_common_cause = fixed_unbounded_common_cause_value
+            sd_uc_common_cause = 1e-9
+        else:
+            mean_uc0_common_cause = bundle.mean_uc0_common_cause
+            sd_uc_common_cause = bundle.sd_uc0_common_cause
+
+        coordination = DirichletGaussianCoordination3D(
+            pymc_model=self.pymc_model,
+            num_time_steps=bundle.num_time_steps_to_fit,
+            mean_mean_uc0=bundle.mean_mean_uc0,
+            sd_mean_uc0=bundle.sd_mean_uc0,
+            initial_samples=bundle.initial_coordination_samples,
+            mean_uc0_individualism=mean_uc0_individualism,
+            sd_uc_individualism=sd_uc_individualism,
+            mean_uc0_coordination=mean_uc0_coordination,
+            sd_uc_coordination=sd_uc_coordination,
+            mean_uc0_common_cause=mean_uc0_common_cause,
+            sd_uc_common_cause=sd_uc_common_cause,
+            unbounded_coordination_observed_values=fixed_unbounded_coordination_value,
+            unbounded_individualism_observed_values=fixed_unbounded_individualism_value,
+            unbounded_common_cause_observed_values=fixed_unbounded_common_cause_value,
+        )
+
+        return coordination
+
+    def _create_coordination_non_common_cause(self, bundle):
         if bundle.constant_coordination or bundle.fnirs_share_fnirs_latent_state_across_subjects:
-            given_coordination = (
+            fixed_unbounded_coordination_value = (
                 0 if bundle.fnirs_share_fnirs_latent_state_across_subjects else
                 bundle.observed_coordination_for_inference)
             coordination = ConstantCoordination(
@@ -235,12 +308,12 @@ class BrainModel(ModelTemplate):
                 alpha_c=bundle.alpha_c,
                 beta_c=bundle.beta_c,
                 initial_samples=bundle.initial_coordination_samples,
-                observed_value=given_coordination,
+                observed_value=fixed_unbounded_coordination_value,
             )
         else:
-            given_coordination = None
+            fixed_unbounded_coordination_value = None
             if bundle.observed_coordination_for_inference is not None:
-                given_coordination = adjust_dimensions(
+                fixed_unbounded_coordination_value = adjust_dimensions(
                     logit(bundle.observed_coordination_for_inference),
                     bundle.num_time_steps_to_fit,
                 )
@@ -248,121 +321,18 @@ class BrainModel(ModelTemplate):
             initial_samples = None
             if bundle.initial_coordination_samples is not None:
                 initial_samples = logit(bundle.initial_coordination_samples)
-            
-            # TODO (Ming): Include more parameters in the config bundle to decide which
-            #  coordination model to use and parameters to set. For instance,
-            #  use_dirichlet_coordination to control if we want to use the dirichlet version of
-            #  coordination when common cause = True or the sigmoid + normalization version.
-            #  Also include parameters for us to able to set the values of individualism,
-            #  coordination and common cause independently when use the newly implemented 3d
-            #  coordination modules.
-            # ==========================================================================================
-            # If common cause is true, we use the dirichlet version of coordination. Otherwise,
-            #  we use the sigmoid + normalization version.
-<<<<<<< HEAD
+            coordination = SigmoidGaussianCoordination(
+                pymc_model=self.pymc_model,
+                num_time_steps=bundle.num_time_steps_to_fit,
+                mean_mean_uc0=bundle.mean_mean_uc0,
+                sd_mean_uc0=bundle.sd_mean_uc0,
+                sd_sd_uc=bundle.sd_sd_uc,
+                mean_uc0=bundle.mean_uc0,
+                sd_uc=bundle.sd_uc,
+                initial_samples=initial_samples,
+                unbounded_coordination_observed_values=fixed_unbounded_coordination_value,
+            )
 
-            if bundle.observed_coordination_for_inference is not None:
-                if bundle.coordination_mode == "sigmoid":
-                    given_coordination = adjust_dimensions(
-                        logit(bundle.observed_coordination_for_inference),
-                        bundle.num_time_steps_to_fit,
-                    )
-                elif bundle.coordination_mode == "dirichlet":
-                    given_coordination = adjust_dimensions(
-                        np.log(bundle.observed_coordination_for_inference + 1e-9),
-                        bundle.num_time_steps_to_fit,
-=======
-            if bundle.common_cause:
-                if bundle.coordination_mode == "dirichlet":
-                    coordination = DirichletGaussianCoordination3D(
-                        pymc_model=self.pymc_model,
-                        num_time_steps=bundle.num_time_steps_to_fit,
-                        mean_mean_uc0=bundle.mean_mean_uc0,
-                        sd_mean_uc0=bundle.sd_mean_uc0,
-                        sd_uc=bundle.sd_uc,
-                        initial_samples=bundle.initial_coordination_samples,
-                        unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
->>>>>>> parent of 8440b5c... Refactoring 3D class constructor: Replace 'sd_uc' with 'sd_uc_coordination', update config with options for 'sd_uc_individualism' and 'sd_uc_common_cause', and apply similar changes for 'mean_uc0'. And also add these into config bundle
-                    )
-                given_individualism = None
-                given_common_cause = None
-                if bundle.individualism_observed_value is not None:
-                    given_individualism = logit(bundle.individualism_observed_value)
-                if bundle.common_cause_observed_value is not None:
-                    given_common_cause = logit(bundle.common_cause_observed_value)
-                bundle.given_individualism = given_individualism
-                bundle.given_common_cause = given_common_cause
-
-                if bundle.common_cause:
-                    if bundle.coordination_mode == "dirichlet":
-                        coordination = DirichletGaussianCoordination3D(
-                            pymc_model=self.pymc_model,
-                            num_time_steps=bundle.num_time_steps_to_fit,
-                            mean_mean_uc0=bundle.mean_mean_uc0,
-                            sd_mean_uc0=bundle.sd_mean_uc0,
-                            initial_samples=bundle.initial_coordination_samples,
-                            unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
-                            mean_uc0_individualism=bundle.mean_uc0_individualism,
-                            sd_uc_individualism=bundle.sd_uc_individualism,
-                            mean_uc0_coordination=bundle.mean_uc0_coordination,
-                            sd_uc_coordination=bundle.sd_uc_coordination,
-                            mean_uc0_common_cause=bundle.mean_uc0_common_cause,
-                            sd_uc_common_cause=bundle.sd_uc_common_cause,
-                            given_individualism=bundle.given_individualism,
-                            given_common_cause=bundle.given_common_cause,
-                        )
-                    elif bundle.coordination_mode == "sigmoid":
-                        coordination = SigmoidGaussianCoordination3D(
-                            pymc_model=self.pymc_model,
-                            num_time_steps=bundle.num_time_steps_to_fit,
-                            mean_mean_uc0=bundle.mean_mean_uc0,
-                            sd_mean_uc0=bundle.sd_mean_uc0,
-                            initial_samples=bundle.initial_coordination_samples,
-                            unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
-                            mean_uc0_individualism=bundle.mean_uc0_individualism,
-                            sd_uc_individualism=bundle.sd_uc_individualism,
-                            mean_uc0_coordination=bundle.mean_uc0_coordination,
-                            sd_uc_coordination=bundle.sd_uc_coordination,
-                            mean_uc0_common_cause=bundle.mean_uc0_common_cause,
-                            sd_uc_common_cause=bundle.sd_uc_common_cause,
-                            given_individualism=bundle.given_individualism,
-                            given_common_cause=bundle.given_common_cause,
-                        )
-                else:
-                    coordination = SigmoidGaussianCoordination(
-                        pymc_model=self.pymc_model,
-                        num_time_steps=bundle.num_time_steps_to_fit,
-                        mean_mean_uc0=bundle.mean_mean_uc0,
-                        sd_mean_uc0=bundle.sd_mean_uc0,
-<<<<<<< HEAD
-                        sd_sd_uc=bundle.sd_sd_uc,
-                        mean_uc0=bundle.mean_uc0,
-                        sd_uc=bundle.sd_uc,
-                        initial_samples=bundle.initial_coordination_samples,
-                        unbounded_coordination_observed_values=given_coordination,
-                        observed_value=bundle.observed_coordination_for_inference,
-                        include_common_cause=bundle.include_common_cause,
-                    )
-
-
-=======
-                        sd_uc=bundle.sd_uc,
-                        initial_samples=bundle.initial_coordination_samples,
-                        unbounded_coordination_observed_values=bundle.observed_coordination_for_inference,
-                    )
-            else:
-                # Use SigmoidGaussianCoordination if common cause is not enabled
-                coordination = SigmoidGaussianCoordination(
-                    pymc_model=self.pymc_model,
-                    num_time_steps=bundle.num_time_steps_to_fit,
-                    mean_mean_uc0=bundle.mean_mean_uc0,
-                    sd_mean_uc0=bundle.sd_mean_uc0,
-                    sd_uc=bundle.sd_uc,
-                    initial_samples=bundle.initial_coordination_samples,
-                    observed_value=bundle.observed_coordination_for_inference
-                )
->>>>>>> parent of 8440b5c... Refactoring 3D class constructor: Replace 'sd_uc' with 'sd_uc_coordination', update config with options for 'sd_uc_individualism' and 'sd_uc_common_cause', and apply similar changes for 'mean_uc0'. And also add these into config bundle
-        # ================================================================================================================
         return coordination
 
     def _get_adjusted_bundle(self) -> BrainBundle:

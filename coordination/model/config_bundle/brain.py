@@ -189,20 +189,21 @@ class BrainBundle(ModelConfigBundle):
     mean_mean_cc0: float = 0.0
     sd_mean_cc0: float = 1.0
     sd_sd_cc: float = 1.0
-    mean_cc0: float = None  # mean_cc0 ~ N(mean_mean_cc0, sd_mean_cc0^2)
-    sd_cc: float = None  # sd_cc ~ HN(sd_sd_cc)
+    mean_uc0_individualism: float = None  # mean_cc0 ~ N(mean_mean_cc0, sd_mean_cc0^2)
+    sd_cc_individualism: float = None  # sd_cc ~ HN(sd_sd_cc)
+    mean_uc0_common_cause: float = None  # mean_cc0 ~ N(mean_mean_cc0, sd_mean_cc0^2)
+    sd_cc_common_cause: float = None  # sd_cc ~ HN(sd_sd_cc)
     share_mean_cc0_across_dimensions: bool = False
     share_sd_cc_across_dimensions: bool = False
     initial_common_cause_samples: np.ndarray = None
-
     
     coordination_mode: str = "sigmoid" # Or "dirichlet"
-    
 
     observed_individualism_for_inference: Optional[float] = None
     observed_common_cause_for_inference: Optional[float] = None
     constant_individualism: bool = False
     constant_common_cause: bool = False
+
 
     # # For independent model
     # observed_common_cause_for_inference = 0
