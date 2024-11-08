@@ -223,48 +223,37 @@ class NonSerial2DGaussianLatentComponent(NonSerialGaussianLatentComponent):
                 if self.single_chain:
                     blended_mean = prev_same
                 else:
-                    # ================= [TODO] SPLIT ====================
-                    # [TODO!!] c1 and c2 should be sum to 1, this is norm.
-                    # c = sampled_coordination[:, time_steps_in_coordination_scale[t]]  # n
-                    coordination = coordination / coordination.sum(axis=0)[None,:]
-
-                    # (T-1,). C1 is individual, C2 is coordination, C3 is common cause. I have shuffled them.
-                    c1 = coordination[0, 1:]  
-                    c2 = coordination[1, 1:]
-                    c3 = coordination[2, 1:]
-                    c1 = np.array(c1)
-                    c2 = np.array(c2)
-                    c3 = np.array(c3)
-
-                    c1 = c1[:, None, None]  # n x 1 x 1
-                    c2 = c2[:, None, None]  # n x 1 x 1
-                    c3 = c2[:, None, None]  # n x 1 x 1
-                    # ================= [END] SPLIT ====================
+                    c = sampled_coordination[:, :, time_steps_in_coordination_scale[t]]  # n
                     c_mask = -1 if self.asymmetric_coordination else 1
 
+                    # n x s x d
+                    prev_others = (
+                            np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
+                            * c_mask
+                    )
+
                     if self.common_cause:
-                        X_t_current = sampled_common_cause[..., t].repeat(mean_a0.shape[1], axis=1)
+                        individualism = c[:, 0]
+                        coordination = c[:, 1]
+                        common_cause = c[:, 2]
+
                         # n x s x d
-                        prev_others = (
-                                np.einsum("ij,kjl->kil", sum_matrix_others, values[..., t - 1])
-                                * c_mask
-                        )
+                        X_t_current = sampled_common_cause[..., t].repeat(mean_a0.shape[1], axis=1)
+
                         dt_diff = 1
                         F = np.array([[1.0, dt_diff], [0.0, 0.0]])[None, :].repeat(
                             num_series, axis=0
                         )
-                        F[:, 1, 1] = c2
+                        F[:, 1, 1] = individualism
 
                         U1 = np.zeros((num_series, 2, 2))
-                        U1[:, 1, 1] = c1
+                        U1[:, 1, 1] = coordination
 
                         U2 = np.zeros((num_series, 2, 2))
-                        U2[:, 1, 1] = c3
-
+                        U2[:, 1, 1] = common_cause
 
                         blended_mean = np.einsum("kij,klj->kli", F, prev_same) + np.einsum(
                             "kij,klj->kli", U1, prev_others) + np.einsum("kij,klj->kli", U2, X_t_current)
-
 
                     else:
                         c = c[:, None, None]  # Shape: n x 1 x 1
@@ -393,10 +382,10 @@ def common_cause_log_prob(
         # print(T.eval())
         # The dimensions of F and U are: T-1 x 2 x 2
         F = ptt.as_tensor(np.array([[[1.0, 1.0], [0.0, 1.0]]])).repeat(T, axis=0)
-        F = ptt.set_subtensor(F[:, 1, 1], c2)
+        F = ptt.set_subtensor(F[:, 1, 1], c1)
 
         U1 = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
-        U1 = ptt.set_subtensor(U1[:, 1, 1], c1)
+        U1 = ptt.set_subtensor(U1[:, 1, 1], c2)
 
         U2 = ptt.as_tensor(np.array([[[0.0, 0.0], [0.0, 1.0]]])).repeat(T, axis=0)
         U2 = ptt.set_subtensor(U2[:, 1, 1], c3)

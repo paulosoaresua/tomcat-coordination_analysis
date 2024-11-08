@@ -178,6 +178,76 @@ def get_cc_model() -> BrainModel:
         return BrainModel(bundle)
 
 
+def get_c_model_dirichlet(coordination: float) -> BrainModel:
+    """
+    Gets a c-model-dirichlet.
+
+    @param coordination: value of coordination to fix.
+    @return: c-model-dirichlet.
+    """
+    with open(f"{ROOT_DIR}/config/params/brain_params_dict.json",
+              "r") as f:
+        bundle = BrainBundle(**json.load(f))
+        # bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.fnirs_sd_a = PROCESS_NOISE
+        bundle.fnirs_sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.zeros((N, 3, T))
+        bundle.initial_coordination_samples[:, 0] = np.ones(T) * (1 - coordination)
+        bundle.initial_coordination_samples[:, 1] = np.ones(T) * coordination
+        bundle.num_time_steps_in_coordination_scale = T
+        bundle.mean_uc0_individualism = 1 - coordination
+        bundle.mean_uc0 = coordination
+        bundle.mean_uc0_common_cause = 0
+        bundle.sd_uc_individualism = 0
+        bundle.sd_uc = 0
+        bundle.sd_uc_common_cause = 0
+
+        bundle.fnirs_mean_a0 = INITIAL_STATE
+        bundle.common_cause = True
+        bundle.sd_cc = PROCESS_NOISE
+        bundle.mean_cc0 = np.array([INITIAL_STATE[0]])
+
+        return BrainModel(bundle)
+
+
+def get_cc_model_dirichlet(common_cause: float) -> BrainModel:
+    """
+    Gets a cc-model-dirichlet.
+
+    @param common_cause: value of common cause to fix.
+    @return: cc-model-dirichlet.
+    """
+    with open(f"{ROOT_DIR}/config/params/brain_params_dict.json",
+              "r") as f:
+        bundle = BrainBundle(**json.load(f))
+        # bundle.state_space_2d = True
+        # Set some parameters for data generation
+        bundle.fnirs_sd_a = PROCESS_NOISE
+        bundle.fnirs_sd_o = OBSERVATION_NOISE
+
+        bundle.constant_coordination = True
+        bundle.initial_coordination_samples = np.zeros((N, 3, T))
+        bundle.initial_coordination_samples[:, 0] = np.ones(T) * (1 - common_cause)
+        bundle.initial_coordination_samples[:, 2] = np.ones(T) * common_cause
+        bundle.num_time_steps_in_coordination_scale = T
+        bundle.mean_uc0_individualism = 1 - common_cause
+        bundle.mean_uc0_common_cause = common_cause
+        bundle.mean_uc0 = 0
+        bundle.sd_uc_individualism = 0
+        bundle.sd_uc = 0
+        bundle.sd_uc_common_cause = 0
+
+        bundle.fnirs_mean_a0 = INITIAL_STATE
+        bundle.common_cause = True
+        bundle.sd_cc = PROCESS_NOISE
+        bundle.mean_cc0 = np.array([INITIAL_STATE[0]])
+
+        return BrainModel(bundle)
+
+
 x_model = get_x_model()
 c_model_low = get_c_model(0.2)
 c_model_shift = get_c_model_shift(0.2, 0.8)
@@ -186,14 +256,19 @@ c_model_high = get_c_model(0.6)
 c_cc_model_low = get_c_plus_cc_model(0.2)
 cc_model = get_cc_model()
 
+c_model_low_dirichlet = get_c_model_dirichlet(0.2)
+cc_model_low_dirichlet = get_cc_model_dirichlet(0.2)
+
 models = [
     # ("x_data", x_model),
     # ("c_data_low", c_model_low),
     # ("c_model_shift", c_model_shift),
     # ("c_model_gsr", c_model_gsr),
     # ("c_model_high", c_model_high)
-    ("c_cc_data_low", c_cc_model_low),
-    ("cc_data", cc_model)
+    # ("c_cc_data_low", c_cc_model_low),
+    # ("cc_data", cc_model)
+    ("c_data_low_dirichlet", c_model_low_dirichlet),
+    ("cc_data_low_dirichlet", cc_model_low_dirichlet)
 ]
 
 for data_name, model in models:

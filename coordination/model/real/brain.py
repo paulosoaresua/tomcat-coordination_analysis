@@ -262,21 +262,21 @@ class BrainModel(ModelTemplate):
             sd_uc_coordination = 1e-9  # instead of 0 for numerical stability
         else:
             mean_uc0_coordination = bundle.mean_uc0
-            sd_uc_coordination = bundle.sd_uc0
+            sd_uc_coordination = bundle.sd_uc
 
         if fixed_unbounded_individualism_value is not None and bundle.mean_uc0_individualism is None:
             mean_uc0_individualism = fixed_unbounded_individualism_value
             sd_uc_individualism = 1e-9
         else:
             mean_uc0_individualism = bundle.mean_uc0_individualism
-            sd_uc_individualism = bundle.sd_uc0_individualism
+            sd_uc_individualism = bundle.sd_uc_individualism
 
         if fixed_unbounded_common_cause_value is not None and bundle.mean_uc0_common_cause is None:
             mean_uc0_common_cause = fixed_unbounded_common_cause_value
             sd_uc_common_cause = 1e-9
         else:
             mean_uc0_common_cause = bundle.mean_uc0_common_cause
-            sd_uc_common_cause = bundle.sd_uc0_common_cause
+            sd_uc_common_cause = bundle.sd_uc_common_cause
 
         coordination = DirichletGaussianCoordination3D(
             pymc_model=self.pymc_model,
