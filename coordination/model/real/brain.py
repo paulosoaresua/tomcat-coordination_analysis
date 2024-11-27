@@ -790,16 +790,37 @@ class BrainModel(ModelTemplate):
                 "coordination", samples_idx
             )
         else:
-            new_bundle.mean_uc0 = idata.get_posterior_samples(
-                "coordination_mean_uc0", samples_idx
-            )
-            new_bundle.sd_uc = idata.get_posterior_samples(
-                "coordination_sd_uc", samples_idx
-            )
+            if config_bundle.common_cause:
+                new_bundle.mean_uc0 = idata.get_posterior_samples(
+                "coordination_mean_uc0_coordination", samples_idx
+                )
+                new_bundle.mean_uc0_individualism = idata.get_posterior_samples(
+                    "coordination_mean_uc0_individualism", samples_idx
+                )
+                new_bundle.mean_uc0_common_cause = idata.get_posterior_samples(
+                    "coordination_mean_uc0_common_cause", samples_idx
+                )
+                new_bundle.sd_uc = idata.get_posterior_samples(
+                    "coordination_sd_uc_coordination", samples_idx
+                )
+                new_bundle.sd_uc_individualism = idata.get_posterior_samples(
+                    "coordination_sd_uc_individualism", samples_idx
+                )
+                new_bundle.sd_uc_common_cause = idata.get_posterior_samples(
+                    "coordination_sd_uc_common_cause", samples_idx
+                )
+            else:
+                new_bundle.mean_uc0 = idata.get_posterior_samples(
+                    "coordination_mean_uc0", samples_idx
+                )            
+                new_bundle.sd_uc = idata.get_posterior_samples(
+                    "coordination_sd_uc", samples_idx
+                )
+                
             new_bundle.initial_coordination_samples = idata.get_posterior_samples(
                 "coordination", samples_idx
             )
-
+        
         if config_bundle.include_semantic:
             new_bundle.semantic_link_sd_s = idata.get_posterior_samples(
                 "semantic_link_sd_s", samples_idx

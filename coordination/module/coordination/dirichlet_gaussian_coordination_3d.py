@@ -177,11 +177,11 @@ class DirichletGaussianCoordination3D(Coordination):
 
         mean_uc0 = np.array([self.parameters.mean_uc0_individualism.value,
                              self.parameters.mean_uc0_coordination.value,
-                             self.parameters.mean_uc0_common_cause.value])[:, None]
+                             self.parameters.mean_uc0_common_cause.value]).swapaxes(0,1)
 
         sd_uc = np.array([self.parameters.sd_uc_individualism.value,
                           self.parameters.sd_uc_coordination.value,
-                          self.parameters.sd_uc_common_cause.value])[:, None]
+                          self.parameters.sd_uc_common_cause.value]).swapaxes(0,1)
 
         if self.initial_samples is not None:
             if self.initial_samples.shape[0] != num_series:
