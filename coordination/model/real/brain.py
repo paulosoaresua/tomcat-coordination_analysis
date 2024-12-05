@@ -257,22 +257,22 @@ class BrainModel(ModelTemplate):
             # cause. Shape (3, T)
             initial_samples_3d = inv_function(bundle.initial_coordination_samples)
 
-        if fixed_unbounded_coordination_value is not None and bundle.mean_uc0_coordination is None:
-            mean_uc0_coordination = fixed_unbounded_coordination_value
+        if fixed_unbounded_coordination_value is not None and bundle.mean_uc0 is None:
+            mean_uc0_coordination = inv_function(bundle.observed_coordination_for_inference)
             sd_uc_coordination = 1e-9  # instead of 0 for numerical stability
         else:
             mean_uc0_coordination = bundle.mean_uc0
             sd_uc_coordination = bundle.sd_uc
 
         if fixed_unbounded_individualism_value is not None and bundle.mean_uc0_individualism is None:
-            mean_uc0_individualism = fixed_unbounded_individualism_value
+            mean_uc0_individualism = inv_function(bundle.observed_individualism_for_inference)
             sd_uc_individualism = 1e-9
         else:
             mean_uc0_individualism = bundle.mean_uc0_individualism
             sd_uc_individualism = bundle.sd_uc_individualism
 
         if fixed_unbounded_common_cause_value is not None and bundle.mean_uc0_common_cause is None:
-            mean_uc0_common_cause = fixed_unbounded_common_cause_value
+            mean_uc0_common_cause = inv_function(bundle.observed_common_cause_for_inference)
             sd_uc_common_cause = 1e-9
         else:
             mean_uc0_common_cause = bundle.mean_uc0_common_cause
