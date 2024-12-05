@@ -228,7 +228,7 @@ class BrainModel(ModelTemplate):
         )
 
     def _create_coordination_common_cause(self, bundle):
-        inv_function = np.log
+        inv_function = lambda x: np.log(x + 1e-9)
 
         fixed_unbounded_coordination_value = None
         if bundle.observed_coordination_for_inference is not None:
