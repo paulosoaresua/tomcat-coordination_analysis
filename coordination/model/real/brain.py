@@ -228,7 +228,7 @@ class BrainModel(ModelTemplate):
         )
 
     def _create_coordination_common_cause(self, bundle):
-        inv_function = np.exp
+        inv_function = np.log
 
         fixed_unbounded_coordination_value = None
         if bundle.observed_coordination_for_inference is not None:
@@ -240,14 +240,14 @@ class BrainModel(ModelTemplate):
         fixed_unbounded_individualism_value = None
         if bundle.observed_individualism_for_inference is not None:
             fixed_unbounded_individualism_value = adjust_dimensions(
-                logit(bundle.observed_individualism_for_inference),
+                inv_function(bundle.observed_individualism_for_inference),
                 bundle.num_time_steps_to_fit,
             )
 
         fixed_unbounded_common_cause_value = None
         if bundle.observed_common_cause_for_inference is not None:
             fixed_unbounded_common_cause_value = adjust_dimensions(
-                logit(bundle.observed_common_cause_for_inference),
+                inv_function(bundle.observed_common_cause_for_inference),
                 bundle.num_time_steps_to_fit,
             )
 
@@ -283,7 +283,7 @@ class BrainModel(ModelTemplate):
             num_time_steps=bundle.num_time_steps_to_fit,
             mean_mean_uc0=bundle.mean_mean_uc0,
             sd_mean_uc0=bundle.sd_mean_uc0,
-            initial_samples=bundle.initial_coordination_samples,
+            initial_samples=initial_samples_3d,
             mean_uc0_individualism=mean_uc0_individualism,
             sd_uc_individualism=sd_uc_individualism,
             mean_uc0_coordination=mean_uc0_coordination,
