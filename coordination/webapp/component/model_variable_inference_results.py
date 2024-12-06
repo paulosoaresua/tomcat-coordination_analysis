@@ -160,7 +160,7 @@ class ModelVariableInferenceResults:
             if self.dimension is None:
                 return
 
-            if means.ndim == 2:
+            if means.ndim == 2 and "coordination" not in self.model_variable_info.variable_name:
                 # Serialized data. Axes are (dimension x time)
                 # Get subject indices and time indices from the coded coordinates of the data along
                 # the time axis. Each time coordinate is coded as "subject#time" when a serial
