@@ -175,13 +175,68 @@ class DirichletGaussianCoordination3D(Coordination):
         if self.parameters.sd_uc_common_cause.value is None:
             raise ValueError(f"Value of {self.parameters.sd_uc_common_cause.uuid} is undefined.")
 
-        mean_uc0 = np.array([self.parameters.mean_uc0_individualism.value,
-                             self.parameters.mean_uc0_coordination.value,
-                             self.parameters.mean_uc0_common_cause.value]).swapaxes(0,1)
+        # If parameters are fixed as float, repeat them for every series.
+        mean_uc0_coordination = self.parameters.mean_uc0_coordination.value
+        if isinstance(mean_uc0_coordination, np.ndarray):
+            if mean_uc0_coordination.ndim == 2:
+                mean_uc0_coordination = mean_uc0_coordination[..., 0]
+            elif mean_uc0_coordination.shape[0] == 1:
+                mean_uc0_coordination = mean_uc0_coordination.repeat(num_series)
+        else:
+            mean_uc0_coordination = np.ones(num_series) * mean_uc0_coordination
 
-        sd_uc = np.array([self.parameters.sd_uc_individualism.value,
-                          self.parameters.sd_uc_coordination.value,
-                          self.parameters.sd_uc_common_cause.value]).swapaxes(0,1)
+        mean_uc0_individualism = self.parameters.mean_uc0_individualism.value
+        if isinstance(mean_uc0_individualism, np.ndarray):
+            if mean_uc0_individualism.ndim == 2:
+                mean_uc0_individualism = mean_uc0_individualism[..., 0]
+            elif mean_uc0_individualism.shape[0] == 1:
+                mean_uc0_individualism = mean_uc0_individualism.repeat(num_series)
+        else:
+            mean_uc0_individualism = np.ones(num_series) * mean_uc0_individualism
+
+        mean_uc0_common_cause = self.parameters.mean_uc0_common_cause.value
+        if isinstance(mean_uc0_common_cause, np.ndarray):
+            if mean_uc0_common_cause.ndim == 2:
+                mean_uc0_common_cause = mean_uc0_common_cause[..., 0]
+            elif mean_uc0_common_cause.shape[0] == 1:
+                mean_uc0_common_cause = mean_uc0_common_cause.repeat(num_series)
+        else:
+            mean_uc0_common_cause = np.ones(num_series) * mean_uc0_common_cause
+
+        sd_uc_coordination = self.parameters.sd_uc_coordination.value
+        if isinstance(sd_uc_coordination, np.ndarray):
+            if sd_uc_coordination.ndim == 2:
+                sd_uc_coordination = sd_uc_coordination[..., 0]
+            elif sd_uc_coordination.shape[0] == 1:
+                sd_uc_coordination = sd_uc_coordination.repeat(num_series)
+        else:
+            sd_uc_coordination = np.ones(num_series) * sd_uc_coordination
+
+        sd_uc_individualism = self.parameters.sd_uc_individualism.value
+        if isinstance(sd_uc_individualism, np.ndarray):
+            if sd_uc_individualism.ndim == 2:
+                sd_uc_individualism = sd_uc_individualism[..., 0]
+            elif sd_uc_individualism.shape[0] == 1:
+                sd_uc_individualism = sd_uc_individualism.repeat(num_series)
+        else:
+            sd_uc_individualism = np.ones(num_series) * sd_uc_individualism
+
+        sd_uc_common_cause = self.parameters.sd_uc_common_cause.value
+        if isinstance(sd_uc_common_cause, np.ndarray):
+            if sd_uc_common_cause.ndim == 2:
+                sd_uc_common_cause = sd_uc_common_cause[..., 0]
+            elif sd_uc_common_cause.shape[0] == 1:
+                sd_uc_common_cause = sd_uc_common_cause.repeat(num_series)
+        else:
+            sd_uc_common_cause = np.ones(num_series) * sd_uc_common_cause
+
+        mean_uc0 = np.array([mean_uc0_individualism,
+                             mean_uc0_coordination,
+                             mean_uc0_common_cause]).swapaxes(0,1)[..., None]
+
+        sd_uc = np.array([sd_uc_individualism,
+                          sd_uc_coordination,
+                          sd_uc_common_cause]).swapaxes(0,1)[..., None]
 
         if self.initial_samples is not None:
             if self.initial_samples.shape[0] != num_series:
