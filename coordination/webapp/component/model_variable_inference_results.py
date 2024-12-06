@@ -19,11 +19,11 @@ class ModelVariableInferenceResults:
     """
 
     def __init__(
-        self,
-        component_key: str,
-        model_variable_info: ModelVariableInfo,
-        dimension: Optional[str],
-        inference_data: InferenceData,
+            self,
+            component_key: str,
+            model_variable_info: ModelVariableInfo,
+            dimension: Optional[str],
+            inference_data: InferenceData,
     ):
         """
         Creates the component.
@@ -50,8 +50,8 @@ class ModelVariableInferenceResults:
             return
 
         if self.inference_data.is_parameter(
-            self.model_variable_info.inference_mode,
-            self.model_variable_info.variable_name,
+                self.model_variable_info.inference_mode,
+                self.model_variable_info.variable_name,
         ):
             self._display_parameter_variable_histogram()
         else:
@@ -169,16 +169,16 @@ class ModelVariableInferenceResults:
                     [
                         int(x.split("#")[0])
                         for x in getattr(
-                            means, f"{self.model_variable_info.variable_name}_time"
-                        ).data
+                        means, f"{self.model_variable_info.variable_name}_time"
+                    ).data
                     ]
                 )
                 time_steps = np.array(
                     [
                         int(x.split("#")[1])
                         for x in getattr(
-                            means, f"{self.model_variable_info.variable_name}_time"
-                        ).data
+                        means, f"{self.model_variable_info.variable_name}_time"
+                    ).data
                     ]
                 )
                 unique_subjects = sorted(list(set(subject_indices)))
@@ -212,7 +212,11 @@ class ModelVariableInferenceResults:
                     )
             else:
                 # Non-serialized data. Axes are (subject x dimension x time)
+                coordination_labels = ["Individualism", "Coordination", "Common Cause"]
                 for s in range(means.shape[0]):
+                    label = (
+                        f"Subject {s}" if "coordination" not in self.model_variable_info.variable_name else
+                        coordination_labels[s])
                     y = (
                         means[s].loc[self.dimension]
                         if isinstance(self.dimension, str)
@@ -231,7 +235,7 @@ class ModelVariableInferenceResults:
                         x=np.arange(len(y)),
                         y=y,
                         y_std=y_std,
-                        label=f"Subject {s}",
+                        label=label,
                         figure=fig,
                         color=next(color_palette_iter),
                     )
